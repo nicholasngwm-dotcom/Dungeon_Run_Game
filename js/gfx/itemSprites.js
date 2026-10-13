@@ -157,6 +157,30 @@ function buildItemSprites() {
     }),
   };
 
+  // mimic buff orbs: a coloured gem orb with an icon (cross / chevrons / sword)
+  const orb = (dark, mid, light, icon) => sprite(18, 18, (p) => {
+    p.circle(9, 9, 8, dark);
+    p.circle(9, 9, 7, mid);
+    p.circle(7, 7, 3, light);
+    icon(p);
+    p.px(5, 5, '#ffffff');
+  });
+  Sprites.pickups.buff_regen = orb('#1a6a2a', '#3ab84a', '#9cf0a0', (p) => {
+    p.rect(8, 4, 3, 10, '#ffffff');
+    p.rect(4, 8, 11, 3, '#ffffff');
+  });
+  Sprites.pickups.buff_speed = orb('#8a6010', '#d8a020', '#fff0a0', (p) => {
+    for (const x of [5, 10]) {
+      p.line(x, 5, x + 3, 9, '#ffffff', 2);
+      p.line(x + 3, 9, x, 13, '#ffffff', 2);
+    }
+  });
+  Sprites.pickups.buff_damage = orb('#7a1a14', '#d8402e', '#ffa090', (p) => {
+    p.line(5, 13, 12, 5, '#ffffff', 2);
+    p.rect(4, 10, 5, 2, '#5a2a10');
+    p.rect(5, 12, 2, 2, '#5a2a10');
+  });
+
   // mage's bird form (faces right): wings up / wings down
   const bird = (up) => {
     const img = PixelArt.make(24, 18, (p) => {

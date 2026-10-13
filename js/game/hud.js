@@ -74,7 +74,9 @@ const HUD = {
     }
     this.text(ctx, p.cfg.name.toUpperCase(), 60, y, { size: 8, color: '#f2a541' });
     this.text(ctx, this.statusText(p), 148, y, { size: 7, color: '#d8c8a0' });
-    this.drawPassive(ctx, p.passiveInfo, 12, y + 16);
+    const info = p.passiveInfo;
+    this.drawPassive(ctx, info, 12, y + 16);
+    this.drawBuffs(ctx, p, 12, y + 16 + (info ? (info.maxPips || info.bar != null ? 26 : 15) + 8 : 0));
 
     // abilities
     const slots = [
@@ -87,9 +89,12 @@ const HUD = {
     const icons = Sprites.icons[p.classId];
     slots.forEach(([key, name, slot], i) => {
       const icon = slot === 'dodge' ? Sprites.icons.dodge : icons[slot];
-      this.abilitySlot(ctx, 14 + i * 70, 474, key, name, p.cooldowns[slot], p.maxCooldowns[slot], icon);
+      this.abilitySlot(ctx, 14 + i * 70, 474, key, name, p.cooldowns[slot], p.maxCooldowns[slot], icon, p.slotCharges?.[slot]);
     });
     this.ultSlot(ctx, 14 + slots.length * 70 + 6, 474, p);
+    // potion sits on its own in the bottom-right corner
+    this.abilitySlot(ctx, 960 - 14 - 62, 474, 'H', `POTION +${CONFIG.player.potion.heal}`,
+      p.potionCooldown, CONFIG.player.potion.cooldown, Sprites.icons.potion);
   },
 
   /**
@@ -135,6 +140,28 @@ const HUD = {
     }
   },
 
+  /** Mimic buffs: one chip each with its icon, name, seconds left and a draining bar. */
+  drawBuffs(ctx, p, x, y) {
+    let cx = x;
+    for (const [type, t] of Object.entries(p.buffs)) {
+      const b = CONFIG.buffs[type];
+      const w = 70;
+      const blink = t < 2 && Math.floor(t * 6) % 2;
+      this.panel(ctx, cx, y, w, 20);
+      ctx.globalAlpha = blink ? 0.5 : 1;
+      const icon = Sprites.pickups[`buff_${type}`];
+      ctx.drawImage(icon, cx + 1, y + 1);
+      this.text(ctx, b.name, cx + 21, y + 3, { size: 6, color: b.color });
+      this.text(ctx, `${Math.ceil(t)}s`, cx + w - 3, y + 3, { size: 6, align: 'right' });
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#1a1a30';
+      ctx.fillRect(cx + 21, y + 13, w - 24, 3);
+      ctx.fillStyle = b.color;
+      ctx.fillRect(cx + 21, y + 13, Math.round((w - 24) * clamp(t / b.duration, 0, 1)), 3);
+      cx += w + 6;
+    }
+  },
+
   /** Short list of active buffs/debuffs. */
   statusText(p) {
     const s = [];
@@ -153,7 +180,8 @@ const HUD = {
     return s.join(' ');
   },
 
-  abilitySlot(ctx, x, y, key, name, cd, max, icon) {
+  /** charges (optional): { count, max, refill 0-1 } for abilities with stored uses. */
+  abilitySlot(ctx, x, y, key, name, cd, max, icon, charges = null) {
     const w = 62;
     const h = 50;
     this.panel(ctx, x, y, w, h);
@@ -169,6 +197,16 @@ const HUD = {
     } else {
       ctx.fillStyle = '#6cff7a';
       ctx.fillRect(x + 6, y + h - 4, w - 12, 2);
+    }
+    if (charges) {
+      this.text(ctx, `x${charges.count}`, x + w - 4, y + 4, { size: 7, align: 'right', color: charges.count ? '#ffe680' : '#7a6a8a' });
+      // the next charge filling up
+      if (charges.count < charges.max) {
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(x + 5, y + 33, w - 10, 4);
+        ctx.fillStyle = '#f2a541';
+        ctx.fillRect(x + 6, y + 34, Math.round((w - 12) * clamp(charges.refill, 0, 1)), 2);
+      }
     }
   },
 

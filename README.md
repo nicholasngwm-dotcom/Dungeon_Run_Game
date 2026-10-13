@@ -30,7 +30,8 @@ god mode, infinite mana and infinite energy. Dying respawns you.
 
 WASD to move, mouse to aim, left click for the primary attack (hold to repeat),
 right click for the secondary ability, E and F for class abilities, Q for the
-ultimate (it charges as you deal damage), Shift to dodge, Esc to pause, M to
+ultimate (it charges as you deal damage), Shift to dodge, H to drink a health
+potion (+40 hp, starts regen, 40s cooldown), Esc to pause, M to
 toggle music. The Mage spends mana and the Rogue spends energy (bar under HP).
 
 ## Project layout
@@ -51,7 +52,8 @@ js/
     pickup.js           heart drops
     player/             Player base + Warrior, Ranger, Mage, Rogue
     enemies/            Enemy base + Zombie, Slime, Wraith, Skeleton, UndeadKnight,
-                        Gravestone (raises zombies/skeletons), Ghost (slowing aura)
+                        Gravestone (raises zombies/skeletons), Ghost (slowing aura),
+                        Mimic (tough lunging chest, drops regen/speed/power buffs)
     boss/golem.js       Clay Golem (parts, phases, attacks)
     boss/phantom.js     Phantom King (dash, eye lasers, vanish + pull shockwaves)
   game/                 Game world, wave director, HUD

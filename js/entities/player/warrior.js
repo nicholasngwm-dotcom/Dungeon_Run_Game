@@ -24,6 +24,8 @@ class Warrior extends Player {
     this.charge = null;
     this.cleave = null;    // ult power-up
     this.hitsTaken = 0;    // Tanker passive: hits since the last automatic block
+    this.chargeCharges = c.charge.charges;  // F uses stored up
+    this.chargeRecharge = 0;                // seconds until the next one refills
   }
 
   get channeling() { return !!(this.spin || this.cleave); }
@@ -171,7 +173,9 @@ class Warrior extends Player {
 
   abilityF() {
     const c = this.cfg.charge;
-    this.cooldowns.f = c.cooldown;
+    this.chargeCharges--;
+    if (this.chargeRecharge <= 0) this.chargeRecharge = c.cooldown;
+    this.cooldowns.f = this.chargeCharges > 0 ? 0 : this.chargeRecharge;
     this.charge = { t: 0, angle: this.aim, dashing: false, hit: new Set() };
     this.busy = c.windup + c.time;
     Sound.play('thrustCharge');
@@ -273,7 +277,27 @@ class Warrior extends Player {
     });
   }
 
+  /** Charges refill one at a time; F is only on cooldown once they're all spent. */
+  updateChargeCharges(dt) {
+    const c = this.cfg.charge;
+    if (this.chargeCharges < c.charges) {
+      this.chargeRecharge -= dt;
+      if (this.chargeRecharge <= 0) {
+        this.chargeCharges++;
+        this.chargeRecharge = this.chargeCharges < c.charges ? c.cooldown : 0;
+      }
+    }
+    this.cooldowns.f = this.chargeCharges > 0 ? Math.min(this.cooldowns.f, 0) : this.chargeRecharge;
+  }
+
+  /** Charge count for the HUD's F slot. */
+  get slotCharges() {
+    const c = this.cfg.charge;
+    return { f: { count: this.chargeCharges, max: c.charges, refill: this.chargeCharges < c.charges ? 1 - this.chargeRecharge / c.cooldown : 1 } };
+  }
+
   updateAbility(dt, world) {
+    this.updateChargeCharges(dt);
     this.swingTime -= dt;
     this.comboTimer -= dt;
     if (this.stab) {

@@ -18,8 +18,10 @@ const CONFIG = {
     dodge: { distance: 125, duration: 0.22, invulnerability: 0.3, cooldown: 1.4 },
     // Enemies further than this can't see an invisible hero
     invisibleDetectRange: 200,
-    // passive regen: after `delay` seconds without losing hp, heal `perSecond` (fraction of max hp)
-    regen: { delay: 4, perSecond: 0.015 },
+    // passive regen: after `delay` seconds without losing hp, heal `hpPerSecond` (1 hp every 5s)
+    regen: { delay: 4, hpPerSecond: 0.2 },
+    // H: health potion. Unlimited, but on a cooldown; drinking also starts passive regen right away
+    potion: { heal: 40, cooldown: 40 },
   },
 
   // ---------------------------------------------------------
@@ -31,7 +33,7 @@ const CONFIG = {
       // passive: after taking `hits` hits, the next one is blocked automatically
       passive: { name: 'Tanker', hits: 4 },
       name: 'Warrior',
-      hp: 300,
+      hp: 350,
       speed: 150,
       // LMB: slash, slash, stab
       combo:  { damage: 26, cooldown: 0.34, resetTime: 0.9, range: 82, arcDegrees: 130, knockback: 180,
@@ -41,9 +43,9 @@ const CONFIG = {
       shield: { hp: 400, regen: 80, regenDelay: 1.2, breakCooldown: 5, arcDegrees: 130,
                 radius: 30, moveMultiplier: 0.55, guardTime: 0.2 },
       // E: spin attack, moving faster while spinning
-      spin:   { damage: 15, tick: 0.22, duration: 2.5, radius: 88, knockback: 90, moveMultiplier: 1.35, cooldown: 9 },
-      // F: wind up, then charge through enemies, stunning them
-      charge: { windup: 0.5, distance: 330, time: 0.35, width: 44, damage: 35, stun: 1.0, knockback: 260, cooldown: 10 },
+      spin:   { damage: 22, tick: 0.22, duration: 2.5, radius: 88, knockback: 90, moveMultiplier: 1.35, cooldown: 9 },
+      // F: wind up, then charge through enemies, stunning them. Holds `charges` uses; each refills over `cooldown`s
+      charge: { windup: 0.5, distance: 330, time: 0.35, width: 44, damage: 35, stun: 1.0, knockback: 260, cooldown: 10, charges: 2 },
       // Q: power up, then a huge downward strike along the aim line.
       // LMB releases it early; damage scales from minPower up to full.
       ult:    { charge: 1400, powerTime: 3, moveMultiplier: 0.3, damage: 300, minPower: 0.35, length: 360, width: 84 },
@@ -169,21 +171,37 @@ const CONFIG = {
       auraRadius: 130, slowAmount: 0.65, knockbackResist: 0.4,
       maxLead: 1.4,   // seconds ahead of the hero it aims for, to cut them off
     },
+    // a treasure chest with teeth: hops slowly toward the hero, then lunges again and again
+    // while the hero stays within leashRange. Very tough, hits hard, usually drops a buff orb
+    mimic: {
+      hp: 760, speed: 0, radius: 18, damage: 42, contactDamage: 14,
+      hopDistance: 46, hopTime: 0.32, hopRest: 0.55,
+      aggroRange: 160, leashRange: 230,
+      windup: 0.42, aimLockAt: 0.15, lungeDistance: 150, lungeTime: 0.2, recovery: 0.45,
+      knockbackResist: 0.85, stunResist: 0.5, buffChance: 0.8, heartChance: 0.3,
+    },
   },
 
   // mana orbs only drop for mana users; picking one up triggers the Mage's Mana Surge passive
   drops: { heartChance: 0.1, heartHeal: 45, manaChance: 0.3, manaRestore: 10 },
 
+  // buff orbs dropped by mimics (one random type each); picking one up again refreshes it
+  buffs: {
+    regen:  { name: 'REGEN', duration: 8, perSecond: 0.03, color: '#6cff7a' },  // 3% max hp/s even while hit (24% total)
+    speed:  { name: 'SPEED', duration: 8, multiplier: 1.3, color: '#ffd34a' },  // +30% move speed
+    damage: { name: 'POWER', duration: 8, multiplier: 1.25, color: '#ff5a4a' }, // +25% damage, stacks with passives
+  },
+
   // ---------------------------------------------------------
   //  WAVES (spawned in order, then a random boss appears)
   // ---------------------------------------------------------
   waves: [
-    // gravestones keep raising enemies until broken, so waves with them have fewer of the rest
+    // gravestones keep raising enemies until broken and mimics are tough, so waves with them have fewer of the rest
     { zombie: 6, slime: 1 },
     { zombie: 4, skeleton: 3, wraith: 2, gravestone: 1 },
-    { slime: 2, wraith: 3, skeleton: 3, undeadKnight: 1, gravestone: 1 },
-    { zombie: 4, skeleton: 4, wraith: 3, undeadKnight: 2, gravestone: 2 },
-    { zombie: 4, slime: 2, skeleton: 5, wraith: 4, undeadKnight: 2, gravestone: 2 },
+    { slime: 2, wraith: 3, skeleton: 2, undeadKnight: 1, gravestone: 1, mimic: 1 },
+    { zombie: 3, skeleton: 4, wraith: 3, undeadKnight: 2, gravestone: 2, mimic: 1 },
+    { zombie: 3, slime: 2, skeleton: 4, wraith: 4, undeadKnight: 2, gravestone: 2, mimic: 2 },
   ],
   // each wave after the first adds this much enemy hp / damage (wave 5: +60% hp, +32% damage)
   waveScaling: { hp: 0.15, damage: 0.08 },

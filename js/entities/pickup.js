@@ -69,3 +69,36 @@ class ManaPickup extends Pickup {
     this.drawSprite(ctx, Sprites.pickups.mana);
   }
 }
+
+/** Buff orb from a mimic: type is a key of CONFIG.buffs (regen, speed, damage). */
+class BuffPickup extends Pickup {
+  constructor(x, y, type) {
+    super(x, y);
+    this.type = type;
+  }
+
+  wanted() { return true; }
+
+  collect(p, world) {
+    const b = CONFIG.buffs[this.type];
+    p.addBuff(this.type);
+    world.effects.text(p.hx, p.hy - 40, `${b.name} UP!`, { color: b.color, size: 9, life: 1 });
+    world.effects.burst(p.hx, p.hy, { count: 18, colors: [b.color, '#ffffff'], speed: [40, 140], life: [0.3, 0.6], up: 30 });
+  }
+
+  draw(ctx) {
+    const b = CONFIG.buffs[this.type];
+    const rgb = hexToRgb(b.color).join(', ');
+    const cy = this.y - 8 + Math.sin(this.age * 4) * 3;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const r = 18 + Math.sin(this.age * 6) * 2;
+    const g = ctx.createRadialGradient(this.x, cy, 1, this.x, cy, r);
+    g.addColorStop(0, `rgba(${rgb}, 0.6)`);
+    g.addColorStop(1, `rgba(${rgb}, 0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(this.x - r, cy - r, r * 2, r * 2);
+    ctx.restore();
+    this.drawSprite(ctx, Sprites.pickups[`buff_${this.type}`]);
+  }
+}

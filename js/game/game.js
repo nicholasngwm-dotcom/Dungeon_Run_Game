@@ -58,7 +58,7 @@ class Game {
    */
   damageTarget(target, amount, { angle = 0, knockback = 0, sound = 'hit', noCrit = false, color = '#ffffff', fromUlt = false } = {}) {
     const crit = !noCrit && Math.random() < CONFIG.player.critChance;
-    const dmg = Math.max(1, Math.round(amount * (crit ? CONFIG.player.critMultiplier : 1) * this.player.damageMultiplier));
+    const dmg = Math.max(1, Math.round(amount * (crit ? CONFIG.player.critMultiplier : 1) * this.player.damageMultiplier * this.player.buffDamage));
     if (!target.takeDamage(dmg, this)) return 0;
     if (knockback) target.knockback(angle, knockback);
     this.effects.text(target.hx, target.hy - 22, crit ? `${dmg}!` : `${dmg}`, {

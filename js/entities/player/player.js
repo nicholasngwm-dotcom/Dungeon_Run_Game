@@ -35,6 +35,8 @@ class Player extends Entity {
     this.healPopup = 0;           // batches small heals into one number
     this.healPopupTimer = 0;
     this.sinceHurt = 0;           // seconds since hp was last lost (drives passive regen)
+    this.buffs = {};              // mimic buffs: type -> seconds left
+    this.potionCooldown = 0;      // H potion (kept apart from ability cooldowns so resets don't refill it)
     const r = this.cfg.resource;
     this.resource = r ? { ...r, value: r.max } : null;
   }
@@ -46,7 +48,8 @@ class Player extends Entity {
   /** Overridden by classes for spins, hastes, ult slowdowns... */
   get moveMultiplier() { return 1; }
   get speedMultiplier() {
-    return (this.slowTime > 0 ? CONFIG.golem.slowAmount : 1) * (this.chillTime > 0 ? this.chillAmount : 1) * this.moveMultiplier;
+    return (this.slowTime > 0 ? CONFIG.golem.slowAmount : 1) * (this.chillTime > 0 ? this.chillAmount : 1)
+      * (this.buffs.speed > 0 ? CONFIG.buffs.speed.multiplier : 1) * this.moveMultiplier;
   }
 
   /** Ghost auras: slowed to `amount` speed while inside one (refreshed every frame). */
@@ -77,6 +80,9 @@ class Player extends Entity {
     this.guard -= dt;
     this.slowTime -= dt;
     this.chillTime = (this.chillTime || 0) - dt;
+    this.updateBuffs(dt, world);
+    this.potionCooldown -= dt;
+    if (Input.wasPressed('KeyH')) this.drinkPotion(world);
     this.busy -= dt;
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
     for (const k of Object.keys(this.cooldowns)) this.cooldowns[k] -= dt;
@@ -306,15 +312,61 @@ class Player extends Entity {
     return this.sinceHurt >= CONFIG.player.regen.delay && this.hp < this.maxHp;
   }
 
-  /** Slow passive heal once the hero has gone a while without losing hp. */
+  /**
+   * Passive heal once the hero has gone a while without losing hp, plus the
+   * mimic regen buff, which heals even while taking damage.
+   */
   updateRegen(dt, world) {
     this.sinceHurt += dt;
-    if (!this.regenerating) return;
-    this.hp = Math.min(this.maxHp, this.hp + this.maxHp * CONFIG.player.regen.perSecond * dt);
-    if (Math.random() < dt * 4) {
+    let hps = this.regenerating ? CONFIG.player.regen.hpPerSecond : 0;
+    if (this.buffs.regen > 0) hps += this.maxHp * CONFIG.buffs.regen.perSecond;
+    if (hps <= 0 || this.hp >= this.maxHp) return;
+    this.hp = Math.min(this.maxHp, this.hp + hps * dt);
+    if (Math.random() < dt * (this.buffs.regen > 0 ? 12 : 1.5)) {
       world.effects.burst(this.x + rand(-8, 8), this.y - rand(4, 20), { count: 1, colors: ['#6cff7a', '#c8ffd0'], speed: [5, 15], life: [0.4, 0.7], up: 30 });
     }
   }
+
+  // ---------- health potion (H) ----------
+
+  /** Heals a chunk and starts passive regen immediately. Unlimited, but on a cooldown. */
+  drinkPotion(world) {
+    const c = CONFIG.player.potion;
+    if (this.potionCooldown > 0) return Sound.play('denied');
+    if (this.hp >= this.maxHp) {
+      Sound.play('denied');
+      world.effects.text(this.hx, this.hy - 30, 'FULL HP', { color: '#d8c8a0', size: 7 });
+      return;
+    }
+    this.potionCooldown = c.cooldown;
+    this.heal(c.heal, world);
+    this.sinceHurt = Math.max(this.sinceHurt, CONFIG.player.regen.delay);
+    world.effects.burst(this.hx, this.hy - 10, { count: 12, colors: ['#e83a4a', '#ff8aa0', '#ffffff'], speed: [20, 70], life: [0.3, 0.6], up: 40 });
+    Sound.play('pickup');
+  }
+
+  // ---------- mimic buffs ----------
+
+  /** Starts (or refreshes) a buff from CONFIG.buffs. */
+  addBuff(type) {
+    this.buffs[type] = CONFIG.buffs[type].duration;
+  }
+
+  updateBuffs(dt, world) {
+    for (const k of Object.keys(this.buffs)) {
+      this.buffs[k] -= dt;
+      if (this.buffs[k] <= 0) delete this.buffs[k];
+    }
+    if (this.buffs.speed > 0 && this.moving && Math.random() < 0.5) {
+      world.effects.burst(this.x - this.moveDir.x * 10, this.y + rand(-4, 4), { count: 1, colors: ['#ffd34a', '#fff0a0'], speed: [5, 20], life: [0.2, 0.35] });
+    }
+    if (this.buffs.damage > 0 && Math.random() < 0.3) {
+      world.effects.burst(this.x + rand(-10, 10), this.y - rand(0, 26), { count: 1, colors: ['#ff5a4a', '#ffb0a0'], speed: [10, 30], life: [0.3, 0.5], up: 40 });
+    }
+  }
+
+  /** Damage multiplier from the POWER buff (applied on top of damageMultiplier). */
+  get buffDamage() { return this.buffs.damage > 0 ? CONFIG.buffs.damage.multiplier : 1; }
 
   updateHealPopup(dt, world) {
     this.healPopupTimer -= dt;

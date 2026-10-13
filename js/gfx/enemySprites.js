@@ -365,6 +365,66 @@ function drawGhost(p, pose) {
   p.ellipse(37, 31, 2, 3, face);
 }
 
+/**
+ * Mimic: a treasure chest with a toothy mouth and a lolling tongue, facing right.
+ * pose.gap = how far the lid is open; pose.lift raises the whole chest (hops);
+ * pose.wag moves the tongue tip.
+ */
+function drawMimic(p, pose) {
+  const W = ['#2e1a0c', '#4e2e14', '#744420', '#9a6030', '#c08448'];
+  const G = ['#5a3e0e', '#a87a22', '#e8b83a', '#fff0a0'];
+  const mouth = '#3a0a14';
+  const tooth = '#f4ead7';
+  const T = ['#a02848', '#e0507a', '#ff8aa8'];
+  const gap = pose.gap;
+  const up = pose.lift || 0;
+  const base = 50 - up;           // bottom of the chest
+  const top = base - 14;          // top rim of the box
+  const lidBottom = top - gap;
+
+  // box
+  p.rect(13, top, 38, 14, W[2]);
+  p.rect(13, top, 38, 2, W[3]);
+  p.rect(13, top, 4, 14, W[1]);
+  for (const y of [top + 5, top + 10]) p.rect(17, y, 34, 1, W[1]);
+  p.rect(13, base - 2, 38, 2, W[0]);
+  for (const x of [19, 43]) {       // gold bands
+    p.rect(x, top, 3, 14, G[1]);
+    p.rect(x, top, 1, 14, G[2]);
+  }
+  p.rect(13, top, 38, 1, G[2]);     // rim
+  // mouth interior + lower teeth
+  if (gap > 0) {
+    p.rect(15, lidBottom, 34, gap + 1, mouth);
+    p.rect(15, lidBottom + gap - 2, 34, 2, '#5a1424');
+    for (let x = 16; x < 48; x += 4) p.poly([[x, top + 1], [x + 3, top + 1], [x + 1.5, top - Math.min(4, gap - 1)]], tooth);
+  }
+  // tongue lolling out of the front
+  const wag = pose.wag || 0;
+  p.round(30, top - 2, 20, 4, T[0], 1);
+  p.rect(31, top - 2, 18, 2, T[1]);
+  p.round(47, top - 2, 7, 8 + wag, T[1], 2);
+  p.rect(48, top - 1, 2, 5 + wag, T[2]);
+  p.px(50, top + 4 + wag, T[0]);
+  // lid
+  p.round(12, lidBottom - 12, 40, 12, W[2], 4);
+  p.round(13, lidBottom - 12, 36, 5, W[3], 3);
+  p.rect(16, lidBottom - 11, 20, 1, W[4]);
+  p.rect(12, lidBottom - 2, 40, 2, G[1]);
+  p.rect(12, lidBottom - 2, 40, 1, G[2]);
+  for (const x of [19, 43]) p.rect(x, lidBottom - 12, 3, 10, G[1]);
+  // upper teeth
+  if (gap > 0) for (let x = 18; x < 50; x += 4) p.poly([[x, lidBottom], [x + 3, lidBottom], [x + 1.5, lidBottom + Math.min(4, gap - 1)]], tooth);
+  // angry eyes on the lid and a lock plate
+  p.poly([[33, lidBottom - 9], [39, lidBottom - 7], [39, lidBottom - 5], [33, lidBottom - 6]], '#ffd34a');
+  p.poly([[42, lidBottom - 7], [48, lidBottom - 9], [48, lidBottom - 6], [42, lidBottom - 5]], '#ffd34a');
+  p.px(37, lidBottom - 6, '#7a1a10');
+  p.px(44, lidBottom - 6, '#7a1a10');
+  p.rect(28, top + 3, 6, 6, G[1]);
+  p.rect(29, top + 4, 4, 4, G[2]);
+  p.rect(30, top + 6, 2, 2, G[0]);
+}
+
 function buildEnemySprites() {
   const wraithPoses = { idle: [0, 1, 2, 3].map((w) => ({ bob: w % 2 ? -1 : 1, wave: w })) };
   Sprites.enemies = {
@@ -375,6 +435,12 @@ function buildEnemySprites() {
     slime: buildSlimeFrames(SLIME_BIG, false),
     slimeSmall: buildSlimeFrames(SLIME_SMALL, true),
     ghost: buildPoseFrames(drawGhost, 64, wraithPoses, 0.5),
+    mimic: buildPoseFrames(drawMimic, 64, {
+      idle: [{ gap: 4, wag: 0 }, { gap: 5, wag: 2 }],
+      crouch: [{ gap: 2, wag: 1 }],
+      hop: [{ gap: 7, wag: 3, lift: 2 }],
+      bite: [{ gap: 13, wag: 4 }],
+    }, 0.5),
     gravestone: {
       idle: [false, true].map((cracked) => {
         const img = PixelArt.make(GRAVE_SPRITE.w, GRAVE_SPRITE.h, (p) => drawGravestone(p, cracked), OUTLINE, 0.5);

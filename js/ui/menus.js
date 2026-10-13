@@ -6,7 +6,7 @@ const CLASS_INFO = {
     LMB: ['Sword Combo', 'Slash, slash, stab'],
     RMB: ['Barrier Shield', 'Hold: 400 hp frontal shield'],
     E: ['Whirlwind', 'Spin and slash, move faster'],
-    F: ['Charge', 'Rush forward, stunning foes'],
+    F: ['Charge', 'Stunning rush, 2 charges'],
     Q: ['World Cutter', 'Power up, then a massive strike'],
   },
   ranger: {

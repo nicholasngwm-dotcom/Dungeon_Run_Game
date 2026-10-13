@@ -246,7 +246,7 @@ class Enemy extends Entity {
 function createEnemy(type, x, y) {
   const classes = {
     zombie: Zombie, slime: Slime, slimeSmall: Slime, wraith: Wraith, skeleton: Skeleton,
-    undeadKnight: UndeadKnight, clayMinion: ClayMinion, gravestone: Gravestone, ghost: Ghost,
+    undeadKnight: UndeadKnight, clayMinion: ClayMinion, gravestone: Gravestone, ghost: Ghost, mimic: Mimic,
   };
   return new classes[type](x, y, type);
 }
