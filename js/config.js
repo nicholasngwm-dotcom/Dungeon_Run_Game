@@ -146,6 +146,19 @@ const CONFIG = {
       waveRadius: 110, waveSpeed: 260, waveWidth: 14,
       heartChance: 0.25,   // overrides drops.heartChance
     },
+    // stationary: raises a zombie or skeleton every spawnInterval (up to maxAlive at once),
+    // and releases 1-3 ghosts when destroyed
+    gravestone: {
+      hp: 320, speed: 0, radius: 18, damage: 0, contactDamage: 0,
+      firstSpawn: 1.5, spawnInterval: 3, maxAlive: 3, spawnTypes: ['zombie', 'skeleton'],
+      ghosts: [1, 3], heartChance: 0.35,
+    },
+    // only comes out of broken gravestones: slow, contact damage only,
+    // with a chilling aura that slows heroes inside it
+    ghost: {
+      hp: 95, speed: 40, radius: 13, damage: 16, contactDamage: 16,
+      auraRadius: 85, slowAmount: 0.65, knockbackResist: 0.4,
+    },
   },
 
   // mana orbs only drop while the hero uses mana
@@ -155,11 +168,12 @@ const CONFIG = {
   //  WAVES (spawned in order, then a random boss appears)
   // ---------------------------------------------------------
   waves: [
+    // gravestones keep raising enemies until broken, so waves with them have fewer of the rest
     { zombie: 6, slime: 1 },
-    { zombie: 5, skeleton: 4, wraith: 2 },
-    { slime: 3, wraith: 4, skeleton: 4, undeadKnight: 1 },
-    { zombie: 6, skeleton: 5, wraith: 4, undeadKnight: 2 },
-    { zombie: 6, slime: 3, skeleton: 6, wraith: 5, undeadKnight: 3 },
+    { zombie: 4, skeleton: 3, wraith: 2, gravestone: 1 },
+    { slime: 2, wraith: 3, skeleton: 3, undeadKnight: 1, gravestone: 1 },
+    { zombie: 4, skeleton: 4, wraith: 3, undeadKnight: 2, gravestone: 2 },
+    { zombie: 4, slime: 2, skeleton: 5, wraith: 4, undeadKnight: 2, gravestone: 2 },
   ],
   // each wave after the first adds this much enemy hp / damage (wave 5: +60% hp, +32% damage)
   waveScaling: { hp: 0.15, damage: 0.08 },
@@ -260,6 +274,7 @@ const CONFIG = {
     dashSpeed: 760,
     dashRange: 440,
     dashDamage: 38,
+    dashWidth: 56,          // hit lane, same width as the red telegraph on the ground
     dashRecover: 0.5,
     dashChain: [1, 1, 2],   // dashes in a row
 
@@ -268,6 +283,9 @@ const CONFIG = {
     eyeWindup: 0.45,
     eyeLaser: { damage: 18, speed: 135, life: 9, radius: 6 },
     eyeSpreadDegrees: 14,
+    // phase 3: instead of charged volleys, a steady stream while floating
+    eyeStreamEvery: 0.38,
+    eyeStreamJitterDegrees: 6,
 
     // Vanish, then reappear near the hero
     vanishTime: 0.45,
@@ -278,10 +296,11 @@ const CONFIG = {
     // Pull shockwaves after reappearing
     pulseCount: 4,
     pulseInterval: 0.7,
-    pulseSpeed: 320,
+    pulseSpeed: 300,        // rings start at pulseRadius and close in on the king
     pulseRadius: 360,
-    pulseYank: 300,        // knockback toward the king when a ring passes the hero
-    pullSpeed: 70,          // constant drag toward the king while pulsing
+    pullSpeed: 55,          // steady drag toward the king while pulsing (px/s)
+    pullSurge: 240,         // extra drag added when a ring sweeps over the hero...
+    pullSurgeDecay: 3.5,    // ...fading out at this rate (per second)
     pulseLaserEvery: 0.13,  // seconds between random lasers sprayed in every direction
   },
 };

@@ -162,7 +162,15 @@ const SFX = {
   },
   bowDraw: (s) => s.tone({ type: 'triangle', freq: 200, to: 320, dur: 0.25, vol: 0.06 }),
   enemyArrow: (s) => s.tone({ type: 'triangle', freq: 700, to: 250, dur: 0.1, vol: 0.12 }),
-  zombieGroan: (s) => s.tone({ type: 'sawtooth', freq: 110, to: 80, dur: 0.35, vol: 0.06 }),
+  graveRumble: (s) => {
+    s.noise({ dur: 0.45, vol: 0.2, filter: 'lowpass', freq: 300, to: 80 });
+    s.tone({ type: 'triangle', freq: 70, to: 45, dur: 0.4, vol: 0.12 });
+  },
+  ghostWail: (s) => {
+    s.tone({ type: 'sine', freq: 520, to: 380, dur: 0.6, vol: 0.05 });
+    s.tone({ type: 'sine', freq: 530, to: 300, dur: 0.7, vol: 0.04, delay: 0.1 });
+  },
+  zombieGroan:(s) => s.tone({ type: 'sawtooth', freq: 110, to: 80, dur: 0.35, vol: 0.06 }),
   heavySwing: (s) => {
     s.noise({ dur: 0.3, vol: 0.4, filter: 'lowpass', freq: 900, to: 100 });
     s.tone({ type: 'square', freq: 90, to: 40, dur: 0.3, vol: 0.2 });

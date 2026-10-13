@@ -95,6 +95,7 @@ const HUD = {
   statusText(p) {
     const s = [];
     if (p.slowTime > 0) s.push('SLOWED');
+    if (p.chillTime > 0) s.push('CHILLED');
     if (p.shielding) s.push(`SHIELD ${Math.ceil(p.shieldHp)}`);
     if (p.parryTime > 0) s.push('PARRY');
     if (p.haste > 0) s.push('HASTE');

@@ -292,6 +292,79 @@ function buildSlimeFrames(cfg, small) {
   return out;
 }
 
+const GRAVE_SPRITE = { w: 48, h: 56, ax: 24, ay: 50 };
+
+/** Mossy headstone on a dirt mound. cracked = badly damaged, ghost-light leaking out. */
+function drawGravestone(p, cracked) {
+  const S = ['#22202c', '#383646', '#545266', '#747288', '#9e9cb2'];
+  const glow = ['#3a8a5a', '#8affb0'];
+  // dirt mound
+  p.ellipse(24, 49, 21, 5, '#2e2018');
+  p.ellipse(24, 48, 19, 4, '#4a3426');
+  p.rect(14, 47, 6, 1, '#6a4c36');
+  // headstone
+  p.round(11, 8, 26, 40, S[1], 9);
+  p.round(12, 8, 24, 38, S[2], 9);
+  p.round(15, 9, 14, 8, S[3], 4);
+  p.rect(18, 9, 8, 1, S[4]);
+  p.rect(12, 18, 3, 28, S[1]);
+  p.dither(12, 38, 24, 8, S[1], 0);
+  // engraved cross (dark cut with a lit lower lip)
+  p.rect(22, 15, 4, 18, S[0]);
+  p.rect(17, 20, 14, 4, S[0]);
+  p.rect(22, 33, 4, 1, S[3]);
+  p.rect(17, 24, 5, 1, S[3]);
+  p.rect(26, 24, 5, 1, S[3]);
+  // base slab
+  p.rect(8, 43, 32, 6, S[1]);
+  p.rect(8, 43, 32, 1, S[3]);
+  p.rect(9, 48, 30, 1, S[0]);
+  // moss
+  p.rect(12, 14, 4, 3, '#4f6a2a');
+  p.px(13, 13, '#6f8f3c');
+  p.rect(30, 40, 6, 3, '#4f6a2a');
+  p.rect(31, 39, 3, 1, '#6f8f3c');
+  if (cracked) {
+    for (const [pts, light] of [[[[28, 10], [24, 18], [27, 26], [23, 36]], true], [[[14, 30], [19, 36], [17, 42]], false]]) {
+      for (let i = 0; i + 1 < pts.length; i++) {
+        p.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], S[0], 2);
+        if (light) p.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], glow[1]);
+      }
+    }
+    p.rect(32, 9, 3, 2, S[0]); // chipped corner
+    p.px(25, 20, glow[0]);
+  }
+}
+
+/** Sheet ghost facing right; pose.wave (0-3) ripples the hem. */
+function drawGhost(p, pose) {
+  const G = ['#2e4a66', '#5e88ac', '#a4d0ec', '#daf2ff', '#ffffff'];
+  const w = pose.wave;
+  const face = '#1a1030';
+  // rippling hem
+  for (let i = 0; i < 5; i++) {
+    const x0 = 19 + i * 5;
+    const len = (i + w) % 2 ? 7 : 3;
+    p.poly([[x0, 42], [x0 + 6, 42], [x0 + 3, 42 + len]], i % 2 ? G[2] : G[1]);
+  }
+  // body + dome
+  p.rect(19, 26, 26, 17, G[2]);
+  p.ellipse(32, 25, 13, 13, G[1]);
+  p.ellipse(32, 25, 12, 12, G[2]);
+  p.rect(19, 26, 3, 17, G[1]);
+  p.ellipse(28, 19, 6, 4, G[3]);
+  p.rect(25, 17, 3, 1, G[4]);
+  p.line(41, 28, 43, 41, G[3]);
+  // little arm reaching forward
+  p.poly([[42, 27], [51, 31], [42, 35]], G[2]);
+  p.px(50, 31, G[3]);
+  // hollow eyes and a moaning mouth
+  p.rect(33, 21, 3, 5, face);
+  p.rect(39, 21, 3, 5, face);
+  p.px(33, 21, '#4a5a8a');
+  p.ellipse(37, 31, 2, 3, face);
+}
+
 function buildEnemySprites() {
   const wraithPoses = { idle: [0, 1, 2, 3].map((w) => ({ bob: w % 2 ? -1 : 1, wave: w })) };
   Sprites.enemies = {
@@ -301,5 +374,12 @@ function buildEnemySprites() {
     undeadKnight: buildPoseFrames(drawUndeadKnight, 80, HERO_POSES, 0.5),
     slime: buildSlimeFrames(SLIME_BIG, false),
     slimeSmall: buildSlimeFrames(SLIME_SMALL, true),
+    ghost: buildPoseFrames(drawGhost, 64, wraithPoses, 0.5),
+    gravestone: {
+      idle: [false, true].map((cracked) => {
+        const img = PixelArt.make(GRAVE_SPRITE.w, GRAVE_SPRITE.h, (p) => drawGravestone(p, cracked), OUTLINE, 0.5);
+        return { img, flash: PixelArt.silhouette(img) };
+      }),
+    },
   };
 }

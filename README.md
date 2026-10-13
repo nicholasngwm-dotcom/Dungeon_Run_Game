@@ -50,7 +50,8 @@ js/
     effects.js          particles, damage numbers, attack telegraphs
     pickup.js           heart drops
     player/             Player base + Warrior, Ranger, Mage, Rogue
-    enemies/            Enemy base + Zombie, Slime, Wraith, Skeleton, UndeadKnight
+    enemies/            Enemy base + Zombie, Slime, Wraith, Skeleton, UndeadKnight,
+                        Gravestone (raises zombies/skeletons), Ghost (slowing aura)
     boss/golem.js       Clay Golem (parts, phases, attacks)
     boss/phantom.js     Phantom King (dash, eye lasers, vanish + pull shockwaves)
   game/                 Game world, wave director, HUD

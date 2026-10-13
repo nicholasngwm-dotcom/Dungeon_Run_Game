@@ -3,11 +3,11 @@
 // PILLAR = cover cap (top tile), PILLAR_FACE = its brick front. Both are solid.
 const TILE = { FLOOR: 0, WALL: 1, FACE: 2, PILLAR: 3, PILLAR_FACE: 4 };
 
-// Top-left tiles of the 2x2 cover pillars (mirrored around the arena's centre line).
+// Top-left tiles of the optional 2x2 cover pillars (off by default: the arena is open).
 const PILLARS = [[6, 7], [30, 7], [11, 13], [25, 13], [6, 19], [30, 19]];
 
 class Dungeon {
-  constructor({ cols = 38, rows = 26, pillars = true } = {}) {
+  constructor({ cols = 38, rows = 26, pillars = false } = {}) {
     this.cols = cols;
     this.rows = rows;
     this.pillars = pillars ? PILLARS : [];

@@ -8,7 +8,7 @@
 //    pulses shockwaves that pull the player in while spraying slow
 //    lasers in every direction.
 //  Phase 3 (25% hp): mixes both move sets, faster, with double
-//    dashes and wider laser volleys.
+//    dashes, and streams eye lasers nonstop between attacks.
 //  (x, y) is the ground point under the king; it hovers above it.
 // =============================================================
 
@@ -52,6 +52,7 @@ class PhantomKing {
 
   get name() { return 'PHANTOM KING'; }
   get title() { return 'Sovereign of the Restless Dead'; }
+  get defeatText() { return 'The Phantom King has been banished.'; }
 
   get bob() { return Math.sin(this.time * 2.2) * 3; }
   /** Point the sprite is drawn at (the tips of its tails). */
@@ -179,6 +180,7 @@ class PhantomKing {
   updateEyes(dt, world) {
     const c = this.cfg;
     const p = world.player;
+    if (this.phase === 3) return this.updateEyeStream(dt, world);
     if (this.eyeCharge >= 0) {
       this.eyeCharge += dt;
       if (this.eyeCharge < c.eyeWindup - 0.15) this.eyeAim = angleTo(this.hx, this.hy - 22, p.hx, p.hy);
@@ -201,6 +203,22 @@ class PhantomKing {
       this.eyeAim = angleTo(this.hx, this.hy - 22, p.hx, p.hy);
       Sound.play('laserCharge', 0.2);
     }
+  }
+
+  /** Phase 3: a steady stream of lasers from alternating eyes whenever it isn't busy. */
+  updateEyeStream(dt, world) {
+    const c = this.cfg;
+    const p = world.player;
+    this.eyeCharge = -1;
+    this.streamTimer = (this.streamTimer ?? 0.3) - dt;
+    if (this.streamTimer > 0 || p.dead) return;
+    this.streamTimer = c.eyeStreamEvery;
+    this.streamEye = ((this.streamEye || 0) + 1) % 2;
+    const e = PHANTOM_EYES[this.streamEye];
+    const x = this.x + e.x;
+    const y = this.drawY + e.y;
+    this.fireLaser(world, x, y, angleTo(x, y, p.hx, p.hy) + rand(-1, 1) * c.eyeStreamJitterDegrees * DEG);
+    Sound.play('eyeLaser', 0.08);
   }
 
   fireLaser(world, x, y, angle) {
@@ -275,6 +293,8 @@ class PhantomKing {
     const D = this.dash;
     const p = world.player;
     const step = Math.min(c.dashSpeed * dt, D.len - D.traveled);
+    const px = this.x;
+    const py = this.y;
     this.x += Math.cos(D.angle) * step;
     this.y += Math.sin(D.angle) * step;
     D.traveled += step;
@@ -283,7 +303,8 @@ class PhantomKing {
       D.ghost = 0.035;
       this.afterimage(world);
     }
-    if (!D.hit && !p.dead && dist(this.hx, this.hy, p.hx, p.hy) < this.radius + p.radius) {
+    // the hit lane is the ground path the telegraph showed, not the floating body
+    if (!D.hit && !p.dead && pointSegmentDistance(p.x, p.y, px, py, this.x, this.y) < c.dashWidth / 2 + p.hw) {
       D.hit = p.hurt(c.dashDamage, world, this.x, this.y);
     }
     if (D.traveled >= D.len - 0.01) {
@@ -342,22 +363,15 @@ class PhantomKing {
 
   updatePulse(dt, world) {
     const c = this.cfg;
-    const p = world.player;
 
+    // rings start at the edge and close in on the king
     this.pulseTimer -= dt;
     if (this.pulseTimer <= 0 && this.pulsesLeft > 0) {
       this.pulsesLeft--;
       this.pulseTimer = c.pulseInterval;
-      this.pulses.push({ x: this.x, y: this.y, r: 12, hit: false });
+      this.pulses.push({ x: this.x, y: this.y, r: c.pulseRadius, prevR: c.pulseRadius });
       world.shake(4, 0.2);
       Sound.play('pulse');
-    }
-
-    // a steady drag toward the king the whole time (dodging slips free)
-    const d = dist(p.x, p.y, this.x, this.y);
-    if (!p.dead && !p.dodge && d > 20 && d < c.pulseRadius) {
-      const a = angleTo(p.x, p.y, this.x, this.y);
-      world.dungeon.move(p, Math.cos(a) * c.pullSpeed * dt, Math.sin(a) * c.pullSpeed * dt);
     }
 
     // slow lasers sprayed in random directions
@@ -368,39 +382,58 @@ class PhantomKing {
       Sound.play('eyeLaser', 0.08);
     }
 
-    // dust sucked in from the edges
-    if (Math.random() < 0.8) {
+    // dust spiralling in from the edges
+    for (let i = 0; i < 2; i++) {
       const a = rand(0, TAU);
-      const r = rand(120, c.pulseRadius);
-      world.effects.burst(this.x + Math.cos(a) * r, this.y + Math.sin(a) * r * 0.7, { count: 1, colors: ['#7048b4', '#c8b8ff'], speed: [0, 0], life: [0.4, 0.6], size: [2, 3] });
+      const r = rand(140, c.pulseRadius);
+      world.effects.burst(this.x + Math.cos(a) * r, this.y + Math.sin(a) * r * 0.7, { count: 1, colors: ['#7048b4', '#c8b8ff', '#e8d8ff'], speed: [0, 0], life: [0.45, 0.6], size: [2, 3] });
       const last = world.effects.particles[world.effects.particles.length - 1];
-      last.vx = -Math.cos(a) * r * 1.6;
-      last.vy = -Math.sin(a) * r * 1.1;
+      const swirl = a + Math.PI + 0.6; // inward, bent into a spiral
+      last.vx = Math.cos(swirl) * r * 1.5;
+      last.vy = Math.sin(swirl) * r * 1.05;
       last.drag = 0;
     }
 
-    if (this.pulsesLeft === 0 && this.pulseTimer <= c.pulseInterval - 0.6) this.toFloat(world);
+    if (this.pulsesLeft === 0 && this.pulses.length === 0) this.toFloat(world);
   }
 
+  /** Moves the rings and drags the hero in. Runs every frame so a surge fades out smoothly. */
   updatePulseRings(dt, world) {
     const c = this.cfg;
     const p = world.player;
+    const d = dist(p.x, p.y, this.x, this.y);
     for (const s of this.pulses) {
-      s.r += c.pulseSpeed * dt;
-      if (s.r >= c.pulseRadius) s.dead = true;
-      if (!s.hit && !p.dead && !p.dodge && Math.abs(dist(p.x, p.y, s.x, s.y) - s.r) < 18) {
-        s.hit = true;
-        p.knockback(angleTo(p.x, p.y, s.x, s.y), c.pulseYank);
+      s.prevR = s.r;
+      s.r -= c.pulseSpeed * dt;
+      if (s.r <= 24) s.dead = true;
+      // the ring just swept over the hero: a strong tug toward the king
+      const pd = dist(p.x, p.y, s.x, s.y);
+      if (!p.dead && !p.dodge && s.prevR >= pd && s.r < pd) {
+        this.surge = c.pullSurge;
+        world.effects.burst(p.x, p.y - 10, { count: 8, colors: ['#b06aff', '#e8d8ff'], speed: [40, 100], life: [0.2, 0.4], angle: angleTo(p.x, p.y, s.x, s.y), spread: 1 });
       }
     }
     removeDead(this.pulses);
+
+    this.surge = (this.surge || 0) * Math.exp(-c.pullSurgeDecay * dt);
+    const pulling = this.state === 'pulse' && d < c.pulseRadius * 1.1;
+    const speed = (pulling ? c.pullSpeed : 0) + this.surge;
+    this.pullStrength = p.dead || p.dodge || d < 30 ? 0 : speed; // dodging slips free
+    this.pullTarget = p;
+    if (this.pullStrength < 1) return;
+    const a = angleTo(p.x, p.y, this.x, this.y);
+    world.dungeon.move(p, Math.cos(a) * this.pullStrength * dt, Math.sin(a) * this.pullStrength * dt);
+    if (Math.random() < this.pullStrength / 300) {
+      world.effects.burst(p.x + rand(-8, 8), p.y - rand(0, 20), { count: 1, colors: ['#b06aff', '#e8d8ff'], speed: [80, 140], life: [0.2, 0.35], angle: a, spread: 0.3, size: [2, 3] });
+    }
   }
 
   /** Touching the king hurts (its dash deals its own damage). */
   contactDamage(world) {
     const p = world.player;
     if (p.dead || this.state === 'dash' || this.alpha < 0.6) return;
-    if (dist(this.hx, this.hy, p.hx, p.hy) < this.radius + p.radius - 6) p.hurt(this.cfg.contactDamage, world, this.x, this.y);
+    // measured at ground level (its shadow), like the dash lane
+    if (dist(this.x, this.y, p.x, p.y) < this.cfg.dashWidth / 2 + p.hw) p.hurt(this.cfg.contactDamage, world, this.x, this.y);
   }
 
   // ---------------------------------------------------------
@@ -422,6 +455,8 @@ class PhantomKing {
     this.eyeCharge = -1;
     this.dash = null;
     this.pulsesLeft = 0;
+    this.pulses = [];
+    this.surge = 0;
     Sound.play('bossRoar');
     world.banner('THE KING IS BANISHED!', '');
   }
@@ -472,11 +507,39 @@ class PhantomKing {
     const c = this.cfg;
     if (this.alpha > 0) drawShadow(ctx, this.x, this.y + 4, 26 - this.bob, 8, 0.3 * this.alpha);
 
-    for (const s of this.pulses) {
-      const fade = 1 - s.r / c.pulseRadius;
+    // swirling vortex on the floor while it pulls
+    if (this.state === 'pulse') {
+      const R = c.pulseRadius;
       ctx.save();
-      ctx.strokeStyle = `rgba(176, 106, 255, ${0.35 + 0.55 * fade})`;
-      ctx.lineWidth = 5;
+      ctx.fillStyle = 'rgba(90, 40, 150, 0.12)';
+      ctx.beginPath();
+      ctx.ellipse(this.x, this.y, R, R * 0.7, 0, 0, TAU);
+      ctx.fill();
+      ctx.lineCap = 'round';
+      for (let arm = 0; arm < 5; arm++) {
+        const base = (arm / 5) * TAU - this.time * 2.2;
+        for (let k = 0; k < 16; k++) {
+          const f = k / 16;
+          const rr = 30 + f * (R - 40);
+          const a = base + f * 2.4;
+          ctx.fillStyle = `rgba(200, 160, 255, ${0.55 * (1 - f) + 0.08})`;
+          const sz = 2 + (1 - f) * 3;
+          ctx.fillRect(Math.round(this.x + Math.cos(a) * rr - sz / 2), Math.round(this.y + Math.sin(a) * rr * 0.7 - sz / 2), sz, sz);
+        }
+      }
+      ctx.restore();
+    }
+
+    for (const s of this.pulses) {
+      const fade = 1 - s.r / c.pulseRadius; // brighter as it closes in
+      ctx.save();
+      ctx.strokeStyle = `rgba(140, 70, 230, ${0.25 + 0.25 * fade})`;
+      ctx.lineWidth = 14;
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y, s.r + 4, (s.r + 4) * 0.7, 0, 0, TAU);
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(200, 140, 255, ${0.6 + 0.35 * fade})`;
+      ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.ellipse(s.x, s.y, s.r, s.r * 0.7, 0, 0, TAU);
       ctx.stroke();
@@ -504,7 +567,7 @@ class PhantomKing {
 
     const purple = '176, 90, 255';
     if (this.state === 'dashWindup' && this.dash) {
-      Telegraph.line(ctx, this.x, this.y, this.dash.ex, this.dash.ey, this.radius * 2, this.t / c.dashWindup);
+      Telegraph.line(ctx, this.x, this.y, this.dash.ex, this.dash.ey, c.dashWidth, this.t / c.dashWindup);
     }
     if (this.state === 'appear' || this.state === 'hidden') {
       const pt = this.state === 'appear' ? this.dest : null;
@@ -568,8 +631,41 @@ class PhantomKing {
     }
   }
 
+  /** Wavy spectral chain from the hero to the king while it pulls them in. */
+  drawTether(ctx) {
+    const s = this.pullStrength || 0;
+    const p = this.pullTarget;
+    if (s < 5 || !p || this.dying > 0) return;
+    const k = clamp(s / (this.cfg.pullSpeed + this.cfg.pullSurge), 0.15, 1);
+    const sx = p.x;
+    const sy = p.y - 14;
+    const ex = this.hx;
+    const ey = this.hy;
+    const len = dist(sx, sy, ex, ey);
+    const nx = -(ey - sy) / (len || 1);
+    const ny = (ex - sx) / (len || 1);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [width, alpha] of [[6, 0.18], [2, 0.6]]) {
+      ctx.strokeStyle = `rgba(190, 120, 255, ${alpha * k})`;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      for (let i = 0; i <= 20; i++) {
+        const t = i / 20;
+        const wob = Math.sin(t * 14 - this.time * 18) * 5 * Math.sin(t * Math.PI);
+        const x = lerp(sx, ex, t) + nx * wob;
+        const y = lerp(sy, ey, t) + ny * wob;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   /** Aim lines for the eye volley, above everything. */
   drawOverlay(ctx) {
+    this.drawTether(ctx);
     if (this.eyeCharge < 0 || this.dying > 0) return;
     const c = this.cfg;
     const k = clamp(this.eyeCharge / c.eyeWindup, 0, 1);

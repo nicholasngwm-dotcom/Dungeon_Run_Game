@@ -252,6 +252,7 @@ class Golem {
 
   get name() { return 'CLAY GOLEM'; }
   get title() { return 'Guardian of the Crypt'; }
+  get defeatText() { return 'The Clay Golem has fallen.'; }
 
   /** Health bars drawn in the world next to each part that can be hit. */
   get bars() {

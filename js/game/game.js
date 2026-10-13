@@ -8,7 +8,7 @@ class Game {
    */
   constructor(classId, events, opts = {}) {
     this.events = events;          // { onGameOver(stats), onVictory(stats) }
-    this.dungeon = new Dungeon({ pillars: !opts.practice }); // open floor in the practice range
+    this.dungeon = new Dungeon();
     this.camera = new Camera(CONFIG.screen.width, CONFIG.screen.height);
     this.effects = new Effects();
     this.player = createHero(classId, this.dungeon.playerStart.x, this.dungeon.playerStart.y);
@@ -123,7 +123,9 @@ class Game {
   addEnemy(enemy) {
     const s = this.enemyScale;
     if (s.hp !== 1 || s.damage !== 1) {
-      enemy.cfg = { ...enemy.cfg, damage: Math.round(enemy.cfg.damage * s.damage) };
+      const cfg = enemy.cfg;
+      enemy.cfg = { ...cfg, damage: Math.round(cfg.damage * s.damage) };
+      if (cfg.contactDamage) enemy.cfg.contactDamage = Math.round(cfg.contactDamage * s.damage);
       enemy.maxHp = Math.round(enemy.maxHp * s.hp);
       enemy.hp = enemy.maxHp;
     }
@@ -138,8 +140,8 @@ class Game {
     return { hp: 1 + s.hp * d.waveIndex, damage: 1 + s.damage * d.waveIndex };
   }
 
-  /** Shows a summoning circle, then spawns the enemy. */
-  spawnEnemy(type, x, y) {
+  /** Shows a summoning circle, then spawns the enemy. setup(enemy), if given, runs once it appears. */
+  spawnEnemy(type, x, y, setup = null) {
     if (x === undefined) {
       let pt;
       for (let i = 0; i < 30; i++) {
@@ -167,7 +169,9 @@ class Game {
     Sound.play('spawn', 0.1);
     this.after(life, () => {
       this.pendingSpawns = Math.max(0, this.pendingSpawns - 1);
-      this.addEnemy(createEnemy(type, x, y));
+      const enemy = createEnemy(type, x, y);
+      this.addEnemy(enemy);
+      if (setup) setup(enemy);
       this.effects.burst(x, y - 10, { count: 12, colors: ['#b45aff', '#6a28c8', '#e0c0ff'], speed: [30, 100], up: 60 });
     }).spawn = true;
   }
@@ -187,6 +191,7 @@ class Game {
     for (const e of this.enemies) {
       if (e.dead || e.age < 0.3 || e.state === 'leap') continue;
       const damage = e.cfg.contactDamage ?? CONFIG.enemyContactDamage;
+      if (damage <= 0) continue;
       for (const a of this.allies) {
         if (a.contactImmune) continue;
         if (dist(e.x, e.y, a.x, a.y) < e.radius + a.radius) a.hurt(damage, this, e.x, e.y);
@@ -267,6 +272,7 @@ class Game {
     }
     if (this.finished) return;
     this.finished = true;
+    this.defeatText = this.boss.defeatText;
     Music.stop();
     this.after(2.5, () => {
       Sound.play('victory');
@@ -336,7 +342,7 @@ class Game {
   get stats() {
     const m = Math.floor(this.time / 60);
     const s = Math.floor(this.time % 60).toString().padStart(2, '0');
-    return { time: `${m}:${s}`, kills: this.kills, wave: this.director.waveNumber };
+    return { time: `${m}:${s}`, kills: this.kills, wave: this.director.waveNumber, defeatText: this.defeatText };
   }
 
   // ---------------------------------------------------------
@@ -411,8 +417,8 @@ class Game {
         const push = (min - d) / 2;
         const nx = dx / d;
         const ny = dy / d;
-        if (a.state !== 'leap') this.dungeon.move(a, -nx * push, -ny * push);
-        if (b.state !== 'leap') this.dungeon.move(b, nx * push, ny * push);
+        if (a.state !== 'leap' && !a.immovable) this.dungeon.move(a, -nx * push, -ny * push);
+        if (b.state !== 'leap' && !b.immovable) this.dungeon.move(b, nx * push, ny * push);
       }
     }
   }

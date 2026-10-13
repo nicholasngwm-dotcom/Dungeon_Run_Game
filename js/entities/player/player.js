@@ -45,7 +45,15 @@ class Player extends Entity {
 
   /** Overridden by classes for spins, hastes, ult slowdowns... */
   get moveMultiplier() { return 1; }
-  get speedMultiplier() { return (this.slowTime > 0 ? CONFIG.golem.slowAmount : 1) * this.moveMultiplier; }
+  get speedMultiplier() {
+    return (this.slowTime > 0 ? CONFIG.golem.slowAmount : 1) * (this.chillTime > 0 ? this.chillAmount : 1) * this.moveMultiplier;
+  }
+
+  /** Ghost auras: slowed to `amount` speed while inside one (refreshed every frame). */
+  chill(amount, time = 0.2) {
+    if (!(this.chillTime > 0) || amount < this.chillAmount) this.chillAmount = amount;
+    this.chillTime = Math.max(this.chillTime || 0, time);
+  }
 
   /** True while an ability blocks other abilities (movement still allowed). */
   get channeling() { return false; }
@@ -68,6 +76,7 @@ class Player extends Entity {
     this.iframes -= dt;
     this.guard -= dt;
     this.slowTime -= dt;
+    this.chillTime = (this.chillTime || 0) - dt;
     this.busy -= dt;
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
     for (const k of Object.keys(this.cooldowns)) this.cooldowns[k] -= dt;
@@ -100,6 +109,9 @@ class Player extends Entity {
     if (this.busy <= 0) this.handleInput(world);
     this.updateAbility(dt, world);
 
+    if (this.chillTime > 0 && Math.random() < 0.25) {
+      world.effects.burst(this.x + rand(-9, 9), this.y - rand(0, 24), { count: 1, colors: ['#c8f0ff', '#8ad0f0'], speed: [5, 15], life: [0.3, 0.5], up: -10 });
+    }
     if (this.slowTime > 0 && Math.random() < 0.3) {
       world.effects.burst(this.x + rand(-8, 8), this.y, { count: 1, colors: ['#9a7a5a', '#6b4a2a'], speed: [5, 15], life: [0.3, 0.5] });
     }

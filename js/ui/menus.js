@@ -111,7 +111,7 @@ const Menus = {
     document.getElementById('end-title').textContent = won ? 'Victory!' : 'You Died';
     document.getElementById('end-title').style.color = won ? '#f2a541' : '#e04545';
     document.getElementById('end-sub').innerHTML = won
-      ? `The Clay Golem has fallen.<br>Time ${stats.time} &nbsp; Kills ${stats.kills}`
+      ? `${stats.defeatText || "The crypt falls silent."}<br>Time ${stats.time} &nbsp; Kills ${stats.kills}`
       : `Reached wave ${stats.wave}.<br>Time ${stats.time} &nbsp; Kills ${stats.kills}`;
     this.show('end');
   },
