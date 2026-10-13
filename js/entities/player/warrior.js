@@ -426,8 +426,8 @@ class Warrior extends Player {
     const half = (c.arcDegrees * DEG) / 2;
     const frac = this.shieldHp / c.hp;
     const flash = this.shieldFlash > 0;
-    const r0 = c.radius - 4;
-    const r1 = c.radius + 8;
+    const r0 = c.radius - c.thickness * 0.35;
+    const r1 = c.radius + c.thickness * 0.65;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = flash ? 'rgba(220, 240, 255, 0.45)' : `rgba(80, 150, 255, ${0.15 + 0.2 * frac})`;

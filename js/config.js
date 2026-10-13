@@ -40,8 +40,8 @@ const CONFIG = {
                 stabDamage: 50, stabCooldown: 0.6, stabRange: 125, stabWidth: 40, stabLunge: 36, stabKnockback: 340 },
       // RMB (hold): raise a directional barrier shield that soaks hits from the front.
       // Regens after `regenDelay` once lowered; if broken, it's down for `breakCooldown`.
-      shield: { hp: 400, regen: 80, regenDelay: 1.2, breakCooldown: 5, arcDegrees: 130,
-                radius: 30, moveMultiplier: 0.55, guardTime: 0.2 },
+      shield: { hp: 400, regen: 80, regenDelay: 1.2, breakCooldown: 5, arcDegrees: 180,
+                radius: 46, thickness: 22, moveMultiplier: 0.55, guardTime: 0.2 },
       // E: spin attack, moving faster while spinning
       spin:   { damage: 22, tick: 0.22, duration: 2.5, radius: 88, knockback: 90, moveMultiplier: 1.35, cooldown: 9 },
       // F: wind up, then charge through enemies, stunning them. Holds `charges` uses; each refills over `cooldown`s
