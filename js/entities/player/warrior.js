@@ -119,9 +119,9 @@ class Warrior extends Player {
 
   get absorbGuardTime() { return this.cfg.shield.guardTime; }
 
-  /** Soaks hits coming from inside the shield's frontal arc. */
-  absorb(amount, world, fromX, fromY) {
-    if (!this.shielding || fromX === undefined) return amount;
+  /** Soaks projectiles (arrows, fireballs, lasers) hitting the front of the shield. Melee goes through. */
+  absorb(amount, world, fromX, fromY, opts = {}) {
+    if (!this.shielding || fromX === undefined || !opts.projectile) return amount;
     const c = this.cfg.shield;
     if (Math.abs(angleDiff(this.aim, angleTo(this.x, this.hy, fromX, fromY))) > (c.arcDegrees * DEG) / 2) return amount;
     this.shieldHp -= amount;

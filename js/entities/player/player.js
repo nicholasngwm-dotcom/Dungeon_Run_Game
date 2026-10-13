@@ -231,7 +231,8 @@ class Player extends Entity {
   get isInvulnerable() { return this.invulnerable > 0 || this.iframes > 0; }
 
   /**
-   * Classes override this to block or soak damage (shield, parry, aegis).
+   * Classes override this to block or soak damage (shield, parry).
+   * opts = the hurt() options, e.g. { projectile: true }.
    * Returns the damage that still gets through.
    */
   absorb(amount) { return amount; }
@@ -239,11 +240,14 @@ class Player extends Entity {
   /** Grace period after absorb() soaks a whole hit. */
   get absorbGuardTime() { return CONFIG.player.guardTime; }
 
-  /** Returns true if the attack connected (even if it was blocked). */
-  hurt(amount, world, fromX, fromY) {
+  /**
+   * Returns true if the attack connected (even if it was blocked).
+   * opts.projectile marks ranged shots (arrows, fireballs, lasers) for shields.
+   */
+  hurt(amount, world, fromX, fromY, opts = {}) {
     if (this.dead || this.isInvulnerable) return false;
     if (this.guard > 0) return true;
-    amount = this.absorb(amount, world, fromX, fromY);
+    amount = this.absorb(amount, world, fromX, fromY, opts);
     if (amount <= 0) {
       this.guard = this.absorbGuardTime;
       return true;

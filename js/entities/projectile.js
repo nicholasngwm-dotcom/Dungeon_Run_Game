@@ -86,7 +86,7 @@ class Projectile {
   hitPlayer(world) {
     for (const p of world.allies) {
       if (dist(this.x, this.y, p.hx, p.hy) > this.radius + p.radius) continue;
-      if (p.hurt(this.damage, world, this.x, this.y)) return this.destroy(world, p);
+      if (p.hurt(this.damage, world, this.x, this.y, { projectile: true })) return this.destroy(world, p);
     }
   }
 

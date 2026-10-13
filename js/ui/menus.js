@@ -4,8 +4,8 @@ const CLASS_INFO = {
   warrior: {
     PASSIVE: ['Tanker', 'Every 5th hit is blocked'],
     LMB: ['Sword Combo', 'Slash, slash, stab'],
-    RMB: ['Barrier Shield', 'Hold: 400 hp frontal shield'],
-    E: ['Whirlwind', 'Spin and slash, move faster'],
+    RMB: ['Shield', 'Hold: blocks projectiles'],
+    E: ['Whirlwind', '5.5s spin, move faster'],
     F: ['Charge', 'Stunning rush, 2 charges'],
     Q: ['World Cutter', 'Power up, then a massive strike'],
   },

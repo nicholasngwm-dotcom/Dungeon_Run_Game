@@ -36,14 +36,15 @@ const CONFIG = {
       hp: 350,
       speed: 150,
       // LMB: slash, slash, stab
-      combo:  { damage: 26, cooldown: 0.34, resetTime: 0.9, range: 82, arcDegrees: 130, knockback: 180,
-                stabDamage: 50, stabCooldown: 0.6, stabRange: 125, stabWidth: 40, stabLunge: 36, stabKnockback: 340 },
-      // RMB (hold): raise a directional barrier shield that soaks hits from the front.
+      combo:  { damage: 34, cooldown: 0.34, resetTime: 0.9, range: 82, arcDegrees: 130, knockback: 180,
+                stabDamage: 95, stabCooldown: 0.6, stabRange: 125, stabWidth: 40, stabLunge: 36, stabKnockback: 340 },
+      // RMB (hold): raise a directional shield that blocks projectiles (arrows, fireballs, lasers) from the front.
+      // Melee attacks still get through.
       // Regens after `regenDelay` once lowered; if broken, it's down for `breakCooldown`.
       shield: { hp: 400, regen: 80, regenDelay: 1.2, breakCooldown: 5, arcDegrees: 180,
-                radius: 46, thickness: 22, moveMultiplier: 0.55, guardTime: 0.2 },
+                radius: 46, thickness: 22, moveMultiplier: 0.55, guardTime: 0 },
       // E: spin attack, moving faster while spinning
-      spin:   { damage: 22, tick: 0.22, duration: 2.5, radius: 88, knockback: 90, moveMultiplier: 1.35, cooldown: 9 },
+      spin:   { damage: 22, tick: 0.22, duration: 5.5, radius: 88, knockback: 90, moveMultiplier: 1.35, cooldown: 12 },   // cooldown starts when the spin does
       // F: wind up, then charge through enemies, stunning them. Holds `charges` uses; each refills over `cooldown`s
       charge: { windup: 0.5, distance: 330, time: 0.35, width: 44, damage: 35, stun: 1.0, knockback: 260, cooldown: 10, charges: 2 },
       // Q: power up, then a huge downward strike along the aim line.
