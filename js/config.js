@@ -200,7 +200,7 @@ const CONFIG = {
   golem: {
     headHp: 1500,
     fistHp: 750,
-    bodyHp: 2200,
+    bodyHp: 3600,          // the rolling phase (below rollBelow) gets 900 of this
     bodyContactDamage: 30,
 
     // Clay minions summoned around the golem
@@ -268,7 +268,7 @@ const CONFIG = {
   //  Per-phase values are [phase 1, phase 2, phase 3].
   // ---------------------------------------------------------
   phantom: {
-    hp: 5200,
+    hp: 7200,              // phase 3 (below phase3At) gets 1800 of this
     phase2At: 0.5,
     phase3At: 0.25,
     contactDamage: 22,
@@ -290,7 +290,7 @@ const CONFIG = {
     // Dash
     dashWindup: 0.8,
     dashAimLockAt: 0.3,
-    dashSpeeds: [820, 620, 440],   // 1st, 2nd, 3rd dash of a chain: fast, normal, slow (time to react)
+    dashSpeeds: [1000, 780, 580],  // 1st, 2nd, 3rd dash of a chain: fast, normal, slower (time to react)
     dashRange: 440,
     dashDamage: 38,
     dashWidth: 56,          // hit lane, same width as the red telegraph on the ground
@@ -300,7 +300,7 @@ const CONFIG = {
     // Slow eye lasers, aimed at the hero while floating
     eyeInterval: [1.2, 1.6, 1.6],
     eyeWindup: 0.45,
-    eyeLaser: { damage: 28, speed: 135, life: 9, radius: 6 },   // slow, so they hit hard
+    eyeLaser: { damage: 19, speed: 200, life: 7, radius: 6 },   // damage scaled down with the extra speed
     eyeSpreadDegrees: 14,
     // phase 3: instead of charged volleys, a steady stream while floating
     eyeStreamEvery: 0.38,
@@ -320,6 +320,6 @@ const CONFIG = {
     pullSpeed: 55,          // steady drag toward the king while pulsing (px/s)
     pullSurge: 240,         // extra drag added when a ring sweeps over the hero...
     pullSurgeDecay: 3.5,    // ...fading out at this rate (per second)
-    pulseLaserEvery: 0.16,  // seconds between random lasers sprayed in every direction
+    pulseLaserEvery: 0.08,  // seconds between random lasers sprayed in every direction
   },
 };
