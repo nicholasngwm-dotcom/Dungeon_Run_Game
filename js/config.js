@@ -18,6 +18,8 @@ const CONFIG = {
     dodge: { distance: 125, duration: 0.22, invulnerability: 0.3, cooldown: 1.4 },
     // Enemies further than this can't see an invisible hero
     invisibleDetectRange: 200,
+    // passive regen: after `delay` seconds without losing hp, heal `perSecond` (fraction of max hp)
+    regen: { delay: 4, perSecond: 0.015 },
   },
 
   // ---------------------------------------------------------
@@ -150,16 +152,19 @@ const CONFIG = {
   drops: { heartChance: 0.1, heartHeal: 45, manaChance: 0.3, manaRestore: 10 },
 
   // ---------------------------------------------------------
-  //  WAVES (spawned in order, then the boss appears)
+  //  WAVES (spawned in order, then a random boss appears)
   // ---------------------------------------------------------
   waves: [
     { zombie: 6, slime: 1 },
-    { zombie: 4, skeleton: 4, wraith: 2 },
-    { slime: 3, wraith: 4, skeleton: 3, undeadKnight: 1 },
-    { zombie: 6, skeleton: 5, wraith: 3, undeadKnight: 2 },
-    { slime: 3, wraith: 5, skeleton: 5, undeadKnight: 2 },
-    { zombie: 6, slime: 2, skeleton: 6, wraith: 5, undeadKnight: 3 },
+    { zombie: 5, skeleton: 4, wraith: 2 },
+    { slime: 3, wraith: 4, skeleton: 4, undeadKnight: 1 },
+    { zombie: 6, skeleton: 5, wraith: 4, undeadKnight: 2 },
+    { zombie: 6, slime: 3, skeleton: 6, wraith: 5, undeadKnight: 3 },
   ],
+  // each wave after the first adds this much enemy hp / damage (wave 5: +60% hp, +32% damage)
+  waveScaling: { hp: 0.15, damage: 0.08 },
+  // chance of each boss appearing after the last wave
+  bosses: { golem: 0.5, phantom: 0.5 },
   waveBreak: 3,           // pause between waves
   spawnInterval: 0.35,    // stagger between spawns in a wave
   spawnTelegraph: 0.9,    // summoning circle time before an enemy appears
@@ -196,10 +201,11 @@ const CONFIG = {
     fistRange: 430,
     fistDamage: 40,
 
-    // Phase 2 head: lasers + fireball bursts
-    laserInterval: 1.0,
-    laserWindup: 0.6,
-    laserAimLockAt: 0.25,
+    // Phase 2 head: lasers + fireball bursts.
+    // The laser tracks the hero, then locks and charges for laserAimLockAt seconds before firing.
+    laserInterval: 1.6,
+    laserWindup: 1.0,
+    laserAimLockAt: 0.5,
     laserDuration: 0.18,
     laserDamage: 22,
     laserWidth: 14,
@@ -216,7 +222,7 @@ const CONFIG = {
     shockwaveSpeed: 330,
     slowAmount: 0.5,       // movement multiplier while slowed
     slowDuration: 2.0,
-    rollAfter: 30,         // seconds of walking before rolling starts
+    rollBelow: 0.25,       // rolls once the body drops below this fraction of its hp (never before)
 
     // Rolling
     rollWindup: 1.0,
@@ -227,5 +233,55 @@ const CONFIG = {
     rollsBeforeRest: 3,
     rollRest: 2.4,
     rollStun: 0.6,
+  },
+
+  // ---------------------------------------------------------
+  //  BOSS: PHANTOM KING
+  //  Phase 1: floats, dashes, fires slow eye lasers.
+  //  Phase 2 (below phase2At hp): vanishes, reappears near the hero
+  //    and pulses shockwaves that pull the hero in, spraying lasers.
+  //  Phase 3 (below phase3At hp): both move sets, faster.
+  //  Per-phase values are [phase 1, phase 2, phase 3].
+  // ---------------------------------------------------------
+  phantom: {
+    hp: 5200,
+    phase2At: 0.5,
+    phase3At: 0.25,
+    contactDamage: 22,
+    floatSpeed: 90,
+    orbitRadius: 230,
+
+    // time spent floating between big attacks
+    attackInterval: [2.4, 2.0, 1.5],
+
+    // Dash
+    dashWindup: 0.8,
+    dashAimLockAt: 0.3,
+    dashSpeed: 760,
+    dashRange: 440,
+    dashDamage: 38,
+    dashRecover: 0.5,
+    dashChain: [1, 1, 2],   // dashes in a row
+
+    // Slow eye lasers, aimed at the hero while floating
+    eyeInterval: [2.0, 2.6, 1.6],
+    eyeWindup: 0.45,
+    eyeLaser: { damage: 18, speed: 135, life: 9, radius: 6 },
+    eyeSpreadDegrees: 14,
+
+    // Vanish, then reappear near the hero
+    vanishTime: 0.45,
+    hiddenTime: 0.55,
+    appearTime: 0.7,        // telegraph ring at the destination
+    appearDistance: [130, 180],
+
+    // Pull shockwaves after reappearing
+    pulseCount: 4,
+    pulseInterval: 0.7,
+    pulseSpeed: 320,
+    pulseRadius: 360,
+    pulseYank: 300,        // knockback toward the king when a ring passes the hero
+    pullSpeed: 70,          // constant drag toward the king while pulsing
+    pulseLaserEvery: 0.13,  // seconds between random lasers sprayed in every direction
   },
 };

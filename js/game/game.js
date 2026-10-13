@@ -121,7 +121,21 @@ class Game {
   }
 
   addEnemy(enemy) {
+    const s = this.enemyScale;
+    if (s.hp !== 1 || s.damage !== 1) {
+      enemy.cfg = { ...enemy.cfg, damage: Math.round(enemy.cfg.damage * s.damage) };
+      enemy.maxHp = Math.round(enemy.maxHp * s.hp);
+      enemy.hp = enemy.maxHp;
+    }
     this.enemies.push(enemy);
+  }
+
+  /** Later waves get tougher enemies (boss minions and the practice range don't). */
+  get enemyScale() {
+    const d = this.director;
+    if (this.practice || d.state === 'boss' || d.waveIndex <= 0) return { hp: 1, damage: 1 };
+    const s = CONFIG.waveScaling;
+    return { hp: 1 + s.hp * d.waveIndex, damage: 1 + s.damage * d.waveIndex };
   }
 
   /** Shows a summoning circle, then spawns the enemy. */
@@ -224,17 +238,31 @@ class Game {
     this.bannerData = { text, sub, t: duration, maxT: duration };
   }
 
-  startBoss() {
+  /** type: 'golem' | 'phantom', or omitted to roll using CONFIG.bosses. */
+  startBoss(type = Game.rollBoss()) {
     Music.play('boss');
     this.player.heal(this.player.maxHp * CONFIG.bossHealPercent, this);
-    this.boss = new Golem(this.dungeon.center.x, this.dungeon.center.y + 40);
-    this.banner('CLAY GOLEM', 'Guardian of the Crypt', 3);
+    this.boss = Game.createBoss(type, this.dungeon.center);
+    this.banner(this.boss.name, this.boss.title, 3);
     Sound.play('bossRoar');
+  }
+
+  static rollBoss() {
+    const entries = Object.entries(CONFIG.bosses);
+    let r = Math.random() * entries.reduce((s, [, w]) => s + w, 0);
+    for (const [type, w] of entries) {
+      if ((r -= w) < 0) return type;
+    }
+    return entries[0][0];
+  }
+
+  static createBoss(type, center) {
+    return type === 'phantom' ? new PhantomKing(center.x, center.y) : new Golem(center.x, center.y + 40);
   }
 
   onBossDefeated() {
     if (this.practice) {
-      this.banner('GOLEM DEFEATED', 'Spawn it again from the panel');
+      this.banner(`${this.boss.name} DEFEATED`, 'Spawn it again from the panel');
       return;
     }
     if (this.finished) return;
@@ -251,10 +279,9 @@ class Game {
   // ---------------------------------------------------------
 
   practiceSpawn(type) {
-    if (type !== 'golem') return this.spawnEnemy(type);
+    if (type !== 'golem' && type !== 'phantom') return this.spawnEnemy(type);
     if (this.boss) return;
-    const c = this.dungeon.center;
-    this.boss = new Golem(c.x, c.y + 40);
+    this.boss = Game.createBoss(type, this.dungeon.center);
     Sound.play('bossRoar');
   }
 
@@ -425,6 +452,7 @@ class Game {
     for (const p of this.enemyProjectiles) p.draw(ctx);
     if (this.boss) this.boss.drawOverlay(ctx);
     this.effects.draw(ctx);
+    if (this.boss) HUD.drawBossBars(ctx, this.boss);
     this.dungeon.drawTorches(ctx, this.time);
     this.effects.drawTexts(ctx);
     ctx.restore();

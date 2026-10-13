@@ -34,6 +34,7 @@ class Player extends Entity {
     this.ultMax = this.cfg.ult.charge;
     this.healPopup = 0;           // batches small heals into one number
     this.healPopupTimer = 0;
+    this.sinceHurt = 0;           // seconds since hp was last lost (drives passive regen)
     const r = this.cfg.resource;
     this.resource = r ? { ...r, value: r.max } : null;
   }
@@ -71,6 +72,7 @@ class Player extends Entity {
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
     for (const k of Object.keys(this.cooldowns)) this.cooldowns[k] -= dt;
     if (this.resource) this.resource.value = Math.min(this.resource.max, this.resource.value + this.resource.regen * dt);
+    this.updateRegen(dt, world);
     this.updateHealPopup(dt, world);
 
     const m = world.mouseWorld;
@@ -231,6 +233,7 @@ class Player extends Entity {
     // practice god mode (after absorb, so parries and blocks can still be practised)
     if (world.practice && world.practice.options.god) return true;
     this.hp -= amount;
+    this.sinceHurt = 0;
     this.invulnerable = CONFIG.player.hurtInvulnerability;
     this.flashTime = 0.12;
     world.effects.text(this.hx, this.hy - 24, `-${Math.round(amount)}`, { color: '#ff5050', size: 10 });
@@ -258,6 +261,21 @@ class Player extends Entity {
     }
     world.effects.text(this.hx, this.hy - 24, `+${Math.round(gained)}`, { color: '#6cff7a', size: 10 });
     world.effects.burst(this.hx, this.hy, { count: 10, colors: ['#6cff7a', '#c8ffd0'], speed: [20, 60], up: 40 });
+  }
+
+  /** True while passive regen is ticking. */
+  get regenerating() {
+    return this.sinceHurt >= CONFIG.player.regen.delay && this.hp < this.maxHp;
+  }
+
+  /** Slow passive heal once the hero has gone a while without losing hp. */
+  updateRegen(dt, world) {
+    this.sinceHurt += dt;
+    if (!this.regenerating) return;
+    this.hp = Math.min(this.maxHp, this.hp + this.maxHp * CONFIG.player.regen.perSecond * dt);
+    if (Math.random() < dt * 4) {
+      world.effects.burst(this.x + rand(-8, 8), this.y - rand(4, 20), { count: 1, colors: ['#6cff7a', '#c8ffd0'], speed: [5, 15], life: [0.4, 0.7], up: 30 });
+    }
   }
 
   updateHealPopup(dt, world) {

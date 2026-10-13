@@ -8,8 +8,9 @@
 //    untouchable. Fires a laser every second + periodic fireball
 //    bursts. The body becomes attackable and deals contact damage.
 //  Fists destroyed: body walks toward the player, stomping out
-//    shockwaves that slow. After 30s of walking it curls into a
-//    ball and rolls at the player.
+//    shockwaves that slow.
+//  Body below 25% hp (never before): it curls into a ball and
+//    rolls at the player.
 //  Throughout: summons weak clay minions that smash out shockwaves.
 //  Defeat the body to win.
 // =============================================================
@@ -249,14 +250,17 @@ class Golem {
     return list;
   }
 
-  /** Health bars for the HUD. */
+  get name() { return 'CLAY GOLEM'; }
+  get title() { return 'Guardian of the Crypt'; }
+
+  /** Health bars drawn in the world next to each part that can be hit. */
   get bars() {
-    return [
-      { label: 'L.FIST', part: this.fists[0] },
-      { label: 'HEAD', part: this.head, locked: this.phase === 2, lockedText: 'DETACHED' },
-      { label: 'R.FIST', part: this.fists[1] },
-      { label: 'BODY', part: this.body, locked: this.body.immune, lockedText: 'IMMUNE', wide: true },
-    ];
+    if (this.intro > 0 || this.dying > 0 || this.dead) return [];
+    const list = [];
+    for (const f of this.fists) if (!f.dead) list.push({ part: f, x: f.x, y: f.y - 34, w: 44 });
+    if (this.phase === 1) list.push({ part: this.head, x: this.head.x, y: this.head.y - 40, w: 60 });
+    list.push({ part: this.body, x: this.x, y: this.y + 22, w: 110, locked: this.body.immune, lockedText: 'IMMUNE', marker: this.cfg.rollBelow });
+    return list;
   }
 
   // ---------------------------------------------------------
@@ -280,6 +284,7 @@ class Golem {
     if (this.dying > 0) return this.updateDeath(dt, world);
 
     const p = world.player;
+    if (this.mode !== 'roll' && this.body.hp < this.body.maxHp * this.cfg.rollBelow) this.startRolling(world);
     if (this.mode === 'walk') this.updateWalk(dt, world);
     if (this.mode === 'roll') this.updateRoll(dt, world);
     this.updatePartPositions(dt, world);
@@ -412,6 +417,10 @@ class Golem {
       const L = this.laser;
       L.t += dt;
       if (L.t < c.laserWindup - c.laserAimLockAt) L.angle = angleTo(h.x, h.y, p.hx, p.hy);
+      else if (!L.locked) {
+        L.locked = true;
+        Sound.play('laserCharge', 0.2);
+      }
       L.end = world.dungeon.raycast(h.x, h.y, L.angle);
       if (!L.fired && L.t >= c.laserWindup) {
         L.fired = true;
@@ -430,8 +439,7 @@ class Golem {
     }
     this.laserTimer -= dt;
     if (this.laserTimer <= 0) {
-      this.laser = { t: 0, angle: angleTo(h.x, h.y, p.hx, p.hy), fired: false, end: { x: h.x, y: h.y } };
-      Sound.play('laserCharge', 0.2);
+      this.laser = { t: 0, angle: angleTo(h.x, h.y, p.hx, p.hy), fired: false, locked: false, end: { x: h.x, y: h.y } };
     }
   }
 
@@ -481,8 +489,6 @@ class Golem {
         this.stompRaise = 0;
       }
     }
-
-    if (this.walkTime >= c.rollAfter) this.startRolling(world);
   }
 
   updateShockwaves(dt, world) {
@@ -773,15 +779,38 @@ class Golem {
     const h = this.head;
     const c = this.cfg;
     ctx.save();
-    if (!L.fired) {
-      const t = L.t / c.laserWindup;
-      ctx.strokeStyle = `rgba(255, 60, 60, ${0.3 + 0.5 * t})`;
-      ctx.lineWidth = 1 + t * 2;
+    const lockAt = c.laserWindup - c.laserAimLockAt;
+    if (!L.fired && L.t < lockAt) {
+      // tracking: thin dashed sight line
+      const t = L.t / lockAt;
+      ctx.strokeStyle = `rgba(255, 60, 60, ${0.25 + 0.3 * t})`;
+      ctx.lineWidth = 1 + t;
       ctx.setLineDash([8, 6]);
       ctx.beginPath();
       ctx.moveTo(h.x, h.y);
       ctx.lineTo(L.end.x, L.end.y);
       ctx.stroke();
+    } else if (!L.fired) {
+      // locked: the beam's path flashes and an orb charges at the head
+      const t = (L.t - lockAt) / c.laserAimLockAt;
+      const blink = 0.5 + 0.5 * Math.sin(L.t * 40);
+      ctx.strokeStyle = `rgba(255, 60, 60, ${0.15 + 0.25 * t})`;
+      ctx.lineWidth = c.laserWidth;
+      ctx.beginPath();
+      ctx.moveTo(h.x, h.y);
+      ctx.lineTo(L.end.x, L.end.y);
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(255, 120, 100, ${0.5 + 0.4 * blink})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter';
+      const r = 4 + t * 10;
+      const g = ctx.createRadialGradient(h.x, h.y, 1, h.x, h.y, r * 2);
+      g.addColorStop(0, 'rgba(255, 230, 210, 0.9)');
+      g.addColorStop(0.4, 'rgba(255, 80, 50, 0.6)');
+      g.addColorStop(1, 'rgba(255, 40, 20, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(h.x - r * 2, h.y - r * 2, r * 4, r * 4);
     } else {
       const t = (L.t - c.laserWindup) / c.laserDuration;
       ctx.globalCompositeOperation = 'lighter';

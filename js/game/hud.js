@@ -36,12 +36,8 @@ const HUD = {
   draw(ctx, game) {
     this.drawPlayer(ctx, game.player);
     this.drawWave(ctx, game);
-    if (game.boss && !game.boss.dead) {
-      // fade the bars if the hero walks behind them
-      const sy = game.player.y - game.camera.y;
-      ctx.globalAlpha = sy > 420 ? 0.35 : 1;
-      this.drawBoss(ctx, game.boss);
-      ctx.globalAlpha = 1;
+    if (game.boss && !game.boss.dead && game.boss.intro <= 0 && !game.practice) {
+      this.text(ctx, game.boss.name, 480, 12, { size: 10, align: 'center', color: '#f2a541' });
     }
     this.drawBanner(ctx, game);
     const p = game.player;
@@ -108,6 +104,7 @@ const HUD = {
     if (p.stormReady) s.push('STORM READY');
     if (p.cleave) s.push(`POWER ${Math.floor(p.cleavePower * 100)}% (LMB)`);
     if (p.spin) s.push('SPIN (E: STOP)');
+    if (p.regenerating) s.push('REGEN');
     return s.join(' ');
   },
 
@@ -164,32 +161,37 @@ const HUD = {
     this.text(ctx, `ENEMIES ${left}`, 946, 32, { size: 8, align: 'right' });
   },
 
-  drawBoss(ctx, boss) {
-    if (boss.intro > 0) return;
-    // bottom-right, clear of the ability bar and the golem itself
-    const bars = boss.bars;
-    const small = bars.filter((b) => !b.wide);
-    const bw = 118;
-    const gap = 12;
-    const total = small.length * bw + (small.length - 1) * gap;
-    const left = 960 - total - 16;
-    this.text(ctx, 'CLAY GOLEM', left + total / 2, 448, { size: 10, align: 'center', color: '#f2a541' });
-    small.forEach((b, i) => this.bossBar(ctx, left + i * (bw + gap), 478, bw, b));
-    const body = bars.find((b) => b.wide);
-    this.bossBar(ctx, left, 510, total, body);
-  },
-
-  bossBar(ctx, x, y, w, b) {
-    const part = b.part;
-    const dead = part.dead || part.hp <= 0;
-    this.text(ctx, b.label, x, y - 10, { size: 6, color: dead ? '#6a5a7a' : '#f4ead7' });
-    if (b.locked) {
-      this.bar(ctx, x, y, w, 8, 1, '#4a4058', '#2a2438');
-      this.text(ctx, b.lockedText, x + w / 2, y, { size: 6, align: 'center', color: '#a99bbd' });
-      return;
+  /**
+   * Boss health bars, drawn in world space (inside the camera transform)
+   * next to each part that can be hit. boss.bars gives
+   * [{ part, x, y, w, locked?, lockedText?, marker? }] centred on (x, y);
+   * marker is an hp fraction to tick (e.g. a phase threshold).
+   */
+  drawBossBars(ctx, boss) {
+    for (const b of boss.bars) {
+      const h = 4;
+      const x = Math.round(b.x - b.w / 2);
+      const y = Math.round(b.y);
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x - 1, y - 1, b.w + 2, h + 2);
+      if (b.locked) {
+        ctx.fillStyle = '#4a4058';
+        ctx.fillRect(x, y, b.w, h);
+        if (b.lockedText) this.text(ctx, b.lockedText, b.x, y - 8, { size: 5, align: 'center', color: '#a99bbd' });
+        continue;
+      }
+      const ratio = clamp(b.part.hp / b.part.maxHp, 0, 1);
+      ctx.fillStyle = '#3a1a24';
+      ctx.fillRect(x, y, b.w, h);
+      ctx.fillStyle = b.color || '#e8732a';
+      ctx.fillRect(x, y, Math.round(b.w * ratio), h);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.fillRect(x, y, Math.round(b.w * ratio), 1);
+      for (const m of [].concat(b.marker ?? [])) {
+        ctx.fillStyle = '#f4ead7';
+        ctx.fillRect(x + Math.round(b.w * m), y - 1, 1, h + 2);
+      }
     }
-    this.bar(ctx, x, y, w, 8, part.hp / part.maxHp, '#e8732a');
-    if (dead) this.text(ctx, 'DESTROYED', x + w / 2, y, { size: 6, align: 'center', color: '#a99bbd' });
   },
 
   drawBanner(ctx, game) {

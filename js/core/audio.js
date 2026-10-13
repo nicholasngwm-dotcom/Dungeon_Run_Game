@@ -208,6 +208,19 @@ const SFX = {
     s.tone({ type: 'sine', freq: 70, to: 25, dur: 0.4, vol: 0.4 });
   },
   roll: (s) => s.noise({ dur: 0.5, vol: 0.25, filter: 'lowpass', freq: 250, to: 120 }),
+  phantomVanish: (s) => {
+    s.tone({ type: 'sine', freq: 900, to: 180, dur: 0.45, vol: 0.1 });
+    s.noise({ dur: 0.35, vol: 0.12, filter: 'bandpass', freq: 2400, to: 400, q: 2 });
+  },
+  phantomAppear: (s) => {
+    s.tone({ type: 'sine', freq: 180, to: 900, dur: 0.4, vol: 0.1 });
+    s.noise({ dur: 0.3, vol: 0.12, filter: 'bandpass', freq: 400, to: 2400, q: 2 });
+  },
+  pulse: (s) => {
+    s.tone({ type: 'sine', freq: 140, to: 50, dur: 0.45, vol: 0.25 });
+    s.noise({ dur: 0.3, vol: 0.15, filter: 'lowpass', freq: 600, to: 120 });
+  },
+  eyeLaser: (s) => s.tone({ type: 'square', freq: 1300, to: 500, dur: 0.12, vol: 0.05 }),
   partBreak: (s) => {
     s.noise({ dur: 0.7, vol: 0.5, filter: 'lowpass', freq: 2000, to: 60 });
     s.tone({ type: 'square', freq: 200, to: 30, dur: 0.6, vol: 0.2 });

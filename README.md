@@ -1,4 +1,4 @@
-# Crypt of the Clay Golem (prototype)
+# Dungeon Run (prototype)
 
 Top-down pixel-art dungeon arena game in plain HTML, CSS and JavaScript.
 All art is drawn procedurally into canvases and all sound is synthesized with
@@ -15,14 +15,15 @@ VS Code Live Server.
 | --- | --- |
 | `index.html?class=mage` | Skip the menus and start as the Mage |
 | `index.html?class=rogue&wave=3` | Start at wave 3 |
-| `index.html?class=warrior&boss` | Go straight to the Clay Golem |
+| `index.html?class=warrior&boss` | Go straight to a random boss |
+| `index.html?class=warrior&boss=phantom` | Go straight to a chosen boss (`golem` or `phantom`) |
 | `index.html?class=mage&practice` | Start in the practice range |
 
 ## Practice range
 
 Pick **Practice Range** on the main menu. A training dummy shows your DPS
 (top of the screen), and the panel on the right lets you switch hero, spawn
-any enemy or the Clay Golem, clear the arena, fill your ultimate, and toggle
+any enemy or either boss, clear the arena, fill your ultimate, and toggle
 god mode, infinite mana and infinite energy. Dying respawns you.
 
 ## Controls
@@ -51,6 +52,7 @@ js/
     player/             Player base + Warrior, Ranger, Mage, Rogue
     enemies/            Enemy base + Zombie, Slime, Wraith, Skeleton, UndeadKnight
     boss/golem.js       Clay Golem (parts, phases, attacks)
+    boss/phantom.js     Phantom King (dash, eye lasers, vanish + pull shockwaves)
   game/                 Game world, wave director, HUD
   ui/menus.js           DOM menus + class select cards
 ```
@@ -58,8 +60,9 @@ js/
 ## Tuning
 
 Every number you might want to tweak is in `js/config.js`, including hero
-stats, enemy stats and telegraph (`windup`) times, the wave list, and all Clay
-Golem timings and damage.
+stats, enemy stats and telegraph (`windup`) times, the wave list and per-wave
+scaling, boss odds, passive regen, and all Clay Golem and Phantom King timings
+and damage.
 
 ## Adding a class
 

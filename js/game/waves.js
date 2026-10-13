@@ -63,12 +63,12 @@ class WaveDirector {
     Sound.play('waveStart');
   }
 
-  /** Debug helper: jump straight to a wave (1-based) or the boss. */
-  skipTo(waveNumber) {
+  /** Debug helper: jump straight to a wave (1-based) or the boss ('golem' / 'phantom', random if omitted). */
+  skipTo(waveNumber, bossType) {
     if (waveNumber > this.totalWaves) {
       this.state = 'boss';
       this.waveIndex = this.totalWaves - 1;
-      this.world.startBoss();
+      this.world.startBoss(CONFIG.bosses[bossType] !== undefined ? bossType : undefined);
     } else {
       this.waveIndex = waveNumber - 2;
       this.timer = 0.5;

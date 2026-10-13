@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Crypt of the Clay Golem</title>
+  <title>Dungeon Run</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
@@ -14,7 +14,7 @@
 
     <!-- Main menu -->
     <section id="screen-menu" class="screen">
-      <h1 class="title">Crypt of the<br><span>Clay Golem</span></h1>
+      <h1 class="title">Dungeon<br><span>Run</span></h1>
       <div class="menu-buttons">
         <button class="btn" data-action="play">Start Game</button>
         <button class="btn" data-action="practice">Practice Range</button>
@@ -68,6 +68,7 @@
           <button data-pp="spawn:undeadKnight">Knight</button>
           <button data-pp="spawn:clayMinion">Minion</button>
           <button data-pp="spawn:golem" class="pp-wide">Clay Golem</button>
+          <button data-pp="spawn:phantom" class="pp-wide">Phantom King</button>
           <button data-pp="clear" class="pp-wide">Clear enemies</button>
         </div>
         <div class="pp-label">Cheats</div>
@@ -114,6 +115,7 @@
   <script src="js/gfx/heroSprites.js"></script>
   <script src="js/gfx/enemySprites.js"></script>
   <script src="js/gfx/bossSprites.js"></script>
+  <script src="js/gfx/phantomSprites.js"></script>
   <script src="js/gfx/itemSprites.js"></script>
   <script src="js/gfx/iconSprites.js"></script>
   <script src="js/gfx/tiles.js"></script>
@@ -138,6 +140,7 @@
   <script src="js/entities/enemies/undeadKnight.js"></script>
   <script src="js/entities/enemies/clayMinion.js"></script>
   <script src="js/entities/boss/golem.js"></script>
+  <script src="js/entities/boss/phantom.js"></script>
 
   <!-- Game -->
   <script src="js/game/waves.js"></script>

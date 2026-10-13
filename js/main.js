@@ -3,7 +3,7 @@
 // Dev shortcuts (add to the URL):
 //   ?class=mage          skip menus and start as a class
 //   ?class=rogue&wave=3  start at a given wave
-//   ?class=warrior&boss  start at the boss fight
+//   ?class=warrior&boss  start at a random boss (&boss=golem or &boss=phantom to pick)
 //   ?class=mage&practice start in the practice range
 
 const App = {
@@ -26,6 +26,7 @@ const App = {
     buildHeroSprites();
     buildEnemySprites();
     buildBossSprites();
+    buildPhantomSprites();
     buildItemSprites();
     buildIconSprites();
 
@@ -60,7 +61,7 @@ const App = {
     this.practiceMode = params.has('practice');
     this.startGame(classId);
     if (this.practiceMode) return;
-    if (params.has('boss')) this.game.director.skipTo(CONFIG.waves.length + 1);
+    if (params.has('boss')) this.game.director.skipTo(CONFIG.waves.length + 1, params.get('boss'));
     else if (params.get('wave')) this.game.director.skipTo(parseInt(params.get('wave'), 10));
   },
 
