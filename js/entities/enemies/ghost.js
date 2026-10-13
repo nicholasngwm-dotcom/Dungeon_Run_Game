@@ -1,4 +1,5 @@
-// Ghost: rises from broken gravestones. Drifts slowly after the hero with a
+// Ghost: rises from broken gravestones. Fragile and slow, so instead of
+// chasing it drifts to where the hero is heading, to cut them off with its
 // chilling aura that slows anyone inside it. Only hurts by touch.
 
 class Ghost extends Enemy {
@@ -14,11 +15,39 @@ class Ghost extends Enemy {
     const c = this.cfg;
     const p = this.target(world);
     this.auraSpin += dt * 0.6;
-    if (!p.dead) this.moveToward(world, p.x, p.y, this.speed, dt);
+    if (!p.dead) {
+      const t = this.interceptPoint(world, p, dt);
+      this.moveToward(world, t.x, t.y, this.speed, dt);
+    }
     for (const a of world.allies) {
       if (a.chill && dist(a.x, a.y, this.x, this.y) < c.auraRadius) a.chill(c.slowAmount);
     }
     if (Math.random() < dt * 2) Sound.play('ghostWail', 2.5);
+  }
+
+  /**
+   * Where to head to get in the hero's way: a point ahead along their
+   * (smoothed) movement, further ahead the further away they are.
+   * Close up it just goes straight for them.
+   */
+  interceptPoint(world, p, dt) {
+    const c = this.cfg;
+    if (this.lastSeen && this.lastSeen.who === p && dt > 0) {
+      const k = Math.min(1, dt * 4);
+      this.heroVel.x = lerp(this.heroVel.x, (p.x - this.lastSeen.x) / dt, k);
+      this.heroVel.y = lerp(this.heroVel.y, (p.y - this.lastSeen.y) / dt, k);
+    } else {
+      this.heroVel = { x: 0, y: 0 };
+    }
+    this.lastSeen = { who: p, x: p.x, y: p.y };
+    const d = this.distanceTo(p);
+    if (d < c.auraRadius * 0.5) return p;
+    const lead = clamp(d / 160, 0, c.maxLead);
+    const b = world.dungeon.floorBounds;
+    return {
+      x: clamp(p.x + this.heroVel.x * lead, b.left + 20, b.right - 20),
+      y: clamp(p.y + this.heroVel.y * lead, b.top + 20, b.bottom - 20),
+    };
   }
 
   die(world) {

@@ -8,7 +8,7 @@ class Rogue extends Player {
     this.weapon = Sprites.weapons.dagger;
     this.maxCooldowns = {
       primary: c.dagger.cooldown, secondary: c.strike.cooldown, e: c.parry.cooldown,
-      f: c.storm.cooldown, dodge: CONFIG.player.dodge.cooldown,
+      f: c.storm.cooldown, dodge: this.dodgeCooldown,
     };
     this.icons = { primary: 'DAGGERS', secondary: 'STRIKE', e: 'PARRY', f: 'STORM', q: 'CLONE' };
     this.dash = null;
@@ -18,6 +18,8 @@ class Rogue extends Player {
     this.stormReady = false;
     this.storm = null;
     this.vanish = 0;
+    this.streak = 0;       // Killing Streak passive
+    this.streakTime = 0;
   }
 
   get moveMultiplier() { return this.haste > 0 ? this.cfg.parry.speedMultiplier : 1; }
@@ -25,7 +27,66 @@ class Rogue extends Player {
   get ignoresContact() { return !!this.dash; }
   get bodyAlpha() { return this.vanish > 0 ? 0.15 : 1; }
 
-  onKill() { this.gainResource(this.cfg.resource.perKill); }
+  onKill(world) {
+    this.gainResource(this.cfg.resource.perKill);
+    // passive: Killing Streak
+    const c = this.cfg.passive;
+    const was = this.streak;
+    this.streak = Math.min(c.maxStreak, this.streak + 1);
+    this.streakTime = c.duration;
+    if (this.streak !== was) {
+      world.effects.text(this.hx, this.hy - 40, this.streak === c.maxStreak ? 'MAX STREAK!' : `STREAK x${this.streak}`, { color: '#f0c040', size: this.streak === c.maxStreak ? 9 : 7 });
+    }
+  }
+
+  // ---------- passive: Killing Streak ----------
+
+  get damageMultiplier() { return 1 + this.streak * this.cfg.passive.damagePerStreak; }
+
+  updateStreak(dt, world) {
+    if (this.streak <= 0) return;
+    this.streakTime -= dt;
+    if (this.streakTime > 0) return;
+    world.effects.text(this.hx, this.hy - 40, 'STREAK LOST', { color: '#a99bbd', size: 7 });
+    this.streak = 0;
+  }
+
+  get passiveInfo() {
+    const c = this.cfg.passive;
+    const on = this.streak > 0;
+    return {
+      name: 'KILL STREAK', color: '#f0c040', pips: this.streak, maxPips: c.maxStreak, ready: this.streak === c.maxStreak,
+      text: on ? `x${this.streak}  +${Math.round(this.streak * c.damagePerStreak * 100)}% DMG` : 'KILL TO START',
+      bar: on ? this.streakTime / c.duration : null,
+    };
+  }
+
+  /** Streak counter over the rogue's head, with a ring that drains as the streak runs out. */
+  drawPassive(ctx) {
+    if (this.streak <= 0 || this.dead) return;
+    const x = Math.round(this.x);
+    const y = Math.round(this.y - 54);
+    const k = clamp(this.streakTime / this.cfg.passive.duration, 0, 1);
+    ctx.save();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = OUTLINE;
+    ctx.beginPath();
+    ctx.arc(x, y, 10, 0, TAU);
+    ctx.stroke();
+    ctx.strokeStyle = k < 0.3 && Math.floor(this.animTime * 10) % 2 ? '#ff6040' : '#f0c040';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 10, -Math.PI / 2, -Math.PI / 2 + TAU * k);
+    ctx.stroke();
+    ctx.font = `7px ${PIXEL_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = OUTLINE;
+    ctx.fillText(`${this.streak}`, x + 1, y + 1);
+    ctx.fillStyle = '#ffe680';
+    ctx.fillText(`${this.streak}`, x, y);
+    ctx.restore();
+  }
 
   handleMouse(world) {
     if (this.storm) {
@@ -183,6 +244,7 @@ class Rogue extends Player {
   }
 
   updateAbility(dt, world) {
+    this.updateStreak(dt, world);
     this.throwAnim -= dt;
     this.parryTime -= dt;
     this.haste -= dt;

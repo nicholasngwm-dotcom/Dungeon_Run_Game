@@ -8,7 +8,7 @@ class Ranger extends Player {
     this.weapon = Sprites.weapons.bow;
     this.maxCooldowns = {
       primary: c.arrow.cooldown, secondary: c.volley.cooldown, e: c.rapidFire.cooldown,
-      f: c.elemental.cooldown, dodge: CONFIG.player.dodge.cooldown,
+      f: c.elemental.cooldown, dodge: this.dodgeCooldown,
     };
     this.icons = { primary: 'ARROW', secondary: 'VOLLEY', e: 'RAPID', f: 'FIRE/ICE', q: 'CAMO' };
     this.targeting = false;
@@ -190,6 +190,8 @@ class Ranger extends Player {
   ultimate(world) {
     this.camo = this.cfg.ult.duration;
     this.slowTime = 0; // cleanse
+    this.chillTime = 0;
+    for (const k of Object.keys(this.cooldowns)) this.cooldowns[k] = 0; // every ability ready again
     world.effects.burst(this.hx, this.hy, { count: 24, colors: ['#62802f', '#88a446', '#e0d2aa'], speed: [60, 160], life: [0.3, 0.6] });
     world.effects.text(this.hx, this.hy - 30, 'CAMO', { color: '#8cff9a', size: 8 });
     Sound.play('dash');
@@ -199,7 +201,7 @@ class Ranger extends Player {
     this.world = world; // for the camo detection preview while drawing
     this.recoil -= dt;
     this.camo -= dt;
-    if (this.camo > 0) this.slowTime = 0;
+    if (this.camo > 0) { this.slowTime = 0; this.chillTime = 0; }
 
     const c = this.cfg.volley;
     const m = world.mouseWorld;
@@ -282,6 +284,11 @@ class Ranger extends Player {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
+  }
+
+  // passive: Agility (faster base speed in CONFIG, shorter dodge via dodgeCooldown)
+  get passiveInfo() {
+    return { name: 'AGILITY', color: '#8cff9a', text: `FAST, ${this.dodgeCooldown}s DODGE` };
   }
 
   drawExtras(ctx) {

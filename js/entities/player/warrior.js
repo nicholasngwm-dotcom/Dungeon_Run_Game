@@ -8,7 +8,7 @@ class Warrior extends Player {
     this.weapon = Sprites.weapons.greatblade;
     this.maxCooldowns = {
       primary: c.combo.cooldown, secondary: c.shield.breakCooldown, e: c.spin.cooldown,
-      f: c.charge.cooldown, dodge: CONFIG.player.dodge.cooldown,
+      f: c.charge.cooldown, dodge: this.dodgeCooldown,
     };
     this.icons = { primary: 'COMBO', secondary: 'SHIELD', e: 'SPIN', f: 'CHARGE', q: 'CLEAVE' };
     this.swingTime = 0;
@@ -23,6 +23,7 @@ class Warrior extends Player {
     this.spin = null;
     this.charge = null;
     this.cleave = null;    // ult power-up
+    this.hitsTaken = 0;    // Tanker passive: hits since the last automatic block
   }
 
   get channeling() { return !!(this.spin || this.cleave); }
@@ -309,6 +310,75 @@ class Warrior extends Player {
       const power = this.cleavePower;
       Telegraph.line(ctx, this.pivotX, this.pivotY, ex, ey, c.width * lerp(0.6, 1, power), power, power >= 1 ? '255, 240, 140' : '255, 210, 80');
     }
+  }
+
+  // ---------- passive: Tanker ----------
+
+  get tankerReady() { return this.hitsTaken >= this.cfg.passive.hits; }
+
+  onHitTaken() {
+    this.hitsTaken = Math.min(this.cfg.passive.hits, this.hitsTaken + 1);
+  }
+
+  /** Once enough hits have landed, the next one is shrugged off. */
+  passiveBlock(world, fromX, fromY) {
+    if (!this.tankerReady) return false;
+    this.hitsTaken = 0;
+    this.invulnerable = CONFIG.player.hurtInvulnerability;
+    world.effects.text(this.hx, this.hy - 30, 'BLOCKED!', { color: '#ffd34a', size: 10, life: 0.9 });
+    world.effects.burst(this.hx, this.hy - 6, { count: 18, colors: ['#ffd34a', '#fff2a0', '#c8c0b0'], speed: [60, 180], life: [0.2, 0.45] });
+    const x = this.hx;
+    const y = this.hy - 6;
+    world.effects.add(0.35, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `rgba(255, 211, 74, ${1 - t})`;
+      ctx.lineWidth = 4 * (1 - t) + 1;
+      ctx.beginPath();
+      ctx.arc(x, y, 16 + t * 26, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    });
+    world.shake(3, 0.12);
+    Sound.play('impact');
+    Sound.play('pickup');
+    return true;
+  }
+
+  get passiveInfo() {
+    const n = this.cfg.passive.hits;
+    return {
+      name: 'TANKER', color: '#f2a541', pips: this.hitsTaken, maxPips: n, ready: this.tankerReady,
+      text: this.tankerReady ? 'NEXT HIT BLOCKED' : `${this.hitsTaken}/${n} HITS`,
+    };
+  }
+
+  /** A glowing shield over the warrior's head while the free block is ready. */
+  drawPassive(ctx) {
+    if (!this.tankerReady || this.dead) return;
+    const x = Math.round(this.x);
+    const y = Math.round(this.y - 52 + Math.sin(this.animTime * 4) * 2);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(x, y, 1, x, y, 16);
+    g.addColorStop(0, `rgba(255, 211, 74, ${0.45 + Math.sin(this.animTime * 8) * 0.15})`);
+    g.addColorStop(1, 'rgba(255, 211, 74, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - 16, y - 16, 32, 32);
+    ctx.restore();
+    // pixel shield
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 6, y - 7, 12, 10);
+    ctx.fillRect(x - 5, y + 3, 10, 2);
+    ctx.fillRect(x - 3, y + 5, 6, 2);
+    ctx.fillStyle = '#ffd34a';
+    ctx.fillRect(x - 5, y - 6, 10, 8);
+    ctx.fillRect(x - 4, y + 2, 8, 2);
+    ctx.fillRect(x - 2, y + 4, 4, 2);
+    ctx.fillStyle = '#fff2a0';
+    ctx.fillRect(x - 4, y - 5, 3, 3);
+    ctx.fillStyle = '#b8862a';
+    ctx.fillRect(x - 1, y - 6, 2, 11);
   }
 
   drawExtras(ctx) {

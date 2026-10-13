@@ -46,11 +46,13 @@ class HeartPickup extends Pickup {
 }
 
 class ManaPickup extends Pickup {
-  wanted(p) { return p.resource && p.resource.value < p.resource.max; }
+  // always worth grabbing: even at full mana it grants a mana surge
+  wanted(p) { return !!p.resource && p.resource.name === 'MANA'; }
 
   collect(p, world) {
     p.gainResource(CONFIG.drops.manaRestore);
     world.effects.text(p.hx, p.hy - 24, `+${CONFIG.drops.manaRestore}`, { color: p.resource.color, size: 8 });
+    p.startManaSurge?.(world); // Mage passive
   }
 
   draw(ctx) {

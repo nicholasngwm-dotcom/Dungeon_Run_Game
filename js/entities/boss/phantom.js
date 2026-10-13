@@ -2,13 +2,14 @@
 //  PHANTOM KING BOSS
 //
 //  A single floating target that drifts over walls and pillars.
-//  Phase 1: orbits the player, dashes at them, and fires slow
-//    eye lasers.
-//  Phase 2 (50% hp): vanishes and reappears near the player, then
-//    pulses shockwaves that pull the player in while spraying slow
-//    lasers in every direction.
-//  Phase 3 (25% hp): mixes both move sets, faster, with double
-//    dashes, and streams eye lasers nonstop between attacks.
+//  Phase 1: orbits the player and fires slow eye lasers. Takes turns
+//    between dash chains (1, then 2, then 3 dashes, each slower than
+//    the last) and laser barrages (fans of lasers aimed at the player).
+//  Phase 2 (50% hp): takes turns between barrages and vanishing:
+//    it reappears near the player and pulses shockwaves that pull
+//    them in while spraying lasers in every direction.
+//  Phase 3 (25% hp): all three attacks, faster, and streams eye
+//    lasers nonstop between attacks.
 //  (x, y) is the ground point under the king; it hovers above it.
 // =============================================================
 
@@ -30,7 +31,7 @@ class PhantomKing {
     this.flashTime = 0;
     this.alpha = 0;          // fades in/out; only hittable while mostly visible
 
-    this.state = 'float';    // float | dashWindup | dash | dashRecover | vanish | hidden | appear | pulse
+    this.state = 'float';    // float | dashWindup | dash | dashRecover | barrage | vanish | hidden | appear | pulse
     this.t = 0;
     this.attackTimer = c.attackInterval[0];
     this.orbit = rand(0, TAU);
@@ -42,6 +43,9 @@ class PhantomKing {
 
     this.dash = null;
     this.dashesLeft = 0;
+    this.dashIndex = 0;      // which dash of the current chain (0 = first, fastest)
+    this.dashCycleStep = 0;  // dash chains go 1, 2, 3, 1...
+    this.attackStep = 0;
     this.dest = null;        // reappear point
 
     this.pulses = [];        // expanding pull rings
@@ -114,8 +118,12 @@ class PhantomKing {
       case 'dash': this.updateDash(dt, world); break;
       case 'dashRecover':
         if (this.t >= c.dashRecover) {
-          if (--this.dashesLeft > 0) this.beginDash(world);
-          else this.toFloat(world);
+          if (--this.dashesLeft > 0) {
+            this.dashIndex++;
+            this.beginDash(world);
+          } else {
+            this.toFloat(world);
+          }
         }
         break;
       case 'vanish':
@@ -138,6 +146,7 @@ class PhantomKing {
         if (this.t >= c.appearTime) this.startPulse(world);
         break;
       case 'pulse': this.updatePulse(dt, world); break;
+      case 'barrage': this.updateBarrage(dt, world); break;
     }
     this.contactDamage(world);
   }
@@ -232,14 +241,61 @@ class PhantomKing {
     }));
   }
 
+  /** Big attacks take turns, in this order, per phase. */
+  get attackOrder() {
+    return [['dash', 'barrage'], ['vanish', 'barrage'], ['dash', 'vanish', 'barrage']][this.phase - 1];
+  }
+
   startAttack(world) {
-    const dash = this.phase === 1 || (this.phase === 3 && Math.random() < 0.5);
-    if (dash) {
-      this.dashesLeft = this.cfg.dashChain[this.phase - 1];
+    const c = this.cfg;
+    const order = this.attackOrder;
+    const kind = order[this.attackStep++ % order.length];
+    if (kind === 'dash') {
+      // 1 dash, then 2, then 3, then back to 1
+      this.dashesLeft = c.dashCycle[this.dashCycleStep++ % c.dashCycle.length];
+      this.dashIndex = 0;
       this.beginDash(world);
-    } else {
+    } else if (kind === 'vanish') {
       this.startVanish(world);
+    } else {
+      this.startBarrage(world);
     }
+  }
+
+  // ---------- laser barrage ----------
+
+  startBarrage(world) {
+    this.setState('barrage');
+    this.eyeCharge = -1;
+    this.fanTimer = 0;
+    this.fanCount = 0;
+    Sound.play('laserCharge', 0.2);
+  }
+
+  updateBarrage(dt, world) {
+    const c = this.cfg;
+    const i = this.phase - 1;
+    const p = world.player;
+    this.alpha = Math.min(1, this.alpha + dt * 4);
+    // hangs back at range while it fires
+    const t = this.clampToFloor(world, p.x + Math.cos(this.orbit) * c.orbitRadius, p.y + Math.sin(this.orbit) * c.orbitRadius * 0.7);
+    this.driftToward(t.x, t.y, c.floatSpeed * 0.3, dt);
+    if (this.t < c.barrageWindup) return;
+
+    this.fanTimer -= dt;
+    if (this.fanTimer <= 0 && !p.dead) {
+      this.fanTimer = c.barrageEvery[i];
+      const n = c.barrageFan[i];
+      const spread = c.barrageSpreadDegrees * DEG;
+      const gap = spread / (n - 1);
+      const ox = this.x;
+      const oy = this.drawY + PHANTOM_EYES[0].y;
+      const base = angleTo(ox, oy, p.hx, p.hy) - spread / 2 + (this.fanCount % 2 ? gap / 2 : 0);
+      for (let k = 0; k < n; k++) this.fireLaser(world, ox, oy, base + k * gap);
+      this.fanCount++;
+      Sound.play('eyeLaser');
+    }
+    if (this.t >= c.barrageWindup + c.barrageTime[i]) this.toFloat(world);
   }
 
   toFloat(world) {
@@ -292,7 +348,9 @@ class PhantomKing {
     const c = this.cfg;
     const D = this.dash;
     const p = world.player;
-    const step = Math.min(c.dashSpeed * dt, D.len - D.traveled);
+    // later dashes in a chain are slower, giving time to react
+    const speed = c.dashSpeeds[Math.min(this.dashIndex, c.dashSpeeds.length - 1)];
+    const step = Math.min(speed * dt, D.len - D.traveled);
     const px = this.x;
     const py = this.y;
     this.x += Math.cos(D.angle) * step;
@@ -446,6 +504,7 @@ class PhantomKing {
     else world.banner("THE KING'S WRATH", 'All his power unleashed');
     Sound.play('bossRoar');
     world.shake(8, 0.6);
+    this.attackStep = this.attackOrder.indexOf('vanish') + 1; // the phase opens with a vanish
     this.startVanish(world);
   }
 
@@ -494,7 +553,7 @@ class PhantomKing {
   // ---------------------------------------------------------
 
   get angry() {
-    return this.phase === 3 || this.eyeCharge >= 0 || this.state === 'dashWindup' || this.state === 'dash' || this.state === 'pulse';
+    return this.phase === 3 || this.eyeCharge >= 0 || ['dashWindup', 'dash', 'pulse', 'barrage'].includes(this.state);
   }
 
   currentFrame() {
@@ -566,6 +625,9 @@ class PhantomKing {
     if (this.intro > 0 || this.dying > 0) return;
 
     const purple = '176, 90, 255';
+    if (this.state === 'barrage' && this.t < c.barrageWindup) {
+      Telegraph.circle(ctx, this.x, this.y, 50, this.t / c.barrageWindup, '255, 70, 220');
+    }
     if (this.state === 'dashWindup' && this.dash) {
       Telegraph.line(ctx, this.x, this.y, this.dash.ex, this.dash.ey, c.dashWidth, this.t / c.dashWindup);
     }
@@ -592,7 +654,7 @@ class PhantomKing {
 
   drawKing(ctx) {
     const frame = this.currentFrame();
-    const shaking = this.state === 'dashWindup' || this.eyeCharge >= 0;
+    const shaking = this.state === 'dashWindup' || this.eyeCharge >= 0 || (this.state === 'barrage' && this.t < this.cfg.barrageWindup);
     const x = this.x + (shaking ? rand(-1.5, 1.5) : 0);
     const y = this.drawY;
     const a = this.alpha * (this.phase >= 2 ? 0.85 + 0.1 * Math.sin(this.time * 9) : 0.95);
@@ -612,9 +674,10 @@ class PhantomKing {
     drawSprite(ctx, frame.img, x, y, PHANTOM_SPRITE.ax, PHANTOM_SPRITE.ay, false, a);
     if (this.flashTime > 0) drawSprite(ctx, frame.flash, x, y, PHANTOM_SPRITE.ax, PHANTOM_SPRITE.ay, false, a * 0.8);
 
-    // eyes flare while a volley charges
-    if (this.eyeCharge >= 0) {
-      const k = clamp(this.eyeCharge / this.cfg.eyeWindup, 0, 1);
+    // eyes flare while a volley or barrage charges, and stay lit while a barrage fires
+    const k = this.eyeCharge >= 0 ? clamp(this.eyeCharge / this.cfg.eyeWindup, 0, 1)
+      : this.state === 'barrage' ? clamp(this.t / this.cfg.barrageWindup, 0, 1) : -1;
+    if (k >= 0) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       for (const e of PHANTOM_EYES) {

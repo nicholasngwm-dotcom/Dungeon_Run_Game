@@ -1,6 +1,8 @@
 // Mage: spends mana. LMB homing magic missiles, RMB frostfire ball, E lightning
 // strike (pick a target with LMB), F bird form, Q placeable life-drain magic circle.
 
+const MAGIC_CIRCLE_SY = 0.6; // the drain circle is drawn squashed vertically (floor perspective)
+
 class Mage extends Player {
   constructor(x, y) {
     super('mage', x, y);
@@ -8,7 +10,7 @@ class Mage extends Player {
     this.weapon = Sprites.weapons.staff;
     this.maxCooldowns = {
       primary: c.bolt.cooldown, secondary: c.fireball.cooldown, e: c.lightning.cooldown,
-      f: c.bird.cooldown, dodge: CONFIG.player.dodge.cooldown,
+      f: c.bird.cooldown, dodge: this.dodgeCooldown,
     };
     this.icons = { primary: 'MISSILE', secondary: 'FROSTFIRE', e: 'LIGHTNING', f: 'BIRD', q: 'DRAIN' };
     this.recoil = 0;
@@ -18,6 +20,28 @@ class Mage extends Player {
     this.strikes = [];
     this.bird = null;         // bird form: { t }
     this.circles = [];
+    this.manaSurge = 0;       // passive: seconds of boosted damage left
+  }
+
+  // ---------- passive: Mana Surge ----------
+
+  get damageMultiplier() { return this.manaSurge > 0 ? this.cfg.passive.damageMultiplier : 1; }
+
+  /** Mana orb pickup: boosts all damage for a moment. Another orb refreshes it. */
+  startManaSurge(world) {
+    if (!(this.manaSurge > 0)) world.effects.text(this.hx, this.hy - 40, 'MANA SURGE!', { color: '#6ad8ff', size: 8, life: 1 });
+    this.manaSurge = this.cfg.passive.duration;
+    world.effects.burst(this.hx, this.hy, { count: 14, colors: ['#4a8aff', '#9ad0ff', '#ffffff'], speed: [40, 120], life: [0.3, 0.6], up: 30 });
+  }
+
+  get passiveInfo() {
+    const c = this.cfg.passive;
+    const on = this.manaSurge > 0;
+    return {
+      name: 'MANA SURGE', color: '#6ad8ff', ready: on,
+      text: on ? `+${Math.round((c.damageMultiplier - 1) * 100)}% DAMAGE` : 'GRAB MANA ORBS',
+      bar: on ? this.manaSurge / c.duration : null,
+    };
   }
 
   get tipX() { return this.pivotX + Math.cos(this.aim) * 30; }
@@ -265,7 +289,7 @@ class Mage extends Player {
       if (pg.tick <= 0) {
         pg.tick = c.tick;
         for (const t of world.getTargets()) {
-          if (dist(pg.x, pg.y, t.x, t.y + (t.hitOffY || 0)) > c.radius + t.radius) continue;
+          if (!this.inCircle(pg, t)) continue;
           const dealt = world.damageTarget(t, c.dps * c.tick, { sound: null, noCrit: true, color: '#c8a8ff', fromUlt: true });
           if (dealt) {
             this.heal(dealt * c.lifesteal, world, true);
@@ -284,9 +308,30 @@ class Mage extends Player {
     removeDead(this.circles);
   }
 
+  /**
+   * True if a target's feet are inside the drawn circle. The circle is an
+   * ellipse on the floor (squashed to MAGIC_CIRCLE_SY), with a little slack
+   * so bodies overlapping the rim still count.
+   */
+  inCircle(pg, t) {
+    const r = this.cfg.ult.radius + Math.min(t.radius * 0.5, 8);
+    const dx = (t.x - pg.x) / r;
+    const dy = ((t.footY ?? t.y) - pg.y) / (r * MAGIC_CIRCLE_SY);
+    return dx * dx + dy * dy <= 1;
+  }
+
   updateAbility(dt, world) {
     this.world = world; // for the targeting preview while drawing
     this.recoil -= dt;
+    this.manaSurge -= dt;
+    if (this.manaSurge > 0 && Math.random() < 0.4) {
+      world.effects.burst(this.x + rand(-10, 10), this.y - rand(0, 26), { count: 1, colors: ['#4a8aff', '#9ad0ff', '#e6f6ff'], speed: [10, 30], life: [0.3, 0.5], up: 40 });
+    }
+    // while a drain circle is down, abilities come back within a second
+    if (this.circles.length) {
+      const cap = this.cfg.ult.activeCooldown;
+      for (const k of ['secondary', 'e', 'f']) this.cooldowns[k] = Math.min(this.cooldowns[k], cap);
+    }
     if (this.bird) this.updateBird(dt, world);
     const c = this.cfg.ult;
     const m = world.mouseWorld;
@@ -315,7 +360,7 @@ class Mage extends Player {
   drawMagicCircle(ctx, pg, c, alpha = 1) {
     const fade = Math.min(1, pg.t * 4, (c.duration - pg.t) * 2);
     const r = c.radius;
-    const sy = 0.6; // floor perspective
+    const sy = MAGIC_CIRCLE_SY;
     const ring = (rr) => { ctx.beginPath(); ctx.ellipse(pg.x, pg.y, rr, rr * sy, 0, 0, TAU); };
     const pt = (a, rr) => [pg.x + Math.cos(a) * rr, pg.y + Math.sin(a) * rr * sy];
     ctx.save();

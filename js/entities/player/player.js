@@ -28,7 +28,7 @@ class Player extends Entity {
     this.busy = 0;                // > 0 while an ability controls the hero
     this.dodge = null;
     this.cooldowns = { primary: 0, secondary: 0, e: 0, f: 0, dodge: 0 };
-    this.maxCooldowns = { primary: 1, secondary: 1, e: 1, f: 1, dodge: CONFIG.player.dodge.cooldown };
+    this.maxCooldowns = { primary: 1, secondary: 1, e: 1, f: 1, dodge: this.dodgeCooldown };
     this.icons = { primary: '', secondary: '', e: '', f: '', q: '' }; // HUD labels
     this.ult = 0;
     this.ultMax = this.cfg.ult.charge;
@@ -185,7 +185,7 @@ class Player extends Entity {
     const c = CONFIG.player.dodge;
     const moving = this.moveDir.x !== 0 || this.moveDir.y !== 0;
     const angle = moving ? Math.atan2(this.moveDir.y, this.moveDir.x) : this.aim;
-    this.cooldowns.dodge = c.cooldown;
+    this.cooldowns.dodge = this.dodgeCooldown;
     this.dodge = { t: 0, angle, ghost: 0 };
     this.busy = c.duration;
     this.iframes = Math.max(this.iframes, c.invulnerability);
@@ -242,8 +242,13 @@ class Player extends Entity {
       this.guard = this.absorbGuardTime;
       return true;
     }
+    if (this.passiveBlock(world, fromX, fromY)) return true;
+    this.onHitTaken(world);
     // practice god mode (after absorb, so parries and blocks can still be practised)
-    if (world.practice && world.practice.options.god) return true;
+    if (world.practice && world.practice.options.god) {
+      this.invulnerable = CONFIG.player.hurtInvulnerability; // so hit-counting passives tick at a normal rate
+      return true;
+    }
     this.hp -= amount;
     this.sinceHurt = 0;
     this.invulnerable = CONFIG.player.hurtInvulnerability;
@@ -274,6 +279,27 @@ class Player extends Entity {
     world.effects.text(this.hx, this.hy - 24, `+${Math.round(gained)}`, { color: '#6cff7a', size: 10 });
     world.effects.burst(this.hx, this.hy, { count: 10, colors: ['#6cff7a', '#c8ffd0'], speed: [20, 60], up: 40 });
   }
+
+  // ---------- class passives ----------
+  // Each class overrides what it needs. passiveInfo feeds the HUD widget:
+  // { name, color, text, pips, maxPips, bar (0-1 or null), ready }.
+
+  get passiveInfo() { return null; }
+
+  /** Multiplies all damage this hero deals (Mana Surge, Killing Streak). */
+  get damageMultiplier() { return 1; }
+
+  /** Called when a hit gets past blocks and shields; return true to cancel it (Tanker). */
+  passiveBlock() { return false; }
+
+  /** Called when a hit gets past blocks and shields (and so would take hp). */
+  onHitTaken() {}
+
+  /** World-space passive indicator over the hero. */
+  drawPassive() {}
+
+  /** Shorter for the Ranger (Agility). */
+  get dodgeCooldown() { return this.cfg.passive?.dodgeCooldown ?? CONFIG.player.dodge.cooldown; }
 
   /** True while passive regen is ticking. */
   get regenerating() {
@@ -366,6 +392,7 @@ class Player extends Entity {
     if (!weaponBehind) this.drawWeapon(ctx);
     ctx.globalAlpha = 1;
     this.drawExtras(ctx);
+    this.drawPassive(ctx);
   }
 }
 

@@ -28,6 +28,8 @@ const CONFIG = {
   // ---------------------------------------------------------
   classes: {
     warrior: {
+      // passive: after taking `hits` hits, the next one is blocked automatically
+      passive: { name: 'Tanker', hits: 4 },
       name: 'Warrior',
       hp: 300,
       speed: 150,
@@ -47,9 +49,11 @@ const CONFIG = {
       ult:    { charge: 1400, powerTime: 3, moveMultiplier: 0.3, damage: 300, minPower: 0.35, length: 360, width: 84 },
     },
     ranger: {
+      // passive: fastest hero, and a shorter dodge cooldown
+      passive: { name: 'Agility', dodgeCooldown: 0.9 },
       name: 'Ranger',
       hp: 225,
-      speed: 170,
+      speed: 195,   // fastest hero (Agility)
       arrow:     { damage: 34, cooldown: 0.75, speed: 660, pierce: 1 },
       // RMB marks an area, LMB rains arrows on it for `duration` seconds
       volley:    { damage: 14, cooldown: 10, maxRange: 420, radius: 100, arrows: 40,
@@ -62,9 +66,11 @@ const CONFIG = {
                    fire: { damage: 90, speed: 780, pierce: 99, burnDps: 16, burnDuration: 4 },
                    ice:  { damage: 12, speed: 620, radius: 105, freeze: 2.2 } },
       // Q: cleanse, invisible, faster
-      ult:       { charge: 1100, duration: 3, speedMultiplier: 1.5 },
+      ult:       { charge: 1100, duration: 3, speedMultiplier: 1.5 },   // also resets every cooldown
     },
     mage: {
+      // passive: picking up a mana orb (even at full mana) boosts all damage for `duration`s
+      passive: { name: 'Mana Surge', damageMultiplier: 1.2, duration: 2 },
       name: 'Mage',
       hp: 250,
       speed: 155,
@@ -76,14 +82,17 @@ const CONFIG = {
                    arcRange: 160, arcDamage: 100, arcCount: 4 },
       // F: turn into a small, fast bird (tiny hitbox, can't cast). F again lands early.
       bird:      { cost: 50, cooldown: 6, duration: 4, speedMultiplier: 1.8, radius: 5 },
-      // Q: place a magic circle (LMB, RMB cancels) that drains enemies in it into hp and mana
-      ult:       { charge: 900, duration: 5, radius: 130, dps: 50, tick: 0.25, lifesteal: 0.35, manaSteal: 0.35, maxRange: 300 },
+      // Q: place a magic circle (LMB, RMB cancels) that drains enemies in it into hp and mana.
+      // While a circle is active, RMB / E / F cooldowns are capped at activeCooldown seconds.
+      ult:       { charge: 900, duration: 5, radius: 130, dps: 50, tick: 0.25, lifesteal: 0.35, manaSteal: 0.35, maxRange: 300, activeCooldown: 1 },
     },
     rogue: {
+      // passive: each kill in a streak adds damage (up to maxStreak); the streak ends after `duration`s without a kill
+      passive: { name: 'Killing Streak', maxStreak: 10, damagePerStreak: 0.03, duration: 3 },
       name: 'Rogue',
       hp: 200,
       speed: 185,
-      resource: { name: 'ENERGY', max: 200, regen: 1, perKill: 2, color: '#f0c040' },
+      resource: { name: 'ENERGY', max: 200, regen: 1, perKill: 4, color: '#f0c040' },
       dagger:   { damage: 13, cost: 2, cooldown: 0.4, speed: 580, spreadDegrees: 22, count: 3 },
       // RMB: dash-slash; enemies under half hp start bleeding
       strike:   { damage: 45, cost: 30, cooldown: 1.2, distance: 190, duration: 0.18, invulnerability: 0.3,
@@ -156,12 +165,13 @@ const CONFIG = {
     // only comes out of broken gravestones: slow, contact damage only,
     // with a chilling aura that slows heroes inside it
     ghost: {
-      hp: 95, speed: 40, radius: 13, damage: 16, contactDamage: 16,
-      auraRadius: 85, slowAmount: 0.65, knockbackResist: 0.4,
+      hp: 60, speed: 48, radius: 13, damage: 16, contactDamage: 16,
+      auraRadius: 130, slowAmount: 0.65, knockbackResist: 0.4,
+      maxLead: 1.4,   // seconds ahead of the hero it aims for, to cut them off
     },
   },
 
-  // mana orbs only drop while the hero uses mana
+  // mana orbs only drop for mana users; picking one up triggers the Mage's Mana Surge passive
   drops: { heartChance: 0.1, heartHeal: 45, manaChance: 0.3, manaRestore: 10 },
 
   // ---------------------------------------------------------
@@ -265,23 +275,32 @@ const CONFIG = {
     floatSpeed: 90,
     orbitRadius: 230,
 
-    // time spent floating between big attacks
-    attackInterval: [2.4, 2.0, 1.5],
+    // time spent floating between big attacks. Attacks take turns:
+    //   phase 1: dash, barrage   phase 2: vanish, barrage   phase 3: dash, vanish, barrage
+    attackInterval: [2.0, 1.8, 1.4],
+
+    // Laser barrage: stops, charges, then fires fans of slow lasers at the hero
+    // (every other fan is offset so the gaps move)
+    barrageWindup: 0.6,
+    barrageTime: [3.2, 2.6, 2.6],
+    barrageEvery: [0.45, 0.45, 0.38],
+    barrageFan: [5, 5, 7],
+    barrageSpreadDegrees: 60,
 
     // Dash
     dashWindup: 0.8,
     dashAimLockAt: 0.3,
-    dashSpeed: 760,
+    dashSpeeds: [820, 620, 440],   // 1st, 2nd, 3rd dash of a chain: fast, normal, slow (time to react)
     dashRange: 440,
     dashDamage: 38,
     dashWidth: 56,          // hit lane, same width as the red telegraph on the ground
     dashRecover: 0.5,
-    dashChain: [1, 1, 2],   // dashes in a row
+    dashCycle: [1, 2, 3],          // dashes per dash attack, repeating 1, 2, 3, 1, 2, 3...
 
     // Slow eye lasers, aimed at the hero while floating
-    eyeInterval: [2.0, 2.6, 1.6],
+    eyeInterval: [1.2, 1.6, 1.6],
     eyeWindup: 0.45,
-    eyeLaser: { damage: 18, speed: 135, life: 9, radius: 6 },
+    eyeLaser: { damage: 28, speed: 135, life: 9, radius: 6 },   // slow, so they hit hard
     eyeSpreadDegrees: 14,
     // phase 3: instead of charged volleys, a steady stream while floating
     eyeStreamEvery: 0.38,
@@ -301,6 +320,6 @@ const CONFIG = {
     pullSpeed: 55,          // steady drag toward the king while pulsing (px/s)
     pullSurge: 240,         // extra drag added when a ring sweeps over the hero...
     pullSurgeDecay: 3.5,    // ...fading out at this rate (per second)
-    pulseLaserEvery: 0.13,  // seconds between random lasers sprayed in every direction
+    pulseLaserEvery: 0.16,  // seconds between random lasers sprayed in every direction
   },
 };

@@ -32,6 +32,8 @@ class GolemPart {
 
   get hx() { return this.x; }
   get hy() { return this.y; }
+  /** Ground point for floor-area effects: the body stands on the golem's feet. */
+  get footY() { return this === this.golem.body ? this.golem.y : this.y; }
 
   knockback() {} // far too heavy
 

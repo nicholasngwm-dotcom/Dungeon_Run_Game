@@ -74,6 +74,7 @@ const HUD = {
     }
     this.text(ctx, p.cfg.name.toUpperCase(), 60, y, { size: 8, color: '#f2a541' });
     this.text(ctx, this.statusText(p), 148, y, { size: 7, color: '#d8c8a0' });
+    this.drawPassive(ctx, p.passiveInfo, 12, y + 16);
 
     // abilities
     const slots = [
@@ -89,6 +90,49 @@ const HUD = {
       this.abilitySlot(ctx, 14 + i * 70, 474, key, name, p.cooldowns[slot], p.maxCooldowns[slot], icon);
     });
     this.ultSlot(ctx, 14 + slots.length * 70 + 6, 474, p);
+  },
+
+  /**
+   * Class passive panel: name + state text, then pips (hit/streak counters)
+   * and/or a draining timer bar. Glows while the passive is ready/active.
+   */
+  drawPassive(ctx, info, x, y) {
+    if (!info) return;
+    const w = 218;
+    const hasRow = info.maxPips || info.bar != null;
+    const h = hasRow ? 26 : 15;
+    this.panel(ctx, x, y, w, h);
+    if (info.ready) {
+      ctx.fillStyle = `rgba(255, 220, 120, ${0.12 + Math.sin(performance.now() / 120) * 0.08})`;
+      ctx.fillRect(x, y, w, h);
+    }
+    this.text(ctx, 'PASSIVE', x + 4, y + 4, { size: 5, color: '#7a6a8a' });
+    this.text(ctx, info.name, x + 44, y + 3, { size: 6, color: info.color });
+    this.text(ctx, info.text, x + w - 4, y + 3, { size: 6, align: 'right', color: info.ready ? '#ffe680' : '#d8c8a0' });
+    if (!hasRow) return;
+    const rowY = y + 14;
+    let barX = x + 4;
+    if (info.maxPips) {
+      const n = info.maxPips;
+      const pw = n <= 5 ? 22 : 12;
+      for (let i = 0; i < n; i++) {
+        const px = x + 4 + i * (pw + 2);
+        const lit = i < info.pips;
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(px - 1, rowY - 1, pw + 2, 8);
+        ctx.fillStyle = lit ? info.color : '#2a2438';
+        ctx.fillRect(px, rowY, pw, 6);
+        if (lit) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx.fillRect(px, rowY, pw, 1);
+        }
+      }
+      barX = x + 4 + n * (pw + 2) + 4;
+    }
+    if (info.bar != null) {
+      const bw = x + w - 4 - barX;
+      if (bw > 10) this.bar(ctx, barX + 1, rowY + 1, bw - 2, 4, info.bar, info.color, '#1a1a30');
+    }
   },
 
   /** Short list of active buffs/debuffs. */

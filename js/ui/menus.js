@@ -2,6 +2,7 @@
 
 const CLASS_INFO = {
   warrior: {
+    PASSIVE: ['Tanker', 'Every 5th hit is blocked'],
     LMB: ['Sword Combo', 'Slash, slash, stab'],
     RMB: ['Barrier Shield', 'Hold: 400 hp frontal shield'],
     E: ['Whirlwind', 'Spin and slash, move faster'],
@@ -9,20 +10,23 @@ const CLASS_INFO = {
     Q: ['World Cutter', 'Power up, then a massive strike'],
   },
   ranger: {
+    PASSIVE: ['Agility', 'Fastest hero, quicker dodge'],
     LMB: ['Arrow', 'Piercing shot'],
     RMB: ['Volley', 'Mark an area, rain arrows for 3s'],
     E: ['Rapid Fire', 'Next 5 arrows: faster, +25%'],
     F: ['Fire / Ice Arrow', 'F, then LMB fire or RMB ice'],
-    Q: ['Swift Camo', 'Cleanse, invisible, faster'],
+    Q: ['Swift Camo', 'Hide, cleanse, reset cooldowns'],
   },
   mage: {
+    PASSIVE: ['Mana Surge', 'Mana orbs: +20% damage 2s'],
     LMB: ['Magic Missile', 'Homing orbs (3 mana)'],
     RMB: ['Frostfire Ball', 'Big explosion (20 mana)'],
     E: ['Lightning', 'Pick a target, it arcs (150)'],
     F: ['Bird Form', 'Tiny, fast bird (50 mana)'],
-    Q: ['Life Drain', 'Place a circle that drains hp + mana'],
+    Q: ['Life Drain', 'Drain circle, 1s cooldowns while up'],
   },
   rogue: {
+    PASSIVE: ['Killing Streak', '+3% damage per kill, max 10'],
     LMB: ['Dagger Fan', 'Three daggers (2 energy)'],
     RMB: ['Swift Strike', 'Dash slash, bleeds wounded (30)'],
     E: ['Parry', 'Block a hit: +75 energy, haste'],
