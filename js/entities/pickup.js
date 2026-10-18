@@ -15,18 +15,29 @@ class Pickup {
   wanted() { return false; }
   collect() {}
 
+  /** The nearest living hero who can use this pickup, with their distance. */
+  claimant(world) {
+    let best = null;
+    let bestD = Infinity;
+    for (const p of world.players) {
+      if (p.dead || !this.wanted(p)) continue;
+      const d = dist(this.x, this.y, p.x, p.y);
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return { p: best, d: bestD };
+  }
+
   update(dt, world) {
     this.age += dt;
-    const p = world.player;
-    if (!p || p.dead) return;
-    const d = dist(this.x, this.y, p.x, p.y);
-    const wanted = this.wanted(p);
-    if (d < this.magnet && wanted) {
+    if (this.age > this.lifetime) this.dead = true;
+    const { p, d } = this.claimant(world);
+    if (!p) return;
+    if (d < this.magnet) {
       const a = angleTo(this.x, this.y, p.x, p.y);
       this.x += Math.cos(a) * 220 * dt;
       this.y += Math.sin(a) * 220 * dt;
     }
-    if (d < 18 && wanted) {
+    if (d < 18) {
       this.collect(p, world);
       Sound.play(this.sound, 0.02);
       this.dead = true;
@@ -178,7 +189,7 @@ class CoinPickup extends Pickup {
   get hh() { return 3; }
 
   collect(p, world) {
-    world.run?.addCoins(this.value);
+    world.run?.addCoins(this.value, p);   // into the purse of whoever picked it up
   }
 
   draw(ctx) {

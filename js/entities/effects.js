@@ -18,19 +18,19 @@ class Effects {
       size = [2, 4], gravity = 0, drag = 3, angle = null, spread = TAU, up = 0,
     } = opts;
     for (let i = 0; i < count; i++) {
-      const a = angle === null ? rand(0, TAU) : angle + rand(-spread / 2, spread / 2);
-      const s = rand(speed[0], speed[1]);
-      const l = rand(life[0], life[1]);
+      const a = angle === null ? vrand(0, TAU) : angle + vrand(-spread / 2, spread / 2);
+      const s = vrand(speed[0], speed[1]);
+      const l = vrand(life[0], life[1]);
       this.particles.push({
         x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - up,
-        life: l, maxLife: l, size: Math.round(rand(size[0], size[1])),
-        color: choose(colors), gravity, drag,
+        life: l, maxLife: l, size: Math.round(vrand(size[0], size[1])),
+        color: vchoose(colors), gravity, drag,
       });
     }
   }
 
   text(x, y, str, { color = '#ffffff', size = 8, life = 0.8, rise = 40 } = {}) {
-    this.texts.push({ x: x + rand(-6, 6), y, str, color, size, life, maxLife: life, rise });
+    this.texts.push({ x: x + vrand(-6, 6), y, str, color, size, life, maxLife: life, rise });
   }
 
   /** Custom effect: draw(ctx, t) where t goes 0 -> 1 over `life` seconds. */

@@ -216,6 +216,16 @@ const Menus = {
     const [action, arg, arg2] = cmd.split(':');
     switch (action) {
       case 'play': app.enterLobby(true); break;
+      case 'multiplayer': app.openMultiplayer(); break;
+      case 'mpHost': app.hostMultiplayer(); break;
+      case 'mpJoin': app.joinMultiplayer(); break;
+      case 'readyToggle': {
+        const g = app.game;
+        if (g && g.readyCheck) app.command({ type: 'ready', value: !g.readyCheck.ready[g.localId] });
+        break;
+      }
+      case 'readyStart': if (app.game && app.game.allReady) app.openGatePicker(); break;
+      case 'readyCancel': app.command({ type: 'cancelReady' }); break;
       case 'controls': this.show('controls'); break;
       case 'back': this.show('menu'); break;
       case 'resume': app.resume(); break;
@@ -288,18 +298,64 @@ const Menus = {
   },
 
   /** Pause menu; "Return to Lobby" only makes sense outside the lobby. */
-  showPause(inLobby) {
-    document.getElementById('pause-lobby').classList.toggle('hidden', inLobby);
+  /** Pause menu. Multiplayer: the world doesn't stop, and leaving replaces the lobby / quit buttons. */
+  showPause(inLobby, mp = false) {
+    document.getElementById('pause-lobby').classList.toggle('hidden', inLobby || mp);
+    document.getElementById('pause-quit').textContent = mp ? 'Leave Game' : 'Quit to Menu';
+    document.querySelector('#screen-pause h2').textContent = mp ? 'Menu' : 'Paused';
     this.show('pause');
   },
 
-  showEnd(won, stats) {
-    document.getElementById('end-title').textContent = won ? 'Victory!' : 'You Died';
+  /** mpRole: null (single player), 'host' or 'client' - only the host can take everyone back to the lobby. */
+  showEnd(won, stats, mpRole = null) {
+    document.getElementById('end-title').textContent = won ? 'Victory!' : mpRole ? 'Party Wiped' : 'You Died';
     document.getElementById('end-title').style.color = won ? '#f2a541' : '#e04545';
     document.getElementById('end-sub').innerHTML = won
       ? `${stats.defeatText || "The crypt falls silent."}<br>Time ${stats.time} &nbsp; Kills ${stats.kills}`
       : `${stats.stage ? `Fell in the ${stats.theme}, stage ${stats.stage}.` : `Reached wave ${stats.wave}.`}<br>Time ${stats.time} &nbsp; Kills ${stats.kills}`;
+    document.getElementById('end-retry').classList.toggle('hidden', !!mpRole);
+    document.getElementById('end-lobby').classList.toggle('hidden', mpRole === 'client');
+    document.getElementById('end-wait').classList.toggle('hidden', mpRole !== 'client');
+    document.getElementById('end-quit').textContent = mpRole ? 'Leave Game' : 'Main Menu';
     this.show('end');
+  },
+
+  // ---------- multiplayer ----------
+
+  showMultiplayer(name) {
+    document.getElementById('mp-name').value = name;
+    this.mpStatus('');
+    this.show('mp');
+  },
+
+  mpStatus(text) { document.getElementById('mp-status').textContent = text || ''; },
+
+  /**
+   * The ready-check panel at the side (multiplayer lobby, while the host waits
+   * at the gate): who is ready, a ready toggle, and for the host "Choose dungeon"
+   * (once everyone is ready) and Cancel. Rebuilt only when something changes.
+   */
+  updateReadyPanel(app) {
+    const panel = document.getElementById('ready-panel');
+    const g = app.game;
+    const show = !!(app.mp && g && g.lobby && g.readyCheck && (app.state === 'playing' || app.state === 'panel'));
+    panel.classList.toggle('hidden', !show);
+    if (!show) { this.readySig = ''; return; }
+    const sig = JSON.stringify(g.readyCheck.ready) + g.players.map((p) => p.netId + p.name).join() + app.mp.isHost;
+    if (sig === this.readySig) return;
+    this.readySig = sig;
+    document.getElementById('ready-list').innerHTML = g.players.map((p) => {
+      const ready = g.readyCheck.ready[p.netId];
+      const host = p.netId === g.roster[0].id ? ' (HOST)' : '';
+      return `<div><span>${escapeHtml(p.name)}${host}</span><span class="${ready ? 'yes' : 'no'}">${ready ? 'READY' : '...'}</span></div>`;
+    }).join('');
+    const mine = g.readyCheck.ready[g.localId];
+    const toggle = document.getElementById('ready-toggle');
+    toggle.textContent = mine ? 'Not ready' : 'Ready';
+    toggle.classList.toggle('hidden', app.mp.isHost);
+    document.getElementById('ready-start').classList.toggle('hidden', !app.mp.isHost);
+    document.getElementById('ready-start').disabled = !g.allReady;
+    document.getElementById('ready-cancel').classList.toggle('hidden', !app.mp.isHost);
   },
 
   /** Dungeon gate: 'modes' (Set / Random / Test) or 'themes' (Set Dungeon's theme list). */

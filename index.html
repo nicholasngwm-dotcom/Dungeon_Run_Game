@@ -18,11 +18,43 @@
       <h1 class="title">Dungeon<br><span>Run</span></h1>
       <div class="menu-buttons">
         <button class="btn" data-action="play">Start Game</button>
+        <button class="btn" data-action="multiplayer">Multiplayer</button>
         <button class="btn small" data-action="settings">Settings</button>
         <button class="btn small" data-action="controls">Controls</button>
       </div>
       <p class="hint"><span id="menu-music-hint">M - music: ON</span> &nbsp;|&nbsp; Esc - pause</p>
     </section>
+
+    <!-- Multiplayer: host or join a lobby -->
+    <section id="screen-mp" class="screen hidden">
+      <h2>Multiplayer</h2>
+      <div class="mp-box">
+        <label class="mp-row">Your name <input id="mp-name" maxlength="14" spellcheck="false" autocomplete="off"></label>
+        <div class="mp-cols">
+          <div class="mp-col">
+            <div class="set-head">HOST</div>
+            <p class="hint">Open a lobby and share the room code with up to 7 friends.</p>
+            <button class="btn small" data-action="mpHost">Host a lobby</button>
+          </div>
+          <div class="mp-col">
+            <div class="set-head">JOIN</div>
+            <label class="mp-row">Room code <input id="mp-code" maxlength="5" spellcheck="false" autocomplete="off" placeholder="ABCDE"></label>
+            <button class="btn small" data-action="mpJoin">Join lobby</button>
+          </div>
+        </div>
+        <p id="mp-status" class="mp-status"></p>
+      </div>
+      <button class="btn small" data-action="back">Back</button>
+    </section>
+
+    <!-- Multiplayer: ready check (at the side while the host waits at the gate) -->
+    <aside id="ready-panel" class="ready-panel hidden">
+      <div class="set-head">READY CHECK</div>
+      <div id="ready-list" class="ready-list"></div>
+      <button class="btn small" id="ready-toggle" data-action="readyToggle">Ready</button>
+      <button class="btn small save-btn" id="ready-start" data-action="readyStart">Choose dungeon</button>
+      <button class="btn small" id="ready-cancel" data-action="readyCancel">Cancel</button>
+    </aside>
 
     <!-- Controls -->
     <section id="screen-controls" class="screen hidden">
@@ -282,7 +314,7 @@
         <button class="btn" data-action="resume">Resume</button>
         <button class="btn" data-action="settings">Settings</button>
         <button class="btn" id="pause-lobby" data-action="lobby">Return to Lobby</button>
-        <button class="btn" data-action="quit">Quit to Menu</button>
+        <button class="btn" id="pause-quit" data-action="quit">Quit to Menu</button>
       </div>
     </section>
 
@@ -290,10 +322,11 @@
     <section id="screen-end" class="screen dim hidden">
       <h2 id="end-title">You Died</h2>
       <p id="end-sub" class="hint"></p>
+      <p id="end-wait" class="hint hidden">Waiting for the host to return to the lobby...</p>
       <div class="menu-buttons">
-        <button class="btn" data-action="retry">Try Again</button>
-        <button class="btn" data-action="lobby">Return to Lobby</button>
-        <button class="btn" data-action="quit">Main Menu</button>
+        <button class="btn" id="end-retry" data-action="retry">Try Again</button>
+        <button class="btn" id="end-lobby" data-action="lobby">Return to Lobby</button>
+        <button class="btn" id="end-quit" data-action="quit">Main Menu</button>
       </div>
     </section>
   </div>
@@ -301,6 +334,8 @@
   <!-- Core -->
   <script src="js/config.js"></script>
   <script src="js/core/settings.js"></script>
+  <!-- multiplayer: PeerJS for peer-to-peer connections (single player works without it) -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="js/core/utils.js"></script>
   <script src="js/core/input.js"></script>
   <script src="js/core/audio.js"></script>
@@ -357,6 +392,8 @@
   <script src="js/ui/menus.js"></script>
   <script src="js/ui/bestiary.js"></script>
   <script src="js/ui/dialog.js"></script>
+  <script src="js/net/net.js"></script>
+  <script src="js/net/session.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

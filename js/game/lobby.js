@@ -9,7 +9,7 @@ const LOBBY_LAYOUT = { cols: 34, rows: 22, lobby: true };
 class LobbyHub {
   constructor(world) {
     this.world = world;
-    this.near = null;      // station the hero is standing at
+
     this.time = 0;
     const T = CONFIG.tileSize;
     const d = world.dungeon;
@@ -25,20 +25,28 @@ class LobbyHub {
     this.stations.push({ kind: 'gate', x: d.width / 2, y: 4 * T + 18, r: 54, prompt: 'CHOOSE A DUNGEON' });
   }
 
-  /** Runs before the hero updates, so pressing E at a station doesn't also cast the E ability. */
   update(dt) {
     this.time += dt;
-    const p = this.world.player;
-    this.near = null;
+  }
+
+  /** The station the local hero is at (for prompts and highlights). */
+  get near() { return this.world.localPlayer.nearStation || null; }
+
+  /**
+   * Runs for each hero before they update, so pressing E at a station doesn't
+   * also cast the E ability. The station's menu only opens on that hero's screen.
+   */
+  interact(hero) {
+    hero.nearStation = null;
     let best = Infinity;
     for (const s of this.stations) {
-      const d = dist(p.x, p.y, s.x, s.y);
-      if (d < s.r && d < best) { best = d; this.near = s; }
+      const d = dist(hero.x, hero.y, s.x, s.y);
+      if (d < s.r && d < best) { best = d; hero.nearStation = s; }
     }
-    if (this.near && Input.pressed('interact')) {
+    if (hero.nearStation && Input.pressed('interact')) {
       Input.consume('interact');
-      Sound.play('uiClick');
-      this.world.events.onInteract?.(this.near);
+      if (hero === this.world.localPlayer) Sound.play('uiClick');
+      this.world.events.onInteract?.(hero.nearStation, hero);
     }
   }
 
@@ -73,7 +81,7 @@ class LobbyHub {
   drawPrompts(ctx) {
     for (const s of this.stations) {
       if (s.kind === 'hero') {
-        const current = this.world.player.classId === s.id;
+        const current = this.world.localPlayer.classId === s.id;
         HUD.text(ctx, CONFIG.classes[s.id].name.toUpperCase(), s.x, s.y + 12, { size: 6, align: 'center', color: current ? '#ffe680' : '#d8c8a0' });
       }
     }
@@ -88,7 +96,7 @@ class LobbyHub {
 
   /** Stone pedestal with the hero on top; the hero you're playing shows as a faint ghost. */
   drawStatue(ctx, s) {
-    const current = this.world.player.classId === s.id;
+    const current = this.world.localPlayer.classId === s.id;
     const x = Math.round(s.x);
     const y = Math.round(s.y);
     ctx.fillStyle = OUTLINE;

@@ -35,7 +35,8 @@ const HUD = {
 
   draw(ctx, game) {
     this.drawPlayer(ctx, game.player);
-    if (game.run) this.drawCoins(ctx, game.run);
+    if (game.run) this.drawCoins(ctx, game.player);
+    if (game.multiplayer) this.drawParty(ctx, game);
     this.drawWave(ctx, game);
     if (game.boss && !game.boss.dead && game.boss.intro <= 0 && !game.practice) {
       this.text(ctx, game.boss.name, 480, 12, { size: 10, align: 'center', color: '#f2a541' });
@@ -65,10 +66,43 @@ const HUD = {
   },
 
   /** Coin counter next to the health bar (dungeon runs); pops when coins come in. */
-  drawCoins(ctx, run) {
+  /**
+   * Multiplayer: the rest of the party down the left side (name, hero, health),
+   * and a notice while this screen's hero is down and spectating.
+   */
+  drawParty(ctx, game) {
+    const me = game.localPlayer;
+    const others = game.players.filter((p) => p !== me);
+    let y = 170;
+    if (others.length) this.text(ctx, 'PARTY', 14, y - 12, { size: 6, color: '#7a6a8a' });
+    for (const p of others) {
+      this.panel(ctx, 12, y, 150, 18);
+      const icon = Sprites.heroes[p.classId].idle[0].img;
+      ctx.globalAlpha = p.dead ? 0.4 : 1;
+      ctx.drawImage(icon, 22, 8, 22, 22, 13, y, 18, 18);
+      ctx.globalAlpha = 1;
+      this.text(ctx, p.name, 34, y + 2, { size: 6, color: p.dead ? '#7a6a8a' : '#f4ead7' });
+      if (p.dead) {
+        this.text(ctx, 'DOWN', 158, y + 2, { size: 6, align: 'right', color: '#e04545' });
+      } else {
+        ctx.fillStyle = '#3a1a24';
+        ctx.fillRect(34, y + 11, 122, 4);
+        ctx.fillStyle = '#e84a4a';
+        ctx.fillRect(34, y + 11, Math.round(122 * clamp(p.hp / p.maxHp, 0, 1)), 4);
+      }
+      y += 22;
+    }
+    if (me.dead && !game.finished) {
+      this.text(ctx, 'YOU ARE DOWN', 480, 96, { size: 12, align: 'center', color: '#e04545' });
+      this.text(ctx, game.run ? 'Your team carries on - you get back up at the next stage' : 'Watching your team...', 480, 116, { size: 7, align: 'center', color: '#d8c8a0' });
+    }
+  },
+
+  /** The local hero's purse (coins are per hero). */
+  drawCoins(ctx, hero) {
     const x = 244;
     const y = 14;
-    const pop = run.coinFlash > 0 ? 2 : 0;
+    const pop = hero.coinFlash > 0 ? 2 : 0;
     this.panel(ctx, x, y - 1, 58, 16);
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(x + 3 - pop / 2, y + 1 - pop / 2, 12 + pop, 12 + pop);
@@ -78,7 +112,7 @@ const HUD = {
     ctx.fillRect(x + 4 - pop / 2, y + 2 - pop / 2, 9 + pop, 9 + pop);
     ctx.fillStyle = '#fff2a0';
     ctx.fillRect(x + 6, y + 4, 2, 5);
-    this.text(ctx, `${run.coins}`, x + 54, y + 3, { size: 8, align: 'right', color: run.coinFlash > 0 ? '#fff2a0' : '#ffd34a' });
+    this.text(ctx, `${hero.coins}`, x + 54, y + 3, { size: 8, align: 'right', color: hero.coinFlash > 0 ? '#fff2a0' : '#ffd34a' });
   },
 
   drawPlayer(ctx, p) {
@@ -262,6 +296,13 @@ const HUD = {
     if (game.lobby) {
       this.text(ctx, 'LOBBY', 946, 14, { size: 10, align: 'right', color: '#f2a541' });
       this.text(ctx, `WALK TO A STATION, PRESS ${Settings.label('interact')}`, 946, 32, { size: 6, align: 'right', color: '#d8c8a0' });
+      if (game.multiplayer) {
+        // the room code, big enough to read out to friends
+        this.panel(ctx, 786, 48, 160, 40);
+        this.text(ctx, 'ROOM CODE', 866, 53, { size: 6, align: 'center', color: '#a99bbd' });
+        this.text(ctx, game.code || '-----', 866, 66, { size: 14, align: 'center', color: '#ffe680' });
+        this.text(ctx, `${game.players.length}/${CONFIG.multiplayer.maxPlayers} PLAYERS`, 946, 96, { size: 6, align: 'right', color: '#d8c8a0' });
+      }
       return;
     }
     if (game.practice) {

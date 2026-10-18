@@ -16,6 +16,7 @@ const App = {
   menuTime: 0,
   practiceMode: false,
   lastRun: null,        // the dungeon run picked at the gate (null = test dungeon)
+  mp: null,             // the multiplayer Session while in an online game
   // practice-range cheats, kept when switching hero
   practiceOptions: { god: false, infiniteMana: false, infiniteEnergy: false },
 
@@ -87,16 +88,31 @@ const App = {
     return {
       onGameOver: (stats) => this.endGame(false, stats),
       onVictory: (stats) => this.endGame(true, stats),
-      onInteract: (station) => this.interact(station),
+      onInteract: (station, hero) => this.interact(station, hero),
       onToast: (text) => Menus.toast(text, '#ffe680'),
-      onNpc: (kind, run) => this.talkTo(kind, run),
+      onNpc: (kind, run, hero) => this.talkTo(kind, run, hero),
+      onPurchase: (hero, u, ok) => Shop.onPurchase(hero, u, ok),
     };
+  },
+
+  /**
+   * A gameplay command from this screen's player (hero pick, purchase, ready up...).
+   * Single player applies it now; multiplayer sends it through the host so every
+   * machine applies it on the same tick.
+   */
+  command(cmd) {
+    if (this.mp) this.mp.command(cmd);
+    else if (this.game) this.game.applyCommand(cmd, this.game.localId);
   },
 
   // ---------- lobby ----------
 
   /** The hub between runs: walk around as the chosen hero and use the stations. */
   enterLobby(welcome = false) {
+    if (this.mp) {
+      if (this.mp.isHost) this.mp.returnToLobby();
+      return;
+    }
     Sound.init();
     this.practiceMode = false;
     this.game = new Game(this.classId, this.events, { lobby: true, welcome });
@@ -107,25 +123,48 @@ const App = {
     Music.play('lobby');
   },
 
-  /** A lobby station was used (E). */
-  interact(station) {
+  /** A lobby station was used (E). Menus only open on the screen of the hero who used it. */
+  interact(station, hero) {
+    if (hero && hero !== this.game.localPlayer) return;
     switch (station.kind) {
-      case 'hero': this.openPanel(); Menus.showHero(station.id, this.game.player.classId); break;
+      case 'hero': this.openPanel(); Menus.showHero(station.id, this.game.localPlayer.classId); break;
       case 'workshop': this.openPanel('workshop'); break;
-      case 'practice': this.startPractice(); break;
-      case 'gate': this.openPanel(); Menus.showDungeonView('modes'); break;
+      case 'practice':
+        if (this.mp) Menus.toast('THE PRACTICE RANGE IS SINGLE PLAYER ONLY', '#ffe680');
+        else this.startPractice();
+        break;
+      case 'gate': this.useGate(); break;
       case 'legend': this.openPanel(); Menus.showLegend(); break;
       case 'bestiary': this.openPanel(); Bestiary.open(); break;
     }
   },
 
+  /**
+   * The dungeon gate. Single player: pick a dungeon. Multiplayer: only the host
+   * can use it - the first time it starts a ready check for everyone, and once
+   * everyone is ready the host picks the dungeon.
+   */
+  useGate() {
+    if (!this.mp) { this.openGatePicker(); return; }
+    if (!this.mp.isHost) { Menus.toast('ONLY THE HOST CAN CHOOSE THE DUNGEON', '#ffe680'); return; }
+    if (!this.game.readyCheck) { this.command({ type: 'readyCheck' }); return; }
+    if (this.game.allReady) this.openGatePicker();
+    else Menus.toast('WAITING FOR EVERYONE TO READY UP', '#ffe680');
+  },
+
+  openGatePicker() {
+    this.openPanel();
+    Menus.showDungeonView('modes');
+  },
+
   /** Talking to a dungeon NPC: a dialogue first, which can lead on to the shop. */
-  talkTo(kind, run) {
+  talkTo(kind, run, hero) {
+    if (hero && hero !== this.game.localPlayer) return;
     this.openPanel();
     if (kind === 'shopkeeper') {
       Dialog.open({
         name: 'MIRA', frames: Sprites.npcs.shopkeeper,
-        text: run.coins > 0
+        text: this.game.localPlayer.coins > 0
           ? choose(["Oh! A customer! Welcome to Mira's Curios, traveller. What would you like?", 'Back again? I saved the good stuff for you. What will it be?'])
           : "Welcome, welcome! Hmm... your purse looks a little light. Still, have a look. What would you like?",
         options: [
@@ -142,7 +181,7 @@ const App = {
     }
   },
 
-  /** Lobby panels freeze the lobby until closed (Back button or Esc). */
+  /** Panels freeze the world in single player; in multiplayer the world keeps going. */
   openPanel(name = null) {
     this.state = 'panel';
     if (name) Menus.show(name);
@@ -156,15 +195,104 @@ const App = {
   },
 
   pickHero(classId) {
-    if (this.game && this.game.lobby && this.game.player.classId !== classId) this.game.swapHero(classId);
+    this.command({ type: 'hero', classId });
     this.classId = classId;
     this.closePanel();
+  },
+
+  // ---------- multiplayer ----------
+
+  openMultiplayer() {
+    Menus.showMultiplayer(Settings.data.name || '');
+  },
+
+  /** Name from the multiplayer screen (saved for next time). */
+  mpName() {
+    const typed = (document.getElementById('mp-name').value || '').trim().slice(0, 14);
+    const name = typed || `Hero${Math.floor(nativeRandom() * 900 + 100)}`;
+    Settings.data.name = name;
+    Settings.save();
+    return name;
+  },
+
+  get mpEvents() {
+    return {
+      onScene: (game, kind) => {
+        this.game = game;
+        this.state = 'playing';
+        Input.reset();
+        Menus.show(null);
+        Music.stop();
+        Music.play(kind === 'lobby' ? 'lobby' : 'battle');
+      },
+      onRejected: (reason) => this.leaveMultiplayer(reason),
+      onDesync: (who) => Menus.toast(`OUT OF SYNC WITH ${who.toUpperCase()}`, '#ff6a6a'),
+    };
+  },
+
+  hostMultiplayer() {
+    Sound.init();
+    const name = this.mpName();
+    Menus.mpStatus('Opening a lobby...');
+    const s = new Session({ isHost: true, name, classId: this.classId, transport: Net.transport(), events: this.mpEvents, gameEvents: this.events });
+    Net.host({
+      onOpen: (code) => {
+        this.mp = s;
+        s.hostStart(code);
+      },
+      onData: (peer, msg) => s.onMessage(peer, msg),
+      onLeave: (peer) => {
+        const who = s.roster.find((r) => r.id === s.peers.get(peer));
+        s.onPeerLeft(peer);
+        if (who) Menus.toast(`${who.name.toUpperCase()} LEFT`, '#ffe680');
+      },
+      onError: (text) => { Menus.mpStatus(text); Net.close(); this.mp = null; },
+    });
+  },
+
+  joinMultiplayer() {
+    Sound.init();
+    const name = this.mpName();
+    const code = (document.getElementById('mp-code').value || '').trim().toUpperCase();
+    if (code.length !== CONFIG.multiplayer.codeLength) {
+      Menus.mpStatus(`Enter the ${CONFIG.multiplayer.codeLength}-letter room code.`);
+      return;
+    }
+    Menus.mpStatus(`Connecting to ${code}...`);
+    const s = new Session({ isHost: false, name, classId: this.classId, transport: Net.transport(), events: this.mpEvents, gameEvents: this.events });
+    this.mp = s;
+    Net.join(code, {
+      onOpen: () => { Menus.mpStatus('Connected! Joining the lobby...'); s.hello(); },
+      onData: (peer, msg) => s.onMessage(peer, msg),
+      onClose: () => { if (this.mp === s) this.leaveMultiplayer('The host closed the lobby.'); },
+      onError: (text) => {
+        if (this.mp !== s) return;
+        this.mp = null;
+        Net.close();
+        Menus.mpStatus(text);
+      },
+    });
+  },
+
+  /** Leaves (or closes, for the host) the multiplayer game and goes back to the multiplayer screen. */
+  leaveMultiplayer(reason = '') {
+    const s = this.mp;
+    this.mp = null;
+    if (s) s.close();
+    Net.close();
+    this.state = 'menu';
+    this.game = null;
+    Music.stop();
+    Music.play('menu');
+    this.openMultiplayer();
+    Menus.mpStatus(reason);
   },
 
   // ---------- runs ----------
 
   /** The test dungeon: the original wave arena. */
   startRun() {
+    if (this.mp) { if (this.mp.isHost) this.mp.startRun(null); return; }
     this.lastRun = null;
     this.practiceMode = false;
     this.startGame(this.classId);
@@ -172,6 +300,7 @@ const App = {
 
   /** A dungeon run: { mode: 'set', theme } or { mode: 'random' }. */
   startDungeonRun(run) {
+    if (this.mp) { if (this.mp.isHost) this.mp.startRun(run); return; }
     this.lastRun = run;
     this.practiceMode = false;
     this.startGame(this.classId);
@@ -206,13 +335,14 @@ const App = {
 
   endGame(won, stats) {
     this.state = 'ended';
-    Menus.showEnd(won, stats);
+    Menus.showEnd(won, stats, this.mp ? (this.mp.isHost ? 'host' : 'client') : null);
   },
 
+  /** Single player pauses; in multiplayer the menu opens but the world keeps going. */
   pause() {
     if (this.state !== 'playing') return;
     this.state = 'paused';
-    Menus.showPause(!!this.game.lobby);
+    Menus.showPause(!!this.game.lobby, !!this.mp);
   },
 
   resume() {
@@ -223,6 +353,7 @@ const App = {
   },
 
   quitToMenu(screen = 'menu') {
+    if (this.mp) return this.leaveMultiplayer('You left the game.');
     this.state = 'menu';
     this.game = null;
     Menus.show(screen);
@@ -257,7 +388,18 @@ const App = {
       if (!Input.locked && (Input.mouse.leftPressed || Input.mouse.rightPressed)) Input.lockPointer();
     } else Input.unlockPointer();
 
-    if (this.state === 'playing') this.game.update(dt);
+    if (this.mp) {
+      // multiplayer: the session steps the shared world whatever menu is open here;
+      // this screen's hero only gets input while nothing is open
+      const active = this.state === 'playing';
+      this.mp.pollLocal(active);
+      this.mp.update(dt, active);
+      if (this.mp && this.mp.game) this.game = this.mp.game;
+    } else if (this.state === 'playing') {
+      this.game.update(dt);
+    }
+    Shop.refresh();
+    Menus.updateReadyPanel(this);
 
     if (this.game) {
       this.game.render(this.ctx);

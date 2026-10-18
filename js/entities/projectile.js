@@ -2,6 +2,9 @@
 // Behaviour is configured with options rather than subclasses.
 
 class Projectile {
+  /** The hero whose attack this is (set by the game while each hero acts) - damage is credited to them. */
+  static actor = null;
+
   constructor(opts) {
     Object.assign(this, {
       x: 0, y: 0, vx: 0, vy: 0,
@@ -21,6 +24,7 @@ class Projectile {
       onStrike: null,      // fn(projectile, world, target) each time it damages a target
       hitSound: 'hit',
       fromUlt: false,      // damage from an ultimate doesn't charge the ultimate
+      owner: Projectile.actor, // hero who fired it (null for enemy shots)
     }, opts);
     this.age = 0;
     this.hitSet = new Set();

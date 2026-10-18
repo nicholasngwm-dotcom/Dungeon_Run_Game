@@ -31,7 +31,7 @@ const Sound = {
     const len = this.ctx.sampleRate;
     this.noiseBuffer = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const data = this.noiseBuffer.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    for (let i = 0; i < len; i++) data[i] = nativeRandom() * 2 - 1;
   },
 
   /** Music / SFX loudness from Settings (music muted when toggled off). */
@@ -74,7 +74,7 @@ const Sound = {
     gain.gain.setValueAtTime(vol, t);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(f).connect(gain).connect(bus || this.sfxBus);
-    src.start(t, Math.random() * 0.5);
+    src.start(t, nativeRandom() * 0.5);
     src.stop(t + dur + 0.02);
   },
 
@@ -94,7 +94,7 @@ const SFX = {
   coin: (s) => { s.tone({ type: 'square', freq: 1320, dur: 0.05, vol: 0.06 }); s.tone({ type: 'square', freq: 1760, dur: 0.08, vol: 0.06, delay: 0.05 }); },
   chestOpen: (s) => { s.noise({ dur: 0.15, vol: 0.15, filter: 'lowpass', freq: 800 }); [784, 988, 1175, 1568].forEach((f, i) => s.tone({ type: 'triangle', freq: f, dur: 0.12, vol: 0.1, delay: 0.1 + i * 0.07 })); },
   buy: (s) => { [880, 1320].forEach((f, i) => s.tone({ type: 'square', freq: f, dur: 0.08, vol: 0.07, delay: i * 0.06 })); },
-  talk: (s) => s.tone({ type: 'triangle', freq: 520 + Math.random() * 160, dur: 0.03, vol: 0.04 }),
+  talk: (s) => s.tone({ type: 'triangle', freq: 520 + nativeRandom() * 160, dur: 0.03, vol: 0.04 }),
   uiClick: (s) => { s.tone({ freq: 520, to: 900, dur: 0.08, vol: 0.1 }); },
   denied: (s) => s.tone({ type: 'square', freq: 140, dur: 0.1, vol: 0.08 }),
 

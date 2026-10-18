@@ -9,7 +9,12 @@
 const Input = {
   keys: new Set(),
   pressedKeys: new Set(),
-  mouse: { x: 480, y: 270, left: false, right: false, leftPressed: false, rightPressed: false },
+  _mouse: { x: 480, y: 270, left: false, right: false, leftPressed: false, rightPressed: false },
+  // multiplayer: while a hero updates, its networked input stands in for the real devices
+  // ({ held: Set, pressed: Set, mouse }); null otherwise
+  override: null,
+
+  get mouse() { return this.override ? this.override.mouse : this._mouse; },
   canvas: null,
   onKeyCapture: null,   // settings screen waiting for a key to bind: fn(code)
 
@@ -34,21 +39,21 @@ const Input = {
       if (this.locked) {
         const rect = canvas.getBoundingClientRect();
         const s = Settings.data.sensitivity;
-        this.mouse.x = clamp(this.mouse.x + e.movementX * (canvas.width / rect.width) * s, 0, canvas.width);
-        this.mouse.y = clamp(this.mouse.y + e.movementY * (canvas.height / rect.height) * s, 0, canvas.height);
+        this._mouse.x = clamp(this._mouse.x + e.movementX * (canvas.width / rect.width) * s, 0, canvas.width);
+        this._mouse.y = clamp(this._mouse.y + e.movementY * (canvas.height / rect.height) * s, 0, canvas.height);
         return;
       }
       const rect = canvas.getBoundingClientRect();
-      this.mouse.x = ((e.clientX - rect.left) / rect.width) * canvas.width;
-      this.mouse.y = ((e.clientY - rect.top) / rect.height) * canvas.height;
+      this._mouse.x = ((e.clientX - rect.left) / rect.width) * canvas.width;
+      this._mouse.y = ((e.clientY - rect.top) / rect.height) * canvas.height;
     });
     canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 0) { this.mouse.left = true; this.mouse.leftPressed = true; }
-      if (e.button === 2) { this.mouse.right = true; this.mouse.rightPressed = true; }
+      if (e.button === 0) { this._mouse.left = true; this._mouse.leftPressed = true; }
+      if (e.button === 2) { this._mouse.right = true; this._mouse.rightPressed = true; }
     });
     window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) this.mouse.left = false;
-      if (e.button === 2) this.mouse.right = false;
+      if (e.button === 0) this._mouse.left = false;
+      if (e.button === 2) this._mouse.right = false;
     });
     window.addEventListener('contextmenu', (e) => e.preventDefault());
   },
@@ -66,14 +71,21 @@ const Input = {
   /** Held this frame. Movement also always works on the arrow keys. */
   down(action) {
     const arrows = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
+    if (this.override) return this.override.held.has(action);
     return this.codesFor(action).some((c) => this.keys.has(c)) || (arrows[action] && this.keys.has(arrows[action]));
   },
 
   /** Pressed this frame. */
-  pressed(action) { return this.codesFor(action).some((c) => this.pressedKeys.has(c)); },
+  pressed(action) {
+    if (this.override) return this.override.pressed.has(action);
+    return this.codesFor(action).some((c) => this.pressedKeys.has(c));
+  },
 
   /** Swallows this frame's press of an action (so a shared key doesn't trigger twice). */
-  consume(action) { for (const c of this.codesFor(action)) this.pressedKeys.delete(c); },
+  consume(action) {
+    if (this.override) return this.override.pressed.delete(action);
+    for (const c of this.codesFor(action)) this.pressedKeys.delete(c);
+  },
 
   // ---------- pointer lock (aiming with sensitivity) ----------
 
@@ -94,13 +106,13 @@ const Input = {
   /** Call once at the end of every frame. */
   endFrame() {
     this.pressedKeys.clear();
-    this.mouse.leftPressed = false;
-    this.mouse.rightPressed = false;
+    this._mouse.leftPressed = false;
+    this._mouse.rightPressed = false;
   },
 
   reset() {
     this.keys.clear();
     this.pressedKeys.clear();
-    this.mouse.left = this.mouse.right = false;
+    this._mouse.left = this._mouse.right = false;
   },
 };

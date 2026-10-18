@@ -362,8 +362,11 @@ class PhantomKing {
       this.afterimage(world);
     }
     // the hit lane is the ground path the telegraph showed, not the floating body
-    if (!D.hit && !p.dead && pointSegmentDistance(p.x, p.y, px, py, this.x, this.y) < c.dashWidth / 2 + p.hw) {
-      D.hit = p.hurt(c.dashDamage, world, this.x, this.y);
+    // every hero in the lane gets hit, once each per dash
+    D.hitHeroes = D.hitHeroes || new Set();
+    for (const h of world.heroes) {
+      if (D.hitHeroes.has(h) || pointSegmentDistance(h.x, h.y, px, py, this.x, this.y) >= c.dashWidth / 2 + h.hw) continue;
+      if (h.hurt(c.dashDamage, world, this.x, this.y)) D.hitHeroes.add(h);
     }
     if (D.traveled >= D.len - 0.01) {
       world.shake(4, 0.2);
@@ -488,10 +491,11 @@ class PhantomKing {
 
   /** Touching the king hurts (its dash deals its own damage). */
   contactDamage(world) {
-    const p = world.player;
-    if (p.dead || this.state === 'dash' || this.alpha < 0.6) return;
+    if (this.state === 'dash' || this.alpha < 0.6) return;
     // measured at ground level (its shadow), like the dash lane
-    if (dist(this.x, this.y, p.x, p.y) < this.cfg.dashWidth / 2 + p.hw) p.hurt(this.cfg.contactDamage, world, this.x, this.y);
+    for (const p of world.heroes) {
+      if (dist(this.x, this.y, p.x, p.y) < this.cfg.dashWidth / 2 + p.hw) p.hurt(this.cfg.contactDamage, world, this.x, this.y);
+    }
   }
 
   // ---------------------------------------------------------

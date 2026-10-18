@@ -21,8 +21,8 @@ class Camera {
 
     if (this.shakeTime > 0) {
       this.shakeTime -= dt;
-      this.offsetX = rand(-1, 1) * this.shakeMag;
-      this.offsetY = rand(-1, 1) * this.shakeMag;
+      this.offsetX = vrand(-1, 1) * this.shakeMag;
+      this.offsetY = vrand(-1, 1) * this.shakeMag;
     } else {
       this.offsetX = this.offsetY = 0;
     }

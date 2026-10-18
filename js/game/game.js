@@ -1,23 +1,40 @@
 // One run of the game (or the lobby between runs): owns the world state,
 // updates and renders it. Entities receive this object as `world`.
+//
+// There can be several heroes (multiplayer). Simulation code must only ever
+// use `players` / `heroes` (or the hero acting right now, `actor`); `player`
+// and `localPlayer` are the hero on THIS screen and are for the camera, HUD
+// and menus only. In multiplayer every machine runs the same simulation from
+// the same inputs (see Session), so the simulation must not depend on which
+// hero is local.
 
 class Game {
   /**
+   * classId: the hero for single player (ignored when opts.roster is given).
    * opts.practice: practice-range cheat options ({ infiniteMana,
    * infiniteEnergy, god }) or null for a normal run.
    * opts.lobby: true for the hub room (no waves; stations to walk up to).
    * opts.run: { mode: 'set' | 'random', theme } for a dungeon run (generated floors,
    *   3 stages); otherwise it's the test dungeon (the original wave arena).
+   * opts.roster: [{ id, name, classId }] for multiplayer; opts.localId: which one is this screen.
    */
   constructor(classId, events, opts = {}) {
-    this.events = events;          // { onGameOver(stats), onVictory(stats), onInteract(station), onToast(text) }
+    this.events = events;          // { onGameOver(stats), onVictory(stats), onInteract(station, hero), onToast(text), onNpc(kind, run, hero) }
     this.camera = new Camera(CONFIG.screen.width, CONFIG.screen.height);
     this.effects = new Effects();
     this.timers = [];
+    this.roster = opts.roster || [{ id: 'local', name: '', classId }];
+    this.localId = opts.localId || this.roster[0].id;
+    this.multiplayer = !!opts.roster;
+    this.players = [];
     // a run builds its own floors (FloorMap) and sets this.dungeon
     this.run = opts.run ? new DungeonRun(this, opts.run) : null;
     if (!this.run) this.dungeon = new Dungeon(opts.lobby ? LOBBY_LAYOUT : {});
-    this.player = createHero(classId, this.dungeon.playerStart.x, this.dungeon.playerStart.y);
+    const s = this.dungeon.playerStart;
+    this.roster.forEach((r, i) => {
+      const off = Game.spawnOffset(i);
+      this.players.push(this.makeHero(r, r.classId, s.x + off.x, s.y + off.y));
+    });
     this.enemies = [];
     this.playerProjectiles = [];
     this.enemyProjectiles = [];
@@ -33,9 +50,11 @@ class Game {
     this.bannerData = null;
     this.finished = false;
     this.mouseWorld = { x: 0, y: 0 };
+    this.actor = null;             // the hero whose turn it is (their attacks, their input)
     this.director = new WaveDirector(this);
     this.practice = opts.practice ? { options: opts.practice, log: [], total: 0, respawn: 0 } : null;
     this.dummies = [];
+    this.readyCheck = null;        // multiplayer lobby: { ready: { id: bool } } while the host waits at the gate
     if (this.practice) {
       const c = this.dungeon.center;
       this.dummies.push(new TrainingDummy(c.x - 220, c.y + 40));
@@ -53,11 +72,72 @@ class Game {
     this.vignette = Game.buildVignette();
   }
 
+  /** Heroes stand in a loose group: 4 per row. */
+  static spawnOffset(i) {
+    return { x: ((i % 4) - 1.5) * 30, y: Math.floor(i / 4) * 26 };
+  }
+
+  /** A hero for a roster entry, tagged with its network id and name. */
+  makeHero(entry, classId, x, y) {
+    const p = createHero(classId, x, y);
+    p.netId = entry.id;
+    p.name = entry.name;
+    return p;
+  }
+
+  // ---------------------------------------------------------
+  //  Heroes
+  // ---------------------------------------------------------
+
+  /** The hero on this screen (camera, HUD, menus). Never use it in simulation code. */
+  get localPlayer() {
+    return this.players.find((p) => p.netId === this.localId) || this.players[0];
+  }
+
+  /**
+   * In single player there's only one hero, so `player` is it. While a boss
+   * updates, it's the hero the boss is focused on (bosses were written for
+   * one target). Everywhere else it's the local hero.
+   */
+  get player() { return this.bossFocus || this.localPlayer; }
+  set player(p) { this.replaceHero(this.localPlayer, p); }
+
+  replaceHero(old, p) {
+    p.netId = old.netId;
+    p.name = old.name;
+    const i = this.players.indexOf(old);
+    if (i >= 0) this.players[i] = p;
+  }
+
+  /** Living heroes, in roster order. */
+  get heroes() { return this.players.filter((p) => !p.dead); }
+
+  /** The nearest living hero to a point (or the first hero if all are down). */
+  nearestHero(x, y) {
+    let best = null;
+    let bestD = Infinity;
+    for (const p of this.players) {
+      if (p.dead) continue;
+      const d = dist(x, y, p.x, p.y);
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return best || this.players[0];
+  }
+
+  heroById(id) { return this.players.find((p) => p.netId === id) || null; }
+
+  /** Enemy toughness / numbers grow with the party size. */
+  get playerScale() {
+    const m = CONFIG.multiplayer;
+    const extra = Math.max(0, this.players.length - 1);
+    return { hp: 1 + m.hpPerExtraPlayer * extra, count: 1 + m.countPerExtraPlayer * extra };
+  }
+
   // ---------------------------------------------------------
   //  API used by entities
   // ---------------------------------------------------------
 
-  /** Everything the player's attacks can hit. */
+  /** Everything the heroes' attacks can hit. */
   getTargets() {
     const list = this.enemies.filter((e) => !e.dead && e.age > 0.15);
     if (this.boss) list.push(...this.boss.getTargets());
@@ -67,14 +147,17 @@ class Game {
   }
 
   /**
-   * Applies player damage (with crits, numbers, knockback, sound).
-   * sound: null for silent ticks. fromUlt: damage from an ultimate doesn't
-   * charge the ultimate. Returns the damage dealt (0 if none).
+   * Applies hero damage (with crits, numbers, knockback, sound). The damage
+   * belongs to `source` (default: the acting hero) for its multipliers, ult
+   * charge and kill credit. sound: null for silent ticks. fromUlt: damage from
+   * an ultimate doesn't charge the ultimate. Returns the damage dealt (0 if none).
    */
-  damageTarget(target, amount, { angle = 0, knockback = 0, sound = 'hit', noCrit = false, color = '#ffffff', fromUlt = false } = {}) {
+  damageTarget(target, amount, { angle = 0, knockback = 0, sound = 'hit', noCrit = false, color = '#ffffff', fromUlt = false, source = null } = {}) {
+    const src = source || this.actor || this.players[0];
     const crit = !noCrit && Math.random() < CONFIG.player.critChance;
-    const dmg = Math.max(1, Math.round(amount * (crit ? CONFIG.player.critMultiplier : 1) * this.player.damageMultiplier * this.player.buffDamage * this.player.upgradeDamage));
+    const dmg = Math.max(1, Math.round(amount * (crit ? CONFIG.player.critMultiplier : 1) * src.damageMultiplier * src.buffDamage * src.upgradeDamage));
     if (!target.takeDamage(dmg, this)) return 0;
+    target.lastHitBy = src;
     if (knockback) target.knockback(angle, knockback);
     this.effects.text(target.hx, target.hy - 22, crit ? `${dmg}!` : `${dmg}`, {
       color: crit ? '#ffd34a' : color, size: crit ? 11 : 8,
@@ -83,8 +166,8 @@ class Game {
       this.effects.burst(target.hx, target.hy, { count: crit ? 8 : 4, colors: ['#ffffff', '#ffe0a0'], speed: [40, 120], life: [0.1, 0.25] });
       Sound.play(crit ? 'crit' : (sound || 'hit'), 0.04);
     }
-    if (!fromUlt && !this.player.dead) this.player.gainUlt(dmg);
-    this.player.onDamageDealt(target, dmg, this);
+    if (!fromUlt && !src.dead) src.gainUlt(dmg);
+    src.onDamageDealt(target, dmg, this);
     if (this.practice) {
       this.practice.log.push({ t: this.time, dmg });
       this.practice.total += dmg;
@@ -92,9 +175,9 @@ class Game {
     return dmg;
   }
 
-  /** Damage over time (bleed etc.), ticking twice a second. */
+  /** Damage over time (bleed etc.), ticking twice a second; it belongs to the hero who applied it. */
   addDot(target, dps, duration, color = '#ff6060') {
-    this.dots.push({ target, dps, t: duration, tick: 0.5, color });
+    this.dots.push({ target, dps, t: duration, tick: 0.5, color, source: this.actor });
   }
 
   updateDots(dt) {
@@ -104,7 +187,7 @@ class Game {
       if (d.target.dead) { d.dead = true; continue; }
       if (d.tick <= 0) {
         d.tick += 0.5;
-        this.damageTarget(d.target, d.dps * 0.5, { sound: null, noCrit: true, color: d.color });
+        this.damageTarget(d.target, d.dps * 0.5, { sound: null, noCrit: true, color: d.color, source: d.source });
         this.effects.burst(d.target.hx, d.target.hy, { count: 2, colors: [d.color, '#7a1010'], speed: [10, 40], life: [0.2, 0.4] });
       }
       if (d.t <= 0) d.dead = true;
@@ -112,10 +195,10 @@ class Game {
     removeDead(this.dots);
   }
 
-  /** The hero plus anything enemies may attack instead (clones, a defend room's lantern). */
+  /** The heroes plus anything enemies may attack instead (clones, a defend room's lantern). */
   get allies() {
-    const list = this.clones.filter((c) => !c.dead);
-    if (!this.player.dead) list.unshift(this.player);
+    const list = this.heroes;
+    list.push(...this.clones.filter((c) => !c.dead));
     if (this.run) list.push(...this.run.allies());
     return list;
   }
@@ -125,7 +208,7 @@ class Game {
    * stand-in with dead = true when there is nothing to chase.
    */
   targetFor(enemy) {
-    // defend rooms: the hero if spotted, otherwise the lantern
+    // defend rooms: a hero if spotted, otherwise the lantern
     if (this.run && this.run.totem && !this.run.totem.dead) return this.run.defendTarget(enemy);
     let best = null;
     let bestD = Infinity;
@@ -135,7 +218,7 @@ class Game {
       if (d < bestD) { bestD = d; best = a; }
     }
     if (best) return best;
-    const p = this.player;
+    const p = this.players[0];
     return { dead: true, x: p.x, y: p.y, hx: p.hx, hy: p.hy, radius: 0, hurt: () => false };
   }
 
@@ -151,13 +234,15 @@ class Game {
     this.enemies.push(enemy);
   }
 
-  /** Later waves get tougher enemies (boss minions and the practice range don't). */
+  /** Stage / wave scaling times party size (boss minions and the practice range don't scale with waves). */
   get enemyScale() {
-    if (this.run) return this.run.scale;   // dungeon runs scale by stage
+    const party = this.playerScale.hp;
+    if (this.run) return { hp: this.run.scale.hp * party, damage: this.run.scale.damage };
     const d = this.director;
-    if (this.practice || d.state === 'boss' || d.waveIndex <= 0) return { hp: 1, damage: 1 };
+    if (this.practice) return { hp: 1, damage: 1 };
+    if (d.state === 'boss' || d.waveIndex <= 0) return { hp: party, damage: 1 };
     const s = CONFIG.waveScaling;
-    return { hp: 1 + s.hp * d.waveIndex, damage: 1 + s.damage * d.waveIndex };
+    return { hp: (1 + s.hp * d.waveIndex) * party, damage: 1 + s.damage * d.waveIndex };
   }
 
   /** Shows a summoning circle, then spawns the enemy. setup(enemy), if given, runs once it appears. */
@@ -166,7 +251,8 @@ class Game {
       let pt;
       for (let i = 0; i < 30; i++) {
         pt = this.dungeon.randomFloorPoint(60);
-        if (dist(pt.x, pt.y, this.player.x, this.player.y) > 260) break;
+        const near = this.nearestHero(pt.x, pt.y);
+        if (dist(pt.x, pt.y, near.x, near.y) > 260) break;
       }
       x = pt.x;
       y = pt.y;
@@ -200,9 +286,10 @@ class Game {
     if (Math.random() < chance) this.pickups.push(new HeartPickup(x, y));
   }
 
+  /** Mana orbs only drop while someone in the party uses mana. */
   maybeDropMana(x, y) {
-    const r = this.player.resource;
-    if (!r || r.name !== 'MANA' || Math.random() >= CONFIG.drops.manaChance) return;
+    if (!this.players.some((p) => p.resource && p.resource.name === 'MANA')) return;
+    if (Math.random() >= CONFIG.drops.manaChance) return;
     this.pickups.push(new ManaPickup(x + rand(-8, 8), y + rand(-8, 8)));
   }
 
@@ -276,8 +363,10 @@ class Game {
   /** type: 'golem' | 'phantom', or omitted to roll using CONFIG.bosses. */
   startBoss(type = Game.rollBoss()) {
     Music.play('boss');
-    this.player.heal(this.player.maxHp * CONFIG.bossHealPercent, this);
+    for (const p of this.heroes) p.heal(p.maxHp * CONFIG.bossHealPercent, this);
     this.boss = Game.createBoss(type, this.dungeon.center);
+    this.boss.maxHp = Math.round(this.boss.maxHp * this.playerScale.hp);
+    this.boss.hp = this.boss.maxHp;
     this.banner(this.boss.name, this.boss.title, 3);
     Sound.play('bossRoar');
   }
@@ -311,17 +400,85 @@ class Game {
     });
   }
 
+  /**
+   * The boss keeps attacking one hero for a few seconds, then re-picks the
+   * nearest living one, so a party splits its attention.
+   */
+  updateBossFocus(dt) {
+    const b = this.boss;
+    b.focusTimer = (b.focusTimer || 0) - dt;
+    if (!b.focus || b.focus.dead || !this.players.includes(b.focus) || b.focusTimer <= 0) {
+      b.focus = this.nearestHero(b.x, b.y);
+      b.focusTimer = 4;
+    }
+  }
+
+  // ---------------------------------------------------------
+  //  Commands (hero picks, shopping, ready checks)
+  //  In multiplayer these arrive inside the host's input bundles, so every
+  //  machine applies them on the same tick.
+  // ---------------------------------------------------------
+
+  applyCommand(cmd, fromId) {
+    const hero = this.heroById(fromId);
+    switch (cmd.type) {
+      case 'hero': {
+        if (!this.lobby || !hero || hero.classId === cmd.classId) return;
+        const taken = this.players.filter((p) => p.classId === cmd.classId).length;
+        if (this.multiplayer && taken >= CONFIG.multiplayer.maxDuplicates) {
+          if (fromId === this.localId) this.events.onToast?.(`ONLY ${CONFIG.multiplayer.maxDuplicates} OF EACH HERO`);
+          return;
+        }
+        this.swapHero(cmd.classId, hero);
+        return;
+      }
+      case 'buy':
+        if (this.run && hero) this.run.buyUpgrade(hero, cmd.upgrade);
+        return;
+      case 'readyCheck':
+        if (this.lobby && fromId === this.roster[0].id && !this.readyCheck) {
+          this.readyCheck = { ready: {} };
+          for (const p of this.players) this.readyCheck.ready[p.netId] = p.netId === fromId;
+        }
+        return;
+      case 'ready':
+        if (this.readyCheck && hero) this.readyCheck.ready[fromId] = !!cmd.value;
+        return;
+      case 'cancelReady':
+        if (fromId === this.roster[0].id) this.readyCheck = null;
+        return;
+      case 'leave':
+        this.removeHero(cmd.id);
+        return;
+    }
+  }
+
+  get allReady() {
+    return !!this.readyCheck && this.players.every((p) => this.readyCheck.ready[p.netId]);
+  }
+
+  /** A player left the game: their hero (and clones) vanish. */
+  removeHero(id) {
+    const p = this.heroById(id);
+    if (!p) return;
+    this.effects.burst(p.hx, p.hy, { count: 20, colors: ['#b45aff', '#e0c0ff'], speed: [30, 120], life: [0.3, 0.6], up: 40 });
+    this.players.splice(this.players.indexOf(p), 1);
+    this.roster = this.roster.filter((r) => r.id !== id);
+    this.clones = this.clones.filter((c) => c.owner !== p);
+    if (this.readyCheck) delete this.readyCheck.ready[id];
+  }
+
   // ---------------------------------------------------------
   //  PRACTICE RANGE
   // ---------------------------------------------------------
 
-  /** Lobby: become another hero on the spot. */
-  swapHero(classId) {
-    const p = this.player;
-    this.player = createHero(classId, p.x, p.y);
-    this.clones = [];
-    this.barriers = [];
-    this.effects.burst(p.hx, p.hy, { count: 30, colors: ['#ffe680', '#ffffff', '#b45aff'], speed: [40, 160], life: [0.3, 0.7], up: 40 });
+  /** Lobby: a hero becomes another hero on the spot. */
+  swapHero(classId, old = this.localPlayer) {
+    const p = createHero(classId, old.x, old.y);
+    this.replaceHero(old, p);
+    this.clones = this.clones.filter((c) => c.owner !== old);
+    this.barriers = this.barriers.filter((b) => b.owner !== old);
+    this.effects.burst(old.hx, old.hy, { count: 30, colors: ['#ffe680', '#ffffff', '#b45aff'], speed: [40, 160], life: [0.3, 0.7], up: 40 });
     Sound.play('pickup');
   }
 
@@ -395,24 +552,44 @@ class Game {
   //  UPDATE
   // ---------------------------------------------------------
 
-  update(dt) {
+  /**
+   * One step of the simulation. inputs: { heroId: input } in multiplayer
+   * (each hero reads its own input through Input.override); omitted in
+   * single player, where the one hero reads the keyboard and mouse directly.
+   */
+  update(dt, inputs = null) {
     this.time += dt;
-    this.mouseWorld = this.camera.screenToWorld(Input.mouse.x, Input.mouse.y);
+    if (!inputs) this.mouseWorld = this.camera.screenToWorld(Input.mouse.x, Input.mouse.y);
 
-    // stations / props get the interact key before the hero, so E there never casts an ability
     if (this.lobby) this.lobby.update(dt);
-    if (this.run && !this.finished) this.run.preUpdate();
-    if (!this.player.dead) this.player.update(dt, this);
-    for (const c of this.clones) c.update(dt, this);
+    for (const p of this.players.slice()) {
+      if (inputs) {
+        const inp = inputs[p.netId] || Session.idleInput;
+        Input.override = Session.toOverride(inp);
+        this.mouseWorld = { x: inp.mx, y: inp.my };
+      }
+      this.setActor(p);
+      // stations / props get the interact key before the hero, so E there never casts an ability
+      if (this.lobby) this.lobby.interact(p);
+      if (this.run && !this.finished) this.run.preUpdate(p);
+      if (!p.dead) p.update(dt, this);
+    }
+    Input.override = null;
+    for (const c of this.clones) { this.setActor(c.owner); c.update(dt, this); }
+    this.setActor(null);
     for (const b of this.barriers) b.update(dt, this);
     for (const e of this.enemies) e.update(dt, this);
     this.separateEnemies();
     this.contactDamage();
     if (this.boss) {
+      this.updateBossFocus(dt);
+      this.bossFocus = this.boss.focus;
       this.boss.update(dt, this);
+      this.bossFocus = null;
       if (this.boss.dead) this.boss = null;
     }
-    for (const p of this.playerProjectiles) p.update(dt, this);
+    for (const p of this.playerProjectiles) { this.setActor(p.owner); p.update(dt, this); }
+    this.setActor(null);
     for (const p of this.enemyProjectiles) p.update(dt, this);
     for (const p of this.pickups) p.update(dt, this);
 
@@ -431,9 +608,11 @@ class Game {
 
     const dead = this.enemies.filter((e) => e.dead);
     if (this.run) for (const e of dead) this.run.onEnemyKilled(e);
-    const killed = dead.length;
-    this.kills += killed;
-    for (let i = 0; i < killed; i++) this.player.onKill(this);
+    this.kills += dead.length;
+    for (const e of dead) {
+      const killer = this.players.includes(e.lastHitBy) ? e.lastHitBy : this.players[0];
+      killer.onKill(this);
+    }
     removeDead(this.enemies);
     removeDead(this.clones);
     removeDead(this.barriers);
@@ -447,14 +626,29 @@ class Game {
       if (this.bannerData.t <= 0) this.bannerData = null;
     }
 
-    this.camera.follow(this.player.x, this.player.y - 16, dt, this.dungeon.width, this.dungeon.height);
+    // the camera follows this screen's hero (or a living teammate while they're down)
+    const view = this.cameraTarget;
+    this.camera.follow(view.x, view.y - 16, dt, this.dungeon.width, this.dungeon.height);
 
-    if (this.player.dead && !this.finished && !this.practice) {
+    if (!this.finished && !this.practice && this.players.every((p) => p.dead)) {
       this.finished = true;
       Music.stop();
       Sound.play('defeat');
       this.after(1.8, () => this.events.onGameOver(this.stats));
     }
+  }
+
+  /** Projectiles fired from here on belong to `hero` (for damage credit). */
+  setActor(hero) {
+    this.actor = hero;
+    Projectile.actor = hero;
+  }
+
+  /** Who the camera watches: this screen's hero, or a living teammate while they're down. */
+  get cameraTarget() {
+    const me = this.localPlayer;
+    if (!me.dead || !this.multiplayer) return me;
+    return this.heroes[0] || me;
   }
 
   /** Stops enemies from stacking on top of each other. */
@@ -500,11 +694,11 @@ class Game {
     for (const e of this.enemies) e.drawGround(ctx);
     for (const cl of this.clones) cl.drawGround(ctx);
     for (const d of this.dummies) d.drawGround(ctx);
-    if (!this.player.dead) this.player.drawGround(ctx);
+    for (const p of this.heroes) p.drawGround(ctx);
 
     // y-sorted characters
     const items = this.enemies.map((e) => ({ y: e.y, draw: (c) => e.draw(c) }));
-    items.push({ y: this.player.y, draw: (c) => this.player.draw(c) });
+    for (const p of this.heroes) items.push({ y: p.y, draw: (c) => p.draw(c) });
     for (const cl of this.clones) items.push({ y: cl.y, draw: (c) => cl.draw(c) });
     for (const d of this.dummies) items.push({ y: d.y, draw: (c) => d.draw(c) });
     for (const b of this.barriers) items.push({ y: b.y, draw: (c) => b.draw(c) });
@@ -521,11 +715,28 @@ class Game {
     if (this.boss) HUD.drawBossBars(ctx, this.boss);
     this.dungeon.drawTorches(ctx, this.time, this.camera);
     if (this.lobby) this.lobby.drawPrompts(ctx);
+    if (this.multiplayer) this.drawNameTags(ctx);
     this.effects.drawTexts(ctx);
     ctx.restore();
 
     ctx.drawImage(this.vignette, 0, 0);
     HUD.draw(ctx, this);
+  }
+
+  /** Multiplayer: every other hero's name and health over their head. */
+  drawNameTags(ctx) {
+    const me = this.localPlayer;
+    for (const p of this.players) {
+      if (p === me) continue;
+      const x = Math.round(p.x);
+      const y = Math.round(p.y - 66);
+      HUD.text(ctx, p.dead ? `${p.name} (DOWN)` : p.name, x, y, { size: 6, align: 'center', color: p.dead ? '#a99bbd' : '#8cff9a' });
+      if (p.dead) continue;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x - 13, y + 9, 26, 4);
+      ctx.fillStyle = '#e84a4a';
+      ctx.fillRect(x - 12, y + 10, Math.round(24 * clamp(p.hp / p.maxHp, 0, 1)), 2);
+    }
   }
 
   static buildVignette() {

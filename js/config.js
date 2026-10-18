@@ -339,6 +339,21 @@ const CONFIG = {
                'friendlyTrader', 'treasure', 'helper'],
   },
 
+  // ---------------------------------------------------------
+  //  MULTIPLAYER (host + up to 7 friends, peer to peer)
+  // ---------------------------------------------------------
+  multiplayer: {
+    maxPlayers: 8,
+    maxDuplicates: 2,          // at most this many of the same hero in one lobby
+    // enemies scale with the party: each extra hero adds this much enemy hp / this many more enemies
+    hpPerExtraPlayer: 0.5,
+    countPerExtraPlayer: 0.3,
+    tickRate: 60,              // simulation steps per second (everyone steps in lockstep)
+    codeLength: 5,             // room code letters
+    peerPrefix: 'dungeonrun-v1-',   // room code -> PeerJS id (bump to keep old versions out)
+    checksumEvery: 120,        // ticks between desync checks
+  },
+
   // mana orbs only drop for mana users; picking one up triggers the Mage's Mana Surge passive
   drops: { heartChance: 0.1, heartHeal: 45, manaChance: 0.3, manaRestore: 15 },
 

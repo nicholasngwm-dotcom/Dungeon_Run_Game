@@ -2,7 +2,8 @@
 // make rooms feel alive. Dead trees, soul-flame lamp posts, flickering
 // candles, coffins, bone piles, crows that take off when you get close, a
 // campfire in the start room, and barrels / crates / shelves / rugs in the
-// shop. Drifting mist rises around the hero.
+// shop. Drifting mist rises around the hero. Placement happens once, inside the
+// shared simulation; the idle animation (crows, embers, mist) is visual only.
 
 class FloorDecor {
   constructor(floor, run) {
@@ -81,13 +82,13 @@ class FloorDecor {
 
   update(dt, world) {
     this.time += dt;
-    const p = world.player;
+    const p = world.localPlayer;   // visual only: crows and mist react to this screen's hero
     for (const d of this.items) {
       if (d.kind === 'crow') this.updateCrow(d, dt, p);
-      else if (d.kind === 'campfire' && Math.random() < dt * 8) {
-        world.effects.burst(d.x + rand(-6, 6), d.y - 10, { count: 1, colors: ['#ffb02e', '#ff5a1e', '#fff2a0'], speed: [5, 20], up: 60, life: [0.5, 1.1], size: [1, 3] });
-      } else if (d.kind === 'lampPost' && Math.random() < dt * 1.2) {
-        world.effects.burst(d.x + rand(-4, 4), d.y - 44, { count: 1, colors: d.warm ? ['#ffd34a', '#fff2a0'] : ['#8affb0', '#c8ffe0'], speed: [3, 10], up: 18, life: [1, 1.8], size: [1, 2] });
+      else if (d.kind === 'campfire' && nativeRandom() < dt * 8) {
+        world.effects.burst(d.x + vrand(-6, 6), d.y - 10, { count: 1, colors: ['#ffb02e', '#ff5a1e', '#fff2a0'], speed: [5, 20], up: 60, life: [0.5, 1.1], size: [1, 3] });
+      } else if (d.kind === 'lampPost' && nativeRandom() < dt * 1.2) {
+        world.effects.burst(d.x + vrand(-4, 4), d.y - 44, { count: 1, colors: d.warm ? ['#ffd34a', '#fff2a0'] : ['#8affb0', '#c8ffe0'], speed: [3, 10], up: 18, life: [1, 1.8], size: [1, 2] });
       }
     }
     removeDead(this.items);
@@ -95,7 +96,7 @@ class FloorDecor {
     this.mistTimer -= dt;
     if (this.mistTimer <= 0 && !p.dead) {
       this.mistTimer = 0.12;
-      world.effects.burst(p.x + rand(-460, 460), p.y + rand(-260, 260), {
+      world.effects.burst(p.x + vrand(-460, 460), p.y + vrand(-260, 260), {
         count: 1, colors: ['rgba(120, 160, 140, 0.25)', 'rgba(90, 120, 110, 0.22)'], speed: [4, 12], up: 8, life: [2, 3.5], size: [6, 10],
       });
     }
@@ -108,7 +109,7 @@ class FloorDecor {
       if (!p.dead && dist(p.x, p.y, d.x, d.y) < 90) {
         d.flying = true;
         d.t = 0;
-        const away = angleTo(p.x, p.y, d.x, d.y) + rand(-0.6, 0.6);
+        const away = angleTo(p.x, p.y, d.x, d.y) + vrand(-0.6, 0.6);
         d.vx = Math.cos(away) * 140;
         d.facing = d.vx >= 0 ? 1 : -1;
         Sound.play('dagger', 0.3);

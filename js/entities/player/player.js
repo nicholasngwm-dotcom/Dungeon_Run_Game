@@ -47,6 +47,10 @@ class Player extends Entity {
     this.abilityHaste = 1;        // RMB / E / F cooldowns recover this much faster
     this.upgradeDamage = 1;       // all damage dealt
     this.bonusRegen = 0;          // hp per second, always on (even while taking hits)
+    // dungeon runs: each hero has their own purse and shop upgrades
+    this.coins = 0;
+    this.coinFlash = 0;
+    this.upgradeLevels = {};
     const r = this.cfg.resource;
     this.resource = r ? { ...r, value: r.max } : null;
   }

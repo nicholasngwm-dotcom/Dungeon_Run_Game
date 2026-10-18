@@ -76,6 +76,25 @@ any enemy or either boss, clear the arena, fill your ultimate, and toggle
 god mode, infinite mana (also light orbs) and infinite energy. Dying respawns you.
 "Back to lobby" on the panel (or in the pause menu) returns to the lobby.
 
+## Multiplayer
+
+Pick **Multiplayer** on the main menu, enter a name, then **Host a lobby** (you get a
+5-letter room code to share) or type a friend's code and **Join lobby**. Up to 8
+players, with at most 2 of the same hero. Everyone shares the lobby: pick heroes at
+the statues, browse the bestiary and legend. When the host uses the gate, a ready
+check pops up at the side for everyone; once all are ready the host picks the
+dungeon and the whole party is teleported in. Enemies get tougher and more numerous
+with more players. Locked rooms pull the whole party inside, each hero has their own
+coins and shop upgrades, a reward chest holds 5 coins per hero, and fallen heroes
+spectate and get back up at the next stage. The practice range is single player only.
+
+How it works: connections are peer to peer (WebRTC via the free PeerJS service, which
+only introduces the players). Every machine runs the same simulation; the host
+collects everyone's input 60 times a second and sends it out in numbered bundles,
+and gameplay randomness is seeded so it comes out the same everywhere. Periodic
+checksums warn the host if a machine drifts out of sync. Some strict school or office
+networks block peer-to-peer connections.
+
 ## Settings
 
 **Settings** (main menu or pause menu) has mouse sensitivity, music on/off,
@@ -124,6 +143,8 @@ js/
   ui/menus.js           DOM menus + lobby panels (hero, workshop, dungeon, legend)
   ui/bestiary.js        bestiary book (entries, filters, page flips)
   ui/dialog.js          NPC dialogue box (typewriter text, choices)
+  net/net.js            peer-to-peer connections (PeerJS): host / join by room code
+  net/session.js        multiplayer lockstep: input bundles, commands, scenes, desync checks
   game/upgrades.js      shop upgrades + the shop window
   game/decor.js         dungeon set dressing (trees, lamps, crows, campfire, shop furniture)
 ```

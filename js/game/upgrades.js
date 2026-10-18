@@ -89,9 +89,20 @@ function drawUpgradeIcon(ctx, id, color) {
   }
 }
 
-/** The shop window: six cards, coins, and the shopkeeper's reaction line. */
+/** Price of an upgrade when the hero already owns `level` of it. */
+function upgradePrice(u, level) {
+  return Math.round(u.price * Math.pow(CONFIG.run.shop.priceGrowth, level));
+}
+
+/**
+ * The shop window: six cards, the local hero's coins, and the shopkeeper's
+ * reaction line. Buying sends a command (App.command) - in multiplayer it's
+ * applied a moment later on every machine, so the window refreshes whenever
+ * the hero's purse or upgrades change.
+ */
 const Shop = {
   run: null,
+  shown: '',
 
   open(run) {
     this.run = run;
@@ -101,17 +112,25 @@ const Shop = {
   },
 
   get isOpen() { return !document.getElementById('screen-shop').classList.contains('hidden'); },
+  get hero() { return this.run.world.localPlayer; },
 
-  level(u) { return this.run.upgradeLevels[u.id] || 0; },
-  price(u) { return Math.round(u.price * Math.pow(CONFIG.run.shop.priceGrowth, this.level(u))); },
+  level(u) { return this.hero.upgradeLevels[u.id] || 0; },
+  price(u) { return upgradePrice(u, this.level(u)); },
 
   say(text) { document.getElementById('shop-line').textContent = `"${text}"`; },
 
+  /** Re-renders if the hero's coins or upgrades changed since last time. */
+  refresh() {
+    if (!this.isOpen) return;
+    const p = this.hero;
+    if (`${p.coins}|${JSON.stringify(p.upgradeLevels)}` !== this.shown) this.render();
+  },
+
   render() {
-    const run = this.run;
-    const p = run.world.player;
+    const p = this.hero;
     const max = CONFIG.run.shop.maxLevel;
-    document.getElementById('shop-coins').textContent = run.coins;
+    this.shown = `${p.coins}|${JSON.stringify(p.upgradeLevels)}`;
+    document.getElementById('shop-coins').textContent = p.coins;
     const grid = document.getElementById('shop-items');
     grid.innerHTML = shopStock(p).map((u) => {
       const lvl = this.level(u);
@@ -121,27 +140,34 @@ const Shop = {
       return `<div class="shop-item${maxed ? ' maxed' : ''}">
         <canvas width="32" height="32" data-icon="${u.id}" data-color="${u.color}"></canvas>
         <div class="shop-info"><b style="color:${u.color}">${u.name}</b><span>${u.desc}</span><div class="pips">${pips}</div></div>
-        <button class="buy" data-action="buy:${u.id}" ${maxed || run.coins < price ? 'disabled' : ''}>${maxed ? 'MAXED' : `${price}<em></em>`}</button>
+        <button class="buy" data-action="buy:${u.id}" ${maxed || p.coins < price ? 'disabled' : ''}>${maxed ? 'MAXED' : `${price}<em></em>`}</button>
       </div>`;
     }).join('');
     for (const c of grid.querySelectorAll('canvas')) drawUpgradeIcon(c.getContext('2d'), c.dataset.icon, c.dataset.color);
   },
 
   buy(id) {
-    const run = this.run;
     const u = SHOP_UPGRADES.find((x) => x.id === id);
-    if (!u || this.level(u) >= CONFIG.run.shop.maxLevel) return;
-    const price = this.price(u);
-    if (run.coins < price) {
+    if (!u) return;
+    if (this.level(u) >= CONFIG.run.shop.maxLevel) return;
+    if (this.hero.coins < this.price(u)) {
       this.say("You're a little short, dear.");
       Sound.play('denied');
       return;
     }
-    run.coins -= price;
-    run.upgradeLevels[u.id] = this.level(u) + 1;
-    u.apply(run.world.player);
-    Sound.play('buy');
-    this.say(choose(['A fine choice!', 'Pleasure doing business.', 'That one suits you.', 'Come back soon!']));
+    App.command({ type: 'buy', upgrade: id });
+  },
+
+  /** A purchase went through (or didn't) - the shopkeeper reacts if it was ours. */
+  onPurchase(hero, u, ok) {
+    if (!this.run || hero !== this.hero) return;
+    if (ok) {
+      Sound.play('buy');
+      this.say(choose(['A fine choice!', 'Pleasure doing business.', 'That one suits you.', 'Come back soon!']));
+    } else {
+      Sound.play('denied');
+      this.say("You're a little short, dear.");
+    }
     this.render();
   },
 };

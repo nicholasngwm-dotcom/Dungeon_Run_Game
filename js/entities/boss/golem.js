@@ -67,7 +67,7 @@ class GolemFist extends GolemPart {
     this.t = 0;
     this.angle = Math.PI / 2;
     this.target = { x: 0, y: 0 };
-    this.hitPlayer = false;
+    this.hitHeroes = new Set();   // heroes this punch already hit
     this.snapToRest();
   }
 
@@ -114,7 +114,7 @@ class GolemFist extends GolemPart {
         if (this.t >= c.fistWindup) {
           this.state = 'launch';
           this.t = 0;
-          this.hitPlayer = false;
+          this.hitHeroes = new Set();
           Sound.play('fistLaunch');
         }
         break;
@@ -136,8 +136,10 @@ class GolemFist extends GolemPart {
           this.x += Math.cos(this.angle) * step;
           this.y += Math.sin(this.angle) * step;
         }
-        if (!this.hitPlayer && dist(this.x, this.y, p.hx, p.hy) < this.radius + p.radius) {
-          this.hitPlayer = p.hurt(c.fistDamage, world, this.x, this.y);
+        // the fist hits every hero it passes through, once each
+        for (const h of world.heroes) {
+          if (this.hitHeroes.has(h) || dist(this.x, this.y, h.hx, h.hy) >= this.radius + h.radius) continue;
+          if (h.hurt(c.fistDamage, world, this.x, this.y)) this.hitHeroes.add(h);
         }
         break;
       }
@@ -298,17 +300,17 @@ class Golem {
     this.updateShockwaves(dt, world);
     this.updateMinions(dt, world);
 
-    // body contact damage (phase 2) and keeping the player out of the body
-    if (!p.dead) {
+    // body contact damage (phase 2) and keeping every hero out of the body
+    for (const h of world.heroes) {
       const bx = this.x;
       const by = this.y - 18;
-      const d = dist(p.x, p.y, bx, by);
+      const d = dist(h.x, h.y, bx, by);
       const solidR = this.mode === 'roll' ? 46 : 42;
-      if (d < solidR + p.hw) {
-        const a = angleTo(bx, by, p.x, p.y);
-        const push = solidR + p.hw - d;
-        world.dungeon.move(p, Math.cos(a) * push, Math.sin(a) * push);
-        if (this.phase === 2 && !this.isRolling) p.hurt(this.cfg.bodyContactDamage, world, bx, by);
+      if (d < solidR + h.hw) {
+        const a = angleTo(bx, by, h.x, h.y);
+        const push = solidR + h.hw - d;
+        world.dungeon.move(h, Math.cos(a) * push, Math.sin(a) * push);
+        if (this.phase === 2 && !this.isRolling) h.hurt(this.cfg.bodyContactDamage, world, bx, by);
       }
     }
   }
@@ -431,8 +433,12 @@ class Golem {
         world.shake(2, 0.1);
         const barrier = world.barrierOnSegment(h.x, h.y, L.end.x, L.end.y);
         if (barrier) barrier.absorb(c.laserDamage, world, barrier.x, barrier.hy);
-        else if (!p.dead && pointSegmentDistance(p.hx, p.hy, h.x, h.y, L.end.x, L.end.y) < c.laserWidth / 2 + p.radius) {
-          p.hurt(c.laserDamage, world, h.x, h.y, { projectile: true });
+        else {
+          for (const hero of world.heroes) {
+            if (pointSegmentDistance(hero.hx, hero.hy, h.x, h.y, L.end.x, L.end.y) < c.laserWidth / 2 + hero.radius) {
+              hero.hurt(c.laserDamage, world, h.x, h.y, { projectile: true });
+            }
+          }
         }
         world.effects.burst(L.end.x, L.end.y, { count: 8, colors: ['#ff4a3a', '#ffd0c0'], speed: [40, 140], life: [0.15, 0.3] });
       }
@@ -498,12 +504,14 @@ class Golem {
 
   updateShockwaves(dt, world) {
     const c = this.cfg;
-    const p = world.player;
     for (const s of this.shockwaves) {
       s.r += c.shockwaveSpeed * dt;
       if (s.r >= c.shockwaveRadius) s.dead = true;
-      if (!s.hit && !p.dead && !p.isInvulnerable && Math.abs(dist(p.x, p.y, s.x, s.y) - s.r) < 16) {
-        s.hit = true;
+      s.hitHeroes = s.hitHeroes || new Set();
+      // each ring slows every hero it sweeps over, once
+      for (const p of world.heroes) {
+        if (s.hitHeroes.has(p) || p.isInvulnerable || Math.abs(dist(p.x, p.y, s.x, s.y) - s.r) >= 16) continue;
+        s.hitHeroes.add(p);
         p.slowTime = c.slowDuration;
         world.effects.text(p.hx, p.hy - 28, 'SLOWED', { color: '#d8b070', size: 7 });
       }
@@ -535,7 +543,7 @@ class Golem {
     this.mode = 'roll';
     this.stompRaise = -1;
     if (this.phase === 1) this.enterPhase2(world); // the head can't stay on a rolling ball
-    this.roll = { state: 'curl', t: 0, angle: 0, hit: false };
+    this.roll = { state: 'curl', t: 0, angle: 0, hitHeroes: new Set() };
     world.banner('IT CURLS INTO A BALL!', 'Dodge the roll');
     Sound.play('bossRoar');
   }
@@ -552,7 +560,7 @@ class Golem {
         if (R.t >= c.rollWindup) {
           R.state = 'rolling';
           R.t = 0;
-          R.hit = false;
+          R.hitHeroes = new Set();
           Sound.play('roll');
         }
         break;
@@ -563,8 +571,9 @@ class Golem {
         if (Math.random() < 0.7) {
           world.effects.burst(this.x, this.y, { count: 1, colors: ['#6a6080', GOLEM_COLORS.clayD], speed: [20, 60], life: [0.3, 0.5], size: [3, 5] });
         }
-        if (!R.hit && !p.dead && dist(this.x, this.bodyCenterY, p.hx, p.hy) < GOLEM_BALL.r + p.radius - 6) {
-          R.hit = p.hurt(c.rollDamage, world, this.x, this.bodyCenterY);
+        for (const h of world.heroes) {   // rolls over every hero in its path, once each per roll
+          if (R.hitHeroes.has(h) || dist(this.x, this.bodyCenterY, h.hx, h.hy) >= GOLEM_BALL.r + h.radius - 6) continue;
+          if (h.hurt(c.rollDamage, world, this.x, this.bodyCenterY)) R.hitHeroes.add(h);
         }
         if (hit.hitX || hit.hitY || R.t >= c.rollMaxTime) {
           this.rollCount++;

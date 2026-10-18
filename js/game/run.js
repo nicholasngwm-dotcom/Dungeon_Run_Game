@@ -88,9 +88,6 @@ class DungeonRun {
     this.themes = [];
     for (let s = 0; s < 3; s++) this.themes.push(opts.mode === 'set' ? opts.theme : this.rollTheme());
     this.time = 0;
-    this.coins = 0;              // kept for the whole run (all three stages)
-    this.coinFlash = 0;
-    this.upgradeLevels = {};     // shop upgrade id -> times bought
     this.buildStage();
   }
 
@@ -134,19 +131,29 @@ class DungeonRun {
     this.visit(s);
   }
 
-  /** Called once the hero exists: places them and announces the stage. */
+  /** Called once the heroes exist: groups them at the entrance and announces the stage. */
   start() {
     const w = this.world;
-    const p = this.floor.playerStart;
-    w.player.x = p.x;
-    w.player.y = p.y;
-    w.camera.follow(p.x, p.y, 0, this.floor.width, this.floor.height, true);
+    const s = this.floor.playerStart;
+    w.players.forEach((p, i) => {
+      const off = Game.spawnOffset(i);
+      p.x = s.x + off.x;
+      p.y = s.y + off.y;
+    });
+    w.camera.follow(s.x, s.y, 0, this.floor.width, this.floor.height, true);
     w.banner(`${this.theme.name.toUpperCase()} - STAGE ${this.stage}`, this.stage === 1 ? 'Clear the rooms and find the boss' : 'The dead grow stronger', 3);
   }
 
   nextStage() {
     const w = this.world;
     this.stage++;
+    // fallen teammates get back up for the new stage, at half health
+    for (const p of w.players) {
+      if (!p.dead) continue;
+      p.dead = false;
+      p.hp = Math.round(p.maxHp * 0.5);
+      p.invulnerable = 1;
+    }
     w.enemies = [];
     w.enemyProjectiles = [];
     w.playerProjectiles = [];
@@ -178,25 +185,26 @@ class DungeonRun {
 
   update(dt) {
     const w = this.world;
-    const p = w.player;
     this.time += dt;
-    if (!p.dead) {
+    for (const p of w.heroes) {
       const here = this.floor.roomAt(p.x, p.y);
       if (here) this.visit(here);
       // only lock once the hero is clear of the doorway
       const inside = this.floor.roomAt(p.x, p.y, 1);
-      if (inside && inside.state === 'idle' && !this.active) this.enter(inside);
+      if (inside && inside.state === 'idle' && !this.active) this.enter(inside, p);
     }
     if (this.active) this.updateRoom(dt);
     this.updateSpikes(dt);
     this.updateProps(dt);
     this.decor.update(dt, w);
-    this.coinFlash -= dt;
-    // the portal only works once the hero has stepped away from it (so it can't grab them the moment it opens)
-    if (this.portal && !p.dead) {
-      const d = dist(p.x, p.y, this.portal.x, this.portal.y);
-      if (d > 50) this.portal.armed = true;
-      if (this.portal.armed && d < 26) {
+    if (this.totem) this.totem.update(dt);
+    for (const p of w.players) p.coinFlash -= dt;
+    // the portal only works once every hero has stepped away from it (so it can't grab
+    // someone the moment it opens); then any hero stepping in takes the whole party
+    if (this.portal) {
+      const heroes = w.heroes;
+      if (heroes.every((p) => dist(p.x, p.y, this.portal.x, this.portal.y) > 50)) this.portal.armed = true;
+      if (this.portal.armed && heroes.some((p) => dist(p.x, p.y, this.portal.x, this.portal.y) < 26)) {
         this.portal = null;
         if (this.stage < 3) this.nextStage();
         else this.victory();
@@ -218,8 +226,12 @@ class DungeonRun {
     if (r.type === 'secret') this.world.banner('SECRET ROOM', 'You found a hidden room', 2);
   }
 
-  /** Locks the doors and starts the room's objective. */
-  enter(r) {
+  /**
+   * Locks the doors and starts the room's objective. Teammates who aren't in
+   * the room yet are pulled in next to whoever walked in, so nobody is left
+   * outside the locked doors.
+   */
+  enter(r, by = null) {
     if (!LOCKING_ROOMS.includes(r.type)) return;
     const w = this.world;
     const f = this.floor;
@@ -227,6 +239,18 @@ class DungeonRun {
     r.state = 'active';
     f.activeRoom = r;
     for (const d of r.doors) if (!d.secret) f.lock(d.tiles);
+    if (by) {
+      let i = 0;
+      for (const p of w.heroes) {
+        if (f.roomAt(p.x, p.y, 1) === r) continue;
+        const a = (i++ / 4) * TAU;
+        const pt = f.freePoint(by.x + Math.cos(a) * 34, by.y + Math.sin(a) * 24, p.hw, p.hh);
+        w.effects.burst(p.hx, p.hy, { count: 14, colors: ['#b45aff', '#e0c0ff'], speed: [30, 100], life: [0.2, 0.5] });
+        p.x = pt.x;
+        p.y = pt.y;
+        w.effects.burst(p.hx, p.hy, { count: 14, colors: ['#b45aff', '#e0c0ff'], speed: [30, 100], life: [0.2, 0.5] });
+      }
+    }
     Sound.play('stomp');
     w.shake(4, 0.25);
     const s = this.stage - 1;
@@ -270,9 +294,25 @@ class DungeonRun {
 
   // ---------- coins ----------
 
-  addCoins(n) {
-    this.coins += n;
-    this.coinFlash = 0.25;
+  /** Coins go into one hero's purse (each hero keeps their own for the whole run). */
+  addCoins(n, hero) {
+    hero.coins += n;
+    hero.coinFlash = 0.25;
+  }
+
+  /** Shop purchase (a command, so every machine applies it on the same tick). */
+  buyUpgrade(hero, id) {
+    const u = SHOP_UPGRADES.find((x) => x.id === id);
+    if (!u || !shopStock(hero).includes(u)) return;
+    const level = hero.upgradeLevels[id] || 0;
+    const price = upgradePrice(u, level);
+    const ok = level < CONFIG.run.shop.maxLevel && hero.coins >= price;
+    if (ok) {
+      hero.coins -= price;
+      hero.upgradeLevels[id] = level + 1;
+      u.apply(hero);
+    }
+    this.world.events.onPurchase?.(hero, u, ok);
   }
 
   /** Coins burst out of a point: fives for big amounts, ones for the rest. */
@@ -345,7 +385,7 @@ class DungeonRun {
           r.spawnTimer = this.byStage(c.spawnEvery);
           const counts = {};
           for (let i = 0; i < c.perSpawn; i++) {
-            if (w.enemies.length + w.pendingSpawns < this.byStage(c.maxAlive)) this.spawnIn(r, this.pickEnemy(counts));
+            if (w.enemies.length + w.pendingSpawns < Math.round(this.byStage(c.maxAlive) * w.playerScale.count)) this.spawnIn(r, this.pickEnemy(counts));
           }
         }
         if (r.timeLeft <= 0) {
@@ -378,16 +418,17 @@ class DungeonRun {
   /** Spawns an enemy somewhere in the room, away from the hero. */
   spawnIn(r, type) {
     const w = this.world;
-    const p = w.player;
+    // somewhere in the room, away from every hero
+    const tooClose = (pt) => w.heroes.some((p) => dist(pt.x, pt.y, p.x, p.y) < 170);
     let pt = this.floor.randomPointIn(r, 2);
-    for (let i = 0; i < 20 && dist(pt.x, pt.y, p.x, p.y) < 170; i++) pt = this.floor.randomPointIn(r, 2);
+    for (let i = 0; i < 20 && tooClose(pt); i++) pt = this.floor.randomPointIn(r, 2);
     w.spawnEnemy(type, pt.x, pt.y);
   }
 
   spawnWave(r) {
     const c = CONFIG.run.combat;
     r.wave++;
-    const n = this.byStage(c.perWave) + randInt(0, c.perWaveRandom);
+    const n = Math.round((this.byStage(c.perWave) + randInt(0, c.perWaveRandom)) * this.world.playerScale.count);
     const counts = {};
     for (let i = 0; i < n; i++) this.spawnIn(r, this.pickEnemy(counts));
     this.world.banner(`WAVE ${r.wave}/${r.waves}`, '', 1.2);
@@ -437,7 +478,7 @@ class DungeonRun {
     if (r.waveTimer <= 0) {
       r.waveTimer = c.waveEvery;
       const counts = {};
-      for (let i = 0; i < this.byStage(c.perWave); i++) this.spawnIn(r, this.pickEnemy(counts));
+      for (let i = 0; i < Math.round(this.byStage(c.perWave) * w.playerScale.count); i++) this.spawnIn(r, this.pickEnemy(counts));
     }
     if (r.timeLeft <= 0) {
       this.banishEnemies();
@@ -453,7 +494,7 @@ class DungeonRun {
     w.boss = Game.createBoss(type, { x: r.cx, y: r.cy - 20 });
     const s = this.scale;
     const b = w.boss;
-    b.maxHp = Math.round(b.maxHp * s.hp);
+    b.maxHp = Math.round(b.maxHp * s.hp * w.playerScale.hp);   // stage x party size
     b.hp = b.maxHp;
     b.cfg = scaleBossDamage(b.cfg, s.damage);
     r.bossName = b.name;
@@ -551,57 +592,61 @@ class DungeonRun {
     }
   }
 
-  /** Down the hole into the secret room / back up beside the hole. */
-  descend() {
+  /** Down the hole into the secret room / back up beside the hole (just that hero). */
+  descend(hero) {
     const secret = this.floor.rooms.find((r) => r.type === 'secret');
-    this.travel(secret.cx, secret.cy + this.floor.T);
+    this.travel(hero, secret.cx, secret.cy + this.floor.T);
     Sound.play('phantomVanish');
   }
 
-  ascend() {
-    this.travel(this.hole.x, this.hole.y + 40);
+  ascend(hero) {
+    this.travel(hero, this.hole.x, this.hole.y + 40);
     Sound.play('phantomAppear');
   }
 
-  travel(x, y) {
+  travel(hero, x, y) {
     const w = this.world;
-    const p = w.player;
+    const p = hero;
     w.effects.burst(p.hx, p.hy, { count: 24, colors: ['#fff6c8', '#ffd34a', '#b67aff'], speed: [40, 140], life: [0.3, 0.6], up: 40 });
     p.x = x;
     p.y = y;
     p.iframes = Math.max(p.iframes, 0.6);
-    w.clones = [];
-    w.playerProjectiles = [];
-    w.camera.follow(p.x, p.y - 16, 0, this.floor.width, this.floor.height, true);
+    w.clones = w.clones.filter((c) => c.owner !== p);
     w.effects.burst(p.hx, p.hy, { count: 24, colors: ['#fff6c8', '#ffd34a', '#b67aff'], speed: [40, 140], life: [0.3, 0.6], up: 40 });
-    w.shake(4, 0.2);
+    if (p === w.localPlayer) {
+      w.camera.follow(p.x, p.y - 16, 0, this.floor.width, this.floor.height, true);
+      w.shake(4, 0.2);
+    }
   }
 
   /**
-   * Runs before the hero updates, so pressing E at something here is used up
-   * by the interaction and never also fires the hero's E ability.
+   * Runs for each hero before they update, so pressing E at something here is
+   * used up by the interaction and never also fires the hero's E ability.
    * Reward chests open, the shopkeeper and chef talk, the hole takes you down;
    * the rest (special rooms, secret chests...) aren't in yet.
+   * hero.nearProp is what that hero could use right now (prompts show the local hero's).
    */
-  preUpdate() {
+  preUpdate(hero) {
     const w = this.world;
-    const p = w.player;
-    this.nearProp = null;
+    const p = hero;
+    p.nearProp = null;
     if (this.active || p.dead) return;
     for (const pr of this.props) {
       if (pr.opened) continue;
       const reach = pr.kind === 'hole' || pr.kind === 'holeExit' ? dist(p.x, p.y, pr.x, pr.y) < 40 : dist(p.x, p.y, pr.x, pr.y + 10) < 44;
-      if (reach) { this.nearProp = pr; break; }
+      if (reach) { p.nearProp = pr; break; }
     }
-    const pr = this.nearProp;
+    const pr = p.nearProp;
     if (!pr || !Input.pressed('interact')) return;
     Input.consume('interact');
     if (pr.kind === 'rewardChest') return this.openChest(pr);
-    if (pr.kind === 'hole') return this.descend();
-    if (pr.kind === 'holeExit') return this.ascend();
-    if (pr.kind === 'shopkeeper' || pr.kind === 'chef') return w.events.onNpc?.(pr.kind, this);
-    w.events.onToast?.(`${pr.label}: COMING SOON`);
-    Sound.play('uiClick');
+    if (pr.kind === 'hole') return this.descend(p);
+    if (pr.kind === 'holeExit') return this.ascend(p);
+    if (pr.kind === 'shopkeeper' || pr.kind === 'chef') return w.events.onNpc?.(pr.kind, this, p);
+    if (p === w.localPlayer) {
+      w.events.onToast?.(`${pr.label}: COMING SOON`);
+      Sound.play('uiClick');
+    }
   }
 
   /** Opened chests animate their lid. */
@@ -613,7 +658,8 @@ class DungeonRun {
     const w = this.world;
     pr.opened = true;
     pr.t = 0;
-    this.spawnCoins(pr.x, pr.y - 12, CONFIG.run.coins.roomChest);
+    // 5 coins for every hero in the party
+    this.spawnCoins(pr.x, pr.y - 12, CONFIG.run.coins.roomChest * this.world.players.length);
     w.effects.burst(pr.x, pr.y - 14, { count: 30, colors: ['#ffd34a', '#fff2a0', '#ffffff'], speed: [60, 180], life: [0.3, 0.7], up: 60 });
     w.effects.text(pr.x, pr.y - 40, `+${CONFIG.run.coins.roomChest} COINS`, { color: '#ffd34a', size: 9, life: 1.2 });
     Sound.play('chestOpen');
@@ -828,7 +874,7 @@ class DungeonRun {
       }
     }
     if (pr.opened) return;
-    const near = this.nearProp === pr;
+    const near = this.world.localPlayer.nearProp === pr;
     const labelY = pr.kind === 'shopkeeper' || pr.kind === 'chef' ? y - 82 : pr.kind === 'rewardChest' ? y - 36 : y - 62;
     const label = near && pr.kind === 'shopkeeper' ? 'TALK' : near && pr.kind === 'chef' ? 'TALK' : pr.label;
     if (pr.kind === 'rewardChest' && !near) return;
@@ -892,7 +938,7 @@ class DungeonRun {
       ctx.fillStyle = `rgba(255, 230, 150, ${1 - s})`;
       ctx.fillRect(Math.round(x + Math.sin(i * 2.3 + t) * 12), Math.round(y - s * 50), 2, 2);
     }
-    const near = this.nearProp === pr;
+    const near = this.world.localPlayer.nearProp === pr;
     if (near) HUD.text(ctx, `[${Settings.label('interact')}] ${pr.label}`, x, y - 40, { size: 7, align: 'center', color: '#ffe680' });
   }
 
@@ -936,7 +982,7 @@ class DungeonRun {
       const pb = pos(b);
       ctx.fillRect(Math.min(pa.x, pb.x) - 1, Math.min(pa.y, pb.y) - 1, Math.abs(pa.x - pb.x) + 2, Math.abs(pa.y - pb.y) + 2);
     }
-    const here = f.roomAt(this.world.player.x, this.world.player.y);
+    const here = f.roomAt(this.world.localPlayer.x, this.world.localPlayer.y);
     for (const r of f.rooms) {
       if (!r.seen) continue;
       const { x, y } = pos(r);
@@ -987,8 +1033,16 @@ class DefendTotem {
   get hx() { return this.x; }
   get hy() { return this.y - 18; }
   get invisible() { return false; }
+  /** Enemies bumping into it don't hurt it; only their actual attacks do. */
+  get contactImmune() { return true; }
 
   knockback() {}
+
+  update(dt) {
+    this.time += dt;
+    this.invulnerable -= dt;
+    this.flashTime -= dt;
+  }
 
   hurt(amount, world) {
     if (this.dead || this.invulnerable > 0) return false;
@@ -1007,9 +1061,6 @@ class DefendTotem {
   }
 
   draw(ctx) {
-    this.time += 1 / 60;
-    this.invulnerable -= 1 / 60;
-    this.flashTime -= 1 / 60;
     const x = Math.round(this.x);
     const y = Math.round(this.y);
     drawShadow(ctx, x, y + 2, 18, 5);
