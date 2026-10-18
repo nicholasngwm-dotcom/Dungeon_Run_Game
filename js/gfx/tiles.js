@@ -127,4 +127,38 @@ const Tiles = {
       p.px(rx, ry, TILE_COLORS.floorLight);
     }
   },
+
+  // ---------- graveyard theme ----------
+
+  /** Dead, dark grass with dirt patches (graveyard room floors). */
+  graveGrass(p, x, y, rng) {
+    const T = CONFIG.tileSize;
+    const greens = ['#2e3a2a', '#323f2c', '#2a3527', '#36432f'];
+    p.rect(x, y, T, T, greens[Math.floor(rng() * greens.length)]);
+    for (let i = 0; i < 7; i++) {
+      const gx = x + Math.floor(rng() * 30);
+      const gy = y + Math.floor(rng() * 30);
+      p.rect(gx, gy, 1, 2, rng() < 0.5 ? '#46573a' : '#232c20');
+    }
+    if (rng() < 0.18) p.rect(x + 4 + Math.floor(rng() * 16), y + 6 + Math.floor(rng() * 16), 8, 5, '#3a3024'); // bare dirt
+    if (rng() < 0.06) p.rect(x + 6 + Math.floor(rng() * 18), y + 8 + Math.floor(rng() * 16), 3, 2, '#6a6a5a'); // pebble
+  },
+
+  /** A small, sunken grave marker painted on the floor (decor only, not solid). */
+  graveDecor(p, x, y, rng) {
+    const cross = rng() < 0.5;
+    const cx = x + 10 + Math.floor(rng() * 10);
+    const cy = y + 6 + Math.floor(rng() * 8);
+    p.rect(cx - 5, cy + 12, 14, 5, '#3a3024');                 // dirt mound
+    if (cross) {
+      p.rect(cx, cy, 3, 14, '#5a5868');
+      p.rect(cx - 3, cy + 3, 9, 3, '#5a5868');
+      p.rect(cx, cy, 1, 14, '#747288');
+    } else {
+      p.rect(cx - 3, cy + 2, 9, 12, '#545266');
+      p.rect(cx - 2, cy, 7, 2, '#545266');
+      p.rect(cx - 2, cy + 2, 1, 11, '#747288');
+      p.rect(cx - 1, cy + 5, 5, 1, '#383646');
+    }
+  },
 };

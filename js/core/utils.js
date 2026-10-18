@@ -44,3 +44,12 @@ function removeDead(arr) {
   }
   arr.length = w;
 }
+
+/** True if segment (ax,ay)-(bx,by) crosses segment (cx,cy)-(dx,dy). */
+function segmentsIntersect(ax, ay, bx, by, cx, cy, dx, dy) {
+  const d = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
+  if (d === 0) return false;
+  const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / d;
+  const u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}

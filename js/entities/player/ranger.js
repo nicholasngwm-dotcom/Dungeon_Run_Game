@@ -1,5 +1,6 @@
-// Ranger: LMB arrow, RMB volley (mark an area, then LMB rains arrows),
-// E rapid fire, F fire/ice arrow (choose with LMB/RMB), Q swift camo (invisible + fast).
+// Archer (class id 'ranger'): LMB arrow, RMB camo (invisible + fast, broken by
+// attacking), E rapid fire, F fire/ice arrow (choose with LMB/RMB),
+// Q arrow volley (mark an area, then LMB rains arrows).
 
 class Ranger extends Player {
   constructor(x, y) {
@@ -7,11 +8,11 @@ class Ranger extends Player {
     const c = this.cfg;
     this.weapon = Sprites.weapons.bow;
     this.maxCooldowns = {
-      primary: c.arrow.cooldown, secondary: c.volley.cooldown, e: c.rapidFire.cooldown,
+      primary: c.arrow.cooldown, secondary: c.camo.cooldown, e: c.rapidFire.cooldown,
       f: c.elemental.cooldown, dodge: this.dodgeCooldown,
     };
-    this.icons = { primary: 'ARROW', secondary: 'VOLLEY', e: 'RAPID', f: 'FIRE/ICE', q: 'CAMO' };
-    this.targeting = false;
+    this.icons = { primary: 'ARROW', secondary: 'CAMO', e: 'RAPID', f: 'FIRE/ICE', q: 'VOLLEY' };
+    this.targeting = false;     // Q pressed: choosing where the volley lands
     this.choosingArrow = false; // F pressed: LMB fire arrow, RMB ice arrow
     this.targetPos = { x, y };
     this.volleys = [];
@@ -21,8 +22,9 @@ class Ranger extends Player {
   }
 
   get invisible() { return this.camo > 0; }
+  get detectRange() { return this.cfg.camo.detectRange; }
   get bodyAlpha() { return this.camo > 0 ? 0.35 : 1; }
-  get moveMultiplier() { return this.camo > 0 ? this.cfg.ult.speedMultiplier : 1; }
+  get moveMultiplier() { return this.camo > 0 ? this.cfg.camo.speedMultiplier : 1; }
 
   handleMouse(world) {
     const m = Input.mouse;
@@ -31,16 +33,20 @@ class Ranger extends Player {
       else if (m.rightPressed) this.iceArrow(world);
       return;
     }
-    if (m.rightPressed) {
-      if (this.targeting) this.targeting = false;
-      else if (this.cooldowns.secondary <= 0) { this.targeting = true; Sound.play('aim'); }
-      else Sound.play('denied');
-    }
     if (this.targeting) {
-      if (m.leftPressed) this.fireVolley(world);
+      if (m.rightPressed) this.targeting = false;
+      else if (m.leftPressed) this.fireVolley(world);
       return;
     }
-    if (m.left && this.cooldowns.primary <= 0) this.primary(world);
+    super.handleMouse(world);
+  }
+
+  /** Attacking gives the archer away. */
+  breakCamo(world) {
+    if (!(this.camo > 0)) return;
+    this.camo = 0;
+    world.effects.burst(this.hx, this.hy, { count: 12, colors: ['#62802f', '#88a446', '#e0d2aa'], speed: [40, 120], life: [0.2, 0.4] });
+    world.effects.text(this.hx, this.hy - 30, 'REVEALED', { color: '#d8c8a0', size: 7 });
   }
 
   // ---------- LMB: arrow (empowered while rapid fire is active) ----------
@@ -50,6 +56,7 @@ class Ranger extends Player {
     const r = this.cfg.rapidFire;
     const rapid = this.rapidArrows > 0;
     const cooldown = rapid ? r.fireCooldown : c.cooldown;
+    this.breakCamo(world);
     this.cooldowns.primary = cooldown;
     this.maxCooldowns.primary = cooldown;
     this.recoil = 0.12;
@@ -70,26 +77,17 @@ class Ranger extends Player {
     Sound.play('arrow');
   }
 
-  // ---------- RMB: volley ----------
+  // ---------- RMB: swift camo ----------
 
-  fireVolley(world) {
-    const c = this.cfg.volley;
-    this.targeting = false;
+  secondary(world) {
+    const c = this.cfg.camo;
     this.cooldowns.secondary = c.cooldown;
-    const impacts = [];
-    for (let i = 0; i < c.arrows; i++) {
-      const a = rand(0, TAU);
-      const r = Math.sqrt(Math.random()) * c.radius;
-      impacts.push({
-        x: this.targetPos.x + Math.cos(a) * r,
-        y: this.targetPos.y + Math.sin(a) * r,
-        time: c.delay + (i / c.arrows) * c.duration + rand(-0.03, 0.03),
-        done: false,
-      });
-    }
-    this.volleys.push({ x: this.targetPos.x, y: this.targetPos.y, t: 0, impacts });
-    world.effects.burst(this.pivotX, this.pivotY - 10, { count: 8, colors: ['#efe6d2', '#9a6232'], angle: -Math.PI / 2, spread: 0.6, speed: [200, 320], life: [0.2, 0.3], drag: 0 });
-    Sound.play('volley');
+    this.camo = c.duration;
+    this.slowTime = 0; // cleanse
+    this.chillTime = 0;
+    world.effects.burst(this.hx, this.hy, { count: 24, colors: ['#62802f', '#88a446', '#e0d2aa'], speed: [60, 160], life: [0.3, 0.6] });
+    world.effects.text(this.hx, this.hy - 30, 'CAMO', { color: '#8cff9a', size: 8 });
+    Sound.play('dash');
   }
 
   // ---------- E: rapid fire ----------
@@ -114,6 +112,7 @@ class Ranger extends Player {
   }
 
   shootElemental(world, c, opts) {
+    this.breakCamo(world);
     this.choosingArrow = false;
     this.cooldowns.f = this.cfg.elemental.cooldown;
     this.cooldowns.primary = 0.25; // so the choosing click doesn't also loose a normal arrow
@@ -185,16 +184,36 @@ class Ranger extends Player {
     Sound.play('explosion');
   }
 
-  // ---------- Q: swift camo ----------
+  // ---------- Q: arrow volley ----------
 
-  ultimate(world) {
-    this.camo = this.cfg.ult.duration;
-    this.slowTime = 0; // cleanse
-    this.chillTime = 0;
-    for (const k of Object.keys(this.cooldowns)) this.cooldowns[k] = 0; // every ability ready again
-    world.effects.burst(this.hx, this.hy, { count: 24, colors: ['#62802f', '#88a446', '#e0d2aa'], speed: [60, 160], life: [0.3, 0.6] });
-    world.effects.text(this.hx, this.hy - 30, 'CAMO', { color: '#8cff9a', size: 8 });
-    Sound.play('dash');
+  /** Q starts aiming the volley (Q again cancels); the charge is only spent when it fires. */
+  ultimate() {
+    this.ult = this.ultMax;
+    this.targeting = !this.targeting;
+    this.choosingArrow = false;
+    Sound.play('aim');
+  }
+
+  fireVolley(world) {
+    const c = this.cfg.ult;
+    this.breakCamo(world);
+    this.targeting = false;
+    this.ult = 0;
+    this.cooldowns.primary = 0.25; // so the aiming click doesn't also loose an arrow
+    const impacts = [];
+    for (let i = 0; i < c.arrows; i++) {
+      const a = rand(0, TAU);
+      const r = Math.sqrt(Math.random()) * c.radius;
+      impacts.push({
+        x: this.targetPos.x + Math.cos(a) * r,
+        y: this.targetPos.y + Math.sin(a) * r,
+        time: c.delay + (i / c.arrows) * c.duration + rand(-0.03, 0.03),
+        done: false,
+      });
+    }
+    this.volleys.push({ x: this.targetPos.x, y: this.targetPos.y, t: 0, impacts });
+    world.effects.burst(this.pivotX, this.pivotY - 10, { count: 8, colors: ['#efe6d2', '#9a6232'], angle: -Math.PI / 2, spread: 0.6, speed: [200, 320], life: [0.2, 0.3], drag: 0 });
+    Sound.play('volley');
   }
 
   updateAbility(dt, world) {
@@ -203,7 +222,7 @@ class Ranger extends Player {
     this.camo -= dt;
     if (this.camo > 0) { this.slowTime = 0; this.chillTime = 0; }
 
-    const c = this.cfg.volley;
+    const c = this.cfg.ult;
     const m = world.mouseWorld;
     const d = dist(this.x, this.y, m.x, m.y);
     const a = angleTo(this.x, this.y, m.x, m.y);
@@ -215,7 +234,7 @@ class Ranger extends Player {
       for (const imp of v.impacts) {
         if (imp.done || v.t < imp.time) continue;
         imp.done = true;
-        this.hitCircle(world, imp.x, imp.y, c.impactRadius, c.damage, { knockback: 40, sound: 'arrowRain' });
+        this.hitCircle(world, imp.x, imp.y, c.impactRadius, c.damage, { knockback: 40, sound: 'arrowRain', fromUlt: true });
         world.effects.burst(imp.x, imp.y, { count: 4, colors: ['#8a7a6a', '#efe6d2'], speed: [20, 70], life: [0.15, 0.3] });
         Sound.play('arrowRain', 0.04);
       }
@@ -225,7 +244,7 @@ class Ranger extends Player {
   }
 
   drawGroundExtras(ctx) {
-    const c = this.cfg.volley;
+    const c = this.cfg.ult;
     if (this.camo > 0) this.drawDetectRing(ctx);
     if (this.choosingArrow) {
       // aim line, half fire / half ice
@@ -265,13 +284,13 @@ class Ranger extends Player {
 
   /** Enemies close enough to see through the camo. */
   spotters() {
-    const range = CONFIG.player.invisibleDetectRange;
+    const range = this.detectRange;
     return this.world ? this.world.enemies.filter((e) => !e.dead && dist(e.x, e.y, this.x, this.y) <= range) : [];
   }
 
   /** Camo: ring showing how close enemies can get before they see you (red when one is inside). */
   drawDetectRing(ctx) {
-    const range = CONFIG.player.invisibleDetectRange;
+    const range = this.detectRange;
     const seen = this.spotters().length > 0;
     ctx.save();
     ctx.strokeStyle = seen ? 'rgba(255, 80, 70, 0.8)' : 'rgba(140, 255, 154, 0.6)';

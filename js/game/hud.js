@@ -35,6 +35,7 @@ const HUD = {
 
   draw(ctx, game) {
     this.drawPlayer(ctx, game.player);
+    if (game.run) this.drawCoins(ctx, game.run);
     this.drawWave(ctx, game);
     if (game.boss && !game.boss.dead && game.boss.intro <= 0 && !game.practice) {
       this.text(ctx, game.boss.name, 480, 12, { size: 10, align: 'center', color: '#f2a541' });
@@ -48,11 +49,36 @@ const HUD = {
     if (p.placing) {
       this.text(ctx, 'LEFT CLICK: PLACE DRAIN CIRCLE   RIGHT CLICK: CANCEL', 480, 440, { size: 8, align: 'center', color: '#c8a8ff' });
     }
+    if (p.placingRune) {
+      this.text(ctx, 'LEFT CLICK: PLACE HEALING RUNE   RIGHT CLICK: CANCEL', 480, 440, { size: 8, align: 'center', color: '#9cf0a0' });
+    }
+    if (p.choosingAegis) {
+      this.text(ctx, 'LEFT CLICK: AEGIS ON ALLY', 474, 440, { size: 8, align: 'right', color: '#ffe680' });
+      this.text(ctx, 'RIGHT CLICK: AEGIS ON SELF', 486, 440, { size: 8, color: '#ffe680' });
+      this.text(ctx, `${Settings.label('f')}: CANCEL`, 480, 456, { size: 6, align: 'center', color: '#d8c8a0' });
+    }
     if (p.choosingArrow) {
       this.text(ctx, 'LEFT CLICK: FIRE ARROW', 474, 440, { size: 8, align: 'right', color: '#ff8a1e' });
       this.text(ctx, 'RIGHT CLICK: ICE ARROW', 486, 440, { size: 8, color: '#9ad0ff' });
-      this.text(ctx, 'F: CANCEL', 480, 456, { size: 6, align: 'center', color: '#d8c8a0' });
+      this.text(ctx, `${Settings.label('f')}: CANCEL`, 480, 456, { size: 6, align: 'center', color: '#d8c8a0' });
     }
+  },
+
+  /** Coin counter next to the health bar (dungeon runs); pops when coins come in. */
+  drawCoins(ctx, run) {
+    const x = 244;
+    const y = 14;
+    const pop = run.coinFlash > 0 ? 2 : 0;
+    this.panel(ctx, x, y - 1, 58, 16);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x + 3 - pop / 2, y + 1 - pop / 2, 12 + pop, 12 + pop);
+    ctx.fillStyle = '#a07a24';
+    ctx.fillRect(x + 4 - pop / 2, y + 2 - pop / 2, 10 + pop, 10 + pop);
+    ctx.fillStyle = '#ffd34a';
+    ctx.fillRect(x + 4 - pop / 2, y + 2 - pop / 2, 9 + pop, 9 + pop);
+    ctx.fillStyle = '#fff2a0';
+    ctx.fillRect(x + 6, y + 4, 2, 5);
+    this.text(ctx, `${run.coins}`, x + 54, y + 3, { size: 8, align: 'right', color: run.coinFlash > 0 ? '#fff2a0' : '#ffd34a' });
   },
 
   drawPlayer(ctx, p) {
@@ -82,9 +108,9 @@ const HUD = {
     const slots = [
       ['LMB', p.icons.primary, 'primary'],
       ['RMB', p.icons.secondary, 'secondary'],
-      ['E', p.icons.e, 'e'],
-      ['F', p.icons.f, 'f'],
-      ['SHIFT', 'DODGE', 'dodge'],
+      [Settings.label('e'), p.icons.e, 'e'],
+      [Settings.label('f'), p.icons.f, 'f'],
+      [Settings.label('dodge'), 'DODGE', 'dodge'],
     ];
     const icons = Sprites.icons[p.classId];
     slots.forEach(([key, name, slot], i) => {
@@ -93,7 +119,7 @@ const HUD = {
     });
     this.ultSlot(ctx, 14 + slots.length * 70 + 6, 474, p);
     // potion sits on its own in the bottom-right corner
-    this.abilitySlot(ctx, 960 - 14 - 62, 474, 'H', `POTION +${CONFIG.player.potion.heal}`,
+    this.abilitySlot(ctx, 960 - 14 - 62, 474, Settings.label('potion'), `POTION +${CONFIG.player.potion.heal}`,
       p.potionCooldown, CONFIG.player.potion.cooldown, Sprites.icons.potion);
   },
 
@@ -166,16 +192,20 @@ const HUD = {
   statusText(p) {
     const s = [];
     if (p.slowTime > 0) s.push('SLOWED');
+    if (p.poisonTime > 0) s.push('POISONED');
+    if (p.stunTime > 0) s.push('STUNNED');
     if (p.chillTime > 0) s.push('CHILLED');
-    if (p.shielding) s.push(`SHIELD ${Math.ceil(p.shieldHp)}`);
+    if (p.barrier && p.barrier.raised) s.push(`SHIELD ${Math.ceil(p.barrier.hp)}`, p.bashCooldown > 0 ? `BASH ${p.bashCooldown.toFixed(1)}` : 'LMB: BASH');
+    if (p.aegis) s.push(`AEGIS ${Math.ceil(p.aegis.hp)}`);
+    if (p.bomb) s.push(`CHARGE ${Math.floor(p.bombPower * 100)}% (LMB)`);
     if (p.parryTime > 0) s.push('PARRY');
     if (p.haste > 0) s.push('HASTE');
-    if (p.bird) s.push('BIRD (F: LAND)');
+    if (p.bird) s.push(`BIRD (${Settings.label('f')}: LAND)`);
     if (p.invisible) s.push('HIDDEN');
     if (p.rapidArrows > 0) s.push(`RAPID x${p.rapidArrows}`);
     if (p.stormReady) s.push('STORM READY');
     if (p.cleave) s.push(`POWER ${Math.floor(p.cleavePower * 100)}% (LMB)`);
-    if (p.spin) s.push('SPIN (E: STOP)');
+    if (p.spin) s.push(`SPIN (${Settings.label('e')}: STOP)`);
     if (p.regenerating) s.push('REGEN');
     return s.join(' ');
   },
@@ -219,7 +249,7 @@ const HUD = {
     const ready = p.ultReady;
     ctx.fillStyle = ready ? `rgba(255, 200, 60, ${0.35 + Math.sin(performance.now() / 150) * 0.15})` : 'rgba(255, 180, 60, 0.25)';
     ctx.fillRect(x, y + h * (1 - r), w, h * r);
-    this.text(ctx, 'Q', x + 4, y + 4, { size: 6, color: ready ? '#ffe680' : '#7a6a8a' });
+    this.text(ctx, Settings.label('ult'), x + 4, y + 4, { size: 6, color: ready ? '#ffe680' : '#7a6a8a' });
     const icon = Sprites.icons[p.classId].q;
     ctx.globalAlpha = ready ? 1 : 0.55;
     ctx.drawImage(icon, x + w / 2 - icon.width / 2, y + 8);
@@ -228,6 +258,12 @@ const HUD = {
   },
 
   drawWave(ctx, game) {
+    if (game.run) return game.run.drawHud(ctx);
+    if (game.lobby) {
+      this.text(ctx, 'LOBBY', 946, 14, { size: 10, align: 'right', color: '#f2a541' });
+      this.text(ctx, `WALK TO A STATION, PRESS ${Settings.label('interact')}`, 946, 32, { size: 6, align: 'right', color: '#d8c8a0' });
+      return;
+    }
     if (game.practice) {
       const pr = game.practice;
       const o = pr.options;

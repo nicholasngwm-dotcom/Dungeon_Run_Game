@@ -74,6 +74,21 @@ function buildItemSprites() {
       p.poly([[38, 7], [40, 4], [42, 7]], '#c79aff');
       p.px(39, 5, '#f0e0ff');
     }),
+    // the priestess's white-and-gold scepter with a radiant sun head
+    scepter: weapon(44, 16, 10, 8, (p) => {
+      p.rect(1, 7, 30, 2, '#e8e0c8');
+      p.rect(1, 7, 30, 1, '#fff6dc');
+      for (const x of [2, 12, 22]) p.rect(x, 6, 2, 4, G[2]);  // gold bands
+      p.rect(29, 5, 3, 6, G[1]);
+      p.rect(29, 5, 1, 6, G[3]);
+      for (let i = 0; i < 8; i++) {                           // sun rays
+        const a = (i / 8) * TAU;
+        p.line(37, 8, 37 + Math.cos(a) * 6, 8 + Math.sin(a) * 6, G[2]);
+      }
+      p.circle(37, 8, 4, G[2]);
+      p.circle(37, 8, 3, '#fff6c8');
+      p.px(36, 7, '#ffffff');
+    }),
     dagger: weapon(20, 8, 4, 4, (p) => {
       p.rect(1, 3, 5, 2, L[1]);
       p.px(1, 3, L[3]);
@@ -117,6 +132,12 @@ function buildItemSprites() {
       p.circle(7, 7, 4, '#8e4ee0');
       p.circle(6, 6, 2, '#c79aff');
       p.px(5, 5, '#ffffff');
+    }),
+    // the priestess's homing missile of light
+    lightMissile: sprite(12, 12, (p) => {
+      p.circle(6, 6, 4, '#d8a640');
+      p.circle(6, 6, 3, '#ffe680');
+      p.circle(5, 5, 1, '#ffffff');
     }),
     // the mage's frostfire ball: blue flame with spiky tongues, unlike the golem's orange one
     fireball: sprite(20, 20, (p) => {

@@ -1,5 +1,5 @@
 // Mage: spends mana. LMB homing magic missiles, RMB frostfire ball, E lightning
-// strike (pick a target with LMB), F bird form, Q placeable life-drain magic circle.
+// strike (pick a target with LMB), F bird form, Q placeable mana-drain magic circle.
 
 const MAGIC_CIRCLE_SY = 0.6; // the drain circle is drawn squashed vertically (floor perspective)
 
@@ -245,7 +245,7 @@ class Mage extends Player {
   updateBird(dt, world) {
     const b = this.bird;
     // F again lands early (ignoring the frame it started)
-    if ((b.t > 0 && Input.wasPressed('KeyF')) || b.t >= this.cfg.bird.duration) return this.endBird(world);
+    if ((b.t > 0 && Input.pressed('f')) || b.t >= this.cfg.bird.duration) return this.endBird(world);
     b.t += dt;
     if (this.moving && Math.random() < 0.3) {
       world.effects.burst(this.x, this.y - 18, { count: 1, colors: ['#b67aff', '#e6ccff'], speed: [5, 20], life: [0.2, 0.4], size: [2, 3] });
@@ -263,7 +263,7 @@ class Mage extends Player {
     world.effects.burst(this.hx, this.hy, { count: 18, colors: ['#b67aff', '#e6ccff', '#ffffff'], speed: [40, 140], life: [0.2, 0.5] });
   }
 
-  // ---------- Q: life drain circle ----------
+  // ---------- Q: mana drain circle ----------
 
   /** Q starts placing the circle (Q again cancels); the charge is only spent on placement. */
   ultimate() {
@@ -292,7 +292,6 @@ class Mage extends Player {
           if (!this.inCircle(pg, t)) continue;
           const dealt = world.damageTarget(t, c.dps * c.tick, { sound: null, noCrit: true, color: '#c8a8ff', fromUlt: true });
           if (dealt) {
-            this.heal(dealt * c.lifesteal, world, true);
             this.gainResource(dealt * c.manaSteal);
             world.effects.burst(t.hx, t.hy, { count: 1, colors: ['#b67aff', '#6ad8ff'], speed: [0, 0], life: [0.4, 0.5], size: [3, 4] });
             const last = world.effects.particles[world.effects.particles.length - 1];

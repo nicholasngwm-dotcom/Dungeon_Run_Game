@@ -1,5 +1,5 @@
 // Base hero: movement, aiming, dodge, health, resources, ult charge, drawing.
-// Each class (Warrior, Ranger, ...) extends this and implements
+// Each class (Warrior = Knight, Ranger = Archer, ...) extends this and implements
 // primary(), secondary(), abilityE(), abilityF(), ultimate(), plus
 // optional updateAbility()/draw hooks.
 //
@@ -37,6 +37,16 @@ class Player extends Entity {
     this.sinceHurt = 0;           // seconds since hp was last lost (drives passive regen)
     this.buffs = {};              // mimic buffs: type -> seconds left
     this.potionCooldown = 0;      // H potion (kept apart from ability cooldowns so resets don't refill it)
+    this.aegis = null;            // Priestess aegis: { hp, maxHp, t } soaks every kind of hit
+    this.poisonTime = 0;          // enemy poison: loses poisonDps hp per second
+    this.poisonDps = 0;
+    this.poisonTick = 0;
+    this.stunTime = 0;            // stunned by enemies: can't move or act
+    // shop upgrades (multipliers start at 1)
+    this.attackSpeed = 1;         // primary attack cooldowns recover this much faster
+    this.abilityHaste = 1;        // RMB / E / F cooldowns recover this much faster
+    this.upgradeDamage = 1;       // all damage dealt
+    this.bonusRegen = 0;          // hp per second, always on (even while taking hits)
     const r = this.cfg.resource;
     this.resource = r ? { ...r, value: r.max } : null;
   }
@@ -70,6 +80,9 @@ class Player extends Entity {
   /** Invisible heroes can't be seen by distant enemies. */
   get invisible() { return false; }
 
+  /** Enemies closer than this still see an invisible hero. */
+  get detectRange() { return CONFIG.player.invisibleDetectRange; }
+
   get ultReady() { return this.ult >= this.ultMax; }
 
   update(dt, world) {
@@ -82,10 +95,20 @@ class Player extends Entity {
     this.chillTime = (this.chillTime || 0) - dt;
     this.updateBuffs(dt, world);
     this.potionCooldown -= dt;
-    if (Input.wasPressed('KeyH')) this.drinkPotion(world);
+    this.updatePoison(dt, world);
+    this.stunTime -= dt;
+    if (this.aegis) {
+      this.aegis.t -= dt;
+      this.aegis.flash -= dt;
+      if (this.aegis.t <= 0) this.aegis = null;
+    }
+    if (Input.pressed('potion')) this.drinkPotion(world);
     this.busy -= dt;
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
-    for (const k of Object.keys(this.cooldowns)) this.cooldowns[k] -= dt;
+    for (const k of Object.keys(this.cooldowns)) {
+      const rate = k === 'primary' ? this.attackSpeed : k === 'dodge' ? 1 : this.abilityHaste;
+      this.cooldowns[k] -= dt * rate;
+    }
     if (this.resource) this.resource.value = Math.min(this.resource.max, this.resource.value + this.resource.regen * dt);
     this.updateRegen(dt, world);
     this.updateHealPopup(dt, world);
@@ -97,10 +120,10 @@ class Player extends Entity {
     // movement
     let mx = 0;
     let my = 0;
-    if (Input.isDown('KeyW') || Input.isDown('ArrowUp')) my -= 1;
-    if (Input.isDown('KeyS') || Input.isDown('ArrowDown')) my += 1;
-    if (Input.isDown('KeyA') || Input.isDown('ArrowLeft')) mx -= 1;
-    if (Input.isDown('KeyD') || Input.isDown('ArrowRight')) mx += 1;
+    if (Input.down('up')) my -= 1;
+    if (Input.down('down')) my += 1;
+    if (Input.down('left')) mx -= 1;
+    if (Input.down('right')) mx += 1;
     const len = Math.hypot(mx, my) || 1;
     this.moveDir = { x: mx / len, y: my / len };
     this.moving = (mx !== 0 || my !== 0) && this.busy <= 0;
@@ -124,14 +147,14 @@ class Player extends Entity {
   }
 
   handleInput(world) {
-    if (Input.wasPressed('ShiftLeft') || Input.wasPressed('ShiftRight')) this.startDodge(world);
+    if (Input.pressed('dodge')) this.startDodge(world);
     if (this.busy > 0 || this.channeling) return;
-    if (Input.wasPressed('KeyQ')) {
+    if (Input.pressed('ult')) {
       if (this.ultReady) { this.ult = 0; this.ultimate(world); }
       else Sound.play('denied');
     }
-    if (Input.wasPressed('KeyE')) this.tryAbility('e', world, () => this.abilityE(world));
-    if (Input.wasPressed('KeyF')) this.tryAbility('f', world, () => this.abilityF(world));
+    if (Input.pressed('e')) this.tryAbility('e', world, () => this.abilityE(world));
+    if (Input.pressed('f')) this.tryAbility('f', world, () => this.abilityF(world));
     if (this.busy > 0 || this.channeling) return;
     this.handleMouse(world);
   }
@@ -174,6 +197,9 @@ class Player extends Entity {
   }
 
   onKill() {}
+
+  /** Called by the game after this hero's attack lands on a target (target.dead if it killed). */
+  onDamageDealt() {}
 
   primary() {}
   secondary() {}
@@ -237,6 +263,112 @@ class Player extends Entity {
    */
   absorb(amount) { return amount; }
 
+  // ---------- enemy status effects: poison and stun ----------
+
+  /** Poisons for `duration`s (a new dose refreshes it; the stronger dps wins). Blocked hits don't poison. */
+  poison(dps, duration, world) {
+    if (this.dead || this.guard > 0 || this.iframes > 0) return;
+    if (!(this.poisonTime > 0)) world?.effects.text(this.hx, this.hy - 36, 'POISONED', { color: '#9cf06a', size: 7 });
+    this.poisonDps = this.poisonTime > 0 ? Math.max(this.poisonDps, dps) : dps;
+    this.poisonTime = Math.max(this.poisonTime, duration);
+  }
+
+  updatePoison(dt, world) {
+    if (!(this.poisonTime > 0)) return;
+    this.poisonTime -= dt;
+    this.poisonTick -= dt;
+    if (Math.random() < dt * 6) {
+      world.effects.burst(this.x + rand(-8, 8), this.y - rand(4, 24), { count: 1, colors: ['#9cf06a', '#4a8a2a'], speed: [5, 15], life: [0.3, 0.5], up: 20 });
+    }
+    if (this.poisonTick > 0) return;
+    this.poisonTick = 0.5;
+    if (world.practice && world.practice.options.god) return;
+    const dmg = this.poisonDps * 0.5;
+    this.hp -= dmg;
+    this.sinceHurt = 0;
+    world.effects.text(this.hx, this.hy - 24, `-${Math.round(dmg)}`, { color: '#9cf06a', size: 8 });
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.dead = true;
+      world.effects.burst(this.hx, this.hy, { count: 30, colors: ['#9cf06a', '#ffffff', '#4a8a2a'], speed: [80, 220], life: [0.5, 1] });
+    }
+  }
+
+  /** Can't move or act for `duration`s. Blocked hits don't stun. */
+  stun(duration, world) {
+    if (this.dead || this.guard > 0 || this.iframes > 0) return;
+    if (!(this.stunTime > 0)) world?.effects.text(this.hx, this.hy - 36, 'STUNNED', { color: '#ffe680', size: 7 });
+    this.stunTime = Math.max(this.stunTime, duration);
+    this.busy = Math.max(this.busy, duration);
+  }
+
+  /** Spinning stars over a stunned hero. */
+  drawStatus(ctx) {
+    if (!(this.stunTime > 0)) return;
+    const y = this.y - 50;
+    for (let i = 0; i < 3; i++) {
+      const a = this.animTime * 6 + (i * TAU) / 3;
+      const sx = Math.round(this.x + Math.cos(a) * 10);
+      const sy = Math.round(y + Math.sin(a) * 3);
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(sx - 2, sy - 2, 5, 5);
+      ctx.fillStyle = '#ffe680';
+      ctx.fillRect(sx - 1, sy - 1, 3, 3);
+    }
+  }
+
+  // ---------- aegis (cast by the Priestess) ----------
+
+  /** Wraps the hero in a shield that soaks `hp` damage of any kind for `duration`s. */
+  applyAegis(hp, duration, world) {
+    this.aegis = { hp, maxHp: hp, t: duration, flash: 0 };
+    world.effects.text(this.hx, this.hy - 36, 'AEGIS', { color: '#ffe680', size: 8 });
+    world.effects.burst(this.hx, this.hy - 6, { count: 20, colors: ['#ffe680', '#fff6c8', '#ffffff'], speed: [40, 140], life: [0.3, 0.6] });
+  }
+
+  absorbAegis(amount, world) {
+    const a = this.aegis;
+    if (!a || amount <= 0) return amount;
+    const soaked = Math.min(a.hp, amount);
+    a.hp -= soaked;
+    a.flash = 0.12;
+    world.effects.burst(this.hx, this.hy - 6, { count: 8, colors: ['#ffe680', '#ffffff'], speed: [60, 160], life: [0.15, 0.3] });
+    Sound.play('bounce');
+    if (a.hp <= 0) {
+      this.aegis = null;
+      world.effects.text(this.hx, this.hy - 36, 'AEGIS BROKEN', { color: '#ffe680', size: 7 });
+      world.effects.burst(this.hx, this.hy - 6, { count: 24, colors: ['#ffe680', '#fff6c8', '#ffffff'], speed: [80, 220], life: [0.3, 0.6] });
+      Sound.play('partBreak');
+    }
+    return amount - soaked;
+  }
+
+  /** Golden bubble around the hero with a small hp bar. */
+  drawAegis(ctx) {
+    const a = this.aegis;
+    if (!a) return;
+    const fade = Math.min(1, a.t * 2);
+    const flash = a.flash > 0;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = flash ? 'rgba(255, 250, 220, 0.35)' : 'rgba(255, 220, 110, 0.12)';
+    ctx.strokeStyle = `rgba(255, 230, 128, ${0.6 + Math.sin(this.animTime * 10) * 0.2})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y - 16, 22, 28, 0, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    const w = 30;
+    const bx = Math.round(this.x - w / 2);
+    const by = Math.round(this.y - 50);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(bx - 1, by - 1, w + 2, 5);
+    ctx.fillStyle = '#ffe680';
+    ctx.fillRect(bx, by, Math.round(w * clamp(a.hp / a.maxHp, 0, 1)), 3);
+  }
+
   /** Grace period after absorb() soaks a whole hit. */
   get absorbGuardTime() { return CONFIG.player.guardTime; }
 
@@ -247,6 +379,7 @@ class Player extends Entity {
   hurt(amount, world, fromX, fromY, opts = {}) {
     if (this.dead || this.isInvulnerable) return false;
     if (this.guard > 0) return true;
+    amount = this.absorbAegis(amount, world);
     amount = this.absorb(amount, world, fromX, fromY, opts);
     if (amount <= 0) {
       this.guard = this.absorbGuardTime;
@@ -308,7 +441,7 @@ class Player extends Entity {
   /** World-space passive indicator over the hero. */
   drawPassive() {}
 
-  /** Shorter for the Ranger (Agility). */
+  /** Shorter for the Archer (Agility). */
   get dodgeCooldown() { return this.cfg.passive?.dodgeCooldown ?? CONFIG.player.dodge.cooldown; }
 
   /** True while passive regen is ticking. */
@@ -322,7 +455,7 @@ class Player extends Entity {
    */
   updateRegen(dt, world) {
     this.sinceHurt += dt;
-    let hps = this.regenerating ? CONFIG.player.regen.hpPerSecond : 0;
+    let hps = (this.regenerating ? CONFIG.player.regen.hpPerSecond : 0) + this.bonusRegen;
     if (this.buffs.regen > 0) hps += this.maxHp * CONFIG.buffs.regen.perSecond;
     if (hps <= 0 || this.hp >= this.maxHp) return;
     this.hp = Math.min(this.maxHp, this.hp + hps * dt);
@@ -449,11 +582,13 @@ class Player extends Entity {
     ctx.globalAlpha = 1;
     this.drawExtras(ctx);
     this.drawPassive(ctx);
+    this.drawAegis(ctx);
+    this.drawStatus(ctx);
   }
 }
 
 /** Factory used by the game to create the chosen hero. */
 function createHero(classId, x, y) {
-  const classes = { warrior: Warrior, ranger: Ranger, mage: Mage, rogue: Rogue };
+  const classes = { warrior: Warrior, ranger: Ranger, mage: Mage, rogue: Rogue, priestess: Priestess };
   return new classes[classId](x, y);
 }

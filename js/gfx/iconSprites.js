@@ -93,10 +93,13 @@ function buildIconSprites() {
     },
     ranger: {
       primary: icon((p) => arrow(p, 4, 24, 21, 7)),
+      // camo leaf
       secondary: icon((p) => {
-        arrow(p, 7, 2, 7, 18);
-        arrow(p, 14, 6, 14, 22);
-        arrow(p, 21, 2, 21, 18);
+        p.poly([[4, 24], [6, 10], [14, 3], [24, 4], [22, 14], [14, 22]], '#4f6a45');
+        p.poly([[6, 22], [8, 11], [14, 5], [22, 6], [20, 13], [13, 20]], '#88a446');
+        p.line(4, 24, 20, 8, '#3a5030', 1);
+        p.line(11, 16, 11, 10, '#3a5030', 1);
+        p.line(15, 12, 20, 12, '#3a5030', 1);
       }),
       e: icon((p) => {
         arrow(p, 3, 18, 19, 4, { head: '#8cff9a', fletch: '#8cff9a' });
@@ -109,12 +112,11 @@ function buildIconSprites() {
         arrow(p, 3, 25, 19, 17, { head: '#9ad0ff', shaft: L[4], fletch: '#e6f6ff' });
         snowflake(p, 23, 19, 4);
       }),
+      // arrow volley
       q: icon((p) => {
-        p.poly([[4, 24], [6, 10], [14, 3], [24, 4], [22, 14], [14, 22]], '#4f6a45');
-        p.poly([[6, 22], [8, 11], [14, 5], [22, 6], [20, 13], [13, 20]], '#88a446');
-        p.line(4, 24, 20, 8, '#3a5030', 1);
-        p.line(11, 16, 11, 10, '#3a5030', 1);
-        p.line(15, 12, 20, 12, '#3a5030', 1);
+        arrow(p, 7, 2, 7, 18);
+        arrow(p, 14, 6, 14, 22);
+        arrow(p, 21, 2, 21, 18);
       }),
     },
     mage: {
@@ -190,6 +192,55 @@ function buildIconSprites() {
         p.round(2, 16, 14, 11, '#3a3a50', 3);
         p.rect(5, 11, 8, 3, RAMP.skin[2]);
         p.rect(6, 12, 2, 1, OUTLINE); p.rect(10, 12, 2, 1, OUTLINE);
+      }),
+    },
+    priestess: {
+      // beam of light falling onto the floor
+      primary: icon((p) => {
+        p.rect(10, 1, 8, 20, '#d8a640');
+        p.rect(11, 1, 6, 20, '#ffe680');
+        p.rect(13, 1, 2, 20, '#ffffff');
+        p.ellipse(14, 22, 10, 3, '#d8a640');
+        p.ellipse(14, 22, 7, 2, '#fff6c8');
+      }),
+      // five homing light missiles
+      secondary: icon((p) => {
+        for (let i = 0; i < 5; i++) {
+          const a = -Math.PI / 2 + (i - 2) * 0.55;
+          const x = 14 + Math.cos(a) * 10;
+          const y = 18 + Math.sin(a) * 10;
+          p.line(14, 22, x, y, '#a07a24', 1);
+          p.circle(x, y, 2, '#ffe680');
+          p.px(x, y, '#ffffff');
+        }
+      }),
+      // healing rune with a cross
+      e: icon((p) => {
+        p.ellipse(14, 18, 12, 7, '#1a4a2a');
+        ring(p, 14, 14, 11, '#9cf0a0', 0, TAU, 1);
+        p.rect(12, 6, 4, 16, '#6cff7a');
+        p.rect(6, 12, 16, 4, '#6cff7a');
+        p.rect(13, 7, 2, 14, '#c8ffd0');
+        p.rect(7, 13, 14, 2, '#c8ffd0');
+      }),
+      // golden aegis bubble around a shield
+      f: icon((p) => {
+        ring(p, 14, 14, 12, '#ffe680', 0, TAU, 2);
+        p.poly([[8, 7], [20, 7], [20, 15], [14, 22], [8, 15]], G[1]);
+        p.poly([[9, 8], [19, 8], [19, 15], [14, 20], [9, 15]], G[2]);
+        p.rect(13, 9, 2, 9, '#fff6c8');
+        p.rect(10, 12, 8, 2, '#fff6c8');
+      }),
+      // radiant light bomb
+      q: icon((p) => {
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * TAU;
+          const r = i % 2 ? 9 : 13;
+          p.line(14, 14, 14 + Math.cos(a) * r, 14 + Math.sin(a) * r, i % 2 ? G[2] : '#ffe680', 1);
+        }
+        p.circle(14, 14, 6, G[2]);
+        p.circle(14, 14, 4, '#fff6c8');
+        p.circle(13, 13, 2, '#ffffff');
       }),
     },
     dodge: icon((p) => {

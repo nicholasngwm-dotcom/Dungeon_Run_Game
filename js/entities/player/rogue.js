@@ -1,5 +1,6 @@
 // Rogue: spends energy. LMB throws three daggers, RMB swift strike (dash
-// slash, bleeds wounded enemies), E parry, F dagger storm, Q clone surprise.
+// slash, bleeds wounded enemies, marks everything it hits; killing a marked
+// enemy resets it), E parry, F dagger storm, Q clone surprise.
 
 class Rogue extends Player {
   constructor(x, y) {
@@ -20,6 +21,25 @@ class Rogue extends Player {
     this.vanish = 0;
     this.streak = 0;       // Killing Streak passive
     this.streakTime = 0;
+    this.marks = new Map(); // swift strike marks: target -> world.time the mark expires
+  }
+
+  /** A marked enemy dying (to anything the rogue does) resets swift strike. */
+  onDamageDealt(target, dmg, world) {
+    if (!target.dead || !this.marks.has(target)) return;
+    const live = this.marks.get(target) > world.time;
+    this.marks.delete(target);
+    if (!live) return;
+    this.cooldowns.secondary = 0;
+    world.effects.text(this.hx, this.hy - 30, 'STRIKE RESET', { color: '#ff6060', size: 7 });
+    world.effects.burst(target.hx, target.hy, { count: 14, colors: ['#ff6060', '#ffffff', '#9a2230'], speed: [60, 180], life: [0.2, 0.45] });
+    Sound.play('crit');
+  }
+
+  updateMarks(world) {
+    for (const [t, until] of this.marks) {
+      if (t.dead || until <= world.time) this.marks.delete(t);
+    }
   }
 
   get moveMultiplier() { return this.haste > 0 ? this.cfg.parry.speedMultiplier : 1; }
@@ -172,6 +192,7 @@ class Rogue extends Player {
       d.hit.add(t);
       const wounded = t.hp / t.maxHp < c.bleedBelow;
       world.damageTarget(t, c.damage, { angle: d.angle, knockback: 200 });
+      if (!t.dead) this.marks.set(t, world.time + c.markDuration);
       if (wounded && !t.dead) {
         world.addDot(t, c.bleedDps, c.bleedDuration);
         world.effects.text(t.hx, t.hy - 34, 'BLEED', { color: '#ff6060', size: 7 });
@@ -244,7 +265,9 @@ class Rogue extends Player {
   }
 
   updateAbility(dt, world) {
+    this.world = world; // for drawing marks
     this.updateStreak(dt, world);
+    this.updateMarks(world);
     this.throwAnim -= dt;
     this.parryTime -= dt;
     this.haste -= dt;
@@ -257,6 +280,23 @@ class Rogue extends Player {
   }
 
   drawExtras(ctx) {
+    // red crosshair mark over every marked enemy, blinking as it runs out
+    if (this.world) {
+      for (const [t, until] of this.marks) {
+        const left = until - this.world.time;
+        if (left < 1 && Math.floor(left * 8) % 2) continue;
+        const x = Math.round(t.hx);
+        const y = Math.round(t.hy - t.radius - 20);
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(x - 5, y - 1, 11, 3);
+        ctx.fillRect(x - 1, y - 5, 3, 11);
+        ctx.fillStyle = '#ff4a4a';
+        ctx.fillRect(x - 4, y, 9, 1);
+        ctx.fillRect(x, y - 4, 1, 9);
+        ctx.fillStyle = '#ffd0c0';
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
     if (this.stormReady || this.storm) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';

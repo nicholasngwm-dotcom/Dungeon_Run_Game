@@ -93,7 +93,7 @@ class Enemy extends Entity {
   /** Returns true if the damage was applied. */
   takeDamage(amount, world) {
     if (this.dead) return false;
-    this.hp -= amount;
+    this.hp -= amount * (1 - (this.cfg.armor || 0));   // armoured enemies shrug off part of every hit
     this.flashTime = 0.1;
     if (this.hp <= 0) this.die(world);
     return true;
@@ -247,6 +247,10 @@ function createEnemy(type, x, y) {
   const classes = {
     zombie: Zombie, slime: Slime, slimeSmall: Slime, wraith: Wraith, skeleton: Skeleton,
     undeadKnight: UndeadKnight, clayMinion: ClayMinion, gravestone: Gravestone, ghost: Ghost, mimic: Mimic,
+    // graveyard
+    bletcher: Bletcher, skeletonWarrior: SkeletonWarrior, bomber: Bomber, candlehead: Candlehead,
+    shadowalker: Shadowalker, necromancer: Necromancer, reaper: Reaper, minigunner: Minigunner,
+    zombieSoldier: ZombieSoldier, skeletonSorcerer: SkeletonSorcerer, flyingSkull: FlyingSkull,
   };
   return new classes[type](x, y, type);
 }

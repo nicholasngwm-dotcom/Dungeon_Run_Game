@@ -439,6 +439,84 @@ function drawRogue(p, pose) {
   p.rect(36, 21 + b, 3, 1, D[4]);
 }
 
+function drawPriestess(p, pose) {
+  const b = pose.bob;
+  const W = ['#7a7486', '#a8a2b4', '#d4cfdc', '#f0edf4', '#ffffff'];        // white robe
+  const Bl = ['#1e2a5a', '#2e4490', '#4a6ad0', '#8aa8ff'];                  // blue tabard
+  const Hr = ['#5a3a1a', '#8a5a2a', '#b8843e', '#e0b060'];                  // auburn hair
+  const G = RAMP.gold;
+  const L = RAMP.leather;
+  const Sk = RAMP.skin;
+  const s = pose.stride || 0;
+
+  // veil trailing down the back
+  p.poly([[25, 12 + b], [31, 12 + b], [31, 30 + b], [28, 42], [21, 44], [22, 28 + b]], W[2]);
+  p.line(24, 16 + b, 22, 42, W[1]);
+  p.line(27, 16 + b, 26, 41, W[3]);
+
+  // sandals under the robe
+  for (const [x, lift, c] of [[27 - s, pose.liftB || 0, L[2]], [33 + s, pose.liftF || 0, L[3]]]) {
+    p.rect(x, 55 - lift, 5, 3, c);
+    p.rect(x + 1, 57 - lift, 6, 2, c);
+    p.rect(x + 1, 57 - lift, 5, 1, G[1]);
+  }
+
+  // white robe, flaring to a gold hem
+  const hem = Math.round(s / 2);
+  p.poly(shift([[27, 22], [38, 22], [39, 34]], b).concat([[42 + hem, 57], [23 + hem, 57]], shift([[26, 34]], b)), W[3]);
+  p.poly(shift([[27, 22], [30, 22]], b).concat([[27 + hem, 57], [23 + hem, 57]], shift([[26, 34]], b)), W[4]);
+  p.poly(shift([[37, 30], [39, 34]], b).concat([[42 + hem, 57], [38 + hem, 57]]), W[1]);
+  p.rect(23 + hem, 55, 20, 1, G[2]);
+  p.rect(23 + hem, 56, 20, 1, G[1]);
+
+  // blue tabard down the front with a gold cross
+  p.poly(shift([[32, 24], [37, 24], [37, 34]], b).concat([[38 + hem, 55], [32 + hem, 55]], shift([[32, 34]], b)), Bl[2]);
+  p.line(33, 25 + b, 33 + hem, 54, Bl[3]);
+  p.line(37, 34 + b, 38 + hem, 54, Bl[1]);
+  p.rect(35 + hem, 41, 1, 7, G[3]);
+  p.rect(33 + hem, 43, 5, 1, G[3]);
+
+  // gold belt
+  p.rect(27, 33 + b, 12, 2, G[1]);
+  p.rect(27, 33 + b, 12, 1, G[2]);
+  p.rect(33, 33 + b, 2, 2, G[3]);
+
+  // mantle with gold edging
+  p.poly(shift([[24, 21], [40, 21], [41, 26], [36, 27], [31, 25], [27, 27], [23, 26]], b), W[3]);
+  p.rect(25, 21 + b, 14, 1, W[4]);
+  p.line(23, 26 + b, 27, 27 + b, G[2]);
+  p.line(36, 27 + b, 41, 26 + b, G[2]);
+  p.line(31, 25 + b, 36, 27 + b, G[1]);
+
+  // head: hair behind, face, bangs
+  p.rect(27, 12 + b, 6, 12, Hr[1]);
+  p.rect(28, 12 + b, 2, 11, Hr[2]);
+  heroFace(p, b, Sk, Bl[2]);
+  p.rect(31, 11 + b, 8, 2, Hr[2]);
+  p.rect(31, 13 + b, 2, 6, Hr[2]);
+  p.rect(31, 13 + b, 1, 6, Hr[3]);
+  p.px(37, 13 + b, Hr[1]);
+
+  // white veil over the head, gold circlet with a gem
+  p.poly(shift([[28, 13], [29, 9], [33, 8], [38, 9], [40, 11], [36, 10], [31, 10], [30, 14], [29, 22], [27, 22]], b), W[3]);
+  p.line(30, 9 + b, 37, 9 + b, W[4]);
+  p.rect(31, 10 + b, 8, 1, G[2]);
+  p.px(37, 10 + b, '#6ad8ff');
+
+  // halo
+  p.rect(28, 3 + b, 11, 1, G[3]);
+  p.px(27, 4 + b, G[2]);
+  p.px(39, 4 + b, G[2]);
+  p.rect(28, 5 + b, 11, 1, G[2]);
+
+  // casting arm: wide white sleeve, gold cuff, hand
+  p.poly(shift([[36, 23], [40, 22], [43, 29], [44, 35], [39, 36], [37, 30]], b), W[3]);
+  p.poly(shift([[40, 30], [44, 35], [39, 36]], b), W[1]);
+  p.line(37, 23 + b, 39, 32 + b, W[4]);
+  p.rect(39, 33 + b, 6, 2, G[2]);
+  p.rect(40, 35 + b, 3, 2, Sk[2]);
+}
+
 // ---------- frame building ----------
 
 /** Builds { idle: [frame], walk: [frame] } where frame = { img, flash }. */
@@ -459,5 +537,6 @@ function buildHeroSprites() {
     ranger: buildPoseFrames(drawRanger, 64, HERO_POSES, 0.5),
     mage: buildPoseFrames(drawMage, 64, HERO_POSES, 0.5),
     rogue: buildPoseFrames(drawRogue, 64, HERO_POSES, 0.5),
+    priestess: buildPoseFrames(drawPriestess, 64, HERO_POSES, 0.5),
   };
 }

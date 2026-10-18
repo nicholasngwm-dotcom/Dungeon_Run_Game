@@ -1,25 +1,31 @@
-// One run of the game: owns the world state, updates and renders it.
-// Entities receive this object as `world`.
+// One run of the game (or the lobby between runs): owns the world state,
+// updates and renders it. Entities receive this object as `world`.
 
 class Game {
   /**
    * opts.practice: practice-range cheat options ({ infiniteMana,
    * infiniteEnergy, god }) or null for a normal run.
+   * opts.lobby: true for the hub room (no waves; stations to walk up to).
+   * opts.run: { mode: 'set' | 'random', theme } for a dungeon run (generated floors,
+   *   3 stages); otherwise it's the test dungeon (the original wave arena).
    */
   constructor(classId, events, opts = {}) {
-    this.events = events;          // { onGameOver(stats), onVictory(stats) }
-    this.dungeon = new Dungeon();
+    this.events = events;          // { onGameOver(stats), onVictory(stats), onInteract(station), onToast(text) }
     this.camera = new Camera(CONFIG.screen.width, CONFIG.screen.height);
     this.effects = new Effects();
+    this.timers = [];
+    // a run builds its own floors (FloorMap) and sets this.dungeon
+    this.run = opts.run ? new DungeonRun(this, opts.run) : null;
+    if (!this.run) this.dungeon = new Dungeon(opts.lobby ? LOBBY_LAYOUT : {});
     this.player = createHero(classId, this.dungeon.playerStart.x, this.dungeon.playerStart.y);
     this.enemies = [];
     this.playerProjectiles = [];
     this.enemyProjectiles = [];
     this.pickups = [];
     this.clones = [];
+    this.barriers = [];            // Knight barrier shields; soak enemy projectiles while raised
     this.dots = [];
     this.hazards = [];
-    this.timers = [];
     this.boss = null;
     this.pendingSpawns = 0;
     this.time = 0;
@@ -35,6 +41,14 @@ class Game {
       this.dummies.push(new TrainingDummy(c.x - 220, c.y + 40));
       this.banner('PRACTICE RANGE', 'Use the panel to spawn enemies and toggle cheats', 2.6);
     }
+    this.lobby = opts.lobby ? new LobbyHub(this) : null;
+    if (this.lobby) {
+      // a dummy by the practice targets to try abilities on
+      const T = CONFIG.tileSize;
+      this.dummies.push(new TrainingDummy(31 * T, 16 * T));
+      if (opts.welcome) this.banner('THE LOBBY', 'Pick a hero, then head through the gate', 2.6);
+    }
+    if (this.run) this.run.start();
     this.camera.follow(this.player.x, this.player.y, 0, this.dungeon.width, this.dungeon.height, true);
     this.vignette = Game.buildVignette();
   }
@@ -48,6 +62,7 @@ class Game {
     const list = this.enemies.filter((e) => !e.dead && e.age > 0.15);
     if (this.boss) list.push(...this.boss.getTargets());
     list.push(...this.dummies);
+    if (this.run) list.push(...this.run.targets());
     return list;
   }
 
@@ -58,7 +73,7 @@ class Game {
    */
   damageTarget(target, amount, { angle = 0, knockback = 0, sound = 'hit', noCrit = false, color = '#ffffff', fromUlt = false } = {}) {
     const crit = !noCrit && Math.random() < CONFIG.player.critChance;
-    const dmg = Math.max(1, Math.round(amount * (crit ? CONFIG.player.critMultiplier : 1) * this.player.damageMultiplier * this.player.buffDamage));
+    const dmg = Math.max(1, Math.round(amount * (crit ? CONFIG.player.critMultiplier : 1) * this.player.damageMultiplier * this.player.buffDamage * this.player.upgradeDamage));
     if (!target.takeDamage(dmg, this)) return 0;
     if (knockback) target.knockback(angle, knockback);
     this.effects.text(target.hx, target.hy - 22, crit ? `${dmg}!` : `${dmg}`, {
@@ -69,6 +84,7 @@ class Game {
       Sound.play(crit ? 'crit' : (sound || 'hit'), 0.04);
     }
     if (!fromUlt && !this.player.dead) this.player.gainUlt(dmg);
+    this.player.onDamageDealt(target, dmg, this);
     if (this.practice) {
       this.practice.log.push({ t: this.time, dmg });
       this.practice.total += dmg;
@@ -96,10 +112,11 @@ class Game {
     removeDead(this.dots);
   }
 
-  /** The hero plus anything enemies may attack instead (clones). */
+  /** The hero plus anything enemies may attack instead (clones, a defend room's lantern). */
   get allies() {
     const list = this.clones.filter((c) => !c.dead);
     if (!this.player.dead) list.unshift(this.player);
+    if (this.run) list.push(...this.run.allies());
     return list;
   }
 
@@ -108,11 +125,13 @@ class Game {
    * stand-in with dead = true when there is nothing to chase.
    */
   targetFor(enemy) {
+    // defend rooms: the hero if spotted, otherwise the lantern
+    if (this.run && this.run.totem && !this.run.totem.dead) return this.run.defendTarget(enemy);
     let best = null;
     let bestD = Infinity;
     for (const a of this.allies) {
       const d = dist(enemy.x, enemy.y, a.x, a.y);
-      if (a.invisible && d > CONFIG.player.invisibleDetectRange) continue;
+      if (a.invisible && d > (a.detectRange ?? CONFIG.player.invisibleDetectRange)) continue;
       if (d < bestD) { bestD = d; best = a; }
     }
     if (best) return best;
@@ -134,6 +153,7 @@ class Game {
 
   /** Later waves get tougher enemies (boss minions and the practice range don't). */
   get enemyScale() {
+    if (this.run) return this.run.scale;   // dungeon runs scale by stage
     const d = this.director;
     if (this.practice || d.state === 'boss' || d.waveIndex <= 0) return { hp: 1, damage: 1 };
     const s = CONFIG.waveScaling;
@@ -184,6 +204,16 @@ class Game {
     const r = this.player.resource;
     if (!r || r.name !== 'MANA' || Math.random() >= CONFIG.drops.manaChance) return;
     this.pickups.push(new ManaPickup(x + rand(-8, 8), y + rand(-8, 8)));
+  }
+
+  /** The first barrier crossing the segment, or null (lasers and other hitscan shots). */
+  barrierOnSegment(x1, y1, x2, y2) {
+    return this.barriers.find((b) => !b.dead && b.crossesSegment(x1, y1, x2, y2)) || null;
+  }
+
+  /** The first barrier a projectile at (x, y) with radius r is touching, or null. */
+  barrierAt(x, y, r) {
+    return this.barriers.find((b) => !b.dead && b.touches(x, y, r)) || null;
   }
 
   /** Enemy bodies hurt heroes/clones they touch (not while airborne or fading in). */
@@ -266,6 +296,7 @@ class Game {
   }
 
   onBossDefeated() {
+    if (this.run) return this.run.onBossDefeated();
     if (this.practice) {
       this.banner(`${this.boss.name} DEFEATED`, 'Spawn it again from the panel');
       return;
@@ -283,6 +314,16 @@ class Game {
   // ---------------------------------------------------------
   //  PRACTICE RANGE
   // ---------------------------------------------------------
+
+  /** Lobby: become another hero on the spot. */
+  swapHero(classId) {
+    const p = this.player;
+    this.player = createHero(classId, p.x, p.y);
+    this.clones = [];
+    this.barriers = [];
+    this.effects.burst(p.hx, p.hy, { count: 30, colors: ['#ffe680', '#ffffff', '#b45aff'], speed: [40, 160], life: [0.3, 0.7], up: 40 });
+    Sound.play('pickup');
+  }
 
   practiceSpawn(type) {
     if (type !== 'golem' && type !== 'phantom') return this.spawnEnemy(type);
@@ -318,7 +359,8 @@ class Game {
     const pr = this.practice;
     const o = pr.options;
     const p = this.player;
-    if (p.resource && ((p.resource.name === 'MANA' && o.infiniteMana) || (p.resource.name === 'ENERGY' && o.infiniteEnergy))) {
+    // infinite mana also covers the Priestess's light orbs
+    if (p.resource && ((p.resource.name !== 'ENERGY' && o.infiniteMana) || (p.resource.name === 'ENERGY' && o.infiniteEnergy))) {
       p.resource.value = p.resource.max;
     }
     while (pr.log.length && pr.log[0].t < this.time - 5) pr.log.shift();
@@ -335,6 +377,7 @@ class Game {
         const s = this.dungeon.playerStart;
         this.player = createHero(p.classId, s.x, s.y);
         this.clones = [];
+        this.barriers = [];
       }
     }
   }
@@ -342,7 +385,10 @@ class Game {
   get stats() {
     const m = Math.floor(this.time / 60);
     const s = Math.floor(this.time % 60).toString().padStart(2, '0');
-    return { time: `${m}:${s}`, kills: this.kills, wave: this.director.waveNumber, defeatText: this.defeatText };
+    return {
+      time: `${m}:${s}`, kills: this.kills, wave: this.director.waveNumber, defeatText: this.defeatText,
+      stage: this.run ? this.run.stage : null, theme: this.run ? this.run.theme.name : null,
+    };
   }
 
   // ---------------------------------------------------------
@@ -353,8 +399,12 @@ class Game {
     this.time += dt;
     this.mouseWorld = this.camera.screenToWorld(Input.mouse.x, Input.mouse.y);
 
+    // stations / props get the interact key before the hero, so E there never casts an ability
+    if (this.lobby) this.lobby.update(dt);
+    if (this.run && !this.finished) this.run.preUpdate();
     if (!this.player.dead) this.player.update(dt, this);
     for (const c of this.clones) c.update(dt, this);
+    for (const b of this.barriers) b.update(dt, this);
     for (const e of this.enemies) e.update(dt, this);
     this.separateEnemies();
     this.contactDamage();
@@ -374,14 +424,19 @@ class Game {
     this.updateDots(dt);
     this.updateHazards(dt);
     if (this.practice) this.updatePractice(dt);
+    else if (this.lobby) this.dummies.forEach((d) => d.update(dt));
+    else if (this.run) { if (!this.finished) this.run.update(dt); }
     else if (!this.finished) this.director.update(dt);
     this.effects.update(dt);
 
-    const killed = this.enemies.filter((e) => e.dead).length;
+    const dead = this.enemies.filter((e) => e.dead);
+    if (this.run) for (const e of dead) this.run.onEnemyKilled(e);
+    const killed = dead.length;
     this.kills += killed;
     for (let i = 0; i < killed; i++) this.player.onKill(this);
     removeDead(this.enemies);
     removeDead(this.clones);
+    removeDead(this.barriers);
     removeDead(this.playerProjectiles);
     removeDead(this.enemyProjectiles);
     removeDead(this.pickups);
@@ -433,7 +488,9 @@ class Game {
 
     ctx.save();
     this.camera.apply(ctx);
-    this.dungeon.draw(ctx);
+    this.dungeon.draw(ctx, this.camera);
+    if (this.lobby) this.lobby.drawGround(ctx);
+    if (this.run) this.run.drawGround(ctx);
     this.effects.drawGround(ctx);
     this.drawHazards(ctx);
 
@@ -450,7 +507,10 @@ class Game {
     items.push({ y: this.player.y, draw: (c) => this.player.draw(c) });
     for (const cl of this.clones) items.push({ y: cl.y, draw: (c) => cl.draw(c) });
     for (const d of this.dummies) items.push({ y: d.y, draw: (c) => d.draw(c) });
+    for (const b of this.barriers) items.push({ y: b.y, draw: (c) => b.draw(c) });
     if (this.boss) items.push(...this.boss.getDrawables());
+    if (this.lobby) items.push(...this.lobby.getDrawables());
+    if (this.run) items.push(...this.run.getDrawables());
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.draw(ctx);
 
@@ -459,7 +519,8 @@ class Game {
     if (this.boss) this.boss.drawOverlay(ctx);
     this.effects.draw(ctx);
     if (this.boss) HUD.drawBossBars(ctx, this.boss);
-    this.dungeon.drawTorches(ctx, this.time);
+    this.dungeon.drawTorches(ctx, this.time, this.camera);
+    if (this.lobby) this.lobby.drawPrompts(ctx);
     this.effects.drawTexts(ctx);
     ctx.restore();
 

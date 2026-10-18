@@ -45,7 +45,8 @@ class Gravestone extends Enemy {
     const y = this.y + 6 + Math.sin(a) * 30;
     this.pending++;
     this.shakeTime = 0.45;
-    world.spawnEnemy(choose(this.cfg.spawnTypes), x, y, (e) => {
+    // in a dungeon run, tombstones raise whatever undead the theme lists
+    world.spawnEnemy(choose(world.run ? world.run.summonPool : this.cfg.spawnTypes), x, y, (e) => {
       e.owner = this;
       this.pending--;
     });

@@ -1,5 +1,5 @@
-// Warrior: LMB slash-slash-stab combo, RMB shield block, E spin attack,
-// F stunning charge, Q world-cutting slash.
+// Knight (class id 'warrior'): LMB slash-slash-stab combo, RMB (hold) carried barrier shield,
+// E spin attack, F stunning charge, Q world-cutting slash.
 
 class Warrior extends Player {
   constructor(x, y) {
@@ -7,7 +7,7 @@ class Warrior extends Player {
     const c = this.cfg;
     this.weapon = Sprites.weapons.greatblade;
     this.maxCooldowns = {
-      primary: c.combo.cooldown, secondary: c.shield.breakCooldown, e: c.spin.cooldown,
+      primary: c.combo.cooldown, secondary: c.barrier.breakCooldown, e: c.spin.cooldown,
       f: c.charge.cooldown, dodge: this.dodgeCooldown,
     };
     this.icons = { primary: 'COMBO', secondary: 'SHIELD', e: 'SPIN', f: 'CHARGE', q: 'CLEAVE' };
@@ -16,10 +16,9 @@ class Warrior extends Player {
     this.comboStep = 0;
     this.comboTimer = 0;
     this.stab = null;      // short lunge on the 3rd hit
-    this.shielding = false;
-    this.shieldHp = c.shield.hp;
-    this.shieldIdle = 0;     // time since the shield was lowered (regen delay)
-    this.shieldFlash = 0;
+    this.bash = null;      // shield bash lunge in progress
+    this.bashCooldown = 0;
+    this.barrier = new KnightBarrier(this); // carried shield wall, raised with RMB
     this.spin = null;
     this.charge = null;
     this.cleave = null;    // ult power-up
@@ -29,12 +28,12 @@ class Warrior extends Player {
   }
 
   get channeling() { return !!(this.spin || this.cleave); }
-  get ignoresContact() { return !!this.charge; }
+  get ignoresContact() { return !!(this.charge || this.bash); }
 
   get moveMultiplier() {
     if (this.cleave) return this.cfg.ult.moveMultiplier;
     if (this.spin) return this.cfg.spin.moveMultiplier;
-    if (this.shielding) return this.cfg.shield.moveMultiplier;
+    if (this.shielding) return this.cfg.barrier.moveMultiplier;
     return 1;
   }
 
@@ -99,47 +98,64 @@ class Warrior extends Player {
     Sound.play('thrust');
   }
 
-  // ---------- RMB (hold): barrier shield ----------
+  // ---------- RMB (hold): carried barrier shield ----------
 
-  /** LMB combo is disabled while the shield is up; RMB is handled in updateShield. */
+  get shielding() { return this.barrier.raised; }
+
+  /** With the shield up, LMB is a shield bash instead of the combo; RMB is handled in updateShield. */
   handleMouse(world) {
-    if (Input.mouse.left && this.cooldowns.primary <= 0 && !this.shielding) this.primary(world);
-    if (Input.mouse.rightPressed && this.cooldowns.secondary > 0) Sound.play('denied');
+    const m = Input.mouse;
+    if (this.shielding) {
+      if (m.leftPressed) {
+        if (this.bashCooldown <= 0) this.shieldBash(world);
+        else Sound.play('denied');
+      }
+    } else if (m.left && this.cooldowns.primary <= 0) this.primary(world);
+    if (m.rightPressed && this.cooldowns.secondary > 0) Sound.play('denied');
   }
 
-  updateShield(dt) {
-    const c = this.cfg.shield;
-    const up = Input.mouse.right && this.busy <= 0 && !this.channeling && this.cooldowns.secondary <= 0;
-    if (up && !this.shielding) Sound.play('aim');
-    this.shielding = up;
-    this.shieldIdle = up ? 0 : this.shieldIdle + dt;
-    if (this.shieldIdle >= c.regenDelay) this.shieldHp = Math.min(c.hp, this.shieldHp + c.regen * dt);
-    this.shieldFlash -= dt;
+  /** Raises the barrier while RMB is held (and it isn't broken), lowers it otherwise. Stays up through a bash. */
+  updateShield(world) {
+    if (!world.barriers.includes(this.barrier)) world.barriers.push(this.barrier);
+    const up = Input.mouse.right && (this.busy <= 0 || this.bash) && !this.channeling && this.cooldowns.secondary <= 0 && this.barrier.hp > 0;
+    if (up && !this.barrier.raised) Sound.play('aim');
+    this.barrier.raised = up;
+    this.barrier.follow();
   }
 
-  get absorbGuardTime() { return this.cfg.shield.guardTime; }
+  // ---------- LMB while shielding: shield bash ----------
 
-  /** Soaks projectiles (arrows, fireballs, lasers) hitting the front of the shield. Melee goes through. */
-  absorb(amount, world, fromX, fromY, opts = {}) {
-    if (!this.shielding || fromX === undefined || !opts.projectile) return amount;
-    const c = this.cfg.shield;
-    if (Math.abs(angleDiff(this.aim, angleTo(this.x, this.hy, fromX, fromY))) > (c.arcDegrees * DEG) / 2) return amount;
-    this.shieldHp -= amount;
-    this.shieldFlash = 0.12;
-    const sx = this.x + Math.cos(this.aim) * c.radius;
-    const sy = this.hy + Math.sin(this.aim) * c.radius;
-    world.effects.burst(sx, sy, { count: 10, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [60, 180], life: [0.15, 0.35] });
-    Sound.play('bounce');
-    if (this.shieldHp <= 0) {
-      this.shieldHp = 0;
-      this.shielding = false;
-      this.cooldowns.secondary = c.breakCooldown;
-      world.effects.text(this.hx, this.hy - 30, 'SHIELD BROKEN', { color: '#9ad0ff', size: 8 });
-      world.effects.burst(sx, sy, { count: 24, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [80, 240], life: [0.3, 0.6] });
-      world.shake(4, 0.15);
-      Sound.play('explosion');
+  shieldBash(world) {
+    const c = this.cfg.bash;
+    this.bashCooldown = c.cooldown;
+    this.bash = { t: 0, angle: this.aim, hit: new Set() };
+    this.busy = c.time;
+    this.cooldowns.primary = 0.3; // so the combo doesn't swing the moment the shield drops
+    world.effects.burst(this.barrier.x, this.barrier.hy, { count: 10, colors: ['#ffffff', '#9ad0ff'], speed: [40, 120], life: [0.15, 0.3] });
+    Sound.play('dash');
+  }
+
+  updateBash(dt, world) {
+    const b = this.bash;
+    const c = this.cfg.bash;
+    b.t += dt;
+    const speed = c.distance / c.time;
+    world.dungeon.move(this, Math.cos(b.angle) * speed * dt, Math.sin(b.angle) * speed * dt);
+    const arc = (c.arcDegrees * DEG) / 2;
+    for (const t of world.getTargets()) {
+      if (b.hit.has(t)) continue;
+      const d = dist(this.x, this.hy, t.hx, t.hy);
+      if (d > c.reach + t.radius) continue;
+      if (d > t.radius && Math.abs(angleDiff(b.angle, angleTo(this.x, this.hy, t.hx, t.hy))) > arc) continue;
+      b.hit.add(t);
+      world.damageTarget(t, c.damage, { angle: b.angle, knockback: c.knockback, sound: 'impact' });
+      t.stun?.(c.stun);
+      this.barrier.flash = 0.15;
+      world.effects.burst(t.hx, t.hy, { count: 14, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [80, 220], life: [0.2, 0.4] });
+      world.shake(4, 0.12);
     }
-    return 0;
+    this.afterimage(world, 0.15, 0.35);
+    if (b.t >= c.time) this.bash = null;
   }
 
   // ---------- E: spin ----------
@@ -155,7 +171,7 @@ class Warrior extends Player {
     const s = this.spin;
     const c = this.cfg.spin;
     // press E again to stop spinning (ignoring the frame it started)
-    if (s.t > 0 && Input.wasPressed('KeyE')) {
+    if (s.t > 0 && Input.pressed('e')) {
       this.spin = null;
       return;
     }
@@ -309,7 +325,9 @@ class Warrior extends Player {
     if (this.spin) this.updateSpin(dt, world);
     if (this.charge) this.updateCharge(dt, world);
     if (this.cleave) this.updateCleave(dt, world);
-    this.updateShield(dt);
+    this.bashCooldown -= dt;
+    if (this.bash) this.updateBash(dt, world);
+    this.updateShield(world);
   }
 
   drawGroundExtras(ctx) {
@@ -406,7 +424,6 @@ class Warrior extends Player {
   }
 
   drawExtras(ctx) {
-    if (this.shielding) this.drawShield(ctx);
     if (this.cleave) {
       const r = 20 + Math.sin(this.animTime * 25) * 4;
       ctx.save();
@@ -418,49 +435,6 @@ class Warrior extends Player {
       ctx.fillRect(this.pivotX - r * 2, this.pivotY - r * 2, r * 4, r * 4);
       ctx.restore();
     }
-  }
-
-  /** Curved energy barrier in the aim direction with an hp bar above the hero. */
-  drawShield(ctx) {
-    const c = this.cfg.shield;
-    const half = (c.arcDegrees * DEG) / 2;
-    const frac = this.shieldHp / c.hp;
-    const flash = this.shieldFlash > 0;
-    const r0 = c.radius - c.thickness * 0.35;
-    const r1 = c.radius + c.thickness * 0.65;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = flash ? 'rgba(220, 240, 255, 0.45)' : `rgba(80, 150, 255, ${0.15 + 0.2 * frac})`;
-    ctx.beginPath();
-    ctx.arc(this.x, this.hy, r1, this.aim - half, this.aim + half);
-    ctx.arc(this.x, this.hy, r0, this.aim + half, this.aim - half, true);
-    ctx.closePath();
-    ctx.fill();
-    // panel seams
-    ctx.strokeStyle = `rgba(160, 210, 255, ${0.35 + 0.3 * frac})`;
-    ctx.lineWidth = 1;
-    for (let i = -2; i <= 2; i++) {
-      const a = this.aim + (half * i) / 3;
-      ctx.beginPath();
-      ctx.moveTo(this.x + Math.cos(a) * r0, this.hy + Math.sin(a) * r0);
-      ctx.lineTo(this.x + Math.cos(a) * r1, this.hy + Math.sin(a) * r1);
-      ctx.stroke();
-    }
-    // bright outer edge
-    ctx.strokeStyle = `rgba(190, 230, 255, ${0.6 + Math.sin(this.animTime * 12) * 0.15})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(this.x, this.hy, r1, this.aim - half, this.aim + half);
-    ctx.stroke();
-    ctx.restore();
-    // hp bar
-    const w = 30;
-    const bx = Math.round(this.x - w / 2);
-    const by = Math.round(this.y - 46);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(bx - 1, by - 1, w + 2, 5);
-    ctx.fillStyle = frac > 0.3 ? '#9ad0ff' : '#ff8a6a';
-    ctx.fillRect(bx, by, Math.round(w * frac), 3);
   }
 
   get weaponReach() {
@@ -478,5 +452,142 @@ class Warrior extends Player {
       return this.aim + lerp(-1.4, 1.4, t) * this.swingDir;
     }
     return this.aim - 0.5 * this.facing;
+  }
+}
+
+/**
+ * Knight barrier: a wall of light the knight carries and raises with RMB.
+ * It's its own entity in world.barriers, so enemy projectiles (and golem
+ * lasers) crossing it are soaked by the wall itself, not the knight. It sits
+ * `distance` px ahead of the knight, facing the aim, and only blocks while
+ * raised. Bodies and melee pass through. (x, y) are the feet of the wall's
+ * centre; projectiles collide at hy.
+ */
+class KnightBarrier {
+  constructor(owner) {
+    this.owner = owner;
+    this.cfg = owner.cfg.barrier;
+    this.hp = this.cfg.hp;
+    this.raised = false;
+    this.raise = 0;          // 0..1 raise animation
+    this.age = 0;
+    this.flash = 0;
+    this.dead = false;
+    this.follow();
+  }
+
+  get hy() { return this.y - 14; }
+
+  /** Keeps the wall in front of the knight, facing the aim. */
+  follow() {
+    const o = this.owner;
+    const c = this.cfg;
+    const cx = o.x + Math.cos(o.aim) * c.distance;
+    const cy = o.hy + Math.sin(o.aim) * c.distance;
+    this.x = cx;
+    this.y = cy + 14;
+    const perp = o.aim + Math.PI / 2;
+    const hw = c.width / 2;
+    this.ax = cx + Math.cos(perp) * hw;
+    this.ay = cy + Math.sin(perp) * hw;
+    this.bx = cx - Math.cos(perp) * hw;
+    this.by = cy - Math.sin(perp) * hw;
+  }
+
+  touches(x, y, r) {
+    return this.raised && pointSegmentDistance(x, y, this.ax, this.ay, this.bx, this.by) <= r + this.cfg.thickness / 2;
+  }
+
+  crossesSegment(x1, y1, x2, y2) {
+    return this.raised && segmentsIntersect(this.ax, this.ay, this.bx, this.by, x1, y1, x2, y2);
+  }
+
+  absorb(amount, world, x, y) {
+    if (!this.raised) return;
+    this.hp -= amount;
+    this.flash = 0.12;
+    world.effects.burst(x, y, { count: 10, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [60, 180], life: [0.15, 0.35] });
+    Sound.play('bounce');
+    if (this.hp > 0) return;
+    this.hp = 0;
+    this.raised = false;
+    this.owner.cooldowns.secondary = this.cfg.breakCooldown;
+    world.effects.text(this.x, this.hy - 36, 'SHIELD BROKEN', { color: '#9ad0ff', size: 8 });
+    for (let i = 0; i <= 4; i++) {
+      const t = i / 4;
+      world.effects.burst(lerp(this.ax, this.bx, t), lerp(this.ay, this.by, t) - 6, {
+        count: 8, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [40, 160], life: [0.25, 0.5],
+      });
+    }
+    world.shake(4, 0.15);
+    Sound.play('explosion');
+  }
+
+  /** The knight drives raising/lowering; the wall tracks him and regens while lowered. */
+  update(dt) {
+    const c = this.cfg;
+    this.age += dt;
+    this.flash -= dt;
+    this.idle = this.raised ? 0 : (this.idle || 0) + dt;
+    if (this.idle >= c.regenDelay) this.hp = Math.min(c.hp, this.hp + c.regen * dt);
+    this.raise = clamp(this.raise + (this.raised ? 10 : -10) * dt, 0, 1);
+    if (this.owner.dead) this.raised = false;
+    this.follow();
+  }
+
+  draw(ctx) {
+    if (this.raise <= 0) return;
+    const frac = clamp(this.hp / this.cfg.hp, 0, 1);
+    const top = 26 * this.raise;   // wall height above the collision line
+    const foot = 14;               // ...and down to the floor
+    const { ax, ay, bx, by } = this;
+    ctx.save();
+    ctx.globalAlpha = this.raise;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = this.flash > 0 ? 'rgba(220, 240, 255, 0.5)' : `rgba(80, 150, 255, ${0.14 + 0.2 * frac})`;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay + foot);
+    ctx.lineTo(bx, by + foot);
+    ctx.lineTo(bx, by - top);
+    ctx.lineTo(ax, ay - top);
+    ctx.closePath();
+    ctx.fill();
+    // panel seams
+    ctx.strokeStyle = `rgba(160, 210, 255, ${0.3 + 0.3 * frac})`;
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 5; i++) {
+      const x = lerp(ax, bx, i / 5);
+      const y = lerp(ay, by, i / 5);
+      ctx.beginPath();
+      ctx.moveTo(x, y + foot);
+      ctx.lineTo(x, y - top);
+      ctx.stroke();
+    }
+    // a band of light sweeping up the wall
+    const s = (this.age * 0.8) % 1;
+    ctx.strokeStyle = `rgba(200, 235, 255, ${0.5 * (1 - s)})`;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay + foot - s * (top + foot));
+    ctx.lineTo(bx, by + foot - s * (top + foot));
+    ctx.stroke();
+    // bright edges
+    ctx.strokeStyle = `rgba(190, 230, 255, ${0.65 + Math.sin(this.age * 12) * 0.15})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay - top);
+    ctx.lineTo(bx, by - top);
+    ctx.moveTo(ax, ay + foot);
+    ctx.lineTo(bx, by + foot);
+    ctx.stroke();
+    ctx.restore();
+    // hp bar over the knight
+    const o = this.owner;
+    const w = 30;
+    const x = Math.round(o.x - w / 2);
+    const y = Math.round(o.y - 46);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(x - 1, y - 1, w + 2, 5);
+    ctx.fillStyle = frac > 0.3 ? '#9ad0ff' : '#ff8a6a';
+    ctx.fillRect(x, y, Math.round(w * frac), 3);
   }
 }

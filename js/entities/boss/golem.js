@@ -429,7 +429,9 @@ class Golem {
         L.fired = true;
         Sound.play('laser');
         world.shake(2, 0.1);
-        if (!p.dead && pointSegmentDistance(p.hx, p.hy, h.x, h.y, L.end.x, L.end.y) < c.laserWidth / 2 + p.radius) {
+        const barrier = world.barrierOnSegment(h.x, h.y, L.end.x, L.end.y);
+        if (barrier) barrier.absorb(c.laserDamage, world, barrier.x, barrier.hy);
+        else if (!p.dead && pointSegmentDistance(p.hx, p.hy, h.x, h.y, L.end.x, L.end.y) < c.laserWidth / 2 + p.radius) {
           p.hurt(c.laserDamage, world, h.x, h.y, { projectile: true });
         }
         world.effects.burst(L.end.x, L.end.y, { count: 8, colors: ['#ff4a3a', '#ffd0c0'], speed: [40, 140], life: [0.15, 0.3] });

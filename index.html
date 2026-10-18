@@ -11,16 +11,17 @@
 <body>
   <div id="stage">
     <canvas id="game" width="960" height="540"></canvas>
+    <div id="toast" class="toast hidden"></div>
 
     <!-- Main menu -->
     <section id="screen-menu" class="screen">
       <h1 class="title">Dungeon<br><span>Run</span></h1>
       <div class="menu-buttons">
         <button class="btn" data-action="play">Start Game</button>
-        <button class="btn" data-action="practice">Practice Range</button>
-        <button class="btn" data-action="controls">Controls</button>
+        <button class="btn small" data-action="settings">Settings</button>
+        <button class="btn small" data-action="controls">Controls</button>
       </div>
-      <p class="hint">M - toggle music &nbsp;|&nbsp; Esc - pause</p>
+      <p class="hint"><span id="menu-music-hint">M - music: ON</span> &nbsp;|&nbsp; Esc - pause</p>
     </section>
 
     <!-- Controls -->
@@ -31,22 +32,149 @@
         <li><b>Mouse</b> Aim</li>
         <li><b>Left Click</b> Primary attack (hold to repeat)</li>
         <li><b>Right Click</b> Secondary ability</li>
-        <li><b>E / F</b> Class abilities</li>
+        <li><b>E / F</b> Class abilities (E at a lobby station: use it)</li>
         <li><b>Q</b> Ultimate (charges as you deal damage)</li>
         <li><b>Shift</b> Dodge (brief invulnerability)</li>
         <li><b>H</b> Health potion (+40 hp, 40s cooldown)</li>
         <li><b>Esc</b> Pause</li>
         <li><b>M</b> Toggle music</li>
+        <li class="controls-note">Keys above are the defaults. Change them in Settings.</li>
       </ul>
       <p class="hint">Red zones on the ground are enemy attacks winding up. Move!</p>
       <button class="btn" data-action="back">Back</button>
     </section>
 
-    <!-- Class select -->
-    <section id="screen-select" class="screen hidden">
-      <h2 id="select-title">Choose Your Hero</h2>
-      <div id="class-cards" class="cards"></div>
-      <button class="btn small" data-action="back">Back</button>
+    <!-- Lobby: hero statue (main class / subclass) -->
+    <section id="screen-hero" class="screen dim hidden">
+      <h2 id="hero-title">Hero</h2>
+      <div class="hero-panel">
+        <div id="hero-card"></div>
+        <div class="hero-choices">
+          <div class="pp-label">CLASS</div>
+          <button class="choice selected" id="hero-main">Main class</button>
+          <div class="pp-label">SUBCLASS</div>
+          <button class="choice locked" disabled>Subclass I<span>Coming soon</span></button>
+          <button class="choice locked" disabled>Subclass II<span>Coming soon</span></button>
+        </div>
+      </div>
+      <div class="menu-buttons row">
+        <button class="btn small" id="hero-choose" data-action="chooseHero">Choose</button>
+        <button class="btn small" data-action="closePanel">Back</button>
+      </div>
+    </section>
+
+    <!-- Lobby: workshop (not built yet) -->
+    <section id="screen-workshop" class="screen dim hidden">
+      <h2>Workshop</h2>
+      <p class="hint">Under construction.<br>Crafting and upgrades are coming soon.</p>
+      <button class="btn small" data-action="closePanel">Back</button>
+    </section>
+
+    <!-- NPC dialogue (dungeon shopkeeper, chef) -->
+    <section id="screen-dialog" class="screen dialog-screen hidden">
+      <div class="dialog-box">
+        <canvas id="dialog-portrait" width="96" height="96"></canvas>
+        <div class="dialog-body">
+          <div id="dialog-name" class="dialog-name"></div>
+          <p id="dialog-text" class="dialog-text" data-action="dialogSkip"></p>
+          <div id="dialog-options" class="dialog-options"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dungeon shop (opened through the shopkeeper) -->
+    <section id="screen-shop" class="screen dim hidden">
+      <div class="shop-head">
+        <h2>Mira's Curios</h2>
+        <div class="shop-coins"><i></i><span id="shop-coins">0</span></div>
+      </div>
+      <p id="shop-line" class="shop-line"></p>
+      <div id="shop-items" class="shop-items"></div>
+      <p class="hint">Upgrades last for the rest of the run. Each can be bought 3 times.</p>
+      <button class="btn small" data-action="closePanel">Leave</button>
+    </section>
+
+    <!-- Lobby: map legend board -->
+    <section id="screen-legend" class="screen dim hidden">
+      <h2>Map Legend</h2>
+      <div class="legend-cols">
+        <div class="legend-col">
+          <div class="set-head">ROOMS</div>
+          <div id="legend-rooms" class="legend-list"></div>
+        </div>
+        <div class="legend-col narrow">
+          <div class="set-head">MAP</div>
+          <div id="legend-states" class="legend-list"></div>
+        </div>
+      </div>
+      <button class="btn small" data-action="closePanel">Back</button>
+    </section>
+
+    <!-- Lobby: bestiary book -->
+    <section id="screen-bestiary" class="screen dim hidden">
+      <div class="bestiary-filters">
+        <div class="filter-row"><span>THEME</span><div id="bestiary-themes"></div></div>
+        <div class="filter-row"><span>STAGE</span><div id="bestiary-stages"></div></div>
+        <div class="filter-row"><span>ROLE</span><div id="bestiary-roles"></div></div>
+      </div>
+      <div class="bestiary-wrap">
+        <button class="page-btn" id="bestiary-prev" data-action="bestiaryFlip:-1">&lt;</button>
+        <div id="bestiary-book" class="book">
+          <div class="book-page left" id="bestiary-left"></div>
+          <div class="book-spine"></div>
+          <div class="book-page right" id="bestiary-right"></div>
+        </div>
+        <button class="page-btn" id="bestiary-next" data-action="bestiaryFlip:1">&gt;</button>
+      </div>
+      <div class="bestiary-foot">
+        <span id="bestiary-count"></span>
+        <span class="set-sub">Arrows / A D flip pages. Stats are stage 1 values.</span>
+      </div>
+      <button class="btn small" data-action="closePanel">Close</button>
+    </section>
+
+    <!-- Lobby: dungeon gate (game mode, then theme for Set Dungeon) -->
+    <section id="screen-dungeon" class="screen dim hidden">
+      <div id="dungeon-modes" class="dungeon-view">
+        <h2>Choose a Mode</h2>
+        <div class="cards">
+          <div class="card dungeon-card" data-action="mode:set">
+            <h3>Set Dungeon</h3>
+            <div class="stats">1 THEME - 3 STAGES</div>
+            <div class="ability"><span>Pick a theme and fight through all three of its stages, each harder than the last.</span></div>
+            <div class="enter">CHOOSE THEME</div>
+          </div>
+          <div class="card dungeon-card" data-action="mode:random">
+            <h3>Random Dungeon</h3>
+            <div class="stats">3 RANDOM THEMES</div>
+            <div class="ability"><span>Each stage rolls a random theme. Repeats are rare. (Only the Graveyard exists so far.)</span></div>
+            <div class="enter">ENTER</div>
+          </div>
+          <div class="card dungeon-card" data-action="mode:test">
+            <h3>Test Dungeon</h3>
+            <div class="stats">5 WAVES + BOSS</div>
+            <div class="ability"><span>The original arena: waves of undead, slimes and mimics, then the Clay Golem or the Phantom King.</span></div>
+            <div class="enter">ENTER</div>
+          </div>
+          <div class="card dungeon-card locked"><h3>???</h3><div class="stats">COMING SOON</div></div>
+        </div>
+        <button class="btn small" data-action="closePanel">Back</button>
+      </div>
+      <div id="dungeon-themes" class="dungeon-view hidden">
+        <h2>Set Dungeon: Theme</h2>
+        <div class="cards">
+          <div class="card dungeon-card" data-action="theme:graveyard">
+            <h3>Graveyard</h3>
+            <div class="stats">STAGES 1 - 3</div>
+            <div class="ability"><span>Restless dead, poison and bone. Necromancers and reapers rise in stage 2, soldiers and sorcerers in stage 3.</span></div>
+            <div class="ability"><b>BOSS</b><br><span>Phantom King</span></div>
+            <div class="enter">ENTER</div>
+          </div>
+          <div class="card dungeon-card locked"><h3>???</h3><div class="stats">COMING SOON</div></div>
+          <div class="card dungeon-card locked"><h3>???</h3><div class="stats">COMING SOON</div></div>
+        </div>
+        <button class="btn small" data-action="dungeonBack">Back</button>
+      </div>
     </section>
 
     <!-- Practice range panel (shown while playing in practice mode) -->
@@ -55,10 +183,11 @@
       <div class="pp-body">
         <div class="pp-label">Hero</div>
         <div class="pp-grid">
-          <button data-pp="class:warrior">Warrior</button>
-          <button data-pp="class:ranger">Ranger</button>
+          <button data-pp="class:warrior">Knight</button>
+          <button data-pp="class:ranger">Archer</button>
           <button data-pp="class:mage">Mage</button>
           <button data-pp="class:rogue">Rogue</button>
+          <button data-pp="class:priestess" class="pp-wide">Priestess</button>
         </div>
         <div class="pp-label">Spawn</div>
         <div class="pp-grid">
@@ -66,31 +195,93 @@
           <button data-pp="spawn:slime">Slime</button>
           <button data-pp="spawn:wraith">Wraith</button>
           <button data-pp="spawn:skeleton">Skeleton</button>
-          <button data-pp="spawn:undeadKnight">Knight</button>
+          <button data-pp="spawn:undeadKnight">Undead</button>
           <button data-pp="spawn:clayMinion">Minion</button>
           <button data-pp="spawn:gravestone">Grave</button>
           <button data-pp="spawn:ghost">Ghost</button>
           <button data-pp="spawn:mimic">Mimic</button>
+        </div>
+        <div class="pp-label">Graveyard</div>
+        <div class="pp-grid">
+          <button data-pp="spawn:bletcher">Bletcher</button>
+          <button data-pp="spawn:skeletonWarrior">Sk. Warrior</button>
+          <button data-pp="spawn:bomber">Bomber</button>
+          <button data-pp="spawn:candlehead">Candlehead</button>
+          <button data-pp="spawn:shadowalker">Shadowalker</button>
+          <button data-pp="spawn:necromancer">Necromancer</button>
+          <button data-pp="spawn:reaper">Reaper</button>
+          <button data-pp="spawn:minigunner">Minigunner</button>
+          <button data-pp="spawn:zombieSoldier">Z. Soldier</button>
+          <button data-pp="spawn:skeletonSorcerer">Sorcerer</button>
+        </div>
+        <div class="pp-label">Bosses</div>
+        <div class="pp-grid">
           <button data-pp="spawn:golem" class="pp-wide">Clay Golem</button>
           <button data-pp="spawn:phantom" class="pp-wide">Phantom King</button>
           <button data-pp="clear" class="pp-wide">Clear enemies</button>
         </div>
         <div class="pp-label">Cheats</div>
         <button data-pp="toggle:god" class="pp-toggle">God mode</button>
-        <button data-pp="toggle:infiniteMana" class="pp-toggle">Infinite mana</button>
+        <button data-pp="toggle:infiniteMana" class="pp-toggle">Infinite mana/light</button>
         <button data-pp="toggle:infiniteEnergy" class="pp-toggle">Infinite energy</button>
         <div class="pp-grid">
           <button data-pp="ult">Fill ult</button>
           <button data-pp="resetDps">Reset DPS</button>
+          <button data-pp="lobby" class="pp-wide">Back to lobby</button>
         </div>
       </div>
     </aside>
+
+    <!-- Settings (from the main menu or the pause menu) -->
+    <section id="screen-settings" class="screen dim hidden">
+      <h2>Settings</h2>
+      <div class="settings-cols">
+        <div class="settings-col">
+          <div class="set-head">MOUSE</div>
+          <label class="set-row">Sensitivity <span id="set-sens-val">1.0x</span></label>
+          <input type="range" id="set-sens" min="0.2" max="3" step="0.1">
+          <div class="set-head">AUDIO</div>
+          <div class="set-row">Music
+            <button id="set-music" class="toggle" data-action="toggleMusic">ON</button>
+          </div>
+          <label class="set-row">Music volume <span id="set-mvol-val">70%</span></label>
+          <input type="range" id="set-mvol" min="0" max="1" step="0.05">
+          <label class="set-row">Sound effects <span id="set-svol-val">80%</span></label>
+          <input type="range" id="set-svol" min="0" max="1" step="0.05">
+        </div>
+        <div class="settings-col">
+          <div class="set-head">KEYBINDS <span class="set-sub">click, then press a key</span></div>
+          <div id="set-keys" class="set-keys"></div>
+          <div class="set-sub">LMB / RMB stay on the mouse buttons</div>
+        </div>
+      </div>
+      <div class="menu-buttons row">
+        <button class="btn small" data-action="resetSettings">Reset to defaults</button>
+        <button class="btn small save-btn" id="set-save" data-action="saveSettings">Save</button>
+        <button class="btn small" data-action="closeSettings">Back</button>
+      </div>
+      <p id="set-status" class="set-status">All changes saved</p>
+      <!-- shown when leaving with unsaved changes -->
+      <div id="set-confirm" class="confirm hidden">
+        <div class="confirm-box">
+          <h3>Unsaved changes</h3>
+          <p class="hint">Save your changes before leaving?</p>
+          <div class="menu-buttons row">
+            <button class="btn small save-btn" data-action="confirmSave">Save</button>
+            <button class="btn small" data-action="confirmDiscard">Discard</button>
+            <button class="btn small" data-action="confirmCancel">Keep editing</button>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- Pause -->
     <section id="screen-pause" class="screen dim hidden">
       <h2>Paused</h2>
       <div class="menu-buttons">
         <button class="btn" data-action="resume">Resume</button>
+        <button class="btn" data-action="settings">Settings</button>
+        <button class="btn" id="pause-lobby" data-action="lobby">Return to Lobby</button>
         <button class="btn" data-action="quit">Quit to Menu</button>
       </div>
     </section>
@@ -101,7 +292,7 @@
       <p id="end-sub" class="hint"></p>
       <div class="menu-buttons">
         <button class="btn" data-action="retry">Try Again</button>
-        <button class="btn" data-action="select">Change Hero</button>
+        <button class="btn" data-action="lobby">Return to Lobby</button>
         <button class="btn" data-action="quit">Main Menu</button>
       </div>
     </section>
@@ -109,6 +300,7 @@
 
   <!-- Core -->
   <script src="js/config.js"></script>
+  <script src="js/core/settings.js"></script>
   <script src="js/core/utils.js"></script>
   <script src="js/core/input.js"></script>
   <script src="js/core/audio.js"></script>
@@ -118,6 +310,8 @@
   <script src="js/gfx/pixelArt.js"></script>
   <script src="js/gfx/heroSprites.js"></script>
   <script src="js/gfx/enemySprites.js"></script>
+  <script src="js/gfx/graveyardSprites.js"></script>
+  <script src="js/gfx/npcSprites.js"></script>
   <script src="js/gfx/bossSprites.js"></script>
   <script src="js/gfx/phantomSprites.js"></script>
   <script src="js/gfx/itemSprites.js"></script>
@@ -126,6 +320,7 @@
 
   <!-- World & entities -->
   <script src="js/world/dungeon.js"></script>
+  <script src="js/world/floor.js"></script>
   <script src="js/entities/effects.js"></script>
   <script src="js/entities/entity.js"></script>
   <script src="js/entities/projectile.js"></script>
@@ -136,6 +331,7 @@
   <script src="js/entities/player/ranger.js"></script>
   <script src="js/entities/player/mage.js"></script>
   <script src="js/entities/player/rogue.js"></script>
+  <script src="js/entities/player/priestess.js"></script>
   <script src="js/entities/enemies/enemy.js"></script>
   <script src="js/entities/enemies/zombie.js"></script>
   <script src="js/entities/enemies/slime.js"></script>
@@ -146,14 +342,21 @@
   <script src="js/entities/enemies/gravestone.js"></script>
   <script src="js/entities/enemies/ghost.js"></script>
   <script src="js/entities/enemies/mimic.js"></script>
+  <script src="js/entities/enemies/graveyard.js"></script>
   <script src="js/entities/boss/golem.js"></script>
   <script src="js/entities/boss/phantom.js"></script>
 
   <!-- Game -->
   <script src="js/game/waves.js"></script>
   <script src="js/game/hud.js"></script>
+  <script src="js/game/lobby.js"></script>
+  <script src="js/game/decor.js"></script>
+  <script src="js/game/upgrades.js"></script>
+  <script src="js/game/run.js"></script>
   <script src="js/game/game.js"></script>
   <script src="js/ui/menus.js"></script>
+  <script src="js/ui/bestiary.js"></script>
+  <script src="js/ui/dialog.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

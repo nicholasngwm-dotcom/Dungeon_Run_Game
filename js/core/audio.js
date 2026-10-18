@@ -8,7 +8,7 @@ const Sound = {
   musicBus: null,
   noiseBuffer: null,
   lastPlayed: {},
-  musicEnabled: true,
+  get musicEnabled() { return Settings.data.music; },
 
   /** Must be called from a user gesture (browser autoplay rules). */
   init() {
@@ -25,13 +25,21 @@ const Sound = {
     this.sfxBus = this.ctx.createGain();
     this.sfxBus.connect(this.master);
     this.musicBus = this.ctx.createGain();
-    this.musicBus.gain.value = 0.22;
+    this.applyVolumes();
     this.musicBus.connect(this.master);
 
     const len = this.ctx.sampleRate;
     this.noiseBuffer = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const data = this.noiseBuffer.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  },
+
+  /** Music / SFX loudness from Settings (music muted when toggled off). */
+  applyVolumes() {
+    if (!this.ctx) return;
+    const s = Settings.data;
+    this.musicBus.gain.value = s.music ? 0.3 * s.musicVolume : 0;
+    this.sfxBus.gain.value = s.sfxVolume;
   },
 
   /** A single oscillator blip with a pitch slide. */
@@ -52,7 +60,7 @@ const Sound = {
   },
 
   /** Filtered white noise burst (hits, explosions, whooshes). */
-  noise({ dur = 0.1, vol = 0.2, filter = 'lowpass', freq = 1200, to = null, delay = 0, q = 1 }) {
+  noise({ dur = 0.1, vol = 0.2, filter = 'lowpass', freq = 1200, to = null, delay = 0, q = 1, bus = null }) {
     const c = this.ctx;
     const t = c.currentTime + delay;
     const src = c.createBufferSource();
@@ -65,7 +73,7 @@ const Sound = {
     const gain = c.createGain();
     gain.gain.setValueAtTime(vol, t);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f).connect(gain).connect(this.sfxBus);
+    src.connect(f).connect(gain).connect(bus || this.sfxBus);
     src.start(t, Math.random() * 0.5);
     src.stop(t + dur + 0.02);
   },
@@ -83,10 +91,14 @@ const Sound = {
 const SFX = {
   // --- UI ---
   uiHover: (s) => s.tone({ freq: 660, dur: 0.04, vol: 0.05 }),
+  coin: (s) => { s.tone({ type: 'square', freq: 1320, dur: 0.05, vol: 0.06 }); s.tone({ type: 'square', freq: 1760, dur: 0.08, vol: 0.06, delay: 0.05 }); },
+  chestOpen: (s) => { s.noise({ dur: 0.15, vol: 0.15, filter: 'lowpass', freq: 800 }); [784, 988, 1175, 1568].forEach((f, i) => s.tone({ type: 'triangle', freq: f, dur: 0.12, vol: 0.1, delay: 0.1 + i * 0.07 })); },
+  buy: (s) => { [880, 1320].forEach((f, i) => s.tone({ type: 'square', freq: f, dur: 0.08, vol: 0.07, delay: i * 0.06 })); },
+  talk: (s) => s.tone({ type: 'triangle', freq: 520 + Math.random() * 160, dur: 0.03, vol: 0.04 }),
   uiClick: (s) => { s.tone({ freq: 520, to: 900, dur: 0.08, vol: 0.1 }); },
   denied: (s) => s.tone({ type: 'square', freq: 140, dur: 0.1, vol: 0.08 }),
 
-  // --- Warrior ---
+  // --- Knight ---
   slash: (s) => {
     s.noise({ dur: 0.13, vol: 0.28, filter: 'bandpass', freq: 3000, to: 700, q: 2 });
     s.tone({ freq: 500, to: 180, dur: 0.08, vol: 0.05 });
@@ -97,7 +109,7 @@ const SFX = {
     s.tone({ type: 'square', freq: 220, to: 60, dur: 0.2, vol: 0.12 });
   },
 
-  // --- Ranger ---
+  // --- Archer ---
   arrow: (s) => {
     s.tone({ type: 'triangle', freq: 900, to: 300, dur: 0.1, vol: 0.18 });
     s.noise({ dur: 0.07, vol: 0.12, filter: 'highpass', freq: 3000 });
@@ -247,14 +259,34 @@ const SFX = {
 };
 
 // ---------------------------------------------------------------
-//  Background music: a tiny step sequencer (bass + arpeggio).
+//  Background music: a tiny step sequencer (eighth-note steps).
+//  Per track: bass (one note per `bassEvery` steps), lead (one entry per
+//  step, null = rest), optional sustained `chords` (one per bar of 8 steps)
+//  and a soft `hats` pattern. Instrument fields default to the original
+//  chiptune sound.
 // ---------------------------------------------------------------
 const MUSIC_TRACKS = {
+  // main menu
   menu: {
     bpm: 84,
     bass: [45, 45, 41, 41, 43, 43, 40, 40],
     lead: [69, null, 72, null, 76, null, 72, null, 65, null, 69, null, 72, null, 69, null,
            67, null, 71, null, 74, null, 71, null, 64, null, 68, null, 71, null, 76, null],
+  },
+  // lobby: slow, warm lo-fi loop (maj7 / min7 chords, soft sine lead, light swing)
+  lobby: {
+    bpm: 74,
+    swing: 0.18,
+    chords: [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]],   // Fmaj7 Em7 Dm7 Cmaj7
+    chordType: 'triangle', chordVol: 0.045,
+    bass: [41, 41, 40, 40, 38, 38, 36, 43],
+    bassEvery: 4, bassType: 'sine', bassVol: 0.45, bassLen: 3.6,
+    lead: [72, null, null, 76, null, null, 74, null, 71, null, null, 74, null, null, 72, null,
+           69, null, 72, null, null, 76, null, 74, 72, null, null, null, 67, null, null, null,
+           72, null, null, 76, null, 79, null, 77, 76, null, 74, null, 71, null, null, null,
+           69, null, null, 72, null, 71, null, 67, 69, null, null, null, null, null, null, null],
+    leadType: 'sine', leadVol: 0.09, leadLen: 2.2,
+    hats: [0, 0, 1, 0, 0, 0, 1, 1],
   },
   battle: {
     bpm: 132,
@@ -290,9 +322,12 @@ const Music = {
     this.track = null;
   },
 
-  toggle() {
-    Sound.musicEnabled = !Sound.musicEnabled;
-    if (Sound.musicBus) Sound.musicBus.gain.value = Sound.musicEnabled ? 0.22 : 0;
+  /** Music on/off. Returns the new state. save = false inside the settings screen (Save there stores it). */
+  toggle(save = true) {
+    Settings.data.music = !Settings.data.music;
+    if (save) Settings.save();
+    Sound.applyVolumes();
+    return Settings.data.music;
   },
 
   schedule() {
@@ -300,16 +335,27 @@ const Music = {
     const tr = this.track;
     if (!ctx || !tr) return;
     const stepDur = 60 / tr.bpm / 2; // eighth notes
+    const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+    const bus = Sound.musicBus;
     while (this.nextTime < ctx.currentTime + 0.2) {
-      const delay = this.nextTime - ctx.currentTime;
-      const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
-      if (this.step % 2 === 0) {
+      // swing pushes every off-beat eighth a little late
+      const swing = this.step % 2 ? (tr.swing || 0) * stepDur : 0;
+      const delay = Math.max(0, this.nextTime - ctx.currentTime + swing);
+      if (tr.chords && this.step % 8 === 0) {
+        const chord = tr.chords[Math.floor(this.step / 8) % tr.chords.length];
+        for (const n of chord) Sound.tone({ type: tr.chordType, freq: midiToHz(n), dur: stepDur * 8.2, vol: tr.chordVol, delay, bus });
+      }
+      const bassEvery = tr.bassEvery || 2;
+      if (this.step % bassEvery === 0) {
         const b = tr.bass[Math.floor(this.step / 4) % tr.bass.length];
-        Sound.tone({ type: 'triangle', freq: midiToHz(b), dur: stepDur * 1.8, vol: 0.5, delay, bus: Sound.musicBus });
+        Sound.tone({ type: tr.bassType || 'triangle', freq: midiToHz(b), dur: stepDur * (tr.bassLen || 1.8), vol: tr.bassVol ?? 0.5, delay, bus });
       }
       const n = tr.lead[this.step % tr.lead.length];
       if (n !== null) {
-        Sound.tone({ type: 'square', freq: midiToHz(n), dur: stepDur * 0.9, vol: 0.12, delay, bus: Sound.musicBus });
+        Sound.tone({ type: tr.leadType || 'square', freq: midiToHz(n), dur: stepDur * (tr.leadLen || 0.9), vol: tr.leadVol ?? 0.12, delay, bus });
+      }
+      if (tr.hats && tr.hats[this.step % tr.hats.length]) {
+        Sound.noise({ dur: 0.035, vol: 0.06, filter: 'highpass', freq: 7000, delay, bus });
       }
       this.nextTime += stepDur;
       this.step++;

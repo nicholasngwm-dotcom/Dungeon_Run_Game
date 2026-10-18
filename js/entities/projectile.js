@@ -82,8 +82,13 @@ class Projectile {
     }
   }
 
-  /** Enemy shots hit the hero or a clone. */
+  /** Enemy shots hit the hero or a clone, unless a Knight barrier soaks them first. */
   hitPlayer(world) {
+    const barrier = world.barrierAt(this.x, this.y, this.radius);
+    if (barrier) {
+      barrier.absorb(this.damage, world, this.x, this.y);
+      return this.destroy(world, null);
+    }
     for (const p of world.allies) {
       if (dist(this.x, this.y, p.hx, p.hy) > this.radius + p.radius) continue;
       if (p.hurt(this.damage, world, this.x, this.y, { projectile: true })) return this.destroy(world, p);

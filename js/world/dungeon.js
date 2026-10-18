@@ -7,9 +7,12 @@ const TILE = { FLOOR: 0, WALL: 1, FACE: 2, PILLAR: 3, PILLAR_FACE: 4 };
 const PILLARS = [[6, 7], [30, 7], [11, 13], [25, 13], [6, 19], [30, 19]];
 
 class Dungeon {
-  constructor({ cols = 38, rows = 26, pillars = false } = {}) {
+  /** lobby: the hub room (no ritual circle or bones, a carpet up to the gate). */
+  constructor({ cols = 38, rows = 26, pillars = false, lobby = false, custom = false } = {}) {
+    if (custom) return; // subclasses (FloorMap) build their own grid and art
     this.cols = cols;
     this.rows = rows;
+    this.lobby = lobby;
     this.pillars = pillars ? PILLARS : [];
     this.T = CONFIG.tileSize;
     this.width = cols * this.T;
@@ -83,6 +86,7 @@ class Dungeon {
 
     // wall decorations
     for (let tx = 4; tx < this.cols - 2; tx += 6) {
+      if (this.lobby && Math.abs(tx * T + 16 - this.width / 2) < 60) continue; // the gate goes there
       Tiles.torchBracket(p, tx * T, 2 * T);
       this.torches.push({ x: tx * T + 16, y: 2 * T + 8, seed: Math.random() * 10 });
     }
@@ -99,6 +103,10 @@ class Dungeon {
       p.ctx.fillRect(tx * T + 2, (ty + 2) * T + 8, 2 * T - 4, 6);
     }
 
+    if (this.lobby) {
+      this.drawCarpet(p);
+      return p.canvas;
+    }
     this.drawRitualCircle(p);
 
     // floor clutter (kept away from the centre)
@@ -115,6 +123,19 @@ class Dungeon {
       }
     }
     return p.canvas;
+  }
+
+  /** Lobby: a red runner from the start up to the gate in the back wall. */
+  drawCarpet(p) {
+    const T = this.T;
+    const x = this.width / 2 - T;
+    const top = 4 * T;
+    const h = this.height - T - top;
+    p.rect(x, top, 2 * T, h, '#50131d');
+    p.rect(x + 3, top, 2 * T - 6, h, '#7c1f2a');
+    p.rect(x + 6, top, 2, h, '#dcb44c');
+    p.rect(x + 2 * T - 8, top, 2, h, '#dcb44c');
+    for (let y = top + 12; y < top + h; y += 24) p.rect(this.width / 2 - 3, y, 6, 6, '#a63036');
   }
 
   drawRitualCircle(p) {
