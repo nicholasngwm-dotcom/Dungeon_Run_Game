@@ -189,21 +189,21 @@ const CONFIG = {
     // stationary: raises a zombie or skeleton every spawnInterval (up to maxAlive at once),
     // and releases 1-3 ghosts when destroyed
     gravestone: {
-      hp: 320, speed: 0, radius: 18, damage: 0, contactDamage: 0,
-      firstSpawn: 1.5, spawnInterval: 3, maxAlive: 3, spawnTypes: ['zombie', 'skeleton'],
+      hp: 220, speed: 0, radius: 18, damage: 0, contactDamage: 0,
+      firstSpawn: 1.5, spawnInterval: 2, maxAlive: 3, spawnTypes: ['zombie', 'skeleton'],
       ghosts: [1, 3], heartChance: 0.35,
     },
     // only comes out of broken gravestones: slow, contact damage only,
     // with a chilling aura that slows heroes inside it
     ghost: {
       hp: 60, speed: 48, radius: 13, damage: 16, contactDamage: 16,
-      auraRadius: 130, slowAmount: 0.65, knockbackResist: 0.4,
+      auraRadius: 130, slowAmount: 0.90, knockbackResist: 0.4,
       maxLead: 1.4,   // seconds ahead of the hero it aims for, to cut them off
     },
     // a treasure chest with teeth: hops slowly toward the hero, then lunges again and again
     // while the hero stays within leashRange. Very tough, hits hard, usually drops a buff orb
     mimic: {
-      hp: 760, speed: 0, radius: 18, damage: 42, contactDamage: 14,
+      hp: 700, speed: 0, radius: 18, damage: 42, contactDamage: 14,
       hopDistance: 46, hopTime: 0.32, hopRest: 0.55,
       aggroRange: 160, leashRange: 230,
       windup: 0.42, aimLockAt: 0.15, lungeDistance: 150, lungeTime: 0.2, recovery: 0.45,
@@ -236,7 +236,7 @@ const CONFIG = {
     // Candlehead: skeleton that fires souls; a soul knocks you back hard
     candlehead: {
       hp: 95, speed: 58, radius: 13, damage: 14,
-      preferredMin: 170, preferredMax: 300, windup: 0.6, cooldown: 1.8, soulSpeed: 230, knockback: 320,
+      preferredMin: 170, preferredMax: 300, windup: 0.6, cooldown: 1., soulSpeed: 230, knockback: 400,
     },
     // Shadowalker: poison dagger; every blinkInterval it teleports behind you and stabs
     shadowalker: {
