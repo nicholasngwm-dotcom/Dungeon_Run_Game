@@ -3,13 +3,40 @@
 // directly between browsers. The host's PeerJS id is the room code plus a
 // prefix, so friends join by typing the code.
 //
+// Players on mobile data usually can't connect directly (carrier NAT), so the
+// connection falls back to a TURN relay from CONFIG.multiplayer (iceServers and
+// the optional turnCredentialsUrl).
+//
 // Net.host / Net.join return a transport for Session: { send, broadcast, close }.
 
 const Net = {
   peer: null,
   conns: new Map(),    // peer id -> DataConnection (host: every client; client: just the host)
+  extraIce: null,      // ICE servers fetched from turnCredentialsUrl (once per page)
 
   get available() { return typeof Peer !== 'undefined'; },
+
+  /** PeerJS options with our ICE servers (STUN + TURN relays). */
+  async peerOptions() {
+    const mp = CONFIG.multiplayer;
+    if (mp.turnCredentialsUrl && !this.extraIce) {
+      try {
+        const res = await fetch(mp.turnCredentialsUrl);
+        const list = await res.json();
+        this.extraIce = Array.isArray(list) ? list : [];
+      } catch (e) { this.extraIce = []; /* relay service down: try with the rest */ }
+    }
+    return { config: { iceServers: [...mp.iceServers, ...(this.extraIce || [])] } };
+  },
+
+  /** Calls onFail if a data connection's network route fails (e.g. no relay got through). */
+  watchIce(conn, onFail) {
+    const pc = conn.peerConnection;
+    if (!pc) return;
+    pc.addEventListener('iceconnectionstatechange', () => {
+      if (pc.iceConnectionState === 'failed') onFail();
+    });
+  },
 
   /** A random room code from letters that are hard to mix up. */
   makeCode() {
@@ -34,10 +61,10 @@ const Net = {
    * Opens a room. h: { onOpen(code), onData(peer, msg), onJoin(peer), onLeave(peer), onError(text) }.
    * A taken code (very unlikely) just retries with a new one.
    */
-  host(h, tries = 0) {
+  async host(h, tries = 0) {
     if (!this.available) return h.onError('Could not load the multiplayer library. Check your internet connection.');
     const code = this.makeCode();
-    const peer = new Peer(CONFIG.multiplayer.peerPrefix + code);
+    const peer = new Peer(CONFIG.multiplayer.peerPrefix + code, await this.peerOptions());
     this.peer = peer;
     peer.on('open', () => h.onOpen(code));
     peer.on('connection', (conn) => {
@@ -63,21 +90,33 @@ const Net = {
   },
 
   /** Joins a room by code. h: { onOpen(), onData(peer, msg), onClose(), onError(text) }. */
-  join(code, h) {
+  async join(code, h) {
     if (!this.available) return h.onError('Could not load the multiplayer library. Check your internet connection.');
-    const peer = new Peer();
+    const peer = new Peer(await this.peerOptions());
     this.peer = peer;
-    let opened = false;
+    let opened = false, failed = false;
+    // the room exists (no peer-unavailable error) but no network route got through
+    const noRoute = () => {
+      if (opened || failed) return;
+      failed = true;
+      h.onError(`Found room ${code.toUpperCase()} but couldn't connect to it. Mobile data and some networks block direct connections - try wifi, or ask the host about a relay server.`);
+    };
     peer.on('open', () => {
       const conn = peer.connect(CONFIG.multiplayer.peerPrefix + code.toUpperCase(), { reliable: true, serialization: 'json' });
+      this.watchIce(conn, noRoute);
       conn.on('open', () => {
         opened = true;
         this.conns.set('host', conn);
         h.onOpen();
       });
       conn.on('data', (msg) => h.onData('host', msg));
-      conn.on('close', () => { this.conns.delete('host'); h.onClose(); });
-      setTimeout(() => { if (!opened) h.onError(`Couldn't reach room ${code.toUpperCase()}. Check the code and try again.`); }, 12000);
+      conn.on('close', () => { this.conns.delete('host'); if (opened) h.onClose(); });
+      setTimeout(() => {
+        if (opened || failed) return;
+        const ice = conn.peerConnection && conn.peerConnection.iceConnectionState;
+        if (ice && ice !== 'new') noRoute();   // the host answered, the connection didn't
+        else h.onError(`Couldn't reach room ${code.toUpperCase()}. Check the code and try again.`);
+      }, CONFIG.multiplayer.joinTimeout * 1000);
     });
     peer.on('error', (e) => h.onError(e.type === 'peer-unavailable' ? `No room called ${code.toUpperCase()}.` : Net.describe(e)));
   },

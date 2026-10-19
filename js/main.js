@@ -5,8 +5,10 @@
 //   ?class=rogue&wave=3  start at a given wave
 //   ?class=warrior&boss  start at a random boss (&boss=golem or &boss=phantom to pick)
 //   ?class=mage&practice start in the practice range
-//   ?lobby               start in the lobby (&class=... to pick the hero)
+//   ?lobby               start in the lobby (&class=... to pick the hero; &panel=hero:mage or &panel=workshop opens a station)
 //   ?run=graveyard       start a set-dungeon run (?run=random for random mode; &stage=2 or 3 to skip ahead)
+//   ?run=graveyard&visit=special&special=blacksmith   start inside a room type (shop, special, boss...),
+//                        optionally forcing which special room it is
 
 const App = {
   state: 'menu',     // menu | playing (lobby or run) | panel (lobby station open) | paused | ended
@@ -34,14 +36,15 @@ const App = {
     buildItemSprites();
     buildGraveyardSprites();   // after the items: it adds to Sprites.projectiles
     buildNpcSprites();
+    buildPropSprites();
+    buildPotionSprites();
     buildIconSprites();
 
     Input.init(this.canvas);
     Menus.init(this);
     this.menuDungeon = new Dungeon();
 
-    window.addEventListener('resize', () => this.resize());
-    this.resize();
+    Display.init(this.stage);
 
     // Browsers only allow audio after a user gesture.
     const unlock = () => {
@@ -52,29 +55,43 @@ const App = {
     window.addEventListener('keydown', unlock);
     // the browser eats the Esc that releases a pointer lock, so treat losing the lock as "pause"
     document.addEventListener('pointerlockchange', () => {
-      if (!Input.locked && this.state === 'playing') this.pause();
+      if (!Input.locked && !Input.freeMouse && this.state === 'playing') this.pause();
     });
 
     this.applyDevShortcuts();
     requestAnimationFrame((t) => this.loop(t));
   },
 
-  resize() {
-    const s = Math.min(window.innerWidth / CONFIG.screen.width, window.innerHeight / CONFIG.screen.height);
-    this.stage.style.transform = `translate(-50%, -50%) scale(${s})`;
-  },
-
   applyDevShortcuts() {
     const params = new URLSearchParams(location.search);
     const classId = params.get('class');
     if (classId && CONFIG.classes[classId]) this.classId = classId;
-    if (params.has('lobby')) return this.enterLobby(true);
+    if (params.has('lobby')) {
+      this.enterLobby(true);
+      // &panel=hero:mage (or workshop) opens that lobby station's panel
+      const [panel, arg] = (params.get('panel') || '').split(':');
+      if (panel === 'hero') { this.openPanel(); Menus.showHero(CONFIG.classes[arg] ? arg : this.classId, this.classId); }
+      else if (panel) this.openPanel(panel);
+      return;
+    }
     // ?run=graveyard (set dungeon) or ?run=random, optionally &stage=2 / 3
     const run = params.get('run');
     if (run) {
+      // &special=blacksmith makes every special room that kind
+      const special = params.get('special');
+      if (special && SPECIAL_INFO[special]) CONFIG.run.specials = [special];
       this.startDungeonRun(run === 'random' ? { mode: 'random' } : { mode: 'set', theme: CONFIG.themes[run] ? run : 'graveyard' });
       const stage = parseInt(params.get('stage'), 10);
       for (let s = 1; s < Math.min(3, stage || 1); s++) this.game.run.nextStage();
+      // &visit=shop (or special, boss...) puts the hero just inside that room
+      const visit = params.get('visit');
+      const room = visit && this.game.run.floor.rooms.find((r) => r.type === visit);
+      if (room) {
+        const p = this.game.localPlayer;
+        p.x = room.cx;
+        p.y = room.cy + 3 * this.game.run.floor.T;
+        this.game.camera.follow(p.x, p.y - 16, 0, this.game.run.floor.width, this.game.run.floor.height, true);
+      }
       return;
     }
     if (!classId || !CONFIG.classes[classId]) return;
@@ -91,7 +108,7 @@ const App = {
       onInteract: (station, hero) => this.interact(station, hero),
       onToast: (text) => Menus.toast(text, '#ffe680'),
       onNpc: (kind, run, hero) => this.talkTo(kind, run, hero),
-      onPurchase: (hero, u, ok) => Shop.onPurchase(hero, u, ok),
+      onPurchase: (hero, what, ok) => Shop.onPurchase(hero, what, ok),
     };
   },
 
@@ -165,17 +182,29 @@ const App = {
       Dialog.open({
         name: 'MIRA', frames: Sprites.npcs.shopkeeper,
         text: this.game.localPlayer.coins > 0
-          ? choose(["Oh! A customer! Welcome to Mira's Curios, traveller. What would you like?", 'Back again? I saved the good stuff for you. What will it be?'])
-          : "Welcome, welcome! Hmm... your purse looks a little light. Still, have a look. What would you like?",
+          ? choose(["Oh! A customer! Welcome to Mira's Potions, traveller. Something to drink?", 'Back again? I brewed a fresh batch. What will it be?'])
+          : "Welcome, welcome! Hmm... your purse looks a little light. Still, have a look at my potions!",
         options: [
-          { label: 'Show me your wares', fn: () => Shop.open(run) },
+          { label: 'Show me your potions', fn: () => Shop.open(run, 'potions') },
           { label: 'Just looking', fn: () => Dialog.close() },
+        ],
+      });
+    } else if (kind === 'enchanter') {
+      const st = run.shopState(this.game.localPlayer);
+      Dialog.open({
+        name: 'BRAM', frames: Sprites.npcs.enchanter,
+        text: st.bought
+          ? 'You have chosen your enchantment, adventurer. Survive this stage, and I will have new ones for you.'
+          : 'Ah, a seeker of power. I have three enchantments for you - choose one. Do not like them? A few coins and I will show you others.',
+        options: [
+          { label: 'Show me the enchantments', fn: () => Shop.open(run, 'upgrades') },
+          { label: 'Not now', fn: () => Dialog.close() },
         ],
       });
     } else {
       Dialog.open({
         name: 'CHEF BRUNO', frames: Sprites.npcs.chef,
-        text: "Ah, an adventurer! The kitchen isn't quite ready yet... come back soon and I'll cook you something special!",
+        text: "Welcome to my restaurant, adventurer! The kitchen isn't quite ready yet... come back soon and I'll cook you something special!",
         options: [{ label: "Can't wait!", fn: () => Dialog.close() }],
       });
     }
@@ -226,7 +255,7 @@ const App = {
         Music.play(kind === 'lobby' ? 'lobby' : 'battle');
       },
       onRejected: (reason) => this.leaveMultiplayer(reason),
-      onDesync: (who) => Menus.toast(`OUT OF SYNC WITH ${who.toUpperCase()}`, '#ff6a6a'),
+      onDesync: () => Sound.play('uiClick'),   // the notice itself stays on screen (drawNetStatus)
     };
   },
 
@@ -342,7 +371,7 @@ const App = {
   pause() {
     if (this.state !== 'playing') return;
     this.state = 'paused';
-    Menus.showPause(!!this.game.lobby, !!this.mp);
+    Menus.showPause(!!this.game.lobby, !!this.mp, !!(this.mp && this.mp.isHost));
   },
 
   resume() {
@@ -383,9 +412,16 @@ const App = {
       if (Input.wasPressed('ArrowRight') || Input.pressed('right')) Bestiary.flip(1);
     }
 
+    // the cursor key swaps the crosshair for the normal mouse pointer (and back)
+    if (this.state === 'playing' && Input.pressed('cursor')) {
+      const free = Input.toggleFreeMouse();
+      Menus.toast(free ? 'MOUSE: POINTER' : 'MOUSE: CROSSHAIR', '#ffe680');
+    }
+    this.canvas.classList.toggle('free-cursor', Input.freeMouse);
+
     // lock the pointer while playing (aim uses Settings sensitivity); free it for menus
     if (this.state === 'playing') {
-      if (!Input.locked && (Input.mouse.leftPressed || Input.mouse.rightPressed)) Input.lockPointer();
+      if (!Input.freeMouse && !Input.locked && (Input.mouse.leftPressed || Input.mouse.rightPressed)) Input.lockPointer();
     } else Input.unlockPointer();
 
     if (this.mp) {
@@ -403,7 +439,8 @@ const App = {
 
     if (this.game) {
       this.game.render(this.ctx);
-      if (this.state === 'playing') HUD.drawCrosshair(this.ctx, Input.mouse.x, Input.mouse.y);
+      if (this.mp) this.drawNetStatus(this.ctx);
+      if (this.state === 'playing' && !Input.freeMouse) HUD.drawCrosshair(this.ctx, Input.mouse.x, Input.mouse.y);
     } else {
       this.renderMenuBackground(dt);
     }
@@ -412,6 +449,30 @@ const App = {
 
     Input.endFrame();
     requestAnimationFrame((t) => this.loop(t));
+  },
+
+  /**
+   * Multiplayer trouble, spelled out so it's clear what's wrong: an out-of-sync
+   * notice (a game problem: the simulations drifted apart) in red, and
+   * connection warnings (a network problem: messages arriving late) in yellow.
+   */
+  drawNetStatus(ctx) {
+    const s = this.mp;
+    const lines = [];
+    if (s.desync) {
+      lines.push({ text: s.isHost ? `OUT OF SYNC WITH ${s.desync.who.toUpperCase()}` : 'YOUR GAME IS OUT OF SYNC WITH THE HOST', color: '#ff6a6a', size: 8 });
+      lines.push({ text: 'The games drifted apart - a game problem, not your connection.', color: '#f4ead7', size: 6 });
+      lines.push({ text: s.isHost ? 'Fix: Esc > Return to Lobby to resync everyone.' : 'Fix: ask the host to return to the lobby to resync.', color: '#ffe680', size: 6 });
+    }
+    for (const w of s.netWarnings()) lines.push({ text: w, color: '#ffd34a', size: 7 });
+    if (!lines.length) return;
+    const y0 = 96;
+    const h = lines.length * 13 + 8;
+    ctx.fillStyle = 'rgba(14, 8, 22, 0.82)';
+    ctx.fillRect(CONFIG.screen.width / 2 - 250, y0 - 10, 500, h);
+    ctx.strokeStyle = s.desync ? '#ff6a6a' : '#ffd34a';
+    ctx.strokeRect(CONFIG.screen.width / 2 - 250 + 0.5, y0 - 9.5, 499, h - 1);
+    lines.forEach((l, i) => HUD.text(ctx, l.text, CONFIG.screen.width / 2, y0 + i * 13, { size: l.size, align: 'center', color: l.color }));
   },
 
   /** Slow pan across the dungeon behind the menus. */

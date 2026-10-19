@@ -90,6 +90,17 @@ function buildIconSprites() {
         for (let i = 0; i < 3; i++) p.rect(5 + i * 8, 2 + (i % 2) * 3, 1, 4, G[3]);
         blade(p, 14, 2, 14, 26, { w: 3, grip: 5, guard: 6, ramp: ['', '', '', G[2], '', G[3]], guardCol: S[4] });
       }),
+      // shield bash: the barrier lunging forward into an impact
+      bash: icon((p) => {
+        for (const y of [8, 14, 20]) p.rect(1, y, 6, 1, '#c9d3dd');
+        p.poly([[7, 7], [15, 4], [19, 7], [19, 20], [15, 24], [7, 20]], '#2a5ad0');
+        p.poly([[9, 9], [15, 6], [17, 9], [17, 19], [15, 22], [9, 19]], '#4a8aff');
+        p.line(13, 6, 13, 22, '#9ad0ff', 1);
+        p.rect(10, 9, 2, 3, '#e6f6ff');
+        // impact star
+        p.poly([[23, 8], [24, 12], [27, 13], [24, 15], [23, 19], [22, 15], [19, 14], [22, 12]], G[3]);
+        p.px(23, 13, '#ffffff');
+      }),
     },
     ranger: {
       primary: icon((p) => arrow(p, 4, 24, 21, 7)),

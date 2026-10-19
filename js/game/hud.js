@@ -140,21 +140,102 @@ const HUD = {
 
     // abilities
     const slots = [
-      ['LMB', p.icons.primary, 'primary'],
-      ['RMB', p.icons.secondary, 'secondary'],
-      [Settings.label('e'), p.icons.e, 'e'],
-      [Settings.label('f'), p.icons.f, 'f'],
-      [Settings.label('dodge'), 'DODGE', 'dodge'],
+      { key: 'LMB', name: p.icons.primary, slot: 'primary' },
+      { key: 'RMB', name: p.icons.secondary, slot: 'secondary' },
+      { key: Settings.label('e'), name: p.icons.e, slot: 'e' },
+      { key: Settings.label('f'), name: p.icons.f, slot: 'f' },
+      { key: Settings.label('dodge'), name: 'DODGE', slot: 'dodge' },
     ];
+    // class extras (the knight's shield bash) go right after the slot they belong to
+    for (const extra of p.extraSlots) slots.splice(slots.findIndex((s) => s.slot === extra.after) + 1, 0, extra);
+    // abilities sit bottom-right, ending with the ultimate in the corner
     const icons = Sprites.icons[p.classId];
-    slots.forEach(([key, name, slot], i) => {
-      const icon = slot === 'dodge' ? Sprites.icons.dodge : icons[slot];
-      this.abilitySlot(ctx, 14 + i * 70, 474, key, name, p.cooldowns[slot], p.maxCooldowns[slot], icon, p.slotCharges?.[slot]);
+    const x0 = 960 - 14 - 70 - 6 - slots.length * 70;
+    slots.forEach((s, i) => {
+      const icon = s.icon || (s.slot === 'dodge' ? Sprites.icons.dodge : icons[s.slot]);
+      const cd = s.cd ?? p.cooldowns[s.slot];
+      const max = s.max ?? p.maxCooldowns[s.slot];
+      this.abilitySlot(ctx, x0 + i * 70, 474, s.key, s.name, cd, max, icon, s.slot ? p.slotCharges?.[s.slot] : null, s.armed, s.slot || s.name);
     });
-    this.ultSlot(ctx, 14 + slots.length * 70 + 6, 474, p);
-    // potion sits on its own in the bottom-right corner
-    this.abilitySlot(ctx, 960 - 14 - 62, 474, Settings.label('potion'), `POTION +${CONFIG.player.potion.heal}`,
-      p.potionCooldown, CONFIG.player.potion.cooldown, Sprites.icons.potion);
+    this.ultSlot(ctx, 960 - 14 - 70, 474, p);
+    this.drawInventory(ctx, p, 14, 474);
+  },
+
+  /**
+   * Bottom-left: the free health potion (H, on a cooldown), then the 5-slot
+   * bag of bought potions, each with the key that drinks it and how many.
+   */
+  drawInventory(ctx, p, x, y) {
+    const s = 40;
+    const gap = 4;
+    const sy = y + 10;
+    // the free potion
+    {
+      const sx = x;
+      const cd = p.potionCooldown;
+      const max = CONFIG.player.potion.cooldown;
+      const icon = Sprites.icons.potion;
+      this.text(ctx, 'FREE', sx + 2, y - 9, { size: 5, color: '#7a6a8a' });
+      this.panel(ctx, sx, sy, s, s);
+      ctx.drawImage(icon, sx + s / 2 - icon.width / 2, sy + s / 2 - icon.height / 2 + 1);
+      this.text(ctx, Settings.label('potion'), sx + 3, sy + 3, { size: 6, color: cd > 0 ? '#7a6a8a' : '#f2a541' });
+      this.text(ctx, `+${CONFIG.player.potion.heal}`, sx + s - 3, sy + s - 9, { size: 5, align: 'right', color: '#ff8a8a' });
+      if (cd > 0) {
+        const r = clamp(cd / max, 0, 1);
+        ctx.fillStyle = 'rgba(10, 6, 18, 0.65)';
+        ctx.fillRect(sx, sy + s * (1 - r), s, s * r);
+        this.text(ctx, `${Math.ceil(cd)}`, sx + s / 2, sy + s / 2 - 4, { size: 8, align: 'center', color: '#ffffff' });
+      }
+      this.readyFlash(ctx, 'potion', cd, sx, sy, s, s);
+    }
+    // the bag
+    const bx = x + s + gap + 8;
+    this.text(ctx, 'BAG', bx + 2, y - 9, { size: 5, color: '#7a6a8a' });
+    p.inventory.forEach((slot, i) => {
+      const sx = bx + i * (s + gap);
+      this.panel(ctx, sx, sy, s, s);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.fillRect(sx + 3, sy + 3, s - 6, s - 6);
+      const key = Settings.label(`item${i + 1}`);
+      if (!slot) {
+        this.text(ctx, key, sx + 3, sy + 3, { size: 5, color: '#4a3d5e' });
+        return;
+      }
+      const icon = Sprites.potions[slot.id];
+      ctx.drawImage(icon, sx + s / 2 - icon.width / 2, sy + s / 2 - icon.height / 2 + 2);
+      this.text(ctx, key, sx + 3, sy + 3, { size: 6, color: '#f2a541' });
+      if (slot.count > 1) this.text(ctx, `x${slot.count}`, sx + s - 3, sy + s - 9, { size: 6, align: 'right', color: '#ffffff' });
+    });
+  },
+
+  /**
+   * When an ability comes off cooldown its slot flashes: a white burst, a gold
+   * ring growing out of the slot and "READY!" popping up. Only for cooldowns of
+   * a second or more, so rapid attacks don't flicker. Visual only.
+   */
+  readyFlash(ctx, id, cd, x, y, w, h) {
+    this.slotState = this.slotState || {};
+    const st = this.slotState[id] || (this.slotState[id] = { peak: 0, flash: -1e9 });
+    const now = performance.now();
+    if (cd > 0) st.peak = Math.max(st.peak, cd);
+    else if (st.peak > 0) {
+      if (st.peak >= 1) st.flash = now;
+      st.peak = 0;
+    }
+    const t = (now - st.flash) / 700;
+    if (t >= 1) return;
+    ctx.save();
+    ctx.fillStyle = `rgba(255, 255, 230, ${0.75 * (1 - t) * (1 - t)})`;
+    ctx.fillRect(x, y, w, h);
+    const g = Math.round(t * 10);
+    ctx.strokeStyle = `rgba(255, 220, 90, ${1 - t})`;
+    ctx.lineWidth = 3 - t * 2;
+    ctx.strokeRect(x - g + 0.5, y - g + 0.5, w + g * 2 - 1, h + g * 2 - 1);
+    ctx.restore();
+    if (t < 0.85) {
+      const pop = t < 0.15 ? 1.4 - t * 2.6 : 1;
+      this.text(ctx, 'READY!', x + w / 2, y - 10 - t * 6, { size: Math.round(7 * pop), align: 'center', color: '#ffe680' });
+    }
   },
 
   /**
@@ -220,6 +301,28 @@ const HUD = {
       ctx.fillRect(cx + 21, y + 13, Math.round((w - 24) * clamp(t / b.duration, 0, 1)), 3);
       cx += w + 6;
     }
+    // potion effects: a small bottle, the effect's name and time left, wrapping onto a second row
+    let row = 0;
+    for (const [family, b] of Object.entries(p.brews)) {
+      const w = 92;
+      if (cx + w > x + 300) { cx = x; row++; }
+      const by = y + row * 24;
+      const color = POTION_COLORS[family][1];
+      const blink = b.t < 2 && Math.floor(b.t * 6) % 2;
+      this.panel(ctx, cx, by, w, 20);
+      ctx.globalAlpha = blink ? 0.5 : 1;
+      const icon = Object.values(POTIONS).find((pot) => pot.family === family);
+      ctx.drawImage(Sprites.potions[icon.id], cx - 3, by - 4, 24, 24);
+      const label = family === 'regen' && b.v > 1 ? `REGEN x${b.v}` : BREW_LABELS[family];
+      this.text(ctx, label, cx + 21, by + 3, { size: 5, color });
+      this.text(ctx, `${Math.ceil(b.t)}s`, cx + w - 3, by + 3, { size: 6, align: 'right' });
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#1a1a30';
+      ctx.fillRect(cx + 21, by + 13, w - 24, 3);
+      ctx.fillStyle = color;
+      ctx.fillRect(cx + 21, by + 13, Math.round((w - 24) * clamp(b.t / (b.max || b.t), 0, 1)), 3);
+      cx += w + 6;
+    }
   },
 
   /** Short list of active buffs/debuffs. */
@@ -229,7 +332,7 @@ const HUD = {
     if (p.poisonTime > 0) s.push('POISONED');
     if (p.stunTime > 0) s.push('STUNNED');
     if (p.chillTime > 0) s.push('CHILLED');
-    if (p.barrier && p.barrier.raised) s.push(`SHIELD ${Math.ceil(p.barrier.hp)}`, p.bashCooldown > 0 ? `BASH ${p.bashCooldown.toFixed(1)}` : 'LMB: BASH');
+    if (p.barrier && p.barrier.raised) s.push(`SHIELD ${Math.ceil(p.barrier.hp)}`);
     if (p.aegis) s.push(`AEGIS ${Math.ceil(p.aegis.hp)}`);
     if (p.bomb) s.push(`CHARGE ${Math.floor(p.bombPower * 100)}% (LMB)`);
     if (p.parryTime > 0) s.push('PARRY');
@@ -245,11 +348,19 @@ const HUD = {
   },
 
   /** charges (optional): { count, max, refill 0-1 } for abilities with stored uses. */
-  abilitySlot(ctx, x, y, key, name, cd, max, icon, charges = null) {
+  /** armed: the ability can be used right now (e.g. bash while the shield is up) - the slot glows. */
+  abilitySlot(ctx, x, y, key, name, cd, max, icon, charges = null, armed = false, id = null) {
     const w = 62;
     const h = 50;
     this.panel(ctx, x, y, w, h);
     const ready = cd <= 0;
+    if (armed && ready) {
+      ctx.fillStyle = `rgba(255, 210, 90, ${0.14 + Math.sin(performance.now() / 110) * 0.08})`;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = '#ffd34a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    }
     this.text(ctx, key, x + 4, y + 4, { size: key.length > 3 ? 5 : 6, color: ready ? '#f2a541' : '#7a6a8a' });
     if (icon) ctx.drawImage(icon, x + w / 2 - icon.width / 2, y + 8);
     this.text(ctx, name, x + w / 2, y + 39, { size: 5, align: 'center', color: ready ? '#f4ead7' : '#7a6a8a' });
@@ -272,6 +383,7 @@ const HUD = {
         ctx.fillRect(x + 6, y + 34, Math.round((w - 12) * clamp(charges.refill, 0, 1)), 2);
       }
     }
+    if (id) this.readyFlash(ctx, id, cd, x, y, w, h);
   },
 
   /** Q slot: fills up as the hero deals damage. */
@@ -289,6 +401,8 @@ const HUD = {
     ctx.drawImage(icon, x + w / 2 - icon.width / 2, y + 8);
     ctx.globalAlpha = 1;
     this.text(ctx, ready ? 'READY' : `${Math.floor(r * 100)}%`, x + w / 2, y + 39, { size: 6, align: 'center', color: ready ? '#ffe680' : '#f4ead7' });
+    // flash the moment it fills (treated as a cooldown of "how much is left to charge")
+    this.readyFlash(ctx, 'ult', ready ? 0 : Math.max(1, (1 - r) * 10), x, y, w, h);
   },
 
   drawWave(ctx, game) {

@@ -99,9 +99,12 @@ networks block peer-to-peer connections.
 
 **Settings** (main menu or pause menu) has mouse sensitivity, music on/off,
 music and sound effect volume, and key bindings for movement, E, F, Q, dodge,
-potion, interact and the music toggle (LMB / RMB stay on the mouse). Settings
-are saved in the browser. While playing, the game locks the mouse pointer so
-sensitivity can apply; press Esc to get the cursor back (this pauses).
+potion, interact, the music toggle and the mouse / crosshair toggle (LMB / RMB
+stay on the mouse). Settings are saved in the browser. While playing, the game
+locks the mouse pointer so sensitivity can apply; press Esc to get the cursor
+back (this pauses), or press C to switch to the normal mouse pointer without
+pausing (C again brings the crosshair back; sensitivity only applies to the
+crosshair).
 
 Music: the main menu, lobby (a slower lo-fi loop), battle and boss each have
 their own track.

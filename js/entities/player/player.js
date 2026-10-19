@@ -51,9 +51,18 @@ class Player extends Entity {
     this.coins = 0;
     this.coinFlash = 0;
     this.upgradeLevels = {};
+    // potions: 5 inventory slots ({ id, count } or null) and the effects running (family -> { t, v })
+    this.inventory = [null, null, null, null, null];
+    this.brews = {};
     const r = this.cfg.resource;
     this.resource = r ? { ...r, value: r.max } : null;
   }
+
+  /**
+   * Extra HUD ability slots: [{ after, key, name, cd, max, icon, armed }], each
+   * placed after the slot named `after`. Classes override (the knight's bash).
+   */
+  get extraSlots() { return []; }
 
   /** Point the weapon rotates around (roughly the hands). */
   get pivotX() { return this.x; }
@@ -63,8 +72,17 @@ class Player extends Entity {
   get moveMultiplier() { return 1; }
   get speedMultiplier() {
     return (this.slowTime > 0 ? CONFIG.golem.slowAmount : 1) * (this.chillTime > 0 ? this.chillAmount : 1)
-      * (this.buffs.speed > 0 ? CONFIG.buffs.speed.multiplier : 1) * this.moveMultiplier;
+      * (this.buffs.speed > 0 ? CONFIG.buffs.speed.multiplier : 1) * this.moveMultiplier * (1 + this.brew('speed'));
   }
+
+  /** The value of a running potion effect (0 when none). */
+  brew(family) { return this.brews[family] ? this.brews[family].v : 0; }
+
+  /** Crit chance: the base rate plus Focus potions. */
+  get critChance() { return CONFIG.player.critChance + this.brew('focus'); }
+
+  /** How much further this hero's hits knock enemies back (Bulldose potions). */
+  get knockbackMultiplier() { return 1 + this.brew('bulldose'); }
 
   /** Ghost auras: slowed to `amount` speed while inside one (refreshed every frame). */
   chill(amount, time = 0.2) {
@@ -98,6 +116,7 @@ class Player extends Entity {
     this.slowTime -= dt;
     this.chillTime = (this.chillTime || 0) - dt;
     this.updateBuffs(dt, world);
+    this.updateBrews(dt, world);
     this.potionCooldown -= dt;
     this.updatePoison(dt, world);
     this.stunTime -= dt;
@@ -107,13 +126,17 @@ class Player extends Entity {
       if (this.aegis.t <= 0) this.aegis = null;
     }
     if (Input.pressed('potion')) this.drinkPotion(world);
+    for (let i = 0; i < this.inventory.length; i++) if (Input.pressed(`item${i + 1}`)) this.useItem(i, world);
     this.busy -= dt;
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
     for (const k of Object.keys(this.cooldowns)) {
-      const rate = k === 'primary' ? this.attackSpeed : k === 'dodge' ? 1 : this.abilityHaste;
+      const rate = k === 'primary' ? this.attackSpeed * (1 + this.brew('rage')) : k === 'dodge' ? 1 : this.abilityHaste;
       this.cooldowns[k] -= dt * rate;
     }
-    if (this.resource) this.resource.value = Math.min(this.resource.max, this.resource.value + this.resource.regen * dt);
+    if (this.resource) {
+      const regen = this.resource.regen * (1 + this.brew('manaRegen'));
+      this.resource.value = Math.min(this.resource.max, this.resource.value + regen * dt);
+    }
     this.updateRegen(dt, world);
     this.updateHealPopup(dt, world);
 
@@ -271,7 +294,7 @@ class Player extends Entity {
 
   /** Poisons for `duration`s (a new dose refreshes it; the stronger dps wins). Blocked hits don't poison. */
   poison(dps, duration, world) {
-    if (this.dead || this.guard > 0 || this.iframes > 0) return;
+    if (this.dead || this.guard > 0 || this.iframes > 0 || this.brews.purity) return;
     if (!(this.poisonTime > 0)) world?.effects.text(this.hx, this.hy - 36, 'POISONED', { color: '#9cf06a', size: 7 });
     this.poisonDps = this.poisonTime > 0 ? Math.max(this.poisonDps, dps) : dps;
     this.poisonTime = Math.max(this.poisonTime, duration);
@@ -300,7 +323,7 @@ class Player extends Entity {
 
   /** Can't move or act for `duration`s. Blocked hits don't stun. */
   stun(duration, world) {
-    if (this.dead || this.guard > 0 || this.iframes > 0) return;
+    if (this.dead || this.guard > 0 || this.iframes > 0 || this.brews.purity) return;
     if (!(this.stunTime > 0)) world?.effects.text(this.hx, this.hy - 36, 'STUNNED', { color: '#ffe680', size: 7 });
     this.stunTime = Math.max(this.stunTime, duration);
     this.busy = Math.max(this.busy, duration);
@@ -390,6 +413,10 @@ class Player extends Entity {
       return true;
     }
     if (this.passiveBlock(world, fromX, fromY)) return true;
+    // Ironskin: flat defence off every hit (always at least 1 gets through)
+    if (this.brews.ironskin) amount = Math.max(1, amount - this.brew('ironskin'));
+    // Thorns: part of the hit goes back at whoever dealt it
+    if (this.brews.thorns) this.reflectDamage(amount * this.brew('thorns'), world, fromX, fromY, opts.projectile);
     this.onHitTaken(world);
     // practice god mode (after absorb, so parries and blocks can still be practised)
     if (world.practice && world.practice.options.god) {
@@ -506,8 +533,179 @@ class Player extends Entity {
     }
   }
 
-  /** Damage multiplier from the POWER buff (applied on top of damageMultiplier). */
-  get buffDamage() { return this.buffs.damage > 0 ? CONFIG.buffs.damage.multiplier : 1; }
+  /** Damage multiplier from the POWER buff and Strength potions (applied on top of damageMultiplier). */
+  get buffDamage() { return (this.buffs.damage > 0 ? CONFIG.buffs.damage.multiplier : 1) * (1 + this.brew('strength')); }
+
+  // ---------- potions (inventory slots 1-5) ----------
+
+  /** Drinks the potion in inventory slot i (keys 1-5). Nothing happens if it can't help right now. */
+  useItem(i, world) {
+    const slot = this.inventory[i];
+    if (!slot || this.dead) return;
+    const pot = POTIONS[slot.id];
+    if (!pot || !this.drink(pot, world)) return Sound.play('denied');
+    slot.count--;
+    if (slot.count <= 0) this.inventory[i] = null;
+  }
+
+  /** Puts a potion in the bag: stacks with the same potion (up to 5), else the first free slot. */
+  addItem(id) {
+    const stack = this.inventory.find((s) => s && s.id === id && s.count < 5);
+    if (stack) { stack.count++; return true; }
+    const i = this.inventory.indexOf(null);
+    if (i < 0) return false;
+    this.inventory[i] = { id, count: 1 };
+    return true;
+  }
+
+  /** Room in the bag for one more of this potion? */
+  canCarry(id) { return this.inventory.some((s) => s === null || (s.id === id && s.count < 5)); }
+
+  /** Applies a potion. Returns false (and keeps it) if it would be wasted. */
+  drink(pot, world) {
+    const say = (text, color) => world.effects.text(this.hx, this.hy - 34, text, { color, size: 7 });
+    const [liquid, light] = POTION_COLORS[pot.family];
+    switch (pot.family) {
+      case 'heal':
+        if (this.hp >= this.maxHp) { say('FULL HP', '#d8c8a0'); return false; }
+        this.heal(pot.value, world);
+        break;
+      case 'mana': {
+        const r = this.resource;
+        if (!r) { say('NO MANA TO RESTORE', '#d8c8a0'); return false; }
+        if (r.value >= r.max) { say(`FULL ${r.name}`, '#d8c8a0'); return false; }
+        // light orbs come in ones: 20 -> 1, 50 -> 2, 100 -> 4
+        const amount = r.name === 'LIGHT' ? Math.max(1, Math.round(pot.value / 25)) : pot.value;
+        r.value = Math.min(r.max, r.value + amount);
+        say(`+${amount} ${r.name}`, r.color);
+        break;
+      }
+      case 'manaRegen':
+        if (!this.resource) { say('NO MANA TO REGENERATE', '#d8c8a0'); return false; }
+        this.addBrew(pot);
+        break;
+      case 'teleport': this.teleportPotion(pot, world); break;
+      case 'purity':
+        this.cleanse();
+        this.addBrew(pot);
+        say('PURIFIED', '#ffffff');
+        break;
+      case 'regen':
+        // stacks add up (max 4), and the longer timer wins
+        this.brews.regen = { t: Math.max(this.brews.regen?.t || 0, pot.duration), v: Math.min(4, (this.brews.regen?.v || 0) + pot.value), max: pot.duration };
+        break;
+      default:
+        this.addBrew(pot);
+    }
+    if (pot.duration && pot.family !== 'purity') say(BREW_LABELS[pot.family] || pot.name.toUpperCase(), light);
+    world.effects.burst(this.hx, this.hy - 10, { count: 14, colors: [liquid, light, '#ffffff'], speed: [20, 80], life: [0.3, 0.6], up: 40 });
+    Sound.play('pickup');
+    return true;
+  }
+
+  /** Starts a timed potion effect, keeping the stronger value and the longer time if one is running. */
+  addBrew(pot) {
+    const cur = this.brews[pot.family];
+    this.brews[pot.family] = {
+      v: Math.max(cur ? cur.v : 0, pot.value),
+      t: Math.max(cur ? cur.t : 0, pot.duration),
+      max: Math.max(cur ? cur.max : 0, pot.duration),
+      tick: 0,
+    };
+  }
+
+  /** Clears poison, slows, chills and stuns. */
+  cleanse() {
+    this.poisonTime = 0;
+    this.slowTime = 0;
+    this.chillTime = 0;
+    if (this.stunTime > 0) { this.busy = Math.min(this.busy, 0); this.stunTime = 0; }
+  }
+
+  /** Teleportation potion: a random clear spot in the current room, then a moment of invulnerability. */
+  teleportPotion(pot, world) {
+    world.effects.burst(this.hx, this.hy, { count: 24, colors: ['#9a4ae0', '#e0b8ff', '#ffffff'], speed: [40, 160], life: [0.3, 0.6], up: 30 });
+    const run = world.run;
+    const room = run && run.floor.roomAt(this.x, this.y);
+    let pt = null;
+    for (let i = 0; i < 20 && !pt; i++) {
+      const c = room ? run.floor.randomPointIn(room, 1) : { x: this.x + rand(-200, 200), y: this.y + rand(-140, 140) };
+      if (!world.dungeon.isSolidAt || !world.dungeon.isSolidAt(c.x, c.y)) pt = c;
+    }
+    if (pt) { this.x = pt.x; this.y = pt.y; }
+    this.iframes = Math.max(this.iframes, pot.value);
+    world.clones = world.clones.filter((c) => c.owner !== this);
+    world.effects.burst(this.hx, this.hy, { count: 24, colors: ['#9a4ae0', '#e0b8ff', '#ffffff'], speed: [40, 160], life: [0.3, 0.6], up: 30 });
+    if (this === world.localPlayer) world.camera.follow(this.x, this.y - 16, 0, world.dungeon.width, world.dungeon.height, true);
+    Sound.play('phantomAppear');
+  }
+
+  /** Thorns: send damage back at the attacker (the nearest enemy to where the hit came from). */
+  reflectDamage(amount, world, fromX, fromY, projectile) {
+    if (amount < 1) return;
+    const ox = projectile || fromX === undefined ? this.x : fromX;
+    const oy = projectile || fromY === undefined ? this.y : fromY;
+    const reach = projectile ? 420 : 70;
+    let best = null;
+    let bestD = reach;
+    for (const t of world.getTargets()) {
+      const d = dist(ox, oy, t.x, t.y);
+      if (d < bestD) { bestD = d; best = t; }
+    }
+    if (!best) return;
+    world.damageTarget(best, amount, { source: this, noCrit: true, sound: null, color: '#b8e07a', fromUlt: true });
+    world.effects.burst(best.hx, best.hy, { count: 6, colors: ['#4a8a2a', '#b8e07a'], speed: [40, 120], life: [0.2, 0.4] });
+  }
+
+  /** Ticks potion effects: regen heals, the inferno ring burns, purity keeps cleansing. */
+  updateBrews(dt, world) {
+    for (const k of Object.keys(this.brews)) {
+      const b = this.brews[k];
+      b.t -= dt;
+      if (b.t <= 0) delete this.brews[k];
+    }
+    const regen = this.brews.regen;
+    if (regen) this.heal(this.maxHp * 0.02 * regen.v * dt, world, true);
+    if (this.brews.purity) this.cleanse();
+    const fire = this.brews.inferno;
+    if (fire) {
+      fire.tick -= dt;
+      if (fire.tick <= 0) {
+        fire.tick = 0.5;
+        for (const t of world.getTargets()) {
+          if (dist(this.x, this.y - 10, t.hx, t.hy) > 90 + t.radius) continue;
+          world.damageTarget(t, fire.v * 0.5, { source: this, sound: null, color: '#ff8a2a', fromUlt: true, noCrit: true });
+          if (!t.dead) world.addDot(t, 8, 3, '#ff8a2a');
+        }
+      }
+    }
+  }
+
+  /** Inferno potion: flames circling the hero. */
+  drawBrews(ctx) {
+    const fire = this.brews.inferno;
+    if (!fire) return;
+    const fade = Math.min(1, fire.t * 2);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = fade;
+    ctx.strokeStyle = 'rgba(255, 120, 40, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y - 4, 90, 50, 0, 0, TAU);
+    ctx.stroke();
+    for (let i = 0; i < 10; i++) {
+      const a = this.animTime * 2.5 + (i / 10) * TAU;
+      const fx = Math.round(this.x + Math.cos(a) * 90);
+      const fy = Math.round(this.y - 4 + Math.sin(a) * 50);
+      const h = 7 + Math.round(Math.sin(this.animTime * 14 + i) * 2);
+      ctx.fillStyle = '#ff6a1e';
+      ctx.fillRect(fx - 3, fy - h, 6, h);
+      ctx.fillStyle = '#ffd34a';
+      ctx.fillRect(fx - 1, fy - h + 2, 3, h - 3);
+    }
+    ctx.restore();
+  }
 
   updateHealPopup(dt, world) {
     this.healPopupTimer -= dt;
@@ -585,6 +783,7 @@ class Player extends Entity {
     if (!weaponBehind) this.drawWeapon(ctx);
     ctx.globalAlpha = 1;
     this.drawExtras(ctx);
+    this.drawBrews(ctx);
     this.drawPassive(ctx);
     this.drawAegis(ctx);
     this.drawStatus(ctx);

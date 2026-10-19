@@ -3,7 +3,7 @@
 //
 //  A single floating target that drifts over walls and pillars.
 //  Phase 1: orbits the player and fires slow eye lasers. Takes turns
-//    between dash chains (1, then 2, then 3 dashes, each slower than
+//    between dash chains (1, then 2, then 3 dashes, each faster than
 //    the last) and laser barrages (fans of lasers aimed at the player).
 //  Phase 2 (50% hp): takes turns between barrages and vanishing:
 //    it reappears near the player and pulses shockwaves that pull
@@ -43,7 +43,7 @@ class PhantomKing {
 
     this.dash = null;
     this.dashesLeft = 0;
-    this.dashIndex = 0;      // which dash of the current chain (0 = first, fastest)
+    this.dashIndex = 0;      // which dash of the current chain (0 = first, slowest)
     this.dashCycleStep = 0;  // dash chains go 1, 2, 3, 1...
     this.attackStep = 0;
     this.dest = null;        // reappear point
@@ -177,7 +177,7 @@ class PhantomKing {
     const c = this.cfg;
     const p = world.player;
     this.alpha = Math.min(1, this.alpha + dt * 4);
-    this.orbit += dt * 0.5 * this.orbitDir;
+    this.orbit += dt * 0.85 * this.orbitDir;
     const t = this.clampToFloor(world, p.x + Math.cos(this.orbit) * c.orbitRadius, p.y + Math.sin(this.orbit) * c.orbitRadius * 0.7);
     this.driftToward(t.x, t.y, c.floatSpeed, dt);
 
@@ -348,7 +348,7 @@ class PhantomKing {
     const c = this.cfg;
     const D = this.dash;
     const p = world.player;
-    // later dashes in a chain are slower, giving time to react
+    // later dashes in a chain are faster, so a long chain gets more and more dangerous
     const speed = c.dashSpeeds[Math.min(this.dashIndex, c.dashSpeeds.length - 1)];
     const step = Math.min(speed * dt, D.len - D.traveled);
     const px = this.x;

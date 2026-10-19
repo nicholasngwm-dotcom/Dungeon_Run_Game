@@ -117,7 +117,13 @@ class PixelArt {
         let cr = r;
         let cg = g;
         let cb = b;
-        if (tint > 0) {
+        if (tint === 'soft') {
+          // set dressing: a deep, slightly warm shade of the colour it borders
+          const avg = [0, 1, 2].map((c) => n.reduce((s, [nx, ny]) => s + d[(ny * w + nx) * 4 + c], 0) / n.length);
+          cr = avg[0] * 0.4 + 14;
+          cg = avg[1] * 0.34 + 4;
+          cb = avg[2] * 0.36 + 10;
+        } else if (tint > 0) {
           const avg = [0, 1, 2].map((c) => n.reduce((s, [nx, ny]) => s + d[(ny * w + nx) * 4 + c], 0) / n.length);
           cr = r + (avg[0] * 0.3 - r) * tint;
           cg = g + (avg[1] * 0.3 - g) * tint;
@@ -133,7 +139,11 @@ class PixelArt {
     return this;
   }
 
-  /** Builds a canvas with a fresh PixelArt, runs draw(p), outlines it. */
+  /**
+   * Builds a canvas with a fresh PixelArt, runs draw(p), outlines it.
+   * tint: 0-1 = how much the outline picks up the colour it borders,
+   * 'soft' = a warm dark shade of that colour (used for set-dressing props).
+   */
   static make(width, height, draw, outlineColor = OUTLINE, tint = 0) {
     const p = new PixelArt(width, height);
     draw(p);

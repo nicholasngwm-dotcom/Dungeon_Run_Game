@@ -54,6 +54,30 @@ class FloorDecor {
         for (const dx of [-6, 6]) this.add('shelf', { x: r.cx + dx * T, y: (r.y0 + 0.7) * T });
         for (let i = 0; i < 3; i++) this.add(choose(['barrel', 'barrel', 'crate']), this.spot(r, { clearMiddle: false, minGap: 34 }));
         for (const dx of [-7, 7]) this.add('lampPost', { x: r.cx + dx * T, y: r.cy + 3 * T }, { warm: true });
+        // Mira's side: a bubbling cauldron; Bram's side: a banner and candles
+        this.add('prop', { x: r.cx - 6.4 * T, y: r.cy - 0.2 * T }, { name: 'cauldron' });
+        this.add('prop', { x: r.cx + 6.4 * T, y: r.cy - 0.6 * T }, { name: 'bannerBlue' });
+        this.add('prop', { x: r.cx + 5.4 * T, y: r.cy + 0.6 * T }, { name: 'candelabra' });
+        return;
+      }
+      case 'special': {
+        // the keeper's scene sits in the middle (run.js); fill the room around it
+        const place = (name, n, opts = {}) => {
+          for (let i = 0; i < n; i++) this.add('prop', this.spot(r, { clearMiddle: true, minGap: 40, ...opts }), { name });
+        };
+        const sets = {
+          blacksmith: [['crate', 2], ['barrel', 2], ['bannerRed', 1], ['sacks', 1]],
+          wishingWell: [['flowers', 4], ['plant', 2], ['bench', 1]],
+          heroStatue: [['bannerBlue', 2], ['plant', 2], ['flowers', 2]],
+          restaurant5: [['plant', 2], ['barrel', 2], ['bannerGreen', 1], ['sacks', 1]],
+          mountTrader: [['hayBale', 3], ['sacks', 1], ['fence', 1]],
+          darkTrader: [['skullPile', 2], ['candelabra', 2]],
+          friendlyTrader: [['crate', 2], ['sacks', 2], ['barrel', 1], ['plant', 1]],
+          treasure: [['goldPile', 5], ['candelabra', 2], ['chest', 1]],
+          helper: [['crate', 1], ['sacks', 1], ['bench', 1], ['flowers', 2]],
+        };
+        for (const [name, n] of sets[r.special] || []) place(name, n);
+        for (let i = 0; i < 2; i++) this.add('candles', this.spot(r));
         return;
       }
       case 'boss':
@@ -160,6 +184,22 @@ class FloorDecor {
     const R = (rx, ry, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x + rx, y + ry, w, h); };
     const t = this.time;
     switch (d.kind) {
+      case 'prop': {
+        const pr = Sprites.props[d.name];
+        drawShadow(ctx, x, y, Math.max(6, pr.img.width * 0.4), 4, 0.3);
+        drawProp(ctx, d.name, x, y, d.seed > 5);
+        if (d.name === 'candelabra') for (const cx of [-7, -1, 5]) drawFlame(ctx, x + cx + 1, y - 27, t, cx + d.seed);
+        if (d.name === 'goldPile' || d.name === 'chest') drawGlints(ctx, [[x - 6, y - 10], [x + 7, y - 6], [x, y - 14]], t + d.seed);
+        if (d.name === 'cauldron') {
+          drawGlow(ctx, x, y - 22, 26, '170, 90, 255', 0.22 + Math.sin(t * 4) * 0.06);
+          for (let i = 0; i < 3; i++) {
+            const s = (t * 0.9 + i / 3) % 1;
+            ctx.fillStyle = `rgba(200, 140, 255, ${1 - s})`;
+            ctx.fillRect(x - 6 + i * 5, Math.round(y - 24 - s * 14), 2, 2);
+          }
+        }
+        break;
+      }
       case 'deadTree':
         drawShadow(ctx, x, y + 2, 16, 5);
         R(-4, -40, 8, 42, OUTLINE); R(-3, -40, 6, 41, '#3b2416'); R(-3, -40, 2, 41, '#5b3922');
@@ -244,15 +284,9 @@ class FloorDecor {
         HUD.text(ctx, d.text, x, y - 35, { size: 6, align: 'center', color: '#f4ead7' });
         break;
       case 'barrel':
-        drawShadow(ctx, x, y + 2, 9, 3);
-        R(-9, -20, 18, 21, OUTLINE); R(-8, -19, 16, 19, '#7d532f'); R(-8, -19, 4, 19, '#9c6c3e');
-        R(-8, -15, 16, 2, '#383b48'); R(-8, -5, 16, 2, '#383b48');
-        break;
       case 'crate':
-        drawShadow(ctx, x, y + 2, 11, 3);
-        R(-11, -20, 22, 21, OUTLINE); R(-10, -19, 20, 19, '#9c6c3e'); R(-10, -19, 20, 2, '#c89a5a');
-        ctx.strokeStyle = '#5b3922'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(x - 9, y - 17); ctx.lineTo(x + 9, y - 1); ctx.stroke();
+        drawShadow(ctx, x, y + 2, 10, 3);
+        drawProp(ctx, d.kind, x, y + 2);
         break;
       case 'shelf':
         R(-40, -44, 80, 46, OUTLINE); R(-39, -43, 78, 44, '#5b3922');

@@ -154,17 +154,22 @@ class Game {
    */
   damageTarget(target, amount, { angle = 0, knockback = 0, sound = 'hit', noCrit = false, color = '#ffffff', fromUlt = false, source = null } = {}) {
     const src = source || this.actor || this.players[0];
-    const crit = !noCrit && Math.random() < CONFIG.player.critChance;
+    const crit = !noCrit && Math.random() < (src.critChance ?? CONFIG.player.critChance);
     const dmg = Math.max(1, Math.round(amount * (crit ? CONFIG.player.critMultiplier : 1) * src.damageMultiplier * src.buffDamage * src.upgradeDamage));
     if (!target.takeDamage(dmg, this)) return 0;
     target.lastHitBy = src;
-    if (knockback) target.knockback(angle, knockback);
-    this.effects.text(target.hx, target.hy - 22, crit ? `${dmg}!` : `${dmg}`, {
-      color: crit ? '#ffd34a' : color, size: crit ? 11 : 8,
-    });
-    if (sound !== null) {
-      this.effects.burst(target.hx, target.hy, { count: crit ? 8 : 4, colors: ['#ffffff', '#ffe0a0'], speed: [40, 120], life: [0.1, 0.25] });
-      Sound.play(crit ? 'crit' : (sound || 'hit'), 0.04);
+    if (knockback) target.knockback(angle, knockback * (src.knockbackMultiplier || 1));
+    if (crit) {
+      // visual only (effects and the camera use the unshared random), so safe in multiplayer
+      this.effects.crit(target.hx, target.hy, dmg, angle, dmg >= 120);
+      if (src === this.localPlayer) this.shake(dmg >= 120 ? 4 : 2.5, 0.12);
+      if (sound !== null) Sound.play('crit', 0.04);
+    } else {
+      this.effects.text(target.hx, target.hy - 22, `${dmg}`, { color, size: 8 });
+      if (sound !== null) {
+        this.effects.burst(target.hx, target.hy, { count: 4, colors: ['#ffffff', '#ffe0a0'], speed: [40, 120], life: [0.1, 0.25] });
+        Sound.play(sound || 'hit', 0.04);
+      }
     }
     if (!fromUlt && !src.dead) src.gainUlt(dmg);
     src.onDamageDealt(target, dmg, this);
@@ -434,6 +439,12 @@ class Game {
       }
       case 'buy':
         if (this.run && hero) this.run.buyUpgrade(hero, cmd.upgrade);
+        return;
+      case 'reroll':
+        if (this.run && hero) this.run.rerollUpgrades(hero);
+        return;
+      case 'buyPotion':
+        if (this.run && hero) this.run.buyPotion(hero, cmd.id);
         return;
       case 'readyCheck':
         if (this.lobby && fromId === this.roster[0].id && !this.readyCheck) {

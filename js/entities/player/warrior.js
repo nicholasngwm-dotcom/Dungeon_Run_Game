@@ -123,6 +123,14 @@ class Warrior extends Player {
     this.barrier.follow();
   }
 
+  /** The shield bash has its own HUD slot beside the shield; it glows while the shield is up (when LMB bashes). */
+  get extraSlots() {
+    return [{
+      after: 'secondary', key: 'RMB+LMB', name: 'BASH', cd: this.bashCooldown, max: this.cfg.bash.cooldown,
+      icon: Sprites.icons.warrior.bash, armed: this.barrier.raised,
+    }];
+  }
+
   // ---------- LMB while shielding: shield bash ----------
 
   shieldBash(world) {
@@ -167,9 +175,17 @@ class Warrior extends Player {
     Sound.play('thrustCharge');
   }
 
+  /** While spinning, E cancels the spin (in updateSpin) rather than being refused as on cooldown. */
+  tryAbility(slot, world, fn) {
+    if (slot === 'e' && this.spin) return;
+    super.tryAbility(slot, world, fn);
+  }
+
   updateSpin(dt, world) {
     const s = this.spin;
     const c = this.cfg.spin;
+    // the cooldown stays full while spinning, so it only starts once the spin ends or is cancelled
+    this.cooldowns.e = c.cooldown;
     // press E again to stop spinning (ignoring the frame it started)
     if (s.t > 0 && Input.pressed('e')) {
       this.spin = null;

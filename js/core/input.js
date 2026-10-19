@@ -4,7 +4,8 @@
 //
 // While playing, the game locks the pointer and moves its own crosshair by
 // the mouse's movement times Settings sensitivity; otherwise (menus) it
-// follows the real cursor.
+// follows the real cursor. The 'cursor' key switches play to free-mouse mode:
+// no lock, the normal pointer instead of the crosshair.
 
 const Input = {
   keys: new Set(),
@@ -16,6 +17,7 @@ const Input = {
 
   get mouse() { return this.override ? this.override.mouse : this._mouse; },
   canvas: null,
+  freeMouse: false,     // playing with the normal pointer instead of the locked crosshair
   onKeyCapture: null,   // settings screen waiting for a key to bind: fn(code)
 
   init(canvas) {
@@ -101,6 +103,14 @@ const Input = {
 
   unlockPointer() {
     if (this.locked) document.exitPointerLock();
+  },
+
+  /** Switches between the locked crosshair and the free mouse pointer. Returns true if now free. */
+  toggleFreeMouse() {
+    this.freeMouse = !this.freeMouse;   // set first: losing the lock below must not pause
+    if (this.freeMouse) this.unlockPointer();
+    else this.lockPointer();            // if the browser refuses, the next click locks
+    return this.freeMouse;
   },
 
   /** Call once at the end of every frame. */

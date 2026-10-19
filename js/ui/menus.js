@@ -1,48 +1,5 @@
 // DOM screens: main menu, controls, lobby panels (hero, workshop, dungeon), pause, end screen.
 
-const CLASS_INFO = {
-  warrior: {
-    PASSIVE: ['Tanker', 'Every 5th hit is blocked'],
-    LMB: ['Sword Combo', 'Slash, slash, long stab'],
-    RMB: ['Barrier Shield', 'Hold: stops shots. +LMB: stun bash'],
-    E: ['Whirlwind', '5.5s spin, move faster'],
-    F: ['Charge', 'Stunning rush, 2 charges'],
-    Q: ['World Cutter', 'Power up, then a massive strike'],
-  },
-  ranger: {
-    PASSIVE: ['Agility', 'Fastest hero, quicker dodge'],
-    LMB: ['Arrow', 'Piercing shot'],
-    RMB: ['Swift Camo', 'Hide + cleanse, attacking reveals'],
-    E: ['Rapid Fire', 'Next 5 arrows: faster, +25%'],
-    F: ['Fire / Ice Arrow', 'F, then LMB fire or RMB ice'],
-    Q: ['Volley', 'Mark an area, rain arrows for 5s'],
-  },
-  mage: {
-    PASSIVE: ['Mana Surge', 'Mana orbs: +20% damage 2s'],
-    LMB: ['Magic Missile', 'Homing orbs (3 mana)'],
-    RMB: ['Frostfire Ball', 'Big explosion (20 mana)'],
-    E: ['Lightning', 'Pick a target, it arcs (120)'],
-    F: ['Bird Form', 'Tiny, fast bird (50 mana)'],
-    Q: ['Mana Drain', 'Drain circle, 1s cooldowns while up'],
-  },
-  rogue: {
-    PASSIVE: ['Killing Streak', '+3% damage per kill, max 10'],
-    LMB: ['Dagger Fan', 'Three daggers (2 energy)'],
-    RMB: ['Swift Strike', 'Dash slash + mark; marked kill resets'],
-    E: ['Parry', 'Block a hit: +75 energy, haste'],
-    F: ['Dagger Storm', 'Next attack: 3s of daggers (100)'],
-    Q: ['Clone Surprise', '3 tough exploding clones'],
-  },
-  priestess: {
-    PASSIVE: ['Divine Mark', 'Marked foes drop light orbs'],
-    LMB: ['Ray of Light', 'A beam falls on the cursor'],
-    RMB: ['Light Missiles', '5 missiles mark 5 foes for 10s'],
-    E: ['Healing Rune', 'Aim + place: 50 hp/s for 4s (2 light)'],
-    F: ['Guardian Aegis', '150 hp shield, LMB ally / RMB self (2)'],
-    Q: ['Light Bomb', 'Charge up to 4s, stuns everything'],
-  },
-};
-
 const Menus = {
   screens: {},
   heroPreview: null,   // { id, ctx } for the hero panel's animated portrait
@@ -92,6 +49,21 @@ const Menus = {
       const btn = e.target.closest('.keybind');
       if (btn) this.captureKey(btn);
     });
+    document.getElementById('set-display').innerHTML = DISPLAY_MODES
+      .map(([mode, label]) => `<button class="toggle" data-action="display:${mode}">${label.toUpperCase()}</button>`)
+      .join('');
+    // the browser left fullscreen by itself: already stored, so not an unsaved edit
+    Display.onChange = (mode) => {
+      if (this.savedSettings) this.savedSettings.display = mode;
+      if (this.settingsOpen) this.refreshSettings();
+    };
+  },
+
+  /** Highlights the current window mode. */
+  displayChanged() {
+    for (const btn of document.querySelectorAll('#set-display .toggle')) {
+      btn.classList.toggle('off', btn.dataset.action !== `display:${Settings.data.display}`);
+    }
   },
 
   /**
@@ -137,6 +109,7 @@ const Menus = {
   discardSettings() {
     Settings.data = Settings.copy(this.savedSettings);
     Sound.applyVolumes();
+    Display.apply();
     this.musicChanged(Settings.data.music, false);
     this.closeSettings();
   },
@@ -170,6 +143,7 @@ const Menus = {
     set('set-mvol', s.musicVolume, `${Math.round(s.musicVolume * 100)}%`);
     set('set-svol', s.sfxVolume, `${Math.round(s.sfxVolume * 100)}%`);
     this.musicChanged(s.music, false);
+    this.displayChanged();
     const keys = document.getElementById('set-keys');
     keys.innerHTML = KEY_ACTIONS
       .map(([action, label]) => `<span>${label}</span><button class="keybind" data-bind="${action}">${Settings.label(action)}</button>`)
@@ -246,6 +220,8 @@ const Menus = {
       case 'dialogOption': Dialog.choose(Number(arg)); break;
       case 'dialogSkip': Dialog.finish(); break;
       case 'buy': Shop.buy(arg); break;
+      case 'buyPotion': Shop.buyPotion(arg); break;
+      case 'reroll': Shop.reroll(); break;
       case 'settings': this.openSettings(); break;
       case 'closeSettings': this.requestCloseSettings(); break;
       case 'saveSettings': this.saveSettings(); break;
@@ -257,9 +233,15 @@ const Menus = {
         this.musicChanged(Music.toggle(!this.settingsOpen));
         this.updateSaveState();
         break;
+      case 'display':
+        Display.set(arg);
+        this.displayChanged();
+        this.updateSaveState();
+        break;
       case 'resetSettings':
         Settings.reset(false);
         Sound.applyVolumes();
+        Display.apply();
         this.refreshSettings();
         break;
     }
@@ -299,8 +281,11 @@ const Menus = {
 
   /** Pause menu; "Return to Lobby" only makes sense outside the lobby. */
   /** Pause menu. Multiplayer: the world doesn't stop, and leaving replaces the lobby / quit buttons. */
-  showPause(inLobby, mp = false) {
-    document.getElementById('pause-lobby').classList.toggle('hidden', inLobby || mp);
+  /** In multiplayer only the host gets "Return to Lobby" (in the lobby it rebuilds it, which resyncs everyone). */
+  showPause(inLobby, mp = false, host = false) {
+    const lobbyBtn = document.getElementById('pause-lobby');
+    lobbyBtn.classList.toggle('hidden', mp ? !host : inLobby);
+    lobbyBtn.textContent = mp && inLobby ? 'Restart Lobby (resync)' : 'Return to Lobby';
     document.getElementById('pause-quit').textContent = mp ? 'Leave Game' : 'Quit to Menu';
     document.querySelector('#screen-pause h2').textContent = mp ? 'Menu' : 'Paused';
     this.show('pause');
@@ -365,42 +350,58 @@ const Menus = {
     this.show('dungeon');
   },
 
-  /** Hero statue panel: the class card, main class / subclass choices (subclasses aren't in yet). */
+  /**
+   * Hero statue panel: on the left who the hero is (portrait, role, difficulty,
+   * stat bars); on the right every ability with its key, icon, key numbers and a
+   * plain-language description (from heroGuide). Subclasses aren't in yet.
+   */
   showHero(id, currentId) {
     const cfg = CONFIG.classes[id];
+    const guide = heroGuide(id);
     document.getElementById('hero-title').textContent = cfg.name;
-    document.getElementById('hero-main').textContent = `Main: ${cfg.name}`;
-    const choose = document.getElementById('hero-choose');
-    choose.textContent = id === currentId ? 'Playing' : 'Choose';
-    const holder = document.getElementById('hero-card');
-    holder.innerHTML = '';
-    const card = this.buildCard(id);
-    holder.appendChild(card);
-    const ctx = card.querySelector('canvas').getContext('2d');
+    document.getElementById('hero-role').textContent = guide.role.toUpperCase();
+    document.getElementById('hero-diff').innerHTML = `DIFFICULTY ${[1, 2, 3].map((n) => `<i class="${n <= guide.difficulty ? 'on' : ''}"></i>`).join('')}`;
+    document.getElementById('hero-blurb').textContent = guide.blurb;
+    document.getElementById('hero-choose').textContent = id === currentId ? 'Playing' : 'Choose';
+
+    document.getElementById('hero-stats').innerHTML = heroStats(id).map((s) => `
+      <div class="stat">
+        <span class="stat-label">${s.label}</span>
+        <span class="stat-value" style="color:${s.color}">${s.value}</span>
+        ${s.bar === null ? '' : `<span class="stat-bar"><span style="width:${Math.round(clamp(s.bar, 0.04, 1) * 100)}%;background:${s.color}"></span></span>`}
+      </div>`).join('');
+
+    // the player's own keys for E / F / Q
+    const keyLabel = (key) => ({ E: Settings.label('e'), F: Settings.label('f'), Q: Settings.label('ult') }[key] || key);
+    const list = document.getElementById('hero-abilities');
+    list.innerHTML = guide.abilities.map((a, i) => `
+      <div class="ab ${a.key === 'PASSIVE' ? 'passive' : ''}">
+        <div class="ab-icon" data-i="${i}">${a.icon ? '' : '<span>P</span>'}</div>
+        <div class="ab-body">
+          <div class="ab-head">
+            <span class="ab-key">${keyLabel(a.key)}</span>
+            <span class="ab-name">${a.name}</span>
+            ${a.tags.map((t) => `<span class="ab-tag">${t}</span>`).join('')}
+          </div>
+          <div class="ab-desc">${a.desc}</div>
+        </div>
+      </div>`).join('');
+    // ability icons: the same pictures as the in-game HUD
+    for (const el of list.querySelectorAll('.ab-icon[data-i]')) {
+      const a = guide.abilities[Number(el.dataset.i)];
+      const img = a.icon && Sprites.icons[id][a.icon];
+      if (!img) continue;
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      el.appendChild(c);
+    }
+
+    const ctx = document.getElementById('hero-portrait').getContext('2d');
     ctx.imageSmoothingEnabled = false;
     this.heroPreview = { id, ctx };
     this.show('hero');
-  },
-
-  /** Hero card: portrait, stats, passive and every ability. */
-  buildCard(id) {
-    const cfg = CONFIG.classes[id];
-    const info = CLASS_INFO[id];
-    const card = document.createElement('div');
-    card.className = 'card';
-    const resource = cfg.resource ? ` &nbsp; ${cfg.resource.name} ${cfg.resource.max}` : '';
-    const abilities = Object.entries(info)
-      .map(([key, [name, desc]]) => {
-        const bound = { E: 'e', F: 'f', Q: 'ult' }[key];   // show the player's own keys
-        return `<div class="ability"><b>${bound ? Settings.label(bound) : key} ${name}</b><br><span>${desc}</span></div>`;
-      })
-      .join('');
-    card.innerHTML = `
-      <canvas width="64" height="64"></canvas>
-      <h3>${cfg.name}</h3>
-      <div class="stats">HP ${cfg.hp} &nbsp; SPD ${cfg.speed}${resource}</div>
-      ${abilities}`;
-    return card;
   },
 
   /** Map legend board: every room's minimap icon and what it's for, plus the map's other markings. */

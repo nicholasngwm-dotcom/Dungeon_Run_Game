@@ -4,6 +4,10 @@
 //  speeds in pixels/second, distances in pixels.
 // =============================================================
 
+// This build's stamp: the ?v= that index.html puts on this script. Multiplayer only
+// lets players on the same build play together (different code = instant desync).
+const BUILD = (document.currentScript && new URL(document.currentScript.src, location.href).searchParams.get('v')) || 'dev';
+
 const CONFIG = {
   screen: { width: 960, height: 540 },
   tileSize: 32,
@@ -47,7 +51,7 @@ const CONFIG = {
       // of the shield (within `reach`, inside `arcDegrees`) once each: damage, knockback and a stun.
       bash:    { damage: 45, stun: 1.2, knockback: 320, cooldown: 4, distance: 70, time: 0.15, reach: 56, arcDegrees: 120 },
       // E: spin attack, moving faster while spinning
-      spin:   { damage: 22, tick: 0.22, duration: 5.5, radius: 88, knockback: 90, moveMultiplier: 1.35, cooldown: 12 },   // cooldown starts when the spin does
+      spin:   { damage: 22, tick: 0.22, duration: 5.5, radius: 88, knockback: 90, moveMultiplier: 1.35, cooldown: 12 },   // cooldown starts once the spin ends (or E cancels it)
       // F: wind up, then charge through enemies, stunning them. Holds `charges` uses; each refills over `cooldown`s
       charge: { windup: 0.5, distance: 330, time: 0.35, width: 44, damage: 35, stun: 1.0, knockback: 260, cooldown: 10, charges: 2 },
       // Q: power up, then a huge downward strike along the aim line.
@@ -329,8 +333,9 @@ const CONFIG = {
     // coins: roughly one per hpPerCoin of an enemy's base hp (at least 1); summoned enemies drop 1 coin
     // summonedChance of the time; the boss drops boss[0]-boss[1]; every cleared room's chest holds roomChest
     coins: { hpPerCoin: 60, summonedChance: 0.3, boss: [25, 35], roomChest: 5 },
-    // shop upgrades: each can be bought maxLevel times per run; price x priceGrowth per level owned
-    shop: { maxLevel: 3, priceGrowth: 1.5 },
+    // shop upgrades: one pick of three per shop; each can be owned maxLevel times per run (price x priceGrowth
+    // per level owned); rerolling the three costs reroll.base, + reroll.step more each time at the same shop
+    shop: { maxLevel: 3, priceGrowth: 1.5, reroll: { base: 6, step: 4 } },
     survival: { duration: [30, 40, 50], spawnEvery: [1.3, 1.05, 0.85], perSpawn: 2, maxAlive: [12, 15, 18] },
     // spike traps (combat rooms only): pop up every `period` seconds for `up` seconds
     spikes: { period: 4, up: 0.8, warn: 0.4, damage: 16, perRoom: [6, 10] },
@@ -352,6 +357,23 @@ const CONFIG = {
     codeLength: 5,             // room code letters
     peerPrefix: 'dungeonrun-v1-',   // room code -> PeerJS id (bump to keep old versions out)
     checksumEvery: 120,        // ticks between desync checks
+    joinTimeout: 25,           // seconds before giving up on reaching a room (relayed connections are slower)
+    // How browsers find a route to each other. STUN works on most home wifi; mobile data
+    // (carrier NAT) usually blocks direct connections, so traffic has to go through a TURN
+    // relay. The PeerJS relay below is free but often busy or down.
+    iceServers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+      {
+        urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478',
+          'turn:eu-0.turn.peerjs.com:3478?transport=tcp', 'turn:us-0.turn.peerjs.com:3478?transport=tcp'],
+        username: 'peerjs', credential: 'peerjsp',
+      },
+    ],
+    // Optional: a URL that returns extra ICE servers as JSON (an array of
+    // { urls, username, credential }), e.g. a Metered TURN credentials URL:
+    //   https://<your-app>.metered.live/api/v1/turn/credentials?apiKey=<key>
+    // Fetched before connecting; leave '' to use only iceServers above.
+    turnCredentialsUrl: '',
   },
 
   // mana orbs only drop for mana users; picking one up triggers the Mage's Mana Surge passive
@@ -462,8 +484,8 @@ const CONFIG = {
     phase2At: 0.5,
     phase3At: 0.25,
     contactDamage: 22,
-    floatSpeed: 90,
-    orbitRadius: 230,
+    floatSpeed: 170,       // how fast he chases his spot near the hero
+    orbitRadius: 180,      // how close he circles the hero
 
     // time spent floating between big attacks. Attacks take turns:
     //   phase 1: dash, barrage   phase 2: vanish, barrage   phase 3: dash, vanish, barrage
@@ -480,7 +502,7 @@ const CONFIG = {
     // Dash
     dashWindup: 0.8,
     dashAimLockAt: 0.3,
-    dashSpeeds: [1000, 780, 580],  // 1st, 2nd, 3rd dash of a chain: fast, normal, slower (time to react)
+    dashSpeeds: [760, 960, 1180],  // 1st, 2nd, 3rd dash of a chain: each one faster than the last
     dashRange: 440,
     dashDamage: 38,
     dashWidth: 56,          // hit lane, same width as the red telegraph on the ground

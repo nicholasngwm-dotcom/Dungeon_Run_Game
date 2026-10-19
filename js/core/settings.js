@@ -1,4 +1,4 @@
-// Player settings: mouse sensitivity, audio and key bindings. Saved in the
+// Player settings: mouse sensitivity, audio, window mode and key bindings. Saved in the
 // browser (localStorage) so they survive reloads; falls back to defaults if
 // storage is unavailable.
 
@@ -13,9 +13,15 @@ const KEY_ACTIONS = [
   ['f', 'Ability F'],
   ['ult', 'Ultimate'],
   ['dodge', 'Dodge'],
-  ['potion', 'Health potion'],
+  ['potion', 'Health potion (free)'],
+  ['item1', 'Inventory slot 1'],
+  ['item2', 'Inventory slot 2'],
+  ['item3', 'Inventory slot 3'],
+  ['item4', 'Inventory slot 4'],
+  ['item5', 'Inventory slot 5'],
   ['interact', 'Interact (lobby)'],
   ['music', 'Toggle music'],
+  ['cursor', 'Mouse / crosshair'],
 ];
 
 const Settings = {
@@ -24,10 +30,12 @@ const Settings = {
     music: true,
     musicVolume: 0.7,
     sfxVolume: 0.8,
+    display: 'default',   // default | fullscreen (see Display)
     keys: {
       up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',
       e: 'KeyE', f: 'KeyF', ult: 'KeyQ', dodge: 'ShiftLeft', potion: 'KeyH',
-      interact: 'KeyE', music: 'KeyM',
+      interact: 'KeyE', music: 'KeyM', cursor: 'KeyC',
+      item1: 'Digit1', item2: 'Digit2', item3: 'Digit3', item4: 'Digit4', item5: 'Digit5',
     },
   },
   data: null,
@@ -41,6 +49,15 @@ const Settings = {
 
   save() {
     try { localStorage.setItem(this.storageKey, JSON.stringify(this.data)); } catch (e) { /* storage blocked: keep in memory */ }
+  },
+
+  /** Stores one setting's live value without also storing other unsaved edits. */
+  saveOne(key) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(this.storageKey)) || {};
+      saved[key] = this.data[key];
+      localStorage.setItem(this.storageKey, JSON.stringify(saved));
+    } catch (e) { /* storage blocked: keep in memory */ }
   },
 
   /** Back to defaults; save = false leaves it as an unsaved edit (settings screen). */

@@ -7,14 +7,18 @@
 //     bundle, sends it to everyone, and steps its own game with it
 //   - clients step their game with each bundle, in order
 // While a game steps, Math.random is a generator seeded by the host, so random
-// choices come out the same everywhere. Every few seconds clients send a checksum
-// of their game so the host can spot a desync.
+// choices come out the same everywhere, and Math's trig / exp / pow are swapped
+// for DetMath so different browsers can't round differently. Clients must run
+// the same build as the host (checked on joining). Every few seconds clients
+// send a checksum of their game so the host can spot a desync; everyone is told,
+// and the network status (a lagging link) is shown separately, so the two
+// kinds of trouble can't be confused.
 //
 // Scenes (the lobby, a dungeon run, the test dungeon) start through bundle
 // commands too, so everyone builds the new world on the same tick from the same seed.
 
 const HELD_ACTIONS = ['up', 'down', 'left', 'right'];
-const PRESS_ACTIONS = ['e', 'f', 'ult', 'dodge', 'potion', 'interact'];
+const PRESS_ACTIONS = ['e', 'f', 'ult', 'dodge', 'potion', 'interact', 'item1', 'item2', 'item3', 'item4', 'item5'];
 
 class Session {
   /** An input that does nothing (players with no input yet, or with a menu open). */
@@ -161,10 +165,18 @@ class Session {
     }
   }
 
-  /** Runs fn with Math.random = the shared seeded generator. */
+  /**
+   * Runs fn as shared simulation: Math.random = the shared seeded generator,
+   * and the trig / exp / pow functions = DetMath, so every browser and device
+   * computes exactly the same numbers.
+   */
   withRng(fn) {
     Math.random = this.rng;
-    try { fn(); } finally { Math.random = nativeRandom; }
+    Object.assign(Math, DetMath);
+    try { fn(); } finally {
+      Math.random = nativeRandom;
+      Object.assign(Math, NativeMath);
+    }
   }
 
   startScene(cmd) {
@@ -175,6 +187,7 @@ class Session {
     this.scene = cmd.scene;
     this.roster = cmd.roster;
     this.rng = seededRng(cmd.seed);
+    this.desync = null;   // a new scene is built fresh from the seed, so everyone is back in step
     const opts = { roster: cmd.roster, localId: this.id, lobby: cmd.scene === 'lobby', run: cmd.run || null, welcome: firstLobby };
     this.withRng(() => { this.game = new Game(null, this.gameEvents, opts); });
     this.game.code = this.code;
@@ -245,6 +258,9 @@ class Session {
     const id = this.peers.get(peer);
     switch (msg.t) {
       case 'hello': {
+        if (msg.build !== BUILD) {
+          return this.transport.send(peer, { t: 'reject', reason: `Different game versions: the host has version ${BUILD}, you have ${msg.build || 'an older one'}. Everyone must run the same version - refresh the page (Ctrl+F5 on a computer, pull down to reload on a phone) and join again.` });
+        }
         if (this.roster.length >= CONFIG.multiplayer.maxPlayers) return this.transport.send(peer, { t: 'reject', reason: 'The lobby is full (8 players).' });
         if (this.scene !== 'lobby') return this.transport.send(peer, { t: 'reject', reason: 'That game is already in a dungeon. Try again when they are back in the lobby.' });
         const newId = `p${this.nextId++}`;
@@ -259,6 +275,7 @@ class Session {
       case 'in': {
         const ci = id && this.clientInputs[id];
         if (!ci) return;
+        ci.at = performance.now();
         const i = msg.i;
         ci.h = i.h; ci.mx = i.mx; ci.my = i.my; ci.ml = i.ml; ci.mr = i.mr;
         for (const a of i.p) ci.p.add(a);
@@ -271,9 +288,13 @@ class Session {
         return;
       case 'sum': {
         const mine = this.hashes.get(msg.k);
-        if (mine && mine !== msg.h) {
+        if (mine && mine !== msg.h && !this.desync) {
+          // tell everyone (once per scene), so every screen shows what's wrong
           const who = this.roster.find((r) => r.id === id);
-          this.events.onDesync?.(who ? who.name : id);
+          const name = who ? who.name : id;
+          this.desync = { who: name, tick: msg.k };
+          this.transport.broadcast({ t: 'desync', who: name, k: msg.k });
+          this.events.onDesync?.(name);
         }
         for (const k of this.hashes.keys()) if (k < msg.k - 600) this.hashes.delete(k);
         return;
@@ -296,7 +317,7 @@ class Session {
 
   /** Client: connected to the host - introduce ourselves. */
   hello() {
-    this.transport.send('host', { t: 'hello', name: this.name, classId: this.classId });
+    this.transport.send('host', { t: 'hello', name: this.name, classId: this.classId, build: BUILD });
   }
 
   onClientMessage(msg) {
@@ -309,6 +330,7 @@ class Session {
         this.events.onRejected?.(msg.reason);
         return;
       case 'b':
+        this.lastBundleAt = performance.now();
         // we start from the first bundle that begins a scene (anything before is from
         // before we joined); after that bundles are applied strictly in order
         if (this.nextK === null) {
@@ -317,7 +339,35 @@ class Session {
         }
         if (msg.k >= this.nextK) this.bundles.set(msg.k, msg);
         return;
+      case 'desync':
+        if (!this.desync) {
+          this.desync = { who: msg.who, tick: msg.k };
+          this.events.onDesync?.(msg.who);
+        }
+        return;
     }
+  }
+
+  /**
+   * Connection health for this screen, separate from desyncs: a list of
+   * warnings like "WAITING FOR THE HOST 2.4s". Empty when all is well.
+   */
+  netWarnings() {
+    const now = performance.now();
+    const out = [];
+    if (this.isHost) {
+      for (const r of this.roster) {
+        const ci = this.clientInputs[r.id];
+        if (!ci || !ci.at) continue;
+        const gap = (now - ci.at) / 1000;
+        if (gap > 1.5) out.push(`${r.name.toUpperCase()}'S CONNECTION IS LAGGING (${gap.toFixed(1)}s)`);
+      }
+    } else if (this.game && this.lastBundleAt) {
+      const gap = (now - this.lastBundleAt) / 1000;
+      if (gap > 1) out.push(`WAITING FOR THE HOST... ${gap.toFixed(1)}s (slow connection)`);
+      else if (this.bundles.size > 20) out.push('CATCHING UP WITH THE HOST (connection hiccup)');
+    }
+    return out;
   }
 
   close() {

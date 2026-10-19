@@ -1,5 +1,5 @@
 // The lobby: an open room the hero walks around between runs (Soul Knight style).
-// Stations: one statue per hero (pick a hero), the workshop (not built yet), the
+// Stations: one statue per hero (pick a hero), the tech workshop (a tinkerer and machines), the
 // map legend board, the bestiary lectern,
 // the practice range, and the dungeon gate. Walk up to one and press E.
 
@@ -23,6 +23,25 @@ class LobbyHub {
     this.stations.push({ kind: 'legend', x: 6 * T, y: 16 * T, r: 48, prompt: 'MAP LEGEND' });
     this.stations.push({ kind: 'bestiary', x: 11 * T, y: 16 * T, r: 44, prompt: 'BESTIARY' });
     this.stations.push({ kind: 'gate', x: d.width / 2, y: 4 * T + 18, r: 54, prompt: 'CHOOSE A DUNGEON' });
+
+    // set dressing (tile coordinates): banners in the hero hall, plants by the gate,
+    // shelves round the bestiary, hay and a dummy at the practice range, a bench to rest on
+    const g = d.width / 2 / T;
+    this.decor = [
+      ['bannerRed', 2.4, 7.4], ['bannerBlue', 15.2, 7.4],
+      ['plant', g - 3, 4.9], ['plant', g + 3, 4.9],
+      ['bookshelf', 8.6, 14.6], ['bookshelf', 13.4, 14.6], ['candelabra', 11, 18.2],
+      ['plant', 3.2, 16.4], ['flowers', 8.4, 18.6],
+      ['dummy', 30.5, 16.4], ['hayBale', 23.8, 17.2], ['hayBale', 30.8, 19], ['bannerGreen', 24.2, 14],
+      ['crate', 31.6, 6.6], ['sacks', 22.4, 6.4], ['barrel', 32, 12.2],
+      ['bench', g - 3.8, 12.4], ['bench', g + 3.8, 12.4], ['plant', g - 5.6, 12.6], ['plant', g + 5.6, 12.6],
+    ].map(([name, tx, ty]) => ({ name, x: tx * T, y: ty * T }));
+    // a cat strolls between a few favourite spots (visual only)
+    this.catPath = [[g + 2, 13.4], [g + 6, 9.5], [21.5, 15.5], [g - 2.5, 17.5], [g - 6, 10]].map(([tx, ty]) => ({ x: tx * T, y: ty * T }));
+    // fireflies drifting through the hall
+    this.motes = Array.from({ length: 26 }, (_, i) => ({
+      x: ((i * 0.618) % 1) * d.width, y: (4.5 + ((i * 0.382) % 1) * 16) * T, s: i * 1.7,
+    }));
   }
 
   update(dt) {
@@ -55,7 +74,7 @@ class LobbyHub {
     for (const s of this.stations) {
       if (s.kind === 'gate') this.drawGate(ctx, s);
       if (s.kind === 'practice') this.drawPracticePad(ctx, s);
-      drawShadow(ctx, s.x, s.y + 4, s.kind === 'hero' ? 18 : 26, 6);
+      if (s.kind !== 'workshop') drawShadow(ctx, s.x, s.y + 4, s.kind === 'hero' ? 18 : 26, 6);
     }
     // the hero hall plaque
     const T = CONFIG.tileSize;
@@ -64,14 +83,72 @@ class LobbyHub {
 
   /** Statues and props, y-sorted with the hero. */
   getDrawables() {
-    return this.stations
-      .filter((s) => s.kind !== 'gate')
-      .map((s) => ({ y: s.y, draw: (ctx) => this.drawStation(ctx, s) }));
+    const items = [];
+    for (const s of this.stations) {
+      if (s.kind === 'gate') continue;
+      // the workshop: a tinkerer welding gadgets among coils, gears and machines
+      if (s.kind === 'workshop') items.push(...Scenes.drawables('workshop', s.x, s.y, this.time));
+      else items.push({ y: s.y, draw: (ctx) => this.drawStation(ctx, s) });
+    }
+    for (const d of this.decor) {
+      items.push({
+        y: d.y,
+        draw: (ctx) => {
+          const pr = Sprites.props[d.name];
+          drawShadow(ctx, d.x, d.y, Math.max(6, pr.img.width * 0.4), 4, 0.3);
+          drawProp(ctx, d.name, d.x, d.y);
+          if (d.name === 'candelabra') for (const cx of [-7, -1, 5]) drawFlame(ctx, d.x + cx + 1, d.y - 27, this.time, cx);
+        },
+      });
+    }
+    const cat = this.catState();
+    items.push({
+      y: cat.y,
+      draw: (ctx) => {
+        drawShadow(ctx, cat.x, cat.y, 6, 2, 0.3);
+        drawProp(ctx, cat.walking ? (Math.floor(this.time * 8) % 2 ? 'catWalk1' : 'catWalk2') : 'catSit', cat.x, cat.y, cat.flip);
+      },
+    });
+    return items;
+  }
+
+  /** Where the cat is: it sits a while at each spot, then trots to the next. */
+  catState() {
+    const sit = 6;
+    const walkSpeed = 34;
+    const path = this.catPath;
+    const legs = path.map((a, i) => { const b = path[(i + 1) % path.length]; return dist(a.x, a.y, b.x, b.y) / walkSpeed; });
+    const total = legs.reduce((s, l) => s + l + sit, 0);
+    let t = this.time % total;
+    for (let i = 0; i < path.length; i++) {
+      const a = path[i];
+      const b = path[(i + 1) % path.length];
+      if (t < sit) return { x: a.x, y: a.y, walking: false, flip: b.x < a.x };
+      t -= sit;
+      if (t < legs[i]) {
+        const k = t / legs[i];
+        return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, walking: true, flip: b.x < a.x };
+      }
+      t -= legs[i];
+    }
+    return { x: path[0].x, y: path[0].y, walking: false, flip: false };
+  }
+
+  /** Fireflies drifting and pulsing over the hall (drawn above the floor art). */
+  drawMotes(ctx) {
+    for (const m of this.motes) {
+      const t = this.time * 0.25 + m.s;
+      const x = m.x + Math.sin(t * 1.3) * 40 + Math.sin(t * 0.7) * 20;
+      const y = m.y + Math.cos(t) * 24;
+      const a = 0.35 + 0.35 * Math.sin(this.time * 2 + m.s * 3);
+      ctx.fillStyle = `rgba(255, 236, 150, ${a})`;
+      ctx.fillRect(Math.round(x), Math.round(y), 2, 2);
+      drawGlow(ctx, x + 1, y + 1, 7, '255, 220, 120', a * 0.35);
+    }
   }
 
   drawStation(ctx, s) {
     if (s.kind === 'hero') this.drawStatue(ctx, s);
-    else if (s.kind === 'workshop') this.drawWorkshop(ctx, s);
     else if (s.kind === 'practice') this.drawPractice(ctx, s);
     else if (s.kind === 'legend') this.drawLegendBoard(ctx, s);
     else if (s.kind === 'bestiary') this.drawLectern(ctx, s);
@@ -79,6 +156,7 @@ class LobbyHub {
 
   /** "[E] ..." (the interact key) over the station the hero is at, plus names under the statues. Drawn on top. */
   drawPrompts(ctx) {
+    this.drawMotes(ctx);
     for (const s of this.stations) {
       if (s.kind === 'hero') {
         const current = this.world.localPlayer.classId === s.id;
@@ -87,7 +165,7 @@ class LobbyHub {
     }
     const s = this.near;
     if (!s) return;
-    const h = { hero: 78, workshop: 66, practice: 70, gate: -6, legend: 74, bestiary: 54 }[s.kind];
+    const h = { hero: 78, workshop: 80, practice: 70, gate: -6, legend: 74, bestiary: 54 }[s.kind];
     const bob = Math.sin(this.time * 5) * 2;
     HUD.text(ctx, `[${Settings.label('interact')}] ${s.prompt}`, s.x, s.y - h + bob, { size: 8, align: 'center', color: '#ffe680' });
   }
@@ -120,56 +198,6 @@ class LobbyHub {
     const frames = Sprites.heroes[s.id];
     const frame = frames.idle[Math.floor((this.time + s.x * 0.01) * 2.5) % 2];
     drawSprite(ctx, frame.img, x, y - 8, HERO_ANCHOR.x, HERO_ANCHOR.y, false, current ? 0.3 : 1);
-  }
-
-  /** Workbench, anvil and an "under construction" sign. */
-  drawWorkshop(ctx, s) {
-    const x = Math.round(s.x);
-    const y = Math.round(s.y);
-    // workbench
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x - 34, y - 22, 46, 24);
-    ctx.fillStyle = '#7d532f';
-    ctx.fillRect(x - 33, y - 21, 44, 6);
-    ctx.fillStyle = '#9c6c3e';
-    ctx.fillRect(x - 33, y - 21, 44, 1);
-    ctx.fillStyle = '#5b3922';
-    ctx.fillRect(x - 31, y - 15, 4, 16);
-    ctx.fillRect(x + 5, y - 15, 4, 16);
-    // tools on the bench
-    ctx.fillStyle = '#adb2c0';
-    ctx.fillRect(x - 26, y - 25, 10, 3);
-    ctx.fillStyle = '#5b3922';
-    ctx.fillRect(x - 16, y - 24, 6, 2);
-    ctx.fillStyle = '#dcb44c';
-    ctx.fillRect(x - 4, y - 26, 5, 4);
-    // anvil
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x + 15, y - 17, 24, 19);
-    ctx.fillStyle = '#585d6c';
-    ctx.fillRect(x + 16, y - 16, 22, 5);
-    ctx.fillStyle = '#80869a';
-    ctx.fillRect(x + 16, y - 16, 22, 1);
-    ctx.fillStyle = '#383b48';
-    ctx.fillRect(x + 22, y - 11, 10, 6);
-    ctx.fillRect(x + 18, y - 5, 18, 6);
-    // striped sign on a post
-    const sx = x - 6;
-    const sy = y - 52;
-    ctx.fillStyle = '#5b3922';
-    ctx.fillRect(sx - 1, sy + 10, 3, 18);
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(sx - 21, sy - 1, 44, 13);
-    for (let i = 0; i < 6; i++) {
-      ctx.fillStyle = i % 2 ? '#1a1020' : '#ffd34a';
-      ctx.fillRect(sx - 20 + i * 7, sy, 7, 11);
-    }
-    // sparks now and then
-    if (Math.floor(this.time * 3) % 4 === 0) {
-      ctx.fillStyle = '#ffd34a';
-      ctx.fillRect(x + 26 + Math.round(Math.sin(this.time * 30) * 4), y - 21, 2, 2);
-      ctx.fillRect(x + 22 + Math.round(Math.cos(this.time * 25) * 5), y - 24, 1, 1);
-    }
   }
 
   /** Glowing green ring on the floor in front of the targets. */

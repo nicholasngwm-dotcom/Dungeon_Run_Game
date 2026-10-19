@@ -13,8 +13,8 @@ const ROOM_INFO = {
   defend: { name: 'Defend', color: '#6ad8ff', desc: 'Doors lock. Keep the lantern alive until the timer runs out. If it breaks, the defense starts over.' },
   survival: { name: 'Survival', color: '#ff8a1e', desc: 'Doors lock. Enemies keep coming: stay alive until the timer runs out.' },
   puzzle: { name: 'Puzzle', color: '#b67aff', desc: 'Puzzles are coming soon.' },
-  shop: { name: 'Shop', color: '#ffd34a', desc: 'A shop and a restaurant. Coming soon.' },
-  special: { name: 'Special', color: '#c08aff', desc: 'Something unusual: a blacksmith, wishing well, trader, treasure... Coming soon.' },
+  shop: { name: 'Shop', color: '#ffd34a', desc: 'Two stores: pick an upgrade (or reroll) at the enchanter, buy potions from Mira.' },
+  special: { name: 'Special', color: '#c08aff', desc: 'Something unusual: a blacksmith, restaurant, wishing well, trader, treasure... Coming soon.' },
   secret: { name: 'Secret', color: '#fff6c8', desc: 'Not connected to anything. Look for a glowing hole in a combat room floor and jump in.' },
   boss: { name: 'Boss', color: '#ff3b30', desc: 'The theme\'s boss. Beat it to open the portal to the next stage.' },
 };
@@ -68,7 +68,7 @@ const SPECIAL_INFO = {
   blacksmith: { name: 'BLACKSMITH', color: '#adb2c0' },
   wishingWell: { name: 'WISHING WELL', color: '#6ad8ff' },
   heroStatue: { name: 'HERO STATUE', color: '#ffe680' },
-  restaurant5: { name: '5 STAR RESTAURANT', color: '#ffd34a' },
+  restaurant5: { name: 'RESTAURANT', color: '#ffd34a' },
   mountTrader: { name: 'MOUNT TRADER', color: '#c89a5a' },
   darkTrader: { name: 'DARK TRADER', color: '#b45aff' },
   friendlyTrader: { name: 'FRIENDLY TRADER', color: '#6cff7a' },
@@ -119,6 +119,10 @@ class DungeonRun {
     this.props = [];
     this.spikes = [];
     this.hole = null;            // the glowing hole down to the secret room
+    // this stage's shop: the potion shelf (shared) and each hero's upgrade store state
+    this.shopSeed = Math.floor(Math.random() * 2 ** 31);
+    this.potionStock = [];
+    this.shopStates = {};
     const f = w.dungeon;
     for (const r of f.rooms) {
       if (r.type === 'combat') this.addSpikes(r);
@@ -300,19 +304,52 @@ class DungeonRun {
     hero.coinFlash = 0.25;
   }
 
-  /** Shop purchase (a command, so every machine applies it on the same tick). */
+  /** A hero's upgrade-store state at this stage's shop: { rerolls, bought (upgrade id or null) }. */
+  shopState(hero) {
+    const key = hero.netId || 'solo';
+    return this.shopStates[key] || (this.shopStates[key] = { rerolls: 0, bought: null });
+  }
+
+  // Shop actions are commands, so every machine applies them on the same tick.
+
+  /** Upgrade store: buy one of the hero's three offers (one per shop). */
   buyUpgrade(hero, id) {
-    const u = SHOP_UPGRADES.find((x) => x.id === id);
-    if (!u || !shopStock(hero).includes(u)) return;
-    const level = hero.upgradeLevels[id] || 0;
-    const price = upgradePrice(u, level);
-    const ok = level < CONFIG.run.shop.maxLevel && hero.coins >= price;
+    const st = this.shopState(hero);
+    const u = upgradeOffers(this, hero).find((x) => x.id === id);
+    const price = u ? upgradePrice(u, hero.upgradeLevels[id] || 0) : Infinity;
+    const ok = !!u && !st.bought && hero.coins >= price;
     if (ok) {
       hero.coins -= price;
-      hero.upgradeLevels[id] = level + 1;
+      hero.upgradeLevels[id] = (hero.upgradeLevels[id] || 0) + 1;
       u.apply(hero);
+      st.bought = id;
     }
-    this.world.events.onPurchase?.(hero, u, ok);
+    this.world.events.onPurchase?.(hero, 'upgrade', ok);
+  }
+
+  /** Upgrade store: pay to swap the three offers for three new ones. */
+  rerollUpgrades(hero) {
+    const st = this.shopState(hero);
+    const price = rerollPrice(st.rerolls);
+    const ok = !st.bought && hero.coins >= price;
+    if (ok) {
+      hero.coins -= price;
+      st.rerolls++;
+    }
+    this.world.events.onPurchase?.(hero, 'reroll', ok);
+  }
+
+  /** Potion store: buy one potion off the shared shelf into the hero's bag. */
+  buyPotion(hero, id) {
+    const s = this.potionStock.find((x) => x.id === id);
+    const pot = POTIONS[id];
+    const ok = !!s && !!pot && s.left > 0 && hero.coins >= pot.price && hero.canCarry(id);
+    if (ok) {
+      hero.coins -= pot.price;
+      s.left--;
+      hero.addItem(id);
+    }
+    this.world.events.onPurchase?.(hero, 'potion', ok);
   }
 
   /** Coins burst out of a point: fives for big amounts, ones for the rest. */
@@ -556,8 +593,10 @@ class DungeonRun {
     const T = this.floor.T;
     const add = (kind, dx, dy, label, color) => this.props.push({ kind, room: r, x: r.cx + dx * T, y: r.cy + dy * T, label, color });
     if (r.type === 'shop') {
-      add('shopkeeper', -3, -1, 'SHOP', '#ffd34a');
-      add('chef', 3, -1, 'RESTAURANT', '#ff8a6a');
+      // two stores: Mira's potions on the left, Bram's enchantments (upgrades) on the right
+      add('shopkeeper', -3, -1, 'POTIONS', '#ff8aa0');
+      add('enchanter', 3, -1, 'UPGRADES', '#8ab8ff');
+      this.potionStock = rollPotionStock();
     } else if (r.type === 'special') {
       const info = SPECIAL_INFO[r.special];
       if (r.special === 'treasure') for (const dx of [-3, 0, 3]) add('chest', dx, 0, 'TREASURE CHEST', info.color);
@@ -642,7 +681,8 @@ class DungeonRun {
     if (pr.kind === 'rewardChest') return this.openChest(pr);
     if (pr.kind === 'hole') return this.descend(p);
     if (pr.kind === 'holeExit') return this.ascend(p);
-    if (pr.kind === 'shopkeeper' || pr.kind === 'chef') return w.events.onNpc?.(pr.kind, this, p);
+    if (pr.kind === 'shopkeeper' || pr.kind === 'chef' || pr.kind === 'enchanter') return w.events.onNpc?.(pr.kind, this, p);
+    if (pr.kind === 'restaurant5') return w.events.onNpc?.('chef', this, p);
     if (p === w.localPlayer) {
       w.events.onToast?.(`${pr.label}: COMING SOON`);
       Sound.play('uiClick');
@@ -674,8 +714,17 @@ class DungeonRun {
   allies() { return this.totem && !this.totem.dead ? [this.totem] : []; }
 
   getDrawables() {
-    // holes are flat on the floor, so they always sort under the characters
-    const items = this.props.map((pr) => ({ y: pr.kind === 'hole' || pr.kind === 'holeExit' ? pr.y - 1000 : pr.y, draw: (ctx) => this.drawProp(ctx, pr) }));
+    // holes are flat on the floor, so they always sort under the characters;
+    // special rooms are whole little scenes (Scenes) with their label on top
+    const items = [];
+    for (const pr of this.props) {
+      if (Scenes[pr.kind]) {
+        items.push(...Scenes.drawables(pr.kind, pr.x, pr.y, this.time));
+        items.push({ y: pr.y + 80, draw: (ctx) => this.drawPropLabel(ctx, pr) });
+      } else {
+        items.push({ y: pr.kind === 'hole' || pr.kind === 'holeExit' ? pr.y - 1000 : pr.y, draw: (ctx) => this.drawProp(ctx, pr) });
+      }
+    }
     if (this.totem) items.push({ y: this.totem.y, draw: (ctx) => this.totem.draw(ctx) });
     items.push(...this.decor.getDrawables(this.world.camera));
     return items;
@@ -768,25 +817,45 @@ class DungeonRun {
     };
     switch (pr.kind) {
       case 'shopkeeper':
+      case 'enchanter':
       case 'chef': {
-        // the NPC stands behind a counter under a striped awning
+        // the keeper stands behind a counter under a striped awning
         const frames = Sprites.npcs[pr.kind].idle;
-        drawSprite(ctx, frames[Math.floor((this.time + x * 0.01) * 2.5) % frames.length].img, x, y - 8, HERO_ANCHOR.x, HERO_ANCHOR.y, pr.kind === 'chef', 1);
-        box(52, 18, '#9c6c3e', '#5b3922');
+        drawSprite(ctx, frames[Math.floor((this.time + x * 0.01) * 2.5) % frames.length].img, x, y - 8, HERO_ANCHOR.x, HERO_ANCHOR.y, pr.kind !== 'shopkeeper', 1);
+        const enchant = pr.kind === 'enchanter';
+        box(56, 18, enchant ? '#3e5a96' : '#9c6c3e', enchant ? '#22325e' : '#5b3922');
+        ctx.fillStyle = enchant ? '#d4ac4c' : '#7d532f';
+        ctx.fillRect(x - 28, y - 12, 56, 2);                       // counter trim
         ctx.fillStyle = '#5b3922';
-        ctx.fillRect(x - 25, y - 64, 3, 48);
-        ctx.fillRect(x + 22, y - 64, 3, 48);
-        for (let i = 0; i < 8; i++) {
+        ctx.fillRect(x - 27, y - 66, 3, 50);
+        ctx.fillRect(x + 24, y - 66, 3, 50);
+        for (let i = 0; i < 9; i++) {
           ctx.fillStyle = i % 2 ? '#f4ead7' : pr.color;
-          ctx.fillRect(x - 28 + i * 7, y - 70, 7, 9);
+          ctx.fillRect(x - 31 + i * 7, y - 72, 7, 9);
+          ctx.fillRect(x - 31 + i * 7 + 2, y - 63, 3, 2);         // scalloped edge
         }
         if (pr.kind === 'shopkeeper') {
-          // wares on the counter: potions and a coin pile
-          for (const [dx, c] of [[-18, '#e84a4a'], [-11, '#4a8aff'], [-4, '#6cff7a']]) {
-            ctx.fillStyle = OUTLINE; ctx.fillRect(x + dx - 1, y - 27, 6, 10);
-            ctx.fillStyle = c; ctx.fillRect(x + dx, y - 25, 4, 7);
+          // the potions actually in stock, lined up on the counter
+          const stock = this.potionStock.filter((s) => s.left > 0).slice(0, 4);
+          stock.forEach((s, i) => ctx.drawImage(Sprites.potions[s.id], x - 26 + i * 13, y - 30, 16, 16));
+          // herbs drying under the awning
+          for (const [dx, c] of [[-20, '#4a8a3a'], [-6, '#8a6a3a'], [9, '#6a9a4a'], [19, '#9a4a6a']]) {
+            ctx.fillStyle = '#5b3922'; ctx.fillRect(x + dx, y - 62, 1, 4);
+            ctx.fillStyle = c; ctx.fillRect(x + dx - 2, y - 58, 5, 5); ctx.fillRect(x + dx - 1, y - 53, 3, 2);
           }
-          ctx.fillStyle = '#ffd34a'; ctx.fillRect(x + 8, y - 21, 10, 3); ctx.fillRect(x + 10, y - 24, 6, 3);
+        } else if (enchant) {
+          // three glowing rune orbs bobbing over the counter: one per enchantment on offer
+          ['#e84a4a', '#9ad0ff', '#ffd34a'].forEach((c, i) => {
+            const ox = x - 16 + i * 16;
+            const oy = y - 26 + Math.round(Math.sin(this.time * 2.4 + i * 2) * 2);
+            drawGlow(ctx, ox, oy, 14, i === 0 ? '255, 110, 110' : i === 1 ? '140, 200, 255' : '255, 220, 110', 0.35);
+            ctx.fillStyle = OUTLINE; ctx.fillRect(ox - 4, oy - 4, 8, 8);
+            ctx.fillStyle = c; ctx.fillRect(ox - 3, oy - 3, 6, 6);
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(ox - 2, oy - 2, 2, 2);
+          });
+          // runes on the counter cloth
+          ctx.fillStyle = '#9ae6ff';
+          for (let i = 0; i < 4; i++) ctx.fillRect(x - 20 + i * 12, y - 8 + (i % 2), 4, 2);
         } else {
           // a steaming pot
           ctx.fillStyle = OUTLINE; ctx.fillRect(x - 10, y - 30, 20, 13);
@@ -826,37 +895,20 @@ class DungeonRun {
         break;
       }
       case 'chest':
-        box(26, 18, '#c89a5a', '#7d532f');
-        ctx.fillStyle = '#dcb44c';
-        ctx.fillRect(x - 13, y - 11, 26, 2);
-        ctx.fillRect(x - 2, y - 13, 4, 6);
+        drawProp(ctx, 'chest', x, y + 2);
+        drawGlints(ctx, [[x - 8, y - 18], [x + 9, y - 10], [x + 2, y - 22]], this.time + x * 0.01);
         break;
-      case 'wishingWell':
-        box(34, 16, '#80869a', '#585d6c');
-        ctx.fillStyle = '#2a5ad0';
-        ctx.fillRect(x - 13, y - 14, 26, 4);
-        ctx.fillStyle = '#5b3922';
-        ctx.fillRect(x - 15, y - 40, 3, 26);
-        ctx.fillRect(x + 12, y - 40, 3, 26);
-        ctx.fillRect(x - 17, y - 42, 34, 4);
-        break;
-      case 'heroStatue': {
-        box(30, 12, '#77699a', '#46415b');
-        const ids = Object.keys(CONFIG.classes);
-        const id = ids[(pr.room.id + this.stage) % ids.length];
-        drawSprite(ctx, Sprites.heroes[id].idle[0].img, x, y - 10, HERO_ANCHOR.x, HERO_ANCHOR.y, false, 0.55);
+      case 'puzzle': {
+        // a rune-carved stone tablet with runes glowing in turn
+        box(26, 34, '#78738a', '#5c586c');
+        for (let i = 0; i < 3; i++) {
+          const on = Math.floor(this.time * 1.5) % 3 === i;
+          ctx.fillStyle = on ? '#e0c0ff' : '#9a6ae0';
+          ctx.fillRect(x - 7 + i * 6, y - 26 + (i % 2) * 6, 3, 8);
+          if (on) drawGlow(ctx, x - 6 + i * 6, y - 22 + (i % 2) * 6, 14, '190, 130, 255', 0.35);
+        }
         break;
       }
-      case 'puzzle':
-        // a rune-carved stone tablet
-        box(26, 34, '#77699a', '#46415b');
-        ctx.fillStyle = '#b67aff';
-        for (let i = 0; i < 3; i++) ctx.fillRect(x - 7 + i * 6, y - 26 + (i % 2) * 6, 3, 8);
-        break;
-      case 'darkTrader':
-        drawSprite(ctx, Sprites.enemies.reaper.idle[0].img, x, y, ENEMY_ANCHOR.x, ENEMY_ANCHOR.y, true, 1);
-        box(30, 10, '#463a5c', '#1e1628', 4);
-        break;
       default: {
         // a stall: counter + striped awning in the prop's colour
         box(40, 16, '#9c6c3e', '#5b3922');
@@ -873,10 +925,18 @@ class DungeonRun {
         break;
       }
     }
+    this.drawPropLabel(ctx, pr);
+  }
+
+  /** The prop's name, or "[E] ..." when the local hero can use it. */
+  drawPropLabel(ctx, pr) {
+    const x = Math.round(pr.x);
+    const y = Math.round(pr.y);
     if (pr.opened) return;
     const near = this.world.localPlayer.nearProp === pr;
-    const labelY = pr.kind === 'shopkeeper' || pr.kind === 'chef' ? y - 82 : pr.kind === 'rewardChest' ? y - 36 : y - 62;
-    const label = near && pr.kind === 'shopkeeper' ? 'TALK' : near && pr.kind === 'chef' ? 'TALK' : pr.label;
+    const npc = ['shopkeeper', 'chef', 'enchanter', 'restaurant5'].includes(pr.kind);
+    const labelY = npc || Scenes[pr.kind] ? y - 86 : pr.kind === 'rewardChest' ? y - 36 : y - 62;
+    const label = near && npc ? 'TALK' : pr.label;
     if (pr.kind === 'rewardChest' && !near) return;
     HUD.text(ctx, near ? `[${Settings.label('interact')}] ${label}` : label, x, labelY, { size: near ? 7 : 6, align: 'center', color: near ? '#ffe680' : pr.color });
   }

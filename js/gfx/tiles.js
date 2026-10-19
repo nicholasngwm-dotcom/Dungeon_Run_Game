@@ -2,11 +2,13 @@
 // into a PixelArt surface using a seeded random generator.
 
 const TILE_COLORS = {
-  floor: ['#4a4560', '#4e4864', '#46415b', '#504a68'],
-  floorLight: '#5c5676',
-  floorDark: '#3a354d',
-  grout: '#2c283b',
-  moss: '#4f6a45',
+  floor: ['#4c4660', '#504963', '#48425a', '#534b66'],
+  floorLight: '#625a78',
+  floorSheen: '#5a5370',
+  floorDark: '#3a344b',
+  grout: '#28233a',
+  moss: '#4a6844',
+  mossLight: '#6a8a58',
   wallTop: '#262033',
   wallTopL: '#3a3150',
   wallRim: '#5a4d78',
@@ -26,13 +28,23 @@ const Tiles = {
       for (let sx = 0; sx < 2; sx++) {
         const ox = x + sx * 16;
         const oy = y + sy * 16;
+        // soft, rounded flagstone: lit top-left edge, shaded bottom-right, a worn sheen
         const col = TILE_COLORS.floor[Math.floor(rng() * TILE_COLORS.floor.length)];
-        p.rect(ox, oy, 15, 15, col);
-        p.rect(ox, oy, 15, 1, TILE_COLORS.floorLight);
-        p.rect(ox, oy, 1, 15, TILE_COLORS.floorLight);
-        p.rect(ox + 1, oy + 14, 14, 1, TILE_COLORS.floorDark);
+        p.round(ox, oy, 15, 15, col, 2);
+        p.rect(ox + 2, oy, 11, 1, TILE_COLORS.floorLight);
+        p.rect(ox, oy + 2, 1, 11, TILE_COLORS.floorLight);
+        p.px(ox + 1, oy + 1, TILE_COLORS.floorLight);
+        p.rect(ox + 2, oy + 14, 11, 1, TILE_COLORS.floorDark);
+        p.rect(ox + 14, oy + 2, 1, 11, TILE_COLORS.floorDark);
+        p.px(ox + 13, oy + 13, TILE_COLORS.floorDark);
+        if (rng() < 0.5) p.rect(ox + 3, oy + 3, 3, 1, TILE_COLORS.floorSheen);
         if (rng() < 0.15) p.line(ox + 3, oy + 4, ox + 3 + Math.floor(rng() * 8), oy + 10, TILE_COLORS.floorDark);
-        if (rng() < 0.08) p.rect(ox + 2 + Math.floor(rng() * 9), oy + 9, 4, 3, TILE_COLORS.moss);
+        if (rng() < 0.08) {
+          const mx = ox + 2 + Math.floor(rng() * 9);
+          p.rect(mx, oy + 10, 4, 2, TILE_COLORS.moss);
+          p.px(mx + 1, oy + 9, TILE_COLORS.mossLight);
+          p.px(mx + 3, oy + 9, TILE_COLORS.moss);
+        }
       }
     }
   },
@@ -139,6 +151,14 @@ const Tiles = {
       const gx = x + Math.floor(rng() * 30);
       const gy = y + Math.floor(rng() * 30);
       p.rect(gx, gy, 1, 2, rng() < 0.5 ? '#46573a' : '#232c20');
+    }
+    // little tufts: a dark base with a lit blade or two
+    for (let i = 0; i < 2; i++) {
+      if (rng() < 0.5) continue;
+      const gx = x + 3 + Math.floor(rng() * 25);
+      const gy = y + 4 + Math.floor(rng() * 24);
+      p.rect(gx, gy + 2, 4, 1, '#232c20');
+      p.px(gx, gy + 1, '#46573a'); p.px(gx + 1, gy, '#5a6e48'); p.px(gx + 3, gy + 1, '#46573a');
     }
     if (rng() < 0.18) p.rect(x + 4 + Math.floor(rng() * 16), y + 6 + Math.floor(rng() * 16), 8, 5, '#3a3024'); // bare dirt
     if (rng() < 0.06) p.rect(x + 6 + Math.floor(rng() * 18), y + 8 + Math.floor(rng() * 16), 3, 2, '#6a6a5a'); // pebble
