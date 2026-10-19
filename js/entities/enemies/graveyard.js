@@ -443,6 +443,53 @@ class Reaper extends Enemy {
     this.attackCooldown = 0.2;
   }
 
+  /** Darkness gathers where it fell (red circle), then explodes: a blast plus a ring of dark waves. */
+  onDeath(world) {
+    const c = this.cfg;
+    const x = this.x;
+    const y = this.y;
+    const scale = world.enemyScale ? world.enemyScale.damage : 1;
+    world.effects.add(c.deathDelay, (ctx, t) => {
+      Telegraph.circle(ctx, x, y, c.deathRadius, t, '150, 100, 220');
+      // shadows swirling inward
+      ctx.save();
+      ctx.fillStyle = `rgba(10, 4, 20, ${0.35 + t * 0.4})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y - 10, 10 + t * 18, 8 + t * 14, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }, true);
+    world.effects.burst(x, y - 14, { count: 26, colors: ['#06030a', '#1e1628', '#463a5c'], speed: [20, 70], life: [0.4, c.deathDelay], up: 20 });
+    Sound.play('phantomVanish');
+    world.after(c.deathDelay, () => {
+      for (const a of world.allies) {
+        if (dist(a.x, a.y, x, y) < c.deathRadius + a.radius) a.hurt(Math.round(c.deathDamage * scale), world, x, y);
+      }
+      for (let i = 0; i < c.deathWaves; i++) {
+        const a = (i / c.deathWaves) * TAU;
+        enemyShot(world, x, y - 14, a, c.deathWaveSpeed, {
+          radius: 16, damage: Math.round(c.deathWaveDamage * scale), life: 1.8, sprite: Sprites.projectiles.darkWave,
+          glow: '120, 80, 180', trail: ['#463a5c', '#9a7ac0'],
+        });
+      }
+      world.effects.burst(x, y - 14, { count: 50, colors: ['#06030a', '#1e1628', '#463a5c', '#9a7ac0'], speed: [80, 280], life: [0.4, 0.9], size: [2, 6] });
+      world.effects.add(0.5, (ctx, t) => {
+        ctx.save();
+        ctx.globalAlpha = 1 - t;
+        ctx.fillStyle = 'rgba(14, 6, 26, 0.75)';
+        ctx.beginPath();
+        ctx.ellipse(x, y, c.deathRadius * (0.3 + t * 0.7), c.deathRadius * 0.6 * (0.3 + t * 0.7), 0, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(154, 122, 192, 0.9)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+      }, true);
+      world.shake(7, 0.3);
+      Sound.play('explosion');
+    });
+  }
+
   drawTelegraph(ctx) {
     this.drawMeleeTelegraph(ctx);
     if (this.state === 'waveWindup') {

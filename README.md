@@ -118,7 +118,9 @@ potion in that bag slot (potions are bought at the shop; there is no free
 potion), Esc to pause, M to
 toggle music (a toast shows ON / OFF). The bag (bottom left) can be managed
 with the mouse: drag a slot onto another to move, swap or stack potions
-(this also works in the shop's bag), and right click a slot to drink it. The Mage spends mana, the Rogue spends energy and the Priestess
+(this also works in the shop's bag), drag it out of the bag to drop it on the
+floor (to make space, or for a teammate to pick up), and right click a slot to
+drink it. The Mage spends mana, the Rogue spends energy and the Priestess
 spends light orbs (bar under HP).
 
 ## Project layout

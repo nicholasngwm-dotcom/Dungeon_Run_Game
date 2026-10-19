@@ -258,6 +258,9 @@ const CONFIG = {
       waveEvery: 4.5, waveWindup: 0.6, waveSpeed: 260, waveDamage: 26,
       blinkEvery: 6, blinkRange: 260,
       knockbackResist: 0.6, stunResist: 0.4,
+      // on death darkness gathers for deathDelay seconds, then explodes: deathDamage to heroes
+      // within deathRadius and deathWaves waves of darkness flying outward
+      deathDelay: 0.7, deathRadius: 110, deathDamage: 30, deathWaves: 10, deathWaveSpeed: 170, deathWaveDamage: 18,
     },
     // stage 2+: big skeleton with a minigun: spins up, then sprays slow bullets
     minigunner: {
@@ -331,6 +334,12 @@ const CONFIG = {
     // coins: roughly one per hpPerCoin of an enemy's base hp (at least 1); summoned enemies drop 1 coin
     // summonedChance of the time; the boss drops boss[0]-boss[1]; every cleared room's chest holds roomChest
     coins: { hpPerCoin: 60, summonedChance: 0.3, boss: [25, 35], roomChest: 5 },
+    // secret room: 3 chests, the party opens up to `picks` (then the rest seal shut); one is a mimic
+    // that drops every buff for mimicBuffTime seconds; the others hold coins or potions (any kind)
+    secret: { chests: 3, picks: 2, coins: [20, 35], potions: [2, 4], mimicBuffTime: 60 },
+    // wishing well: each coin tossed in has `chance` to grant a wish (guaranteed on the pity-th coin);
+    // a wish is one random kind of potion, potions[0]-potions[1] of it. One wish per hero per well
+    well: { chance: 0.15, pity: 12, potions: [2, 6] },
     // shop upgrades: one pick of three per shop; each can be owned maxLevel times per run (price x priceGrowth
     // per level owned); rerolling the three costs reroll.base, + reroll.step more each time at the same shop
     shop: { maxLevel: 3, priceGrowth: 1.5, reroll: { base: 6, step: 4 } },

@@ -177,9 +177,17 @@ const HUD = {
     return -1;
   },
 
+  /** True inside the bag's area (slots, gaps and a margin): letting go of a drag here doesn't drop anything. */
+  inBag(mx, my) {
+    const a = this.bagSlotRect(0);
+    const b = this.bagSlotRect(4);
+    return mx >= a.x - 14 && mx < b.x + b.s + 14 && my >= a.y - 26;
+  },
+
   /**
    * Mouse on the bag, run before the hero reads its input: drag a slot onto
-   * another to move / swap / stack it, right click a slot to drink it. Clicks
+   * another to move / swap / stack it, drag it out of the bag to drop it on
+   * the floor (for a teammate, or to make space), right click a slot to drink it. Clicks
    * that land on the bag are swallowed so they don't also attack. Moves go out
    * as commands so every machine applies them on the same tick.
    * p: this screen's hero, or null when not playing (cancels a drag).
@@ -192,6 +200,7 @@ const HUD = {
       if (m.leftReleased) {
         const to = this.bagSlotAt(m.x, m.y);
         if (to >= 0 && to !== this.bagDrag.from) App.command({ type: 'moveItem', from: this.bagDrag.from, to });
+        else if (!this.inBag(m.x, m.y)) App.command({ type: 'dropItem', slot: this.bagDrag.from });
         this.bagDrag = null;
       }
       return;
@@ -218,7 +227,7 @@ const HUD = {
     const m = Input._mouse;
     const first = this.bagSlotRect(0);
     this.text(ctx, 'BAG', first.x + 2, first.y - 19, { size: 5, color: '#7a6a8a' });
-    this.text(ctx, 'DRAG: MOVE  RMB: DRINK', first.x + 24, first.y - 19, { size: 5, color: '#4a3d5e' });
+    this.text(ctx, 'DRAG: MOVE / OUT TO DROP  RMB: DRINK', first.x + 24, first.y - 19, { size: 5, color: '#4a3d5e' });
     const hover = this.bagSlotAt(m.x, m.y);
     p.inventory.forEach((slot, i) => {
       const { x: sx, y: sy, s } = this.bagSlotRect(i);
@@ -245,6 +254,7 @@ const HUD = {
     if (drag) {
       const icon = Sprites.potions[p.inventory[drag.from].id];
       ctx.drawImage(icon, m.x - icon.width / 2, m.y - icon.height / 2);
+      if (!this.inBag(m.x, m.y)) this.text(ctx, 'DROP', m.x, m.y + 16, { size: 6, align: 'center', color: '#ffe680' });
     }
   },
 
@@ -338,7 +348,7 @@ const HUD = {
       ctx.fillStyle = '#1a1a30';
       ctx.fillRect(cx + 21, y + 13, w - 24, 3);
       ctx.fillStyle = b.color;
-      ctx.fillRect(cx + 21, y + 13, Math.round((w - 24) * clamp(t / b.duration, 0, 1)), 3);
+      ctx.fillRect(cx + 21, y + 13, Math.round((w - 24) * clamp(t / (p.buffMax[type] || b.duration), 0, 1)), 3);
       cx += w + 6;
     }
     // potion effects: a small bottle, the effect's name and time left, wrapping onto a second row

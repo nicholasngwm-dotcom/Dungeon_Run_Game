@@ -36,6 +36,7 @@ class Player extends Entity {
     this.healPopupTimer = 0;
     this.sinceHurt = 0;           // seconds since hp was last lost (drives passive regen)
     this.buffs = {};              // mimic buffs: type -> seconds left
+    this.buffMax = {};            // ...and how long each one lasted when it started
     this.aegis = null;            // Priestess aegis: { hp, maxHp, t } soaks every kind of hit
     this.poisonTime = 0;          // enemy poison: loses poisonDps hp per second
     this.poisonDps = 0;
@@ -494,9 +495,11 @@ class Player extends Entity {
 
   // ---------- mimic buffs ----------
 
-  /** Starts (or refreshes) a buff from CONFIG.buffs. */
-  addBuff(type) {
-    this.buffs[type] = CONFIG.buffs[type].duration;
+  /** Starts (or refreshes) a buff from CONFIG.buffs; a longer one already running is kept. */
+  addBuff(type, duration = CONFIG.buffs[type].duration) {
+    if ((this.buffs[type] || 0) >= duration) return;
+    this.buffs[type] = duration;
+    this.buffMax[type] = duration;   // for the HUD's draining bar
   }
 
   updateBuffs(dt, world) {
@@ -555,6 +558,17 @@ class Player extends Entity {
       inv[to] = a;
       inv[from] = b;
     }
+  }
+
+  /** Drops the whole stack in bag slot i at the hero's feet (to make space, or for a teammate). */
+  dropItem(i, world) {
+    const slot = Number.isInteger(i) ? this.inventory[i] : null;
+    if (!slot || this.dead) return;
+    this.inventory[i] = null;
+    const pt = world.dungeon.freePoint(this.x, this.y + 16, 6, 6);
+    world.pickups.push(new PotionPickup(pt.x, pt.y, slot.id, slot.count, this));
+    world.effects.text(this.hx, this.hy - 34, 'DROPPED', { color: '#d8c8a0', size: 7 });
+    Sound.play('uiClick');
   }
 
   /** Room in the bag for one more of this potion? */

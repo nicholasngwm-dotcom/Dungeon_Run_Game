@@ -14,8 +14,8 @@ const ROOM_INFO = {
   survival: { name: 'Survival', color: '#ff8a1e', desc: 'Doors lock. Enemies keep coming: stay alive until the timer runs out.' },
   puzzle: { name: 'Puzzle', color: '#b67aff', desc: 'Puzzles are coming soon.' },
   shop: { name: 'Shop', color: '#ffd34a', desc: 'Two stores: pick an upgrade (or reroll) at the enchanter, buy potions from Mira.' },
-  special: { name: 'Special', color: '#c08aff', desc: 'Something unusual: a blacksmith, restaurant, wishing well, trader, treasure... Coming soon.' },
-  secret: { name: 'Secret', color: '#fff6c8', desc: 'Not connected to anything. Look for a glowing hole in a combat room floor and jump in.' },
+  special: { name: 'Special', color: '#c08aff', desc: 'Something unusual: a blacksmith, restaurant, wishing well, trader, treasure... The wishing well grants a wish for coins; the rest are coming soon.' },
+  secret: { name: 'Secret', color: '#fff6c8', desc: 'Not connected to anything. Look for a glowing hole in a combat room floor and jump in. Three chests, open two: one is a mimic.' },
   boss: { name: 'Boss', color: '#ff3b30', desc: 'The theme\'s boss. Beat it to open the portal to the next stage.' },
 };
 
@@ -406,7 +406,8 @@ class DungeonRun {
   updateRoom(dt) {
     const r = this.active;
     const w = this.world;
-    const allDead = w.enemies.length === 0 && w.pendingSpawns === 0;
+    // a secret-room mimic (walled off, no doors) doesn't hold up a room fight elsewhere
+    const allDead = !w.enemies.some((e) => !e.secret) && w.pendingSpawns === 0;
     switch (r.type) {
       case 'combat':
         if (!allDead) return;
@@ -604,8 +605,14 @@ class DungeonRun {
     } else if (r.type === 'puzzle') {
       add('puzzle', 0, -0.5, 'PUZZLE ROOM', ROOM_INFO.puzzle.color);
     } else if (r.type === 'secret') {
-      add('chest', -3.5, 0.5, 'SECRET CHEST', '#fff6c8');
-      add('chest', 3.5, 0.5, 'SECRET CHEST', '#fff6c8');
+      // three chests, one of them a mimic; the party may open only `picks` of them
+      const c = CONFIG.run.secret;
+      const mimic = randInt(0, c.chests - 1);
+      r.chestPicks = 0;
+      for (let i = 0; i < c.chests; i++) {
+        add('secretChest', (i - (c.chests - 1) / 2) * 4, 2.2, 'MYSTERY CHEST', '#fff6c8');   // below where heroes land
+        this.props[this.props.length - 1].mimic = i === mimic;
+      }
       add('holeExit', 0, -1.5, 'CLIMB UP', '#fff6c8');   // the way back up to the hole
     }
   }
@@ -661,8 +668,8 @@ class DungeonRun {
   /**
    * Runs for each hero before they update, so pressing E at something here is
    * used up by the interaction and never also fires the hero's E ability.
-   * Reward chests open, the shopkeeper and chef talk, the hole takes you down;
-   * the rest (special rooms, secret chests...) aren't in yet.
+   * Reward and secret chests open, the shopkeeper and chef talk, the wishing
+   * well takes coins, the hole takes you down; the other special rooms aren't in yet.
    * hero.nearProp is what that hero could use right now (prompts show the local hero's).
    */
   preUpdate(hero) {
@@ -679,6 +686,8 @@ class DungeonRun {
     if (!pr || !Input.pressed('interact')) return;
     Input.consume('interact');
     if (pr.kind === 'rewardChest') return this.openChest(pr);
+    if (pr.kind === 'secretChest') return this.openSecretChest(pr);
+    if (pr.kind === 'wishingWell') return this.wish(pr, p);
     if (pr.kind === 'hole') return this.descend(p);
     if (pr.kind === 'holeExit') return this.ascend(p);
     if (pr.kind === 'shopkeeper' || pr.kind === 'chef' || pr.kind === 'enchanter') return w.events.onNpc?.(pr.kind, this, p);
@@ -702,6 +711,94 @@ class DungeonRun {
     this.spawnCoins(pr.x, pr.y - 12, CONFIG.run.coins.roomChest * this.world.players.length);
     w.effects.burst(pr.x, pr.y - 14, { count: 30, colors: ['#ffd34a', '#fff2a0', '#ffffff'], speed: [60, 180], life: [0.3, 0.7], up: 60 });
     w.effects.text(pr.x, pr.y - 40, `+${CONFIG.run.coins.roomChest} COINS`, { color: '#ffd34a', size: 9, life: 1.2 });
+    Sound.play('chestOpen');
+  }
+
+  /**
+   * Secret room chest: coins, a handful of random potions, or a mimic that
+   * jumps out. After the party's last pick the other chests seal shut.
+   */
+  openSecretChest(pr) {
+    const w = this.world;
+    const c = CONFIG.run.secret;
+    const r = pr.room;
+    pr.opened = true;
+    pr.t = 0;
+    r.chestPicks++;
+    if (r.chestPicks >= c.picks) {
+      for (const o of this.props) {
+        if (o.kind === 'secretChest' && o.room === r && !o.opened) { o.opened = true; o.sealed = true; }
+      }
+      w.effects.text(r.cx, r.cy - 20, 'THE OTHER CHESTS SEAL SHUT', { color: '#fff6c8', size: 8, life: 2 });
+    }
+    if (pr.mimic) {
+      // the chest was never a chest
+      pr.gone = true;
+      const m = createEnemy('mimic', pr.x, pr.y);
+      m.secret = true;
+      w.addEnemy(m);
+      w.effects.burst(pr.x, pr.y - 14, { count: 30, colors: ['#744420', '#e8b83a', '#e0507a', '#ffffff'], speed: [60, 180], life: [0.3, 0.7], up: 60 });
+      w.effects.text(pr.x, pr.y - 44, 'MIMIC!', { color: '#ff5a4a', size: 10, life: 1.2 });
+      w.shake(5, 0.25);
+      Sound.play('windup');
+      return;
+    }
+    w.effects.burst(pr.x, pr.y - 14, { count: 30, colors: ['#fff6c8', '#ffd34a', '#ffffff'], speed: [60, 180], life: [0.3, 0.7], up: 60 });
+    Sound.play('chestOpen');
+    if (Math.random() < 0.5) {
+      const n = randInt(c.coins[0], c.coins[1]);
+      this.spawnCoins(pr.x, pr.y - 12, n);
+      w.effects.text(pr.x, pr.y - 44, `+${n} COINS`, { color: '#ffd34a', size: 9, life: 1.2 });
+    } else {
+      const n = randInt(c.potions[0], c.potions[1]);
+      this.spawnPotions(pr.x, pr.y, n, () => choose(Object.keys(POTIONS)));
+      w.effects.text(pr.x, pr.y - 44, `${n} POTIONS!`, { color: '#ff8aa0', size: 9, life: 1.2 });
+    }
+  }
+
+  /** Potions spill out in front of a spot, one pickup each; pick(i) chooses each potion's id. */
+  spawnPotions(x, y, n, pick) {
+    const w = this.world;
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI / 2 + (i - (n - 1) / 2) * 0.6;
+      const pt = w.dungeon.freePoint(x + Math.cos(a) * 34, y + Math.sin(a) * 26, 6, 6);
+      w.pickups.push(new PotionPickup(pt.x, pt.y, pick(i)));
+    }
+  }
+
+  /**
+   * Wishing well: one coin per toss. Each coin may grant the wish (sure to by
+   * the pity-th); the wish is 2-6 of one random potion. One wish per hero.
+   */
+  wish(pr, hero) {
+    const w = this.world;
+    const c = CONFIG.run.well;
+    const local = hero === w.localPlayer;
+    pr.wishes = pr.wishes || {};
+    const key = hero.netId || 'solo';
+    const st = pr.wishes[key] || (pr.wishes[key] = { coins: 0, granted: false });
+    if (st.granted) {
+      if (local) { w.events.onToast?.('THE WELL HAS GRANTED YOUR WISH'); Sound.play('denied'); }
+      return;
+    }
+    if (hero.coins < 1) {
+      if (local) { w.events.onToast?.('NO COINS TO TOSS'); Sound.play('denied'); }
+      return;
+    }
+    hero.coins--;
+    st.coins++;
+    Sound.play('coin');
+    w.effects.burst(pr.x, pr.y - 16, { count: 6, colors: ['#9ad0ff', '#ffffff'], speed: [20, 60], life: [0.2, 0.4], up: 40 });
+    if (st.coins < c.pity && Math.random() >= c.chance) {
+      w.effects.text(pr.x, pr.y - 40, choose(['*plink*', 'nothing...', '*splash*', 'not yet...']), { color: '#9ad0ff', size: 7 });
+      return;
+    }
+    st.granted = true;
+    const id = choose(Object.keys(POTIONS));
+    const n = randInt(c.potions[0], c.potions[1]);
+    this.spawnPotions(pr.x, pr.y + 30, n, () => id);
+    w.effects.burst(pr.x, pr.y - 20, { count: 40, colors: ['#6ad8ff', '#ffffff', '#ffe680'], speed: [60, 200], life: [0.4, 0.8], up: 80 });
+    w.effects.text(pr.x, pr.y - 50, `WISH GRANTED: ${n} ${POTIONS[id].name.toUpperCase()}`, { color: '#6ad8ff', size: 8, life: 1.8 });
     Sound.play('chestOpen');
   }
 
@@ -868,9 +965,13 @@ class DungeonRun {
         }
         break;
       }
-      case 'rewardChest': {
-        const lift = pr.opened ? Math.min(1, pr.t * 6) : 0;
-        if (pr.opened && pr.t < 1.5) {
+      case 'rewardChest':
+      case 'secretChest': {
+        if (pr.gone) return;   // it was a mimic
+        const secret = pr.kind === 'secretChest';
+        const lift = pr.opened && !pr.sealed ? Math.min(1, pr.t * 6) : 0;
+        if (secret && !pr.opened) drawGlints(ctx, [[x - 10, y - 22], [x + 11, y - 14], [x + 3, y - 26]], this.time + x * 0.01);
+        if (pr.opened && !pr.sealed && pr.t < 1.5) {
           ctx.save();
           ctx.globalCompositeOperation = 'lighter';
           const g = ctx.createRadialGradient(x, y - 14, 2, x, y - 14, 40);
@@ -880,18 +981,33 @@ class DungeonRun {
           ctx.fillRect(x - 40, y - 54, 80, 80);
           ctx.restore();
         }
-        box(28, 14, '#7d532f', '#5b3922');
-        ctx.fillStyle = '#dcb44c';
+        // secret chests: dark violet wood with silver trim
+        const trim = secret ? '#cfc7e8' : '#dcb44c';
+        if (pr.sealed) ctx.globalAlpha = 0.55;
+        box(28, 14, secret ? '#4a3a5e' : '#7d532f', secret ? '#2e2440' : '#5b3922');
+        ctx.fillStyle = trim;
         ctx.fillRect(x - 14, y - 9, 28, 2);
         // the lid tips back when opened
         const ly = y - 14 - lift * 8;
         ctx.fillStyle = OUTLINE;
         ctx.fillRect(x - 15, ly - 10 + lift * 4, 30, 11 - lift * 4);
-        ctx.fillStyle = '#9c6c3e';
+        ctx.fillStyle = secret ? '#5c4a74' : '#9c6c3e';
         ctx.fillRect(x - 14, ly - 9 + lift * 4, 28, 9 - lift * 4);
-        ctx.fillStyle = '#dcb44c';
+        ctx.fillStyle = trim;
         ctx.fillRect(x - 14, ly - 2, 28, 2);
-        if (!pr.opened) ctx.fillRect(x - 2, y - 17, 4, 6);
+        if (!pr.opened || pr.sealed) ctx.fillRect(x - 2, y - 17, 4, 6);
+        ctx.globalAlpha = 1;
+        if (pr.sealed) {
+          // chained shut
+          for (const [x1, x2] of [[-16, 16], [16, -16]]) {
+            for (let i = 0; i <= 6; i++) {
+              const cx = Math.round(x + x1 + (x2 - x1) * (i / 6));
+              const cy = Math.round(y - 24 + 20 * (i / 6));
+              ctx.fillStyle = OUTLINE; ctx.fillRect(cx - 2, cy - 2, 5, 4);
+              ctx.fillStyle = '#80869a'; ctx.fillRect(cx - 1, cy - 1, 3, 2);
+            }
+          }
+        }
         break;
       }
       case 'chest':
@@ -935,8 +1051,13 @@ class DungeonRun {
     if (pr.opened) return;
     const near = this.world.localPlayer.nearProp === pr;
     const npc = ['shopkeeper', 'chef', 'enchanter', 'restaurant5'].includes(pr.kind);
-    const labelY = npc || Scenes[pr.kind] ? y - 86 : pr.kind === 'rewardChest' ? y - 36 : y - 62;
-    const label = near && npc ? 'TALK' : pr.label;
+    const labelY = npc || Scenes[pr.kind] ? y - 86 : pr.kind === 'rewardChest' || pr.kind === 'secretChest' ? y - 36 : y - 62;
+    let label = near && npc ? 'TALK' : pr.label;
+    if (pr.kind === 'wishingWell') {
+      const st = pr.wishes?.[this.world.localPlayer.netId || 'solo'];
+      if (st?.granted) label = 'WISH GRANTED';
+      else if (near) label = 'TOSS A COIN';
+    }
     if (pr.kind === 'rewardChest' && !near) return;
     HUD.text(ctx, near ? `[${Settings.label('interact')}] ${label}` : label, x, labelY, { size: near ? 7 : 6, align: 'center', color: near ? '#ffe680' : pr.color });
   }

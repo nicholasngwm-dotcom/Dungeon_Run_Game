@@ -17,7 +17,7 @@ const BESTIARY = {
     { type: 'candlehead', name: 'Candlehead', role: 'ranged', desc: 'A skeleton with a candle for a head. Its souls knock you far back.' },
     { type: 'shadowalker', name: 'Shadowalker', role: 'melee', desc: 'Stabs with a poison dagger. Every 5 seconds it teleports behind you and strikes.' },
     { type: 'necromancer', name: 'Necromancer', role: 'summoner', desc: 'Stays back, raising groups of zombies and skeletons while firing souls.' },
-    { type: 'reaper', name: 'Reaper', role: 'melee', desc: 'Wide scythe swings and waves of darkness. Teleports next to you if you keep away.' },
+    { type: 'reaper', name: 'Reaper', role: 'melee', desc: 'Wide scythe swings and waves of darkness. Teleports next to you if you keep away. Explodes into darkness when it dies: get clear!' },
     { type: 'minigunner', name: 'Skeleton Minigunner', role: 'ranged', desc: 'A big skeleton with a minigun. Spins up, then sprays slow bullets that track you slowly.' },
     { type: 'zombieSoldier', name: 'Zombie Soldier', role: 'ranged', desc: 'Armoured: shrugs off 40% of all damage. Aims, then fires fast three-round bursts.' },
     { type: 'skeletonSorcerer', name: 'Skeleton Sorcerer', role: 'summoner', desc: 'Lines of bone hands burst from the ground and stun. Also summons exploding skulls.' },

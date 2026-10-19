@@ -84,18 +84,22 @@ class ManaPickup extends Pickup {
   }
 }
 
-/** Buff orb from a mimic: type is a key of CONFIG.buffs (regen, speed, damage). */
+/**
+ * Buff orb from a mimic: type is a key of CONFIG.buffs (regen, speed, damage).
+ * duration overrides the buff's usual length (secret-room mimics: a full minute).
+ */
 class BuffPickup extends Pickup {
-  constructor(x, y, type) {
+  constructor(x, y, type, duration = null) {
     super(x, y);
     this.type = type;
+    this.duration = duration;
   }
 
   wanted() { return true; }
 
   collect(p, world) {
     const b = CONFIG.buffs[this.type];
-    p.addBuff(this.type);
+    p.addBuff(this.type, this.duration || b.duration);
     world.effects.text(p.hx, p.hy - 40, `${b.name} UP!`, { color: b.color, size: 9, life: 1 });
     world.effects.burst(p.hx, p.hy, { count: 18, colors: [b.color, '#ffffff'], speed: [40, 140], life: [0.3, 0.6], up: 30 });
   }
@@ -114,6 +118,46 @@ class BuffPickup extends Pickup {
     ctx.fillRect(this.x - r, cy - r, r * 2, r * 2);
     ctx.restore();
     this.drawSprite(ctx, Sprites.pickups[`buff_${this.type}`]);
+  }
+}
+
+/**
+ * Potions on the floor: from secret chests, the wishing well, or dropped out
+ * of a hero's bag. Any hero with room in their bag picks them up (a stack
+ * leaves behind what doesn't fit). Whoever dropped it has to step away before
+ * they can pick it back up, so dropping works for making space or handing
+ * potions to a teammate.
+ */
+class PotionPickup extends Pickup {
+  constructor(x, y, id, count = 1, dropper = null) {
+    super(x, y);
+    this.id = id;
+    this.count = count;
+    this.dropper = dropper;
+    this.magnet = 40;
+    this.lifetime = 90;
+  }
+
+  wanted(p) { return p !== this.dropper && p.canCarry(this.id); }
+
+  update(dt, world) {
+    if (this.dropper && dist(this.x, this.y, this.dropper.x, this.dropper.y) > 60) this.dropper = null;
+    super.update(dt, world);
+    if (this.dead && this.count > 0 && this.age <= this.lifetime) this.dead = false;   // the rest didn't fit
+  }
+
+  collect(p, world) {
+    let n = 0;
+    while (this.count > 0 && p.addItem(this.id)) { this.count--; n++; }
+    const pot = POTIONS[this.id];
+    world.effects.text(p.hx, p.hy - 36, `+${n} ${pot.name.toUpperCase()}`, { color: POTION_COLORS[pot.family][1], size: 7, life: 1 });
+  }
+
+  draw(ctx) {
+    this.drawSprite(ctx, Sprites.potions[this.id]);
+    if (this.count > 1 && !(this.age > this.lifetime - 3 && Math.floor(this.age * 8) % 2)) {
+      HUD.text(ctx, `x${this.count}`, Math.round(this.x + 10), Math.round(this.y - 10), { size: 6, align: 'center' });
+    }
   }
 }
 

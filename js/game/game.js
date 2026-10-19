@@ -449,6 +449,9 @@ class Game {
       case 'moveItem':
         if (hero) hero.moveItem(cmd.from, cmd.to);
         return;
+      case 'dropItem':
+        if (hero) hero.dropItem(cmd.slot, this);
+        return;
       case 'readyCheck':
         if (this.lobby && fromId === this.roster[0].id && !this.readyCheck) {
           this.readyCheck = { ready: {} };

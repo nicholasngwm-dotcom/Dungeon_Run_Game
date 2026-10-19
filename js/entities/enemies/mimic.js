@@ -117,7 +117,13 @@ class Mimic extends Enemy {
     Sound.play('pickup');
     world.maybeDropHeart(this.x - 14, this.y, this.cfg.heartChance);
     world.maybeDropMana(this.x, this.y);
-    if (Math.random() < this.cfg.buffChance) world.pickups.push(new BuffPickup(this.x + 12, this.y, choose(Object.keys(CONFIG.buffs))));
+    if (this.secret) {
+      // a secret-room chest mimic: every buff, each lasting a full minute
+      Object.keys(CONFIG.buffs).forEach((type, i, all) => {
+        const a = (i / all.length) * TAU;
+        world.pickups.push(new BuffPickup(this.x + Math.cos(a) * 20, this.y + Math.sin(a) * 12, type, CONFIG.run.secret.mimicBuffTime));
+      });
+    } else if (Math.random() < this.cfg.buffChance) world.pickups.push(new BuffPickup(this.x + 12, this.y, choose(Object.keys(CONFIG.buffs))));
   }
 
   drawTelegraph(ctx) {
