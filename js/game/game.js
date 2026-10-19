@@ -446,6 +446,9 @@ class Game {
       case 'buyPotion':
         if (this.run && hero) this.run.buyPotion(hero, cmd.id);
         return;
+      case 'moveItem':
+        if (hero) hero.moveItem(cmd.from, cmd.to);
+        return;
       case 'readyCheck':
         if (this.lobby && fromId === this.roster[0].id && !this.readyCheck) {
           this.readyCheck = { ready: {} };

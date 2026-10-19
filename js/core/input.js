@@ -10,7 +10,7 @@
 const Input = {
   keys: new Set(),
   pressedKeys: new Set(),
-  _mouse: { x: 480, y: 270, left: false, right: false, leftPressed: false, rightPressed: false },
+  _mouse: { x: 480, y: 270, left: false, right: false, leftPressed: false, rightPressed: false, leftReleased: false },
   // multiplayer: while a hero updates, its networked input stands in for the real devices
   // ({ held: Set, pressed: Set, mouse }); null otherwise
   override: null,
@@ -54,7 +54,7 @@ const Input = {
       if (e.button === 2) { this._mouse.right = true; this._mouse.rightPressed = true; }
     });
     window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) this._mouse.left = false;
+      if (e.button === 0) { this._mouse.left = false; this._mouse.leftReleased = true; }
       if (e.button === 2) this._mouse.right = false;
     });
     window.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -118,6 +118,7 @@ const Input = {
     this.pressedKeys.clear();
     this._mouse.leftPressed = false;
     this._mouse.rightPressed = false;
+    this._mouse.leftReleased = false;
   },
 
   reset() {

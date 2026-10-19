@@ -158,54 +158,94 @@ const HUD = {
       this.abilitySlot(ctx, x0 + i * 70, 474, s.key, s.name, cd, max, icon, s.slot ? p.slotCharges?.[s.slot] : null, s.armed, s.slot || s.name);
     });
     this.ultSlot(ctx, 960 - 14 - 70, 474, p);
-    this.drawInventory(ctx, p, 14, 474);
+    this.drawInventory(ctx, p);
+  },
+
+  // ---------- the bag (bottom left) ----------
+
+  bagDrag: null,   // { from } while a bag slot is being dragged with the mouse (this screen only)
+
+  /** Screen rect of bag slot i (shared by drawing and the mouse). */
+  bagSlotRect(i) { return { x: 14 + i * 44, y: 484, s: 40 }; },
+
+  /** The bag slot under a screen point, or -1. */
+  bagSlotAt(mx, my) {
+    for (let i = 0; i < 5; i++) {
+      const r = this.bagSlotRect(i);
+      if (mx >= r.x - 2 && mx < r.x + r.s + 2 && my >= r.y - 2 && my < r.y + r.s + 2) return i;
+    }
+    return -1;
   },
 
   /**
-   * Bottom-left: the free health potion (H, on a cooldown), then the 5-slot
-   * bag of bought potions, each with the key that drinks it and how many.
+   * Mouse on the bag, run before the hero reads its input: drag a slot onto
+   * another to move / swap / stack it, right click a slot to drink it. Clicks
+   * that land on the bag are swallowed so they don't also attack. Moves go out
+   * as commands so every machine applies them on the same tick.
+   * p: this screen's hero, or null when not playing (cancels a drag).
    */
-  drawInventory(ctx, p, x, y) {
-    const s = 40;
-    const gap = 4;
-    const sy = y + 10;
-    // the free potion
-    {
-      const sx = x;
-      const cd = p.potionCooldown;
-      const max = CONFIG.player.potion.cooldown;
-      const icon = Sprites.icons.potion;
-      this.text(ctx, 'FREE', sx + 2, y - 9, { size: 5, color: '#7a6a8a' });
-      this.panel(ctx, sx, sy, s, s);
-      ctx.drawImage(icon, sx + s / 2 - icon.width / 2, sy + s / 2 - icon.height / 2 + 1);
-      this.text(ctx, Settings.label('potion'), sx + 3, sy + 3, { size: 6, color: cd > 0 ? '#7a6a8a' : '#f2a541' });
-      this.text(ctx, `+${CONFIG.player.potion.heal}`, sx + s - 3, sy + s - 9, { size: 5, align: 'right', color: '#ff8a8a' });
-      if (cd > 0) {
-        const r = clamp(cd / max, 0, 1);
-        ctx.fillStyle = 'rgba(10, 6, 18, 0.65)';
-        ctx.fillRect(sx, sy + s * (1 - r), s, s * r);
-        this.text(ctx, `${Math.ceil(cd)}`, sx + s / 2, sy + s / 2 - 4, { size: 8, align: 'center', color: '#ffffff' });
+  handleBagMouse(p) {
+    const m = Input._mouse;
+    if (!p || p.dead) { this.bagDrag = null; return; }
+    if (this.bagDrag) {
+      m.left = m.leftPressed = false;
+      if (m.leftReleased) {
+        const to = this.bagSlotAt(m.x, m.y);
+        if (to >= 0 && to !== this.bagDrag.from) App.command({ type: 'moveItem', from: this.bagDrag.from, to });
+        this.bagDrag = null;
       }
-      this.readyFlash(ctx, 'potion', cd, sx, sy, s, s);
+      return;
     }
-    // the bag
-    const bx = x + s + gap + 8;
-    this.text(ctx, 'BAG', bx + 2, y - 9, { size: 5, color: '#7a6a8a' });
+    const over = this.bagSlotAt(m.x, m.y);
+    if (over < 0) return;
+    if (m.leftPressed) {
+      m.left = m.leftPressed = false;
+      if (p.inventory[over] && !m.leftReleased) this.bagDrag = { from: over };
+    }
+    if (m.rightPressed) {
+      m.right = m.rightPressed = false;
+      // same as pressing that slot's key
+      if (p.inventory[over]) Input.pressedKeys.add(Input.codesFor(`item${over + 1}`)[0]);
+    }
+  },
+
+  /**
+   * Bottom-left: the 5-slot bag of bought potions, each with the key that
+   * drinks it and how many. While dragging, the potion follows the mouse.
+   */
+  drawInventory(ctx, p) {
+    const drag = this.bagDrag && p.inventory[this.bagDrag.from] ? this.bagDrag : null;
+    const m = Input._mouse;
+    const first = this.bagSlotRect(0);
+    this.text(ctx, 'BAG', first.x + 2, first.y - 19, { size: 5, color: '#7a6a8a' });
+    this.text(ctx, 'DRAG: MOVE  RMB: DRINK', first.x + 24, first.y - 19, { size: 5, color: '#4a3d5e' });
+    const hover = this.bagSlotAt(m.x, m.y);
     p.inventory.forEach((slot, i) => {
-      const sx = bx + i * (s + gap);
+      const { x: sx, y: sy, s } = this.bagSlotRect(i);
       this.panel(ctx, sx, sy, s, s);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
       ctx.fillRect(sx + 3, sy + 3, s - 6, s - 6);
+      if (drag && hover === i && i !== drag.from) {
+        ctx.strokeStyle = '#ffe680';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(sx + 1, sy + 1, s - 2, s - 2);
+      }
       const key = Settings.label(`item${i + 1}`);
       if (!slot) {
         this.text(ctx, key, sx + 3, sy + 3, { size: 5, color: '#4a3d5e' });
         return;
       }
       const icon = Sprites.potions[slot.id];
+      if (drag && drag.from === i) ctx.globalAlpha = 0.3;
       ctx.drawImage(icon, sx + s / 2 - icon.width / 2, sy + s / 2 - icon.height / 2 + 2);
+      ctx.globalAlpha = 1;
       this.text(ctx, key, sx + 3, sy + 3, { size: 6, color: '#f2a541' });
       if (slot.count > 1) this.text(ctx, `x${slot.count}`, sx + s - 3, sy + s - 9, { size: 6, align: 'right', color: '#ffffff' });
     });
+    if (drag) {
+      const icon = Sprites.potions[p.inventory[drag.from].id];
+      ctx.drawImage(icon, m.x - icon.width / 2, m.y - icon.height / 2);
+    }
   },
 
   /**

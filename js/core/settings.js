@@ -13,7 +13,6 @@ const KEY_ACTIONS = [
   ['f', 'Ability F'],
   ['ult', 'Ultimate'],
   ['dodge', 'Dodge'],
-  ['potion', 'Health potion (free)'],
   ['item1', 'Inventory slot 1'],
   ['item2', 'Inventory slot 2'],
   ['item3', 'Inventory slot 3'],
@@ -33,7 +32,7 @@ const Settings = {
     display: 'default',   // default | fullscreen (see Display)
     keys: {
       up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',
-      e: 'KeyE', f: 'KeyF', ult: 'KeyQ', dodge: 'ShiftLeft', potion: 'KeyH',
+      e: 'KeyE', f: 'KeyF', ult: 'KeyQ', dodge: 'ShiftLeft',
       interact: 'KeyE', music: 'KeyM', cursor: 'KeyC',
       item1: 'Digit1', item2: 'Digit2', item3: 'Digit3', item4: 'Digit4', item5: 'Digit5',
     },
@@ -45,6 +44,8 @@ const Settings = {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(this.storageKey)) || {}; } catch (e) { saved = {}; }
     this.data = { ...this.defaults, ...saved, keys: { ...this.defaults.keys, ...(saved.keys || {}) } };
+    // drop saved bindings for actions that no longer exist (the old free potion)
+    for (const k of Object.keys(this.data.keys)) if (!(k in this.defaults.keys)) delete this.data.keys[k];
   },
 
   save() {

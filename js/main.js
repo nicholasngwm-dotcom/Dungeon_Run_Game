@@ -424,6 +424,9 @@ const App = {
       if (!Input.freeMouse && !Input.locked && (Input.mouse.leftPressed || Input.mouse.rightPressed)) Input.lockPointer();
     } else Input.unlockPointer();
 
+    // the bag takes mouse clicks on its slots before the hero sees them
+    HUD.handleBagMouse(this.state === 'playing' && this.game ? this.game.localPlayer : null);
+
     if (this.mp) {
       // multiplayer: the session steps the shared world whatever menu is open here;
       // this screen's hero only gets input while nothing is open

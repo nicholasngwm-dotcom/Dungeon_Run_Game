@@ -99,7 +99,7 @@ networks block peer-to-peer connections.
 
 **Settings** (main menu or pause menu) has mouse sensitivity, music on/off,
 music and sound effect volume, and key bindings for movement, E, F, Q, dodge,
-potion, interact, the music toggle and the mouse / crosshair toggle (LMB / RMB
+the five bag slots, interact, the music toggle and the mouse / crosshair toggle (LMB / RMB
 stay on the mouse). Settings are saved in the browser. While playing, the game
 locks the mouse pointer so sensitivity can apply; press Esc to get the cursor
 back (this pauses), or press C to switch to the normal mouse pointer without
@@ -113,9 +113,12 @@ their own track.
 
 WASD to move, mouse to aim, left click for the primary attack (hold to repeat),
 right click for the secondary ability, E and F for class abilities, Q for the
-ultimate (it charges as you deal damage), Shift to dodge, H to drink a health
-potion (+40 hp, starts regen, 40s cooldown), Esc to pause, M to
-toggle music (a toast shows ON / OFF). The Mage spends mana, the Rogue spends energy and the Priestess
+ultimate (it charges as you deal damage), Shift to dodge, 1-5 to drink the
+potion in that bag slot (potions are bought at the shop; there is no free
+potion), Esc to pause, M to
+toggle music (a toast shows ON / OFF). The bag (bottom left) can be managed
+with the mouse: drag a slot onto another to move, swap or stack potions
+(this also works in the shop's bag), and right click a slot to drink it. The Mage spends mana, the Rogue spends energy and the Priestess
 spends light orbs (bar under HP).
 
 ## Project layout

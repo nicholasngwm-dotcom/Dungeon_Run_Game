@@ -18,7 +18,7 @@
 // commands too, so everyone builds the new world on the same tick from the same seed.
 
 const HELD_ACTIONS = ['up', 'down', 'left', 'right'];
-const PRESS_ACTIONS = ['e', 'f', 'ult', 'dodge', 'potion', 'interact', 'item1', 'item2', 'item3', 'item4', 'item5'];
+const PRESS_ACTIONS = ['e', 'f', 'ult', 'dodge', 'interact', 'item1', 'item2', 'item3', 'item4', 'item5'];
 
 class Session {
   /** An input that does nothing (players with no input yet, or with a menu open). */

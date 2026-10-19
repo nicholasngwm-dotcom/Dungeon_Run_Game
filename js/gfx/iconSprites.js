@@ -260,18 +260,5 @@ function buildIconSprites() {
       for (const y of [8, 20]) p.rect(1, y, 4, 1, '#8a8070');
       p.rect(23, 13, 4, 2, '#8a8070');
     }),
-    // red health potion flask with a cork
-    potion: icon((p) => {
-      p.rect(11, 2, 6, 4, '#9a6a3a');       // cork
-      p.rect(11, 2, 6, 1, '#c89a5a');
-      p.rect(10, 6, 8, 5, '#c8d8e8');       // glass neck
-      p.circle(14, 18, 8, '#c8d8e8');       // glass bulb
-      p.circle(14, 19, 7, '#b81e2e');       // potion
-      p.circle(14, 20, 6, '#e83a4a');
-      p.rect(8, 15, 12, 1, '#ff8aa0');      // surface shine
-      p.rect(9, 17, 3, 4, '#ff8aa0');
-      p.px(10, 13, '#ffffff');
-      p.px(11, 12, '#ffffff');
-    }),
   };
 }

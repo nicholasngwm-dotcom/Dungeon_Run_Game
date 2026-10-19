@@ -24,8 +24,6 @@ const CONFIG = {
     invisibleDetectRange: 200,
     // passive regen: after `delay` seconds without losing hp, heal `hpPerSecond` (1 hp every 5s)
     regen: { delay: 4, hpPerSecond: 0.2 },
-    // H: health potion. Unlimited, but on a cooldown; drinking also starts passive regen right away
-    potion: { heal: 40, cooldown: 40 },
   },
 
   // ---------------------------------------------------------

@@ -482,7 +482,11 @@ h2 {
   background: #120c1c; border: 2px solid #3a2d52;
   display: flex; align-items: center; justify-content: center;
 }
-.bag-slot canvas { width: 28px; height: 28px; image-rendering: pixelated; }
+.bag-slot[draggable="true"] { cursor: grab; }
+.bag-slot.dragging { opacity: 0.4; }
+.bag-slot.drop { border-color: #ffe680; }
+.bag-slot canvas { width: 28px; height: 28px; image-rendering: pixelated; pointer-events: none; }
+.bag-slot i, .bag-slot b { pointer-events: none; }
 .bag-slot i { position: absolute; left: 2px; top: 1px; font-size: 5px; font-style: normal; color: #f2a541; }
 .bag-slot b { position: absolute; right: 1px; bottom: 1px; font-size: 6px; color: #ffffff; text-shadow: 1px 1px 0 #000; }
 .pips { display: flex; gap: 3px; }

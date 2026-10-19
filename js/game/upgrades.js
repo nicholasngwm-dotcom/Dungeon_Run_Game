@@ -227,9 +227,31 @@ const Shop = {
     // the bag: what this hero is carrying, with the keys to drink it
     const extra = document.getElementById('shop-extra');
     extra.innerHTML = `<div class="bag"><span class="bag-label">YOUR BAG</span>${p.inventory.map((s, i) => `
-      <div class="bag-slot"><i>${Settings.label(`item${i + 1}`)}</i>${s ? `<canvas width="28" height="28" data-bag="${s.id}"></canvas><b>${s.count > 1 ? `x${s.count}` : ''}</b>` : ''}</div>`).join('')}</div>`;
+      <div class="bag-slot" data-slot="${i}"${s ? ' draggable="true"' : ''}><i>${Settings.label(`item${i + 1}`)}</i>${s ? `<canvas width="28" height="28" data-bag="${s.id}"></canvas><b>${s.count > 1 ? `x${s.count}` : ''}</b>` : ''}</div>`).join('')}</div>`;
     for (const c of extra.querySelectorAll('canvas')) c.getContext('2d').drawImage(Sprites.potions[c.dataset.bag], 0, 0);
-    document.getElementById('shop-hint').textContent = 'Potions go in your bag (5 slots, up to 5 of a kind each). Drink with the slot keys during a fight.';
+    this.bindBagDrag(extra);
+    document.getElementById('shop-hint').textContent = 'Potions go in your bag (5 slots, up to 5 of a kind each). Drag to rearrange; drink with the slot keys during a fight.';
+  },
+
+  /** Drag a bag slot onto another to move, swap or stack it (same command as the in-game bag). */
+  bindBagDrag(root) {
+    for (const el of root.querySelectorAll('.bag-slot')) {
+      const i = Number(el.dataset.slot);
+      el.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', String(i));
+        e.dataTransfer.effectAllowed = 'move';
+        el.classList.add('dragging');
+      });
+      el.addEventListener('dragend', () => el.classList.remove('dragging'));
+      el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drop'); });
+      el.addEventListener('dragleave', () => el.classList.remove('drop'));
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        el.classList.remove('drop');
+        const from = Number(e.dataTransfer.getData('text/plain'));
+        if (Number.isInteger(from) && from !== i) App.command({ type: 'moveItem', from, to: i });
+      });
+    }
   },
 
   buy(id) {

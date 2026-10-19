@@ -36,7 +36,6 @@ class Player extends Entity {
     this.healPopupTimer = 0;
     this.sinceHurt = 0;           // seconds since hp was last lost (drives passive regen)
     this.buffs = {};              // mimic buffs: type -> seconds left
-    this.potionCooldown = 0;      // H potion (kept apart from ability cooldowns so resets don't refill it)
     this.aegis = null;            // Priestess aegis: { hp, maxHp, t } soaks every kind of hit
     this.poisonTime = 0;          // enemy poison: loses poisonDps hp per second
     this.poisonDps = 0;
@@ -117,7 +116,6 @@ class Player extends Entity {
     this.chillTime = (this.chillTime || 0) - dt;
     this.updateBuffs(dt, world);
     this.updateBrews(dt, world);
-    this.potionCooldown -= dt;
     this.updatePoison(dt, world);
     this.stunTime -= dt;
     if (this.aegis) {
@@ -125,7 +123,6 @@ class Player extends Entity {
       this.aegis.flash -= dt;
       if (this.aegis.t <= 0) this.aegis = null;
     }
-    if (Input.pressed('potion')) this.drinkPotion(world);
     for (let i = 0; i < this.inventory.length; i++) if (Input.pressed(`item${i + 1}`)) this.useItem(i, world);
     this.busy -= dt;
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
@@ -495,24 +492,6 @@ class Player extends Entity {
     }
   }
 
-  // ---------- health potion (H) ----------
-
-  /** Heals a chunk and starts passive regen immediately. Unlimited, but on a cooldown. */
-  drinkPotion(world) {
-    const c = CONFIG.player.potion;
-    if (this.potionCooldown > 0) return Sound.play('denied');
-    if (this.hp >= this.maxHp) {
-      Sound.play('denied');
-      world.effects.text(this.hx, this.hy - 30, 'FULL HP', { color: '#d8c8a0', size: 7 });
-      return;
-    }
-    this.potionCooldown = c.cooldown;
-    this.heal(c.heal, world);
-    this.sinceHurt = Math.max(this.sinceHurt, CONFIG.player.regen.delay);
-    world.effects.burst(this.hx, this.hy - 10, { count: 12, colors: ['#e83a4a', '#ff8aa0', '#ffffff'], speed: [20, 70], life: [0.3, 0.6], up: 40 });
-    Sound.play('pickup');
-  }
-
   // ---------- mimic buffs ----------
 
   /** Starts (or refreshes) a buff from CONFIG.buffs. */
@@ -556,6 +535,26 @@ class Player extends Entity {
     if (i < 0) return false;
     this.inventory[i] = { id, count: 1 };
     return true;
+  }
+
+  /**
+   * Moves the stack in bag slot `from` onto slot `to` (dragged with the mouse):
+   * the same potion merges (up to 5, any extra stays behind), anything else swaps.
+   */
+  moveItem(from, to) {
+    const inv = this.inventory;
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from === to || !inv[from] || to < 0 || to >= inv.length) return;
+    const a = inv[from];
+    const b = inv[to];
+    if (b && b.id === a.id) {
+      const n = Math.min(a.count, 5 - b.count);
+      b.count += n;
+      a.count -= n;
+      if (a.count <= 0) inv[from] = null;
+    } else {
+      inv[to] = a;
+      inv[from] = b;
+    }
   }
 
   /** Room in the bag for one more of this potion? */
