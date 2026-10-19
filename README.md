@@ -33,6 +33,7 @@ a station and press E:
 - **Practice range** (bottom right): opens the practice range with your hero.
 - **Map legend** board (bottom left): what each minimap colour means and what each room is for.
 - **Bestiary** lectern (bottom left): a book of every enemy in a theme, two per spread. Flip pages with the arrows (or A / D) and filter by stage and role.
+- **Potion guide** alchemy table (beside the bestiary): every potion, what it does and its stage 1 price.
 - **Gate** (top, at the end of the carpet): choose a game mode and start a run.
 
 There is also a training dummy in the lobby to try abilities on. After a run,
@@ -57,10 +58,11 @@ and minigunner from stage 2; zombie soldier and skeleton sorcerer in stage 3).
 
 **Coins**: enemies drop coins (tougher ones drop more; summoned ones rarely), the boss
 drops a pile, and every cleared room leaves a chest worth 5 coins. Coins last for the
-whole run. Spend them in the **shop**: talk to Mira the shopkeeper and she opens her
-wares, six stat upgrades (max HP, regen, attack speed, damage, move speed, plus one
-for your hero: mana regen, energy regen, an extra light orb, or faster abilities).
-Each can be bought 3 times per run and gets pricier each time. In defend rooms,
+whole run. Spend them in the **shop**: Mira sells potions (your bag holds 5 slots,
+up to 10 of a kind each) and Bram the enchanter offers three of six big stat
+upgrades (max HP, regen, attack speed, damage, move speed, plus one for your hero:
+mana regen, energy regen, extra light orbs, or faster abilities). Pick one per shop;
+each can only be owned once per run. Every shop price rises with the stage. In defend rooms,
 enemies chase you once they spot you and go back for the lantern if you outrun them.
 
 The restaurant (its chef just chats for now), special rooms (blacksmith, wishing well, hero statue,
@@ -150,6 +152,7 @@ js/
   game/                 Game world, wave director, lobby hub, dungeon run (rooms + objectives), HUD
   ui/menus.js           DOM menus + lobby panels (hero, workshop, dungeon, legend)
   ui/bestiary.js        bestiary book (entries, filters, page flips)
+  ui/potionGuide.js     lobby potion guide (every potion by family)
   ui/dialog.js          NPC dialogue box (typewriter text, choices)
   net/net.js            peer-to-peer connections (PeerJS): host / join by room code
   net/session.js        multiplayer lockstep: input bundles, commands, scenes, desync checks

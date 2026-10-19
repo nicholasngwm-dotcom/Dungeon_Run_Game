@@ -217,6 +217,7 @@ const Menus = {
       case 'dungeonBack': this.showDungeonView('modes'); break;
       case 'bestiaryFilter': Bestiary.setFilter(arg, arg2); break;
       case 'bestiaryFlip': Bestiary.flip(Number(arg)); break;
+      case 'potionGroup': PotionGuide.setGroup(arg); break;
       case 'dialogOption': Dialog.choose(Number(arg)); break;
       case 'dialogSkip': Dialog.finish(); break;
       case 'buy': Shop.buy(arg); break;

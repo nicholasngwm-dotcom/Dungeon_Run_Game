@@ -1,5 +1,5 @@
 // Potions: sold in the shop's potion store, carried in the 5-slot inventory
-// and drunk with keys 1-5. Each potion belongs to a family (heal, speed,
+// (up to BAG_STACK of a kind per slot) and drunk with keys 1-5. Each potion belongs to a family (heal, speed,
 // thorns...) and a tier (1 plain, 2 large, 3 super). Timed effects live on the
 // hero as "brews" (Player.brews[family] = { t, v }); drinking another potion of
 // the same family keeps the stronger effect and the longer time.
@@ -37,8 +37,19 @@ const POTION_DEFS = [
   ['thorns', 2, 'Large Thorns Potion', 16, 0.15, 30, 'Reflects 15% of damage you take back at the attacker for 30s.'],
   ['thorns', 3, 'Super Thorns Potion', 26, 0.3, 30, 'Reflects 30% of damage you take back at the attacker for 30s.'],
   ['purity', 1, 'Purity Potion', 14, 1, 3, 'Cleanses poison, slows and stuns, and makes you immune to them for 3s.'],
-  ['inferno', 1, 'Inferno Potion', 26, 30, 8, 'A ring of fire circles you for 8s, burning nearby enemies (30 damage per second) and setting them on fire.'],
+  ['inferno', 1, 'Inferno Potion', 26, 30, 8, 'A wide ring of fire circles you for 8s, burning enemies around you (30 damage per second) and setting them on fire.'],
 ];
+
+/** How many of one potion fit in a bag slot. */
+const BAG_STACK = 10;
+
+/** Reach of the Inferno potion's ring of fire around the hero (px). */
+const INFERNO_RADIUS = 180;
+
+/** A potion's price at this point of the run (prices rise each stage). */
+function potionPrice(run, id) {
+  return Math.round(POTIONS[id].price * run.priceScale);
+}
 
 const POTIONS = {};
 for (const [family, tier, name, price, value, duration, desc] of POTION_DEFS) {

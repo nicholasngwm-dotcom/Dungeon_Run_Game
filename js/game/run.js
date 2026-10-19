@@ -316,21 +316,73 @@ class DungeonRun {
   buyUpgrade(hero, id) {
     const st = this.shopState(hero);
     const u = upgradeOffers(this, hero).find((x) => x.id === id);
-    const price = u ? upgradePrice(u, hero.upgradeLevels[id] || 0) : Infinity;
-    const ok = !!u && !st.bought && hero.coins >= price;
+    const price = u ? upgradePrice(u, this) : Infinity;
+    const ok = !!u && !st.bought && !hero.upgradeLevels[id] && hero.coins >= price;
     if (ok) {
       hero.coins -= price;
-      hero.upgradeLevels[id] = (hero.upgradeLevels[id] || 0) + 1;
+      hero.upgradeLevels[id] = 1;
       u.apply(hero);
       st.bought = id;
+      this.enchantFx(hero, u);
     }
     this.world.events.onPurchase?.(hero, 'upgrade', ok);
   }
 
+  /**
+   * The enchantment binding to a hero: a spinning rune circle on the floor,
+   * a pillar of light in the upgrade's colour and sparks rising around them.
+   */
+  enchantFx(hero, u) {
+    const w = this.world;
+    const rgb = hexToRgb(u.color).join(', ');
+    w.effects.add(1.6, (ctx, t) => {
+      const x = hero.x;
+      const y = hero.y;
+      const grow = Math.min(1, t * 4);
+      const fade = t < 0.75 ? 1 : (1 - t) * 4;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = fade;
+      ctx.translate(x, y);
+      ctx.scale(1, 0.5);
+      ctx.rotate(t * 3);
+      ctx.strokeStyle = `rgba(${rgb}, 0.9)`;
+      ctx.lineWidth = 2;
+      for (const r of [44 * grow, 32 * grow]) { ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke(); }
+      // runes round the ring
+      ctx.fillStyle = `rgba(${rgb}, 1)`;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU;
+        ctx.fillRect(Math.cos(a) * 38 * grow - 2, Math.sin(a) * 38 * grow - 3, 4, 6);
+      }
+      ctx.restore();
+    }, true);
+    w.effects.add(1.2, (ctx, t) => {
+      const x = hero.x;
+      const y = hero.y;
+      const wdt = 26 * (1 - t);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createLinearGradient(0, y - 180, 0, y);
+      g.addColorStop(0, `rgba(${rgb}, 0)`);
+      g.addColorStop(1, `rgba(${rgb}, ${0.55 * (1 - t)})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(x - wdt / 2, y - 180, wdt, 180);
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.5 * (1 - t)})`;
+      ctx.fillRect(x - wdt / 6, y - 180, wdt / 3, 180);
+      ctx.restore();
+    });
+    w.effects.burst(hero.hx, hero.hy, { count: 40, colors: [u.color, '#ffffff', '#fff6c8'], speed: [30, 120], life: [0.6, 1.2], up: 90, size: [1, 3] });
+    w.effects.text(hero.hx, hero.hy - 50, u.name.toUpperCase(), { color: u.color, size: 10, life: 1.8, rise: 30 });
+  }
+
+  /** Every price in this stage's shop is multiplied by this (shops cost more deeper in). */
+  get priceScale() { return this.byStage(CONFIG.run.shop.stagePrice); }
+
   /** Upgrade store: pay to swap the three offers for three new ones. */
   rerollUpgrades(hero) {
     const st = this.shopState(hero);
-    const price = rerollPrice(st.rerolls);
+    const price = rerollPrice(st.rerolls, this);
     const ok = !st.bought && hero.coins >= price;
     if (ok) {
       hero.coins -= price;
@@ -343,9 +395,10 @@ class DungeonRun {
   buyPotion(hero, id) {
     const s = this.potionStock.find((x) => x.id === id);
     const pot = POTIONS[id];
-    const ok = !!s && !!pot && s.left > 0 && hero.coins >= pot.price && hero.canCarry(id);
+    const price = pot ? potionPrice(this, id) : Infinity;
+    const ok = !!s && !!pot && s.left > 0 && hero.coins >= price && hero.canCarry(id);
     if (ok) {
-      hero.coins -= pot.price;
+      hero.coins -= price;
       s.left--;
       hero.addItem(id);
     }

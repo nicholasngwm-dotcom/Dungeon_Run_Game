@@ -58,6 +58,22 @@ class FloorDecor {
         this.add('prop', { x: r.cx - 6.4 * T, y: r.cy - 0.2 * T }, { name: 'cauldron' });
         this.add('prop', { x: r.cx + 6.4 * T, y: r.cy - 0.6 * T }, { name: 'bannerBlue' });
         this.add('prop', { x: r.cx + 5.4 * T, y: r.cy + 0.6 * T }, { name: 'candelabra' });
+        const at = (kind, dx, dy, extra = {}) => this.add(kind, { x: r.cx + dx * T, y: r.cy + dy * T }, extra);
+        // Mira's corner: a tiered potion stand, a crate of bottles, herb baskets and plants
+        at('bottleStand', -4.8, -0.9);
+        at('bottleCrate', -1.4, -0.7);
+        at('herbBasket', -5.2, 1.3);
+        at('herbBasket', -7.4, 1.8);
+        at('prop', -7.3, -2.2, { name: 'sacks' });
+        for (const dx of [-4.3, -1.7]) at('prop', dx, -3.9, { name: 'plant' });
+        // Bram's corner: a glowing rune circle before his counter, a floating crystal,
+        // drifting spellbooks, bookshelves behind and candles
+        at('runeCircle', 3, 0.5);
+        at('crystal', 4.9, -0.9);
+        at('floatingBooks', 1.3, -1.4);
+        for (const dx of [1.7, 4.3]) at('prop', dx, -3.9, { name: 'bookshelf' });
+        at('candles', 7.3, -2.2);
+        at('candles', 1.4, 1.5);
         return;
       }
       case 'special': {
@@ -156,6 +172,7 @@ class FloorDecor {
     for (const d of this.items) {
       if (!this.visible(d, cam, 200)) continue;
       if (d.kind === 'rug') this.drawRug(ctx, d);
+      if (d.kind === 'runeCircle') this.drawRuneCircle(ctx, d);
       if (d.kind === 'lampPost' || d.kind === 'campfire') {
         const flick = 1 + Math.sin(this.time * 9 + d.seed) * 0.05;
         const r = (d.kind === 'campfire' ? 110 : 80) * flick;
@@ -174,7 +191,7 @@ class FloorDecor {
 
   getDrawables(cam) {
     return this.items
-      .filter((d) => d.kind !== 'rug' && this.visible(d, cam))
+      .filter((d) => d.kind !== 'rug' && d.kind !== 'runeCircle' && this.visible(d, cam))
       .map((d) => ({ y: d.kind === 'crow' && d.flying ? d.y + 400 : d.y, draw: (ctx) => this.drawItem(ctx, d) }));
   }
 
@@ -299,7 +316,117 @@ class FloorDecor {
           R(-33 + i * 12, -24, 7, 9, colors[(i * 2 + 1) % colors.length]);
         }
         break;
+      case 'bottleStand': {
+        // three tiers of potion bottles on a wooden stand, matching Mira's stall
+        drawShadow(ctx, x, y + 2, 18, 4);
+        R(-19, -34, 38, 36, OUTLINE);
+        R(-18, -33, 36, 34, '#5b3922');
+        for (const sy of [-24, -12, 0]) R(-18, sy - 2, 36, 3, '#9c6c3e');
+        const cols = ['#e84a4a', '#3ab84a', '#2a5ad0', '#e0c030', '#9a4ae0', '#30c8b0'];
+        for (let row = 0; row < 3; row++) {
+          for (let i = 0; i < 4 - (row === 0 ? 1 : 0); i++) {
+            const c = cols[(i + row * 2 + Math.floor(d.seed)) % cols.length];
+            const bx = -15 + i * 9 + (row === 0 ? 4 : 0);
+            const by = -26 + row * 12;
+            R(bx, by - 7, 6, 8, OUTLINE); R(bx + 1, by - 6, 4, 6, c); R(bx + 1, by - 6, 1, 4, 'rgba(255,255,255,0.5)');
+            R(bx + 2, by - 9, 2, 2, '#9a6a3a');
+          }
+        }
+        // a hand-painted sign
+        R(-12, -42, 24, 9, OUTLINE); R(-11, -41, 22, 7, '#f4ead7');
+        R(-7, -39, 3, 3, '#e84a4a'); R(-2, -39, 3, 3, '#2a5ad0'); R(3, -39, 3, 3, '#3ab84a');
+        break;
+      }
+      case 'bottleCrate':
+        drawShadow(ctx, x, y + 2, 12, 3);
+        drawProp(ctx, 'crate', x, y + 2);
+        for (const [bx, c] of [[-8, '#e84a4a'], [-2, '#3aa0c8'], [4, '#e0602a']]) {
+          R(bx, -30, 5, 9, OUTLINE); R(bx + 1, -29, 3, 8, c); R(bx + 1, -32, 3, 3, '#9a6a3a');
+        }
+        break;
+      case 'herbBasket':
+        drawShadow(ctx, x, y + 2, 10, 3);
+        R(-10, -10, 20, 12, OUTLINE); R(-9, -9, 18, 10, '#9c6c3e');
+        for (let i = 0; i < 4; i++) R(-9, -8 + i * 2 + 1, 18, 1, '#7d532f');
+        for (const [hx, hc] of [[-7, '#4a8a3a'], [-2, '#6a9a4a'], [3, '#9a4a6a'], [6, '#8a6a3a']]) {
+          R(hx, -15, 3, 6, OUTLINE); R(hx, -14, 2, 5, hc); R(hx - 1, -16, 4, 2, hc);
+        }
+        break;
+      case 'crystal': {
+        // a stone pedestal with a crystal hovering and turning above it
+        drawShadow(ctx, x, y + 2, 12, 3);
+        R(-9, -16, 18, 18, OUTLINE); R(-8, -15, 16, 16, '#78738a'); R(-8, -15, 16, 3, '#9a96aa');
+        R(-11, -18, 22, 4, OUTLINE); R(-10, -17, 20, 2, '#9a96aa');
+        const bob = Math.round(Math.sin(t * 2 + d.seed) * 3);
+        const cy = -34 + bob;
+        const wdt = Math.max(1, Math.round(Math.abs(Math.cos(t * 1.5 + d.seed)) * 7));
+        drawGlow(ctx, x, y + cy, 30, '140, 200, 255', 0.3 + Math.sin(t * 3) * 0.08);
+        ctx.fillStyle = OUTLINE;
+        ctx.beginPath(); ctx.moveTo(x, y + cy - 12); ctx.lineTo(x + wdt + 1, y + cy); ctx.lineTo(x, y + cy + 12); ctx.lineTo(x - wdt - 1, y + cy); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#7ac8ff';
+        ctx.beginPath(); ctx.moveTo(x, y + cy - 10); ctx.lineTo(x + wdt, y + cy); ctx.lineTo(x, y + cy + 10); ctx.lineTo(x - wdt, y + cy); ctx.closePath(); ctx.fill();
+        R(-1, cy - 6, 1, 6, '#e8f6ff');
+        // motes orbiting the crystal
+        for (let i = 0; i < 3; i++) {
+          const a = t * 2.2 + (i / 3) * TAU;
+          R(Math.round(Math.cos(a) * 14), cy + Math.round(Math.sin(a) * 5), 2, 2, '#c8ecff');
+        }
+        break;
+      }
+      case 'floatingBooks':
+        // spellbooks drifting in the air, pages flapping
+        for (let i = 0; i < 3; i++) {
+          const bx = -14 + i * 14;
+          const by = -30 - i * 6 + Math.round(Math.sin(t * 1.8 + i * 2 + d.seed) * 4);
+          const flap = Math.sin(t * 6 + i) > 0 ? 1 : 0;
+          const c = ['#3e5a96', '#87262a', '#33604e'][i];
+          drawGlow(ctx, x + bx, y + by, 12, '180, 160, 255', 0.15);
+          R(bx - 6, by - 3 - flap, 12, 6 + flap, OUTLINE);
+          R(bx - 5, by - 2 - flap, 5, 4 + flap, c); R(bx + 1, by - 2 - flap, 5, 4 + flap, c);
+          R(bx - 4, by - 1 - flap, 3, 2, '#e8dcc0'); R(bx + 2, by - 1 - flap, 3, 2, '#e8dcc0');
+        }
+        drawShadow(ctx, x, y + 2, 16, 3, 0.15);
+        break;
     }
+  }
+
+  /** A slowly turning circle of glowing runes on the floor (Bram's side of the shop). */
+  drawRuneCircle(ctx, d) {
+    const t = this.time;
+    const pulse = 0.55 + Math.sin(t * 2.2) * 0.2;
+    ctx.save();
+    ctx.translate(Math.round(d.x), Math.round(d.y));
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(0, 0, 4, 0, 0, 56);
+    g.addColorStop(0, `rgba(140, 180, 255, ${0.16 * pulse})`);
+    g.addColorStop(1, 'rgba(140, 180, 255, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(-56, -56, 112, 112);
+    ctx.scale(1, 0.45);
+    ctx.strokeStyle = `rgba(150, 190, 255, ${0.5 * pulse})`;
+    ctx.lineWidth = 2;
+    for (const r of [46, 34]) { ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke(); }
+    ctx.rotate(t * 0.4);
+    ctx.fillStyle = `rgba(190, 215, 255, ${0.75 * pulse})`;
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * TAU;
+      ctx.save();
+      ctx.translate(Math.cos(a) * 40, Math.sin(a) * 40);
+      ctx.rotate(a);
+      ctx.fillRect(-1, -4, 2, 8);
+      ctx.fillRect(-3, (i % 2 ? -4 : 2), 6, 2);
+      ctx.restore();
+    }
+    // a star inside
+    ctx.strokeStyle = `rgba(150, 190, 255, ${0.4 * pulse})`;
+    ctx.beginPath();
+    for (let i = 0; i <= 5; i++) {
+      const a = (i * 2 / 5) * TAU - Math.PI / 2;
+      if (i === 0) ctx.moveTo(Math.cos(a) * 32, Math.sin(a) * 32);
+      else ctx.lineTo(Math.cos(a) * 32, Math.sin(a) * 32);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   drawRug(ctx, d) {

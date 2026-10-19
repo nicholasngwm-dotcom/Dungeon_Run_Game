@@ -1,6 +1,6 @@
 // The lobby: an open room the hero walks around between runs (Soul Knight style).
 // Stations: one statue per hero (pick a hero), the tech workshop (a tinkerer and machines), the
-// map legend board, the bestiary lectern,
+// map legend board, the bestiary lectern, the potion guide's alchemy table,
 // the practice range, and the dungeon gate. Walk up to one and press E.
 
 // Lobby room size in tiles (bigger than the screen, so the camera follows the hero).
@@ -22,6 +22,7 @@ class LobbyHub {
     this.stations.push({ kind: 'practice', x: 27 * T, y: 16 * T, r: 50, prompt: 'PRACTICE RANGE' });
     this.stations.push({ kind: 'legend', x: 6 * T, y: 16 * T, r: 48, prompt: 'MAP LEGEND' });
     this.stations.push({ kind: 'bestiary', x: 11 * T, y: 16 * T, r: 44, prompt: 'BESTIARY' });
+    this.stations.push({ kind: 'potions', x: 15.8 * T, y: 16.2 * T, r: 44, prompt: 'POTION GUIDE' });
     this.stations.push({ kind: 'gate', x: d.width / 2, y: 4 * T + 18, r: 54, prompt: 'CHOOSE A DUNGEON' });
 
     // set dressing (tile coordinates): banners in the hero hall, plants by the gate,
@@ -152,6 +153,7 @@ class LobbyHub {
     else if (s.kind === 'practice') this.drawPractice(ctx, s);
     else if (s.kind === 'legend') this.drawLegendBoard(ctx, s);
     else if (s.kind === 'bestiary') this.drawLectern(ctx, s);
+    else if (s.kind === 'potions') this.drawAlchemyTable(ctx, s);
   }
 
   /** "[E] ..." (the interact key) over the station the hero is at, plus names under the statues. Drawn on top. */
@@ -165,7 +167,7 @@ class LobbyHub {
     }
     const s = this.near;
     if (!s) return;
-    const h = { hero: 78, workshop: 80, practice: 70, gate: -6, legend: 74, bestiary: 54 }[s.kind];
+    const h = { hero: 78, workshop: 80, practice: 70, gate: -6, legend: 74, bestiary: 54, potions: 58 }[s.kind];
     const bob = Math.sin(this.time * 5) * 2;
     HUD.text(ctx, `[${Settings.label('interact')}] ${s.prompt}`, s.x, s.y - h + bob, { size: 8, align: 'center', color: '#ffe680' });
   }
@@ -273,6 +275,55 @@ class LobbyHub {
     ctx.fillStyle = g;
     ctx.fillRect(x - 22, y - 62, 44, 44);
     ctx.restore();
+  }
+
+  /** The potion guide: an alchemy table with bottles, a bubbling flask and an open recipe book. */
+  drawAlchemyTable(ctx, s) {
+    const x = Math.round(s.x);
+    const y = Math.round(s.y);
+    const t = this.time;
+    // a dark wooden workbench with a violet cloth
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 21, y - 16, 5, 17);
+    ctx.fillRect(x + 16, y - 16, 5, 17);
+    ctx.fillRect(x - 25, y - 25, 50, 11);
+    ctx.fillStyle = '#5b3922';
+    ctx.fillRect(x - 20, y - 15, 3, 15);
+    ctx.fillRect(x + 17, y - 15, 3, 15);
+    ctx.fillRect(x - 24, y - 24, 48, 9);
+    ctx.fillStyle = '#7d532f';
+    ctx.fillRect(x - 24, y - 24, 48, 2);
+    ctx.fillStyle = '#5a2a8a';
+    ctx.fillRect(x - 10, y - 24, 20, 12);
+    ctx.fillStyle = '#d4ac4c';
+    ctx.fillRect(x - 10, y - 13, 20, 1);
+    // open recipe book
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 20, y - 32, 22, 9);
+    ctx.fillStyle = '#e8dcc0';
+    ctx.fillRect(x - 19, y - 31, 10, 7);
+    ctx.fillRect(x - 8, y - 31, 9, 7);
+    ctx.fillStyle = '#8a7a5a';
+    for (let i = 0; i < 3; i++) { ctx.fillRect(x - 17, y - 30 + i * 2, 6, 1); ctx.fillRect(x - 6, y - 30 + i * 2, 5, 1); }
+    // three potions from the shop on the table
+    ['health-potion', 'mana-potion', 'speed-potion'].forEach((id, i) => {
+      const img = Sprites.potions[id];
+      if (img) ctx.drawImage(img, x + 2 + i * 8, y - 39, 16, 16);
+    });
+    // a bubbling flask over a little flame
+    const fx = x + 19;
+    drawFlame(ctx, fx, y - 26, t, 3);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(fx - 5, y - 38, 10, 9);
+    ctx.fillRect(fx - 2, y - 44, 4, 6);
+    ctx.fillStyle = '#9a4ae0';
+    ctx.fillRect(fx - 4, y - 36, 8, 6);
+    for (let i = 0; i < 2; i++) {
+      const b = (t * 0.8 + i * 0.5) % 1;
+      ctx.fillStyle = `rgba(224, 184, 255, ${1 - b})`;
+      ctx.fillRect(fx - 1 + i * 2, Math.round(y - 46 - b * 14), 2, 2);
+    }
+    drawGlow(ctx, x, y - 34, 30, '200, 140, 255', 0.18 + Math.sin(t * 3) * 0.06);
   }
 
   /** An archery target on a stand. */

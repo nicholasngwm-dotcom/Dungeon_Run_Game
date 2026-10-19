@@ -4,57 +4,57 @@
 // them; rerolling (for coins, pricier each time) swaps the 3 for new ones.
 // Offers come from a seed (run + stage + hero + rerolls), so every machine and
 // the shop window agree on them without sending them around. Each upgrade can
-// be owned up to CONFIG.run.shop.maxLevel times per run.
+// be owned once per run (no tiers), so each one is a big step up.
 //
 // Potion store: 6 different potions, 1-4 of each (see potions.js), shared by
-// the whole party.
+// the whole party. Every price rises with the stage (CONFIG.run.shop.stagePrice).
 
 const SHOP_UPGRADES = [
   {
-    id: 'vitality', name: 'Vital Draught', price: 14, color: '#e84a4a',
-    desc: '+40 max HP (and heals 40)',
-    apply(p) { p.maxHp += 40; p.hp = Math.min(p.maxHp, p.hp + 40); },
+    id: 'vitality', name: 'Vital Draught', price: 22, color: '#e84a4a',
+    desc: '+100 max HP (and heals 100)',
+    apply(p) { p.maxHp += 100; p.hp = Math.min(p.maxHp, p.hp + 100); },
   },
   {
-    id: 'regen', name: 'Troll Blood', price: 16, color: '#6cff7a',
-    desc: '+1 HP per second, even while fighting',
-    apply(p) { p.bonusRegen += 1; },
+    id: 'regen', name: 'Troll Blood', price: 24, color: '#6cff7a',
+    desc: '+3 HP per second, even while fighting',
+    apply(p) { p.bonusRegen += 3; },
   },
   {
-    id: 'attackSpeed', name: 'Quick Hands', price: 18, color: '#ffd34a',
-    desc: '+15% attack speed (left click)',
-    apply(p) { p.attackSpeed *= 1.15; },
+    id: 'attackSpeed', name: 'Quick Hands', price: 26, color: '#ffd34a',
+    desc: '+30% attack speed (left click)',
+    apply(p) { p.attackSpeed *= 1.3; },
   },
   {
-    id: 'power', name: 'Whetstone', price: 20, color: '#ff8a4a',
-    desc: '+10% damage',
-    apply(p) { p.upgradeDamage *= 1.1; },
+    id: 'power', name: 'Whetstone', price: 28, color: '#ff8a4a',
+    desc: '+25% damage',
+    apply(p) { p.upgradeDamage *= 1.25; },
   },
   {
-    id: 'swift', name: 'Light Boots', price: 12, color: '#9ad0ff',
-    desc: '+8% move speed',
-    apply(p) { p.speed *= 1.08; },
+    id: 'swift', name: 'Light Boots', price: 20, color: '#9ad0ff',
+    desc: '+18% move speed',
+    apply(p) { p.speed *= 1.18; },
   },
   // the hero-specific one: picked by resource
   {
-    id: 'mana', name: 'Arcane Font', price: 15, color: '#4a8aff', resource: 'MANA',
-    desc: '+3 mana per second',
-    apply(p) { p.resource.regen += 3; },
+    id: 'mana', name: 'Arcane Font', price: 22, color: '#4a8aff', resource: 'MANA',
+    desc: '+8 mana per second',
+    apply(p) { p.resource.regen += 8; },
   },
   {
-    id: 'energy', name: 'Second Wind', price: 15, color: '#f0c040', resource: 'ENERGY',
-    desc: '+1.5 energy per second',
-    apply(p) { p.resource.regen += 1.5; },
+    id: 'energy', name: 'Second Wind', price: 22, color: '#f0c040', resource: 'ENERGY',
+    desc: '+4 energy per second',
+    apply(p) { p.resource.regen += 4; },
   },
   {
-    id: 'light', name: 'Lantern of Faith', price: 22, color: '#ffe680', resource: 'LIGHT',
-    desc: '+1 light orb capacity (and one orb)',
-    apply(p) { p.resource.max += 1; p.resource.value += 1; },
+    id: 'light', name: 'Lantern of Faith', price: 28, color: '#ffe680', resource: 'LIGHT',
+    desc: '+2 light orb capacity (and two orbs)',
+    apply(p) { p.resource.max += 2; p.resource.value += 2; },
   },
   {
-    id: 'haste', name: 'War Focus', price: 18, color: '#c08aff', resource: null,
-    desc: 'Abilities (RMB, E, F) recharge 12% faster',
-    apply(p) { p.abilityHaste *= 1.12; },
+    id: 'haste', name: 'War Focus', price: 26, color: '#c08aff', resource: null,
+    desc: 'Abilities (RMB, E, F) recharge 25% faster',
+    apply(p) { p.abilityHaste *= 1.25; },
   },
 ];
 
@@ -94,15 +94,15 @@ function drawUpgradeIcon(ctx, id, color) {
   }
 }
 
-/** Price of an upgrade when the hero already owns `level` of it. */
-function upgradePrice(u, level) {
-  return Math.round(u.price * Math.pow(CONFIG.run.shop.priceGrowth, level));
+/** Price of an upgrade at this point of the run (prices rise each stage). */
+function upgradePrice(u, run) {
+  return Math.round(u.price * run.priceScale);
 }
 
 /** Price of the next reroll at this stage's upgrade store. */
-function rerollPrice(rerolls) {
+function rerollPrice(rerolls, run) {
   const r = CONFIG.run.shop.reroll;
-  return r.base + r.step * rerolls;
+  return Math.round((r.base + r.step * rerolls) * run.priceScale);
 }
 
 /** Small string hash (FNV-1a) for seeding. */
@@ -114,11 +114,12 @@ function hashString(s) {
 
 /**
  * The (up to) 3 upgrades on offer to a hero right now: a seeded shuffle of the
- * upgrades they can still level, so it's the same on every machine.
+ * upgrades they don't own yet, so it's the same on every machine.
  */
 function upgradeOffers(run, hero) {
   const st = run.shopState(hero);
-  const pool = shopStock(hero).filter((u) => (hero.upgradeLevels[u.id] || 0) < CONFIG.run.shop.maxLevel);
+  // the one picked at this shop stays in, so the three offers don't reshuffle after buying
+  const pool = shopStock(hero).filter((u) => !hero.upgradeLevels[u.id] || u.id === st.bought);
   const rng = seededRng(hashString(`${run.shopSeed}|${hero.netId || 'solo'}|${st.rerolls}`));
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -144,7 +145,7 @@ const Shop = {
     this.mode = mode;
     this.say(mode === 'potions'
       ? choose(['Fresh from the cauldron!', 'One sip and you\'ll feel brand new, dear.', 'Mind the fizzy ones.'])
-      : choose(['Pick one. Choose wisely.', 'Power has a price, adventurer.', 'Not to your liking? I can show you others... for a fee.']));
+      : choose(['The runes have chosen three for you. Pick one. Choose wisely.', 'Power has a price, adventurer.', 'Not to your liking? The runes can show you others... for a fee.']));
     this.render();
     Menus.show('shop');
   },
@@ -178,35 +179,44 @@ const Shop = {
     else this.renderUpgrades(grid, p);
   },
 
+  /**
+   * Bram's three enchantments as glowing, floating cards in their own colour.
+   * The moment one is chosen it flares up with a rune circle and sparks, and
+   * the others fade away (justChose: the id picked a moment ago, played once).
+   */
   renderUpgrades(grid, p) {
     const st = this.run.shopState(p);
     const offers = upgradeOffers(this.run, p);
-    const max = CONFIG.run.shop.maxLevel;
-    grid.innerHTML = offers.map((u) => {
-      const lvl = p.upgradeLevels[u.id] || 0;
-      const price = upgradePrice(u, lvl);
+    const flare = this.justChose;
+    this.justChose = null;
+    grid.innerHTML = offers.map((u, i) => {
+      const price = upgradePrice(u, this.run);
       const chosen = st.bought === u.id;
-      const pips = Array.from({ length: max }, (_, i) => `<i class="${i < lvl ? 'on' : ''}"></i>`).join('');
       const btn = chosen ? '<button class="buy" disabled>CHOSEN</button>'
         : st.bought ? '<button class="buy" disabled>-</button>'
           : `<button class="buy" data-action="buy:${u.id}" ${p.coins < price ? 'disabled' : ''}>${price}<em></em></button>`;
-      return `<div class="shop-card${chosen ? ' chosen' : ''}${st.bought && !chosen ? ' faded' : ''}">
+      const cls = `${chosen ? ' chosen' : ''}${st.bought && !chosen ? ' faded' : ''}${flare ? (chosen ? ' enchant' : ' dissolve') : ''}`;
+      const sparks = chosen && flare
+        ? Array.from({ length: 14 }, (_, k) => `<i class="spark" style="left:${8 + ((k * 37) % 84)}%;animation-delay:${(k % 7) * 0.08}s"></i>`).join('')
+        : '';
+      return `<div class="shop-card magic${cls}" style="--glow:${u.color};--delay:${i * 0.4}s">
+        <div class="rune-ring"></div>
         <canvas width="32" height="32" data-icon="${u.id}" data-color="${u.color}"></canvas>
         <b style="color:${u.color}">${u.name}</b>
         <span>${u.desc}</span>
-        <div class="pips">${pips}</div>
-        ${btn}
+        ${btn}${sparks}
       </div>`;
-    }).join('') || '<p class="shop-empty">You have every upgrade maxed out!</p>';
+    }).join('') || '<p class="shop-empty">You own every enchantment I know!</p>';
     for (const c of grid.querySelectorAll('canvas')) drawUpgradeIcon(c.getContext('2d'), c.dataset.icon, c.dataset.color);
     const extra = document.getElementById('shop-extra');
     if (st.bought) {
-      extra.innerHTML = '<p class="shop-note">You made your choice. New upgrades at the next stage\'s shop.</p>';
+      extra.innerHTML = '<p class="shop-note">The enchantment is bound to you. New ones at the next stage\'s shop.</p>';
     } else {
-      const price = rerollPrice(st.rerolls);
+      const price = rerollPrice(st.rerolls, this.run);
       extra.innerHTML = `<button class="btn small reroll" data-action="reroll" ${p.coins < price ? 'disabled' : ''}>Reroll &nbsp;${price}<em></em></button>`;
     }
-    document.getElementById('shop-hint').textContent = `Pick ONE upgrade per shop. It lasts the whole run; each can be owned ${max} times.`;
+    const stageNote = this.run.stage > 1 ? ' Prices rise each stage.' : '';
+    document.getElementById('shop-hint').textContent = `Pick ONE enchantment per shop. It lasts the whole run, and each can only be bound once.${stageNote}`;
   },
 
   renderPotions(grid, p) {
@@ -214,23 +224,24 @@ const Shop = {
       const pot = POTIONS[s.id];
       const out = s.left <= 0;
       const full = !p.canCarry(s.id);
-      const label = out ? 'SOLD OUT' : full ? 'BAG FULL' : `${pot.price}<em></em>`;
+      const price = potionPrice(this.run, pot.id);
+      const label = out ? 'SOLD OUT' : full ? 'BAG FULL' : `${price}<em></em>`;
       return `<div class="shop-card potion${out ? ' faded' : ''}">
         <canvas width="28" height="28" data-potion="${pot.id}"></canvas>
         <b style="color:${POTION_COLORS[pot.family][1]}">${pot.name}</b>
         <span>${pot.desc}</span>
         <div class="stock">${out ? 'none left' : `${s.left} left`}</div>
-        <button class="buy" data-action="buyPotion:${pot.id}" ${out || full || p.coins < pot.price ? 'disabled' : ''}>${label}</button>
+        <button class="buy" data-action="buyPotion:${pot.id}" ${out || full || p.coins < price ? 'disabled' : ''}>${label}</button>
       </div>`;
     }).join('');
     for (const c of grid.querySelectorAll('canvas')) c.getContext('2d').drawImage(Sprites.potions[c.dataset.potion], 0, 0);
     // the bag: what this hero is carrying, with the keys to drink it
     const extra = document.getElementById('shop-extra');
     extra.innerHTML = `<div class="bag"><span class="bag-label">YOUR BAG</span>${p.inventory.map((s, i) => `
-      <div class="bag-slot" data-slot="${i}"${s ? ' draggable="true"' : ''}><i>${Settings.label(`item${i + 1}`)}</i>${s ? `<canvas width="28" height="28" data-bag="${s.id}"></canvas><b>${s.count > 1 ? `x${s.count}` : ''}</b>` : ''}</div>`).join('')}</div>`;
+      <div class="bag-slot" data-slot="${i}"${s ? ` draggable="true" title="${POTIONS[s.id].name}"` : ''}><i>${Settings.label(`item${i + 1}`)}</i>${s ? `<canvas width="28" height="28" data-bag="${s.id}"></canvas><b>${s.count > 1 ? `x${s.count}` : ''}</b>` : ''}</div>`).join('')}</div>`;
     for (const c of extra.querySelectorAll('canvas')) c.getContext('2d').drawImage(Sprites.potions[c.dataset.bag], 0, 0);
     this.bindBagDrag(extra);
-    document.getElementById('shop-hint').textContent = 'Potions go in your bag (5 slots, up to 5 of a kind each). Drag to rearrange; drink with the slot keys during a fight.';
+    document.getElementById('shop-hint').textContent = `Potions go in your bag (5 slots, up to ${BAG_STACK} of a kind each). Drag to rearrange; drink with the slot keys during a fight.${this.run.stage > 1 ? ' Prices rise each stage.' : ''}`;
   },
 
   /** Drag a bag slot onto another to move, swap or stack it (same command as the in-game bag). */
@@ -258,7 +269,7 @@ const Shop = {
     const p = this.hero;
     const u = SHOP_UPGRADES.find((x) => x.id === id);
     if (!u || this.run.shopState(p).bought) return;
-    if (p.coins < upgradePrice(u, p.upgradeLevels[id] || 0)) {
+    if (p.coins < upgradePrice(u, this.run)) {
       this.say("You'll need more coin than that.");
       Sound.play('denied');
       return;
@@ -270,7 +281,7 @@ const Shop = {
     const p = this.hero;
     const st = this.run.shopState(p);
     if (st.bought) return;
-    if (p.coins < rerollPrice(st.rerolls)) {
+    if (p.coins < rerollPrice(st.rerolls, this.run)) {
       this.say('A reroll costs coin, friend.');
       Sound.play('denied');
       return;
@@ -282,19 +293,27 @@ const Shop = {
     const p = this.hero;
     const pot = POTIONS[id];
     if (!pot) return;
-    if (p.coins < pot.price) { this.say("You're a little short, dear."); Sound.play('denied'); return; }
+    if (p.coins < potionPrice(this.run, id)) { this.say("You're a little short, dear."); Sound.play('denied'); return; }
     if (!p.canCarry(id)) { this.say('Your bag is full, dear!'); Sound.play('denied'); return; }
     App.command({ type: 'buyPotion', id });
   },
 
-  /** A purchase went through (or didn't) - the keeper reacts if it was ours. what: 'upgrade' | 'reroll' | 'potion'. */
+  /**
+   * A purchase went through (or didn't) - the keeper reacts if it was ours. what: 'upgrade' | 'reroll' | 'potion'.
+   * Runs inside the shared simulation but only on the buyer's screen, so it uses
+   * the visual-only random (vchoose) to keep multiplayer in sync.
+   */
   onPurchase(hero, what, ok) {
     if (!this.run || hero !== this.hero) return;
     if (ok) {
       Sound.play('buy');
-      if (what === 'reroll') this.say(choose(['Hmm... how about these?', 'Fresh choices, fresh fortunes.']));
-      else if (what === 'potion') this.say(choose(['Drink it while it\'s fizzy!', 'Pleasure doing business.', 'Come back soon, dear!']));
-      else this.say(choose(['A fine choice. It is yours.', 'The enchantment takes hold...', 'Use it well.']));
+      if (what === 'reroll') this.say(vchoose(['Hmm... how about these?', 'Fresh choices, fresh fortunes.', 'The runes shift...']));
+      else if (what === 'potion') this.say(vchoose(['Drink it while it\'s fizzy!', 'Pleasure doing business.', 'Come back soon, dear!']));
+      else {
+        this.justChose = this.run.shopState(hero).bought;
+        Sound.play('magic');
+        this.say(vchoose(['The runes accept you. It is yours.', 'Feel that? The enchantment takes hold...', 'Bound to your soul for this whole journey.']));
+      }
     } else {
       Sound.play('denied');
       this.say(what === 'potion' ? 'Ah... someone beat you to it, dear.' : 'That deal is off the table.');

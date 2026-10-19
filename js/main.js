@@ -153,6 +153,7 @@ const App = {
       case 'gate': this.useGate(); break;
       case 'legend': this.openPanel(); Menus.showLegend(); break;
       case 'bestiary': this.openPanel(); Bestiary.open(); break;
+      case 'potions': this.openPanel(); PotionGuide.open(); break;
     }
   },
 

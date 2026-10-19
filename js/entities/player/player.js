@@ -530,9 +530,9 @@ class Player extends Entity {
     if (slot.count <= 0) this.inventory[i] = null;
   }
 
-  /** Puts a potion in the bag: stacks with the same potion (up to 5), else the first free slot. */
+  /** Puts a potion in the bag: stacks with the same potion (up to BAG_STACK), else the first free slot. */
   addItem(id) {
-    const stack = this.inventory.find((s) => s && s.id === id && s.count < 5);
+    const stack = this.inventory.find((s) => s && s.id === id && s.count < BAG_STACK);
     if (stack) { stack.count++; return true; }
     const i = this.inventory.indexOf(null);
     if (i < 0) return false;
@@ -542,7 +542,7 @@ class Player extends Entity {
 
   /**
    * Moves the stack in bag slot `from` onto slot `to` (dragged with the mouse):
-   * the same potion merges (up to 5, any extra stays behind), anything else swaps.
+   * the same potion merges (up to BAG_STACK, any extra stays behind), anything else swaps.
    */
   moveItem(from, to) {
     const inv = this.inventory;
@@ -550,7 +550,7 @@ class Player extends Entity {
     const a = inv[from];
     const b = inv[to];
     if (b && b.id === a.id) {
-      const n = Math.min(a.count, 5 - b.count);
+      const n = Math.min(a.count, BAG_STACK - b.count);
       b.count += n;
       a.count -= n;
       if (a.count <= 0) inv[from] = null;
@@ -572,7 +572,7 @@ class Player extends Entity {
   }
 
   /** Room in the bag for one more of this potion? */
-  canCarry(id) { return this.inventory.some((s) => s === null || (s.id === id && s.count < 5)); }
+  canCarry(id) { return this.inventory.some((s) => s === null || (s.id === id && s.count < BAG_STACK)); }
 
   /** Applies a potion. Returns false (and keeps it) if it would be wasted. */
   drink(pot, world) {
@@ -686,7 +686,7 @@ class Player extends Entity {
       if (fire.tick <= 0) {
         fire.tick = 0.5;
         for (const t of world.getTargets()) {
-          if (dist(this.x, this.y - 10, t.hx, t.hy) > 90 + t.radius) continue;
+          if (dist(this.x, this.y - 10, t.hx, t.hy) > INFERNO_RADIUS + t.radius) continue;
           world.damageTarget(t, fire.v * 0.5, { source: this, sound: null, color: '#ff8a2a', fromUlt: true, noCrit: true });
           if (!t.dead) world.addDot(t, 8, 3, '#ff8a2a');
         }
@@ -705,12 +705,12 @@ class Player extends Entity {
     ctx.strokeStyle = 'rgba(255, 120, 40, 0.35)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.ellipse(this.x, this.y - 4, 90, 50, 0, 0, TAU);
+    ctx.ellipse(this.x, this.y - 4, INFERNO_RADIUS, INFERNO_RADIUS * 0.55, 0, 0, TAU);
     ctx.stroke();
-    for (let i = 0; i < 10; i++) {
-      const a = this.animTime * 2.5 + (i / 10) * TAU;
-      const fx = Math.round(this.x + Math.cos(a) * 90);
-      const fy = Math.round(this.y - 4 + Math.sin(a) * 50);
+    for (let i = 0; i < 20; i++) {
+      const a = this.animTime * 1.6 + (i / 20) * TAU;
+      const fx = Math.round(this.x + Math.cos(a) * INFERNO_RADIUS);
+      const fy = Math.round(this.y - 4 + Math.sin(a) * INFERNO_RADIUS * 0.55);
       const h = 7 + Math.round(Math.sin(this.animTime * 14 + i) * 2);
       ctx.fillStyle = '#ff6a1e';
       ctx.fillRect(fx - 3, fy - h, 6, h);

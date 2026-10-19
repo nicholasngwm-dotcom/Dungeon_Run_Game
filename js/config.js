@@ -340,9 +340,10 @@ const CONFIG = {
     // wishing well: each coin tossed in has `chance` to grant a wish (guaranteed on the pity-th coin);
     // a wish is one random kind of potion, potions[0]-potions[1] of it. One wish per hero per well
     well: { chance: 0.15, pity: 12, potions: [2, 6] },
-    // shop upgrades: one pick of three per shop; each can be owned maxLevel times per run (price x priceGrowth
-    // per level owned); rerolling the three costs reroll.base, + reroll.step more each time at the same shop
-    shop: { maxLevel: 3, priceGrowth: 1.5, reroll: { base: 6, step: 4 } },
+    // shop: every price (upgrades, potions, rerolls) is multiplied by stagePrice[stage - 1], so shops
+    // further into the dungeon cost more. Upgrades: one pick of three per shop, each owned at most once
+    // per run; rerolling the three costs reroll.base, + reroll.step more each time at the same shop
+    shop: { stagePrice: [1, 1.4, 1.8], reroll: { base: 6, step: 4 } },
     survival: { duration: [30, 40, 50], spawnEvery: [1.3, 1.05, 0.85], perSpawn: 2, maxAlive: [12, 15, 18] },
     // spike traps (combat rooms only): pop up every `period` seconds for `up` seconds
     spikes: { period: 4, up: 0.8, warn: 0.4, damage: 16, perRoom: [6, 10] },

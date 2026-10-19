@@ -34,6 +34,7 @@ const HUD = {
   },
 
   draw(ctx, game) {
+    this.drawPickupHover(ctx, game);
     this.drawPlayer(ctx, game.player);
     if (game.run) this.drawCoins(ctx, game.player);
     if (game.multiplayer) this.drawParty(ctx, game);
@@ -161,6 +162,53 @@ const HUD = {
     this.drawInventory(ctx, p);
   },
 
+  /**
+   * A small dark box with a title (and an optional line under it), centred on
+   * x with its bottom at y, kept on screen.
+   */
+  tooltip(ctx, x, y, title, color = '#f4ead7', sub = '') {
+    ctx.font = `7px ${PIXEL_FONT}`;
+    const tw = ctx.measureText(title).width;
+    // the sub line wraps at about 280px
+    ctx.font = `5px ${PIXEL_FONT}`;
+    const lines = [];
+    for (const word of sub ? sub.split(' ') : []) {
+      const last = lines[lines.length - 1];
+      if (last !== undefined && ctx.measureText(`${last} ${word}`).width <= 280) lines[lines.length - 1] = `${last} ${word}`;
+      else lines.push(word);
+    }
+    const sw = Math.max(0, ...lines.map((l) => ctx.measureText(l).width));
+    const w = Math.ceil(Math.max(tw, sw)) + 12;
+    const h = 16 + lines.length * 9;
+    const bx = Math.round(clamp(x - w / 2, 4, 960 - w - 4));
+    const by = Math.round(y - h);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(bx - 2, by - 2, w + 4, h + 4);
+    ctx.fillStyle = 'rgba(20, 14, 32, 0.95)';
+    ctx.fillRect(bx, by, w, h);
+    ctx.fillStyle = color;
+    ctx.fillRect(bx, by, w, 1);
+    this.text(ctx, title, bx + w / 2, by + 4, { size: 7, align: 'center', color });
+    lines.forEach((l, i) => this.text(ctx, l, bx + w / 2, by + 16 + i * 9, { size: 5, align: 'center', color: '#d8cfe4' }));
+  },
+
+  /** The name of the potion on the floor under the mouse / crosshair. */
+  drawPickupHover(ctx, game) {
+    const cam = game.camera;
+    const m = cam.screenToWorld(Input._mouse.x, Input._mouse.y);
+    let best = null;
+    let bestD = 18;
+    for (const pk of game.pickups) {
+      if (!(pk instanceof PotionPickup) || pk.dead) continue;
+      const d = dist(m.x, m.y, pk.x, pk.y - 12);
+      if (d < bestD) { bestD = d; best = pk; }
+    }
+    if (!best) return;
+    const pot = POTIONS[best.id];
+    const name = best.count > 1 ? `${pot.name} x${best.count}` : pot.name;
+    this.tooltip(ctx, best.x - cam.x, best.y - cam.y - 30, name, POTION_COLORS[pot.family][1]);
+  },
+
   // ---------- the bag (bottom left) ----------
 
   bagDrag: null,   // { from } while a bag slot is being dragged with the mouse (this screen only)
@@ -251,6 +299,11 @@ const HUD = {
       this.text(ctx, key, sx + 3, sy + 3, { size: 6, color: '#f2a541' });
       if (slot.count > 1) this.text(ctx, `x${slot.count}`, sx + s - 3, sy + s - 9, { size: 6, align: 'right', color: '#ffffff' });
     });
+    if (!drag && hover >= 0 && p.inventory[hover]) {
+      const pot = POTIONS[p.inventory[hover].id];
+      const r = this.bagSlotRect(hover);
+      this.tooltip(ctx, r.x + r.s / 2, r.y - 24, pot.name, POTION_COLORS[pot.family][1], pot.desc);
+    }
     if (drag) {
       const icon = Sprites.potions[p.inventory[drag.from].id];
       ctx.drawImage(icon, m.x - icon.width / 2, m.y - icon.height / 2);
