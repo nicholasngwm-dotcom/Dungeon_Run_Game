@@ -1,4 +1,4 @@
-// Keyboard + mouse state. Mouse coordinates are in canvas pixels (960x540).
+// Keyboard + mouse state. Mouse coordinates are in game pixels (960x540, whatever the canvas resolution).
 // Game code asks about actions (Input.down('up'), Input.pressed('e')), which
 // go through the key bindings in Settings.
 //
@@ -41,13 +41,13 @@ const Input = {
       if (this.locked) {
         const rect = canvas.getBoundingClientRect();
         const s = Settings.data.sensitivity;
-        this._mouse.x = clamp(this._mouse.x + e.movementX * (canvas.width / rect.width) * s, 0, canvas.width);
-        this._mouse.y = clamp(this._mouse.y + e.movementY * (canvas.height / rect.height) * s, 0, canvas.height);
+        this._mouse.x = clamp(this._mouse.x + e.movementX * (CONFIG.screen.width / rect.width) * s, 0, CONFIG.screen.width);
+        this._mouse.y = clamp(this._mouse.y + e.movementY * (CONFIG.screen.height / rect.height) * s, 0, CONFIG.screen.height);
         return;
       }
       const rect = canvas.getBoundingClientRect();
-      this._mouse.x = ((e.clientX - rect.left) / rect.width) * canvas.width;
-      this._mouse.y = ((e.clientY - rect.top) / rect.height) * canvas.height;
+      this._mouse.x = ((e.clientX - rect.left) / rect.width) * CONFIG.screen.width;
+      this._mouse.y = ((e.clientY - rect.top) / rect.height) * CONFIG.screen.height;
     });
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) { this._mouse.left = true; this._mouse.leftPressed = true; }
@@ -83,10 +83,24 @@ const Input = {
     return this.codesFor(action).some((c) => this.pressedKeys.has(c));
   },
 
-  /** Swallows this frame's press of an action (so a shared key doesn't trigger twice). */
+  /**
+   * Swallows this frame's press of an action (so a shared key doesn't trigger twice).
+   * A networked player's press also takes the actions they have on the same key
+   * (E is both interact and an ability by default), as their machine reported them.
+   */
   consume(action) {
-    if (this.override) return this.override.pressed.delete(action);
+    if (this.override) {
+      this.override.pressed.delete(action);
+      for (const a of this.override.linked?.[action] || []) this.override.pressed.delete(a);
+      return;
+    }
     for (const c of this.codesFor(action)) this.pressedKeys.delete(c);
+  },
+
+  /** The other actions bound to the same key as `action` on this machine. */
+  sharingKeyWith(action) {
+    const codes = this.codesFor(action);
+    return Object.keys(Settings.keys).filter((a) => a !== action && this.codesFor(a).some((c) => codes.includes(c)));
   },
 
   // ---------- pointer lock (aiming with sensitivity) ----------

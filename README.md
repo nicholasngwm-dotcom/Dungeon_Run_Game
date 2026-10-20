@@ -2,7 +2,9 @@
 
 Top-down pixel-art dungeon arena game in plain HTML, CSS and JavaScript.
 All art is drawn procedurally into canvases and all sound is synthesized with
-Web Audio, so the project has no image or audio files and no build step.
+Web Audio, so the project has no image or audio files and no build step. The one
+asset is the font, Alagard by Hewett Tsoi (free with credit), embedded in
+`css/alagard.css`; the game canvas renders at 2x so it stays sharp.
 
 ## Run it
 
@@ -53,8 +55,11 @@ objective is done (defeat every wave; keep the lantern alive; survive the timer)
 Combat rooms have spike traps that pop up every 4 seconds. The boss room
 (the farthest dead end) holds the Phantom King, scaled up each stage; beating it
 opens a portal to the next stage, and after stage 3 the run is won. Later stages
-scale enemy hp and damage and add stage-exclusive enemies (necromancer, reaper
+make enemies tougher (more hp and damage, a little faster) rather than sending
+many more of them, and add stage-exclusive enemies (necromancer, reaper
 and minigunner from stage 2; zombie soldier and skeleton sorcerer in stage 3).
+Summoners (tombstones, necromancers, sorcerers) share a cap on how many raised
+enemies can be up at once.
 
 **Coins**: enemies drop coins (tougher ones drop more; summoned ones rarely), the boss
 drops a pile, and every cleared room leaves a chest worth 5 coins. Coins last for the
@@ -87,8 +92,9 @@ the statues, browse the bestiary and legend. When the host uses the gate, a read
 check pops up at the side for everyone; once all are ready the host picks the
 dungeon and the whole party is teleported in. Enemies get tougher and more numerous
 with more players. Locked rooms pull the whole party inside, each hero has their own
-coins and shop upgrades, a reward chest holds 5 coins per hero, and fallen heroes
-spectate and get back up at the next stage. The practice range is single player only.
+coins and shop upgrades, and a reward chest holds 5 coins per hero. A fallen hero
+lies where they fell: a teammate holding E (interact) by the body for 4 seconds
+revives them at 35% health, and anyone still down gets back up at the next stage. The practice range is single player only.
 
 How it works: connections are peer to peer (WebRTC via the free PeerJS service, which
 only introduces the players). Every machine runs the same simulation; the host
@@ -122,7 +128,10 @@ toggle music (a toast shows ON / OFF). The bag (bottom left) can be managed
 with the mouse: drag a slot onto another to move, swap or stack potions
 (this also works in the shop's bag), drag it out of the bag to drop it on the
 floor (to make space, or for a teammate to pick up), and right click a slot to
-drink it. The Mage spends mana, the Rogue spends energy and the Priestess
+drink it. Timed potions work one of a kind at a time: the same effect can't be
+drunk again until it wears off, but a higher tier (shown as I / II / III next to the
+effect under the passive) goes on over a weaker one, which carries on underneath.
+The Mage spends mana, the Rogue spends energy and the Priestess
 spends light orbs (bar under HP).
 
 ## Project layout
@@ -135,6 +144,8 @@ js/
   main.js               entry point, screen flow, main loop
   core/                 utils, settings (saved), input (key bindings), audio (SFX + music), camera
   gfx/                  procedural pixel art: heroes, enemies, boss, items, tiles
+    heroes/             one file per hero + cute.js (the shared chibi style and 8-frame poses)
+    enemies/            zombies, skeletons, spirits and casters in the same style (npcSprites.js too)
   world/dungeon.js      arena map, wall collision, torches
   world/floor.js        generated dungeon floors (rooms, hallways, locked doors, chunked art)
   entities/
@@ -170,7 +181,7 @@ and damage.
 ## Adding a class
 
 1. Add stats in `CONFIG.classes`, including `ult.charge` and an optional `resource`.
-2. Add a `drawX(p, pose)` sprite function in `js/gfx/heroSprites.js` and register it in `buildHeroSprites()`.
+2. Add a `drawX(p, P)` sprite function in its own file in `js/gfx/heroes/` (using the parts in `cute.js`) and register it in `buildHeroSprites()`.
 3. Create `js/entities/player/x.js` extending `Player` with `primary()`, `secondary()`,
    `abilityE()`, `abilityF()` and `ultimate()`. Override `absorb()` for blocks/shields.
 4. Register it in `createHero()` (`player.js`), in `CLASS_INFO` (`menus.js`), and add the script tag in `index.html`.

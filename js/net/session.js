@@ -17,7 +17,8 @@
 // Scenes (the lobby, a dungeon run, the test dungeon) start through bundle
 // commands too, so everyone builds the new world on the same tick from the same seed.
 
-const HELD_ACTIONS = ['up', 'down', 'left', 'right'];
+// interact is also held: keeping it down by a downed teammate revives them
+const HELD_ACTIONS = ['up', 'down', 'left', 'right', 'interact'];
 const PRESS_ACTIONS = ['e', 'f', 'ult', 'dodge', 'interact', 'item1', 'item2', 'item3', 'item4', 'item5'];
 
 class Session {
@@ -31,6 +32,8 @@ class Session {
     return {
       held,
       pressed: new Set(inp.p),
+      // actions this player has on the same key as interact: using up an interact press uses them up too
+      linked: { interact: inp.x || [] },
       mouse: { x: 0, y: 0, left: !!inp.ml, right: !!inp.mr, leftPressed: !!inp.lp, rightPressed: !!inp.rp },
     };
   }
@@ -91,6 +94,7 @@ class Session {
     if (active) {
       HELD_ACTIONS.forEach((a, i) => { if (Input.down(a)) inp.h |= 1 << i; });
       inp.p = [...this.pending.p];
+      if (this.pending.p.has('interact')) inp.x = Input.sharingKeyWith('interact').filter((a) => this.pending.p.has(a));
       inp.ml = Input._mouse.left ? 1 : 0;
       inp.mr = Input._mouse.right ? 1 : 0;
       inp.lp = this.pending.lp ? 1 : 0;
@@ -118,7 +122,9 @@ class Session {
         const ci = this.clientInputs[r.id];
         if (!ci) continue;
         inputs[r.id] = { h: ci.h, p: [...ci.p], mx: ci.mx, my: ci.my, ml: ci.ml, mr: ci.mr, lp: ci.lp, rp: ci.rp };
+        if (ci.x.size) inputs[r.id].x = [...ci.x];
         ci.p = new Set();
+        ci.x = new Set();
         ci.lp = 0;
         ci.rp = 0;
       }
@@ -266,7 +272,7 @@ class Session {
         const newId = `p${this.nextId++}`;
         this.peers.set(peer, newId);
         this.roster.push({ id: newId, name: String(msg.name || 'Hero').slice(0, 14), classId: this.freeClass(msg.classId) });
-        this.clientInputs[newId] = { h: 0, p: new Set(), mx: 0, my: 0, ml: 0, mr: 0, lp: 0, rp: 0 };
+        this.clientInputs[newId] = { h: 0, p: new Set(), x: new Set(), mx: 0, my: 0, ml: 0, mr: 0, lp: 0, rp: 0 };
         this.transport.send(peer, { t: 'welcome', id: newId, code: this.code });
         // everyone (re)starts the lobby together with the new roster
         this.queueScene('lobby');
@@ -279,6 +285,7 @@ class Session {
         const i = msg.i;
         ci.h = i.h; ci.mx = i.mx; ci.my = i.my; ci.ml = i.ml; ci.mr = i.mr;
         for (const a of i.p) ci.p.add(a);
+        for (const a of i.x || []) ci.x.add(a);
         if (i.lp) ci.lp = 1;
         if (i.rp) ci.rp = 1;
         return;

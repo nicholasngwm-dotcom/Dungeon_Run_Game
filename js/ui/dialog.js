@@ -62,7 +62,7 @@ const Dialog = {
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     const frames = this.npc.frames.idle;
-    const frame = frames[Math.floor(time * 2.5) % frames.length].img;
+    const frame = frames[Math.floor(time * CUTE.fps.idle) % frames.length].img;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     // head and shoulders: crop the top of the 64px sprite and scale it up
     ctx.drawImage(frame, 12, 2, 40, 40, 0, 0, canvas.width, canvas.height);

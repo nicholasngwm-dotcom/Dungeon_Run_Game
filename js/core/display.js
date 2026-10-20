@@ -6,6 +6,10 @@
 // "fullscreen" is entered on the first input after the page loads. Leaving
 // fullscreen from the browser (Esc / F11) falls back to default.
 
+// The game canvas has 2x the pixels of the 960x540 game space (see index.html), so
+// text renders sharp; App sets this scale on the context at the start of each frame.
+const RENDER_SCALE = 2;
+
 const DISPLAY_MODES = [
   ['default', 'Default'],
   ['fullscreen', 'Fullscreen'],

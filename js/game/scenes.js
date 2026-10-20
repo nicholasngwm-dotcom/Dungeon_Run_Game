@@ -51,8 +51,8 @@ function drawGlints(ctx, pts, t) {
   }
 }
 
-/** The NPC frame for a keeper (gentle 2-frame idle), with a soft shadow. */
-function npcPiece(name, x, y, t, flip = false, anim = 'idle', fps = 2.5) {
+/** The NPC frame for a keeper (the heroes' 8-frame idle), with a soft shadow. */
+function npcPiece(name, x, y, t, flip = false, anim = 'idle', fps = CUTE.fps.idle) {
   return {
     y,
     draw: (ctx) => {
@@ -191,7 +191,7 @@ const Scenes = {
         y,
         draw: (ctx) => {
           const frames = Sprites.npcs.tinkerer;
-          const f = welding ? frames.work[Math.floor(t * 12) % 2] : frames.idle[Math.floor(t * 2.5) % 2];
+          const f = welding ? frames.work[Math.floor(t * 12) % 2] : frames.idle[Math.floor(t * CUTE.fps.idle) % frames.idle.length];
           drawShadow(ctx, x, y + 9, 13, 5);
           drawSprite(ctx, f.img, x, y, HERO_ANCHOR.x, HERO_ANCHOR.y);
         },

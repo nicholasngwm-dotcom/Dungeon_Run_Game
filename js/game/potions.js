@@ -1,8 +1,10 @@
 // Potions: sold in the shop's potion store, carried in the 5-slot inventory
 // (up to BAG_STACK of a kind per slot) and drunk with keys 1-5. Each potion belongs to a family (heal, speed,
 // thorns...) and a tier (1 plain, 2 large, 3 super). Timed effects live on the
-// hero as "brews" (Player.brews[family] = { t, v }); drinking another potion of
-// the same family keeps the stronger effect and the longer time.
+// hero as "brews" (Player.brews[family] = { t, v, tier, under }). One effect of a kind at
+// a time: the same family can't be drunk again until it wears off, except a higher
+// tier, which goes on over the weaker one (that keeps running underneath, and takes
+// over again if it outlasts the stronger one).
 //
 // Everything here runs inside the shared simulation (drinking is a key press,
 // buying is a command), so it stays in sync in multiplayer.
@@ -12,9 +14,9 @@ const POTION_DEFS = [
   ['heal', 1, 'Health Potion', 8, 40, 0, 'Heals 40 HP.'],
   ['heal', 2, 'Large Health Potion', 16, 100, 0, 'Heals 100 HP.'],
   ['heal', 3, 'Super Health Potion', 28, 200, 0, 'Heals 200 HP.'],
-  ['regen', 1, 'Regen Potion', 9, 1, 10, 'Regenerate 1 stack (2% max HP per second) for 10s.'],
-  ['regen', 2, 'Large Regen Potion', 16, 1, 30, 'Regenerate 1 stack (2% max HP per second) for 30s.'],
-  ['regen', 3, 'Super Regen Potion', 26, 2, 30, 'Regenerate 2 stacks (4% max HP per second) for 30s.'],
+  ['regen', 1, 'Regen Potion', 9, 1, 10, 'Regenerate 2% of your max HP per second for 10s.'],
+  ['regen', 2, 'Large Regen Potion', 16, 1, 30, 'Regenerate 2% of your max HP per second for 30s.'],
+  ['regen', 3, 'Super Regen Potion', 26, 2, 30, 'Regenerate 4% of your max HP per second for 30s.'],
   ['mana', 1, 'Mana Potion', 8, 20, 0, 'Restores 20 mana (or energy; 1 light orb).'],
   ['mana', 2, 'Large Mana Potion', 14, 50, 0, 'Restores 50 mana (or energy; 2 light orbs).'],
   ['mana', 3, 'Super Mana Potion', 22, 100, 0, 'Restores 100 mana (or energy; 4 light orbs).'],
@@ -130,3 +132,7 @@ const BREW_LABELS = {
   regen: 'REGEN', manaRegen: 'MANA REGEN', rage: 'RAGE', focus: 'FOCUS', strength: 'STRENGTH', speed: 'SPEED',
   bulldose: 'BULLDOSE', ironskin: 'IRONSKIN', thorns: 'THORNS', purity: 'PURITY', inferno: 'INFERNO',
 };
+
+/** Tier marks shown with a running effect (HUD chips, pop-up text): plain I, large II, super III. */
+const TIER_MARKS = { 1: 'I', 2: 'II', 3: 'III' };
+const TIER_COLORS = { 1: '#d8cfe4', 2: '#8ad8ff', 3: '#ffd34a' };

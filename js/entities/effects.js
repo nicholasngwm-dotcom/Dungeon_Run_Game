@@ -1,7 +1,21 @@
 // Visual effects: particles, floating damage numbers, short-lived
 // custom effects, and the red "telegraph" zones for enemy attacks.
 
-const PIXEL_FONT = '"Press Start 2P", monospace';
+const PIXEL_FONT = 'Alagard, monospace';
+
+/**
+ * Canvas text font for a size on the game's old 8px-grid scale (5 = smallest
+ * label, 8 = normal, 20 = banner). Alagard is drawn on a 16px grid and the
+ * canvas renders at 2x, so 8 (16 screen px) is its sharpest small size;
+ * bigger text snaps to steps of 4 so it stays readable.
+ */
+function fontPx(size) {
+  return size <= 7 ? 8 : Math.round((size * 1.5) / 4) * 4;
+}
+
+function uiFont(size) {
+  return `${fontPx(size)}px ${PIXEL_FONT}`;
+}
 
 class Effects {
   constructor() {
@@ -136,7 +150,7 @@ class Effects {
       if (t.crit) { this.drawCritText(ctx, t, a); continue; }
       const pop = 1 + Math.max(0, (t.life / t.maxLife - 0.8)) * 2;
       ctx.globalAlpha = a;
-      ctx.font = `${Math.round(t.size * pop)}px ${PIXEL_FONT}`;
+      ctx.font = `${Math.round(fontPx(t.size) * pop)}px ${PIXEL_FONT}`;
       ctx.fillStyle = OUTLINE;
       ctx.fillText(t.str, Math.round(t.x) + 1, Math.round(t.y) + 1);
       ctx.fillText(t.str, Math.round(t.x) - 1, Math.round(t.y) + 1);
@@ -155,7 +169,7 @@ class Effects {
     const y = Math.round(t.y);
     ctx.globalAlpha = alpha;
     const draw = (str, size, sy, fill) => {
-      ctx.font = `${Math.round(size)}px ${PIXEL_FONT}`;
+      ctx.font = `${Math.max(8, Math.round(size * 1.5))}px ${PIXEL_FONT}`;   // scales smoothly while it slams in
       ctx.fillStyle = '#5a1a08';
       for (const [dx, dy] of [[-2, 0], [2, 0], [0, -2], [0, 2], [-2, 2], [2, 2], [-1, -1], [1, -1]]) ctx.fillText(str, x + dx, sy + dy);
       ctx.fillStyle = '#ff7a1e';

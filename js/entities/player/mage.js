@@ -3,6 +3,13 @@
 
 const MAGIC_CIRCLE_SY = 0.6; // the drain circle is drawn squashed vertically (floor perspective)
 
+// pixel effect colours: the mage's ghost-teal magic, brass and wine
+const MAGE_FX = {
+  sparkle: ['#3fc2a8', '#9cf0d8', '#ffffff'],
+  glow: '63, 194, 168',
+  brass: '#b08a3e',
+};
+
 class Mage extends Player {
   constructor(x, y) {
     super('mage', x, y);
@@ -29,16 +36,16 @@ class Mage extends Player {
 
   /** Mana orb pickup: boosts all damage for a moment. Another orb refreshes it. */
   startManaSurge(world) {
-    if (!(this.manaSurge > 0)) world.effects.text(this.hx, this.hy - 40, 'MANA SURGE!', { color: '#6ad8ff', size: 8, life: 1 });
+    if (!(this.manaSurge > 0)) world.effects.text(this.hx, this.hy - 40, 'MANA SURGE!', { color: '#9cf0d8', size: 8, life: 1 });
     this.manaSurge = this.cfg.passive.duration;
-    world.effects.burst(this.hx, this.hy, { count: 14, colors: ['#4a8aff', '#9ad0ff', '#ffffff'], speed: [40, 120], life: [0.3, 0.6], up: 30 });
+    world.effects.burst(this.hx, this.hy, { count: 14, colors: MAGE_FX.sparkle, speed: [40, 120], life: [0.3, 0.6], up: 30 });
   }
 
   get passiveInfo() {
     const c = this.cfg.passive;
     const on = this.manaSurge > 0;
     return {
-      name: 'MANA SURGE', color: '#6ad8ff', ready: on,
+      name: 'MANA SURGE', color: '#9cf0d8', ready: on,
       text: on ? `+${Math.round((c.damageMultiplier - 1) * 100)}% DAMAGE` : 'GRAB MANA ORBS',
       bar: on ? this.manaSurge / c.duration : null,
     };
@@ -76,7 +83,7 @@ class Mage extends Player {
       vx: Math.cos(this.aim + spread) * c.speed,
       vy: Math.sin(this.aim + spread) * c.speed,
       radius: 6, damage: c.damage, life: c.life, knockback: 60,
-      sprite: Sprites.projectiles.bolt, spin: 10, glow: '170, 100, 255', trail: ['#b67aff', '#e6ccff'],
+      sprite: Sprites.projectiles.bolt, spin: 10, glow: MAGE_FX.glow, trail: ['#3fc2a8', '#9cf0d8'],
       target: nearestTarget(world, m.x, m.y, 160),
       homing: (p, dt, w) => {
         if (!p.target || p.target.dead || !w.getTargets().includes(p.target)) {
@@ -107,7 +114,7 @@ class Mage extends Player {
       vx: Math.cos(this.aim) * c.speed,
       vy: Math.sin(this.aim) * c.speed,
       radius: 9, damage: 0, life: travel / c.speed,
-      sprite: Sprites.projectiles.fireball, spin: 8, glow: '90, 160, 255', trail: ['#4a8aff', '#9ad0ff', '#e6f6ff'],
+      sprite: Sprites.projectiles.fireball, spin: 8, glow: MAGE_FX.glow, trail: ['#1f7a72', '#3fc2a8', '#9cf0d8'],
       onHit: (p, w) => this.explode(w, p.x, p.y),
     }));
     Sound.play('fireballCast');
@@ -116,26 +123,21 @@ class Mage extends Player {
   explode(world, x, y) {
     const c = this.cfg.fireball;
     this.hitCircle(world, x, y, c.radius, c.damage, { knockback: 260, sound: 'hit' });
-    world.effects.burst(x, y, { count: 30, colors: ['#4a8aff', '#9ad0ff', '#e6f6ff', '#2a3a6a'], speed: [80, 260], life: [0.3, 0.7], size: [3, 6] });
+    world.effects.burst(x, y, { count: 30, colors: ['#1f7a72', '#3fc2a8', '#9cf0d8', '#2a2129'], speed: [80, 260], life: [0.3, 0.7], size: [3, 6] });
     world.effects.add(0.35, (ctx, t) => {
+      // ghost-teal blast: stepped bands round a white-hot core, ring racing out
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 1 - t;
-      ctx.fillStyle = '#4a8aff';
-      ctx.beginPath();
-      ctx.arc(x, y, c.radius * (0.4 + t * 0.7), 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = '#e6f6ff';
-      ctx.beginPath();
-      ctx.arc(x, y, c.radius * 0.5 * (1 - t), 0, TAU);
-      ctx.fill();
+      const r = c.radius * (0.4 + t * 0.7);
+      PFX.disc(ctx, x, y, r, r, 'rgba(31, 122, 114, 0.7)', 3);
+      PFX.disc(ctx, x, y, r * 0.7, r * 0.7, 'rgba(63, 194, 168, 0.6)', 3);
+      PFX.disc(ctx, x, y, c.radius * 0.45 * (1 - t), c.radius * 0.45 * (1 - t), '#f0fff8', 3);
+      PFX.ring(ctx, x, y, r * 1.1, r * 1.1, '#9cf0d8', 3);
       ctx.restore();
     });
     world.effects.add(3, (ctx, t) => {
-      ctx.fillStyle = `rgba(20, 10, 10, ${0.35 * (1 - t)})`;
-      ctx.beginPath();
-      ctx.arc(x, y, c.radius * 0.7, 0, TAU);
-      ctx.fill();
+      PFX.disc(ctx, x, y, c.radius * 0.7, c.radius * 0.7, `rgba(20, 10, 10, ${0.35 * (1 - t)})`, 4);
     }, true);
     world.shake(6, 0.25);
     Sound.play('explosion');
@@ -157,7 +159,7 @@ class Mage extends Player {
     const target = nearestTarget(world, m.x, m.y, c.selectRadius);
     if (!target) {
       Sound.play('denied');
-      world.effects.text(m.x, m.y - 10, 'NO TARGET', { color: '#9ad0ff', size: 7 });
+      world.effects.text(m.x, m.y - 10, 'NO TARGET', { color: '#9cf0d8', size: 7 });
       return;
     }
     if (!this.spend(c.cost, world)) { this.targeting = false; return; }
@@ -213,19 +215,15 @@ class Mage extends Player {
       pts.push([lerp(x1, x2, t) + j, lerp(y1, y2, t) + j * 0.5]);
     }
     world.effects.add(0.3, (ctx, t) => {
+      // chunky zigzag: a wide teal halo with a white core
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 1 - t;
-      for (const [w, col] of [[width * 2.5, 'rgba(120, 160, 255, 0.6)'], [width, '#ffffff']]) {
-        ctx.strokeStyle = col;
-        ctx.lineWidth = w;
-        ctx.beginPath();
-        pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-        ctx.stroke();
-      }
+      PFX.path(ctx, pts, 'rgba(63, 194, 168, 0.55)', Math.round(width * 1.6));
+      PFX.path(ctx, pts, '#f0fff8', width > 3 ? 3 : 2);
       ctx.restore();
     });
-    world.effects.burst(x2, y2, { count: 10, colors: ['#ffffff', '#9ab8ff', '#5a7aff'], speed: [60, 180], life: [0.15, 0.3] });
+    world.effects.burst(x2, y2, { count: 10, colors: ['#ffffff', '#9cf0d8', '#3fc2a8'], speed: [60, 180], life: [0.15, 0.3] });
   }
 
   // ---------- F: bird form ----------
@@ -247,8 +245,13 @@ class Mage extends Player {
     // F again lands early (ignoring the frame it started)
     if ((b.t > 0 && Input.pressed('f')) || b.t >= this.cfg.bird.duration) return this.endBird(world);
     b.t += dt;
+    // the flight restores mana, a few motes drifting up into the bird
+    this.gainResource(this.cfg.bird.manaPerSecond * dt);
+    if (Math.random() < dt * 8) {
+      world.effects.burst(this.x + rand(-10, 10), this.y + rand(-2, 6), { count: 1, colors: ['#3fc2a8', '#f0fff8'], speed: [5, 15], life: [0.3, 0.5], up: 40, size: [2, 3] });
+    }
     if (this.moving && Math.random() < 0.3) {
-      world.effects.burst(this.x, this.y - 18, { count: 1, colors: ['#b67aff', '#e6ccff'], speed: [5, 20], life: [0.2, 0.4], size: [2, 3] });
+      world.effects.burst(this.x, this.y - 18, { count: 1, colors: ['#3fc2a8', '#9cf0d8'], speed: [5, 20], life: [0.2, 0.4], size: [2, 3] });
     }
   }
 
@@ -260,7 +263,7 @@ class Mage extends Player {
   }
 
   poof(world) {
-    world.effects.burst(this.hx, this.hy, { count: 18, colors: ['#b67aff', '#e6ccff', '#ffffff'], speed: [40, 140], life: [0.2, 0.5] });
+    world.effects.burst(this.hx, this.hy, { count: 18, colors: ['#2a2129', '#3c3038', '#3fc2a8', '#9cf0d8'], speed: [40, 140], life: [0.2, 0.5] });
   }
 
   // ---------- Q: mana drain circle ----------
@@ -290,10 +293,10 @@ class Mage extends Player {
         pg.tick = c.tick;
         for (const t of world.getTargets()) {
           if (!this.inCircle(pg, t)) continue;
-          const dealt = world.damageTarget(t, c.dps * c.tick, { sound: null, noCrit: true, color: '#c8a8ff', fromUlt: true });
+          const dealt = world.damageTarget(t, c.dps * c.tick, { sound: null, noCrit: true, color: '#9cf0d8', fromUlt: true });
           if (dealt) {
             this.gainResource(dealt * c.manaSteal);
-            world.effects.burst(t.hx, t.hy, { count: 1, colors: ['#b67aff', '#6ad8ff'], speed: [0, 0], life: [0.4, 0.5], size: [3, 4] });
+            world.effects.burst(t.hx, t.hy, { count: 1, colors: ['#3fc2a8', '#9cf0d8'], speed: [0, 0], life: [0.4, 0.5], size: [3, 4] });
             const last = world.effects.particles[world.effects.particles.length - 1];
             const a = angleTo(t.hx, t.hy, this.hx, this.hy);
             last.vx = Math.cos(a) * 260;
@@ -324,7 +327,7 @@ class Mage extends Player {
     this.recoil -= dt;
     this.manaSurge -= dt;
     if (this.manaSurge > 0 && Math.random() < 0.4) {
-      world.effects.burst(this.x + rand(-10, 10), this.y - rand(0, 26), { count: 1, colors: ['#4a8aff', '#9ad0ff', '#e6f6ff'], speed: [10, 30], life: [0.3, 0.5], up: 40 });
+      world.effects.burst(this.x + rand(-10, 10), this.y - rand(0, 26), { count: 1, colors: MAGE_FX.sparkle, speed: [10, 30], life: [0.3, 0.5], up: 40 });
     }
     // while a drain circle is down, abilities come back within a second
     if (this.circles.length) {
@@ -351,65 +354,49 @@ class Mage extends Player {
     }
     for (const s of this.strikes) {
       const t = s.t / this.cfg.lightning.delay;
-      Telegraph.circle(ctx, s.x, s.y + 14, 22, t, '120, 160, 255');
+      PFX.zone(ctx, s.x, s.y + 14, 22, t, MAGE_FX.glow, { spin: s.t * 4 });
     }
   }
 
-  /** Arcane circle on the floor: rings, rotating rune ticks, inner square. */
+  /** Pixel arcane circle on the floor: brass and teal rings, turning rune ticks, two counter-turning squares. */
   drawMagicCircle(ctx, pg, c, alpha = 1) {
     const fade = Math.min(1, pg.t * 4, (c.duration - pg.t) * 2);
     const r = c.radius;
     const sy = MAGIC_CIRCLE_SY;
-    const ring = (rr) => { ctx.beginPath(); ctx.ellipse(pg.x, pg.y, rr, rr * sy, 0, 0, TAU); };
     const pt = (a, rr) => [pg.x + Math.cos(a) * rr, pg.y + Math.sin(a) * rr * sy];
     ctx.save();
     ctx.globalAlpha = fade * alpha;
-    ctx.fillStyle = 'rgba(110, 60, 220, 0.16)';
-    ring(r);
-    ctx.fill();
+    PFX.disc(ctx, pg.x, pg.y, r, r * sy, 'rgba(31, 122, 114, 0.16)', 4);
     ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = '#a07aff';
-    ctx.lineWidth = 2;
-    ring(r);
-    ctx.stroke();
-    ctx.strokeStyle = '#6ad8ff';
-    ctx.lineWidth = 1;
-    ring(r * 0.88);
-    ctx.stroke();
-    ring(r * 0.45);
-    ctx.stroke();
-    // rune ticks spinning between the two outer rings
-    ctx.fillStyle = '#d8c8ff';
+    PFX.ring(ctx, pg.x, pg.y, r, r * sy, MAGE_FX.brass, 2, { thick: 2 });
+    PFX.ring(ctx, pg.x, pg.y, r * 0.88, r * 0.88 * sy, '#3fc2a8', 2);
+    PFX.ring(ctx, pg.x, pg.y, r * 0.45, r * 0.45 * sy, '#3fc2a8', 2, { dash: [2, 2], spin: -pg.t });
+    // rune ticks turning between the two outer rings: little crosses and dots
     for (let i = 0; i < 16; i++) {
       const [x, y] = pt(pg.t * 0.8 + (i * TAU) / 16, r * 0.94);
-      ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, i % 2 ? 2 : 3, i % 2 ? 2 : 3);
+      if (i % 2) PFX.star(ctx, x, y, 1, '#9cf0d8', '#f0fff8');
+      else { ctx.fillStyle = MAGE_FX.brass; ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 2, 2); }
     }
     // two squares turning in opposite directions
-    ctx.strokeStyle = '#a07aff';
-    for (const dir of [1, -1]) {
-      ctx.beginPath();
-      for (let i = 0; i <= 4; i++) {
-        const [x, y] = pt(dir * pg.t * 0.5 + (i * TAU) / 4, r * 0.88);
-        if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    for (const [dir, col] of [[1, '#3fc2a8'], [-1, MAGE_FX.brass]]) {
+      for (let i = 0; i < 4; i++) {
+        const [x1, y1] = pt(dir * pg.t * 0.5 + (i * TAU) / 4, r * 0.88);
+        const [x2, y2] = pt(dir * pg.t * 0.5 + ((i + 1) * TAU) / 4, r * 0.88);
+        PFX.line(ctx, x1, y1, x2, y2, col, 2);
       }
-      ctx.stroke();
     }
+    // a teal star in the middle
+    PFX.star(ctx, pg.x, pg.y, 3, '#3fc2a8', '#f0fff8', 2);
     ctx.restore();
   }
 
   drawExtras(ctx) {
     if (this.targeting && this.world) {
-      const m = this.world.mouseWorld;
+      const m = this.cursor;
       const t = nearestTarget(this.world, m.x, m.y, this.cfg.lightning.selectRadius);
-      ctx.save();
-      ctx.strokeStyle = t ? '#9ad0ff' : 'rgba(154, 208, 255, 0.4)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      if (t) ctx.arc(t.hx, t.hy, t.radius + 8, 0, TAU);
-      else ctx.arc(m.x, m.y, this.cfg.lightning.selectRadius, 0, TAU);
-      ctx.stroke();
-      ctx.restore();
+      const spin = this.animTime * 2;
+      if (t) PFX.ring(ctx, t.hx, t.hy, t.radius + 8, t.radius + 8, '#9cf0d8', 2, { dash: [2, 2], spin });
+      else PFX.ring(ctx, m.x, m.y, this.cfg.lightning.selectRadius, this.cfg.lightning.selectRadius, 'rgba(156, 240, 216, 0.4)', 2, { dash: [2, 2], spin });
     }
   }
 
@@ -432,7 +419,7 @@ class Mage extends Player {
     const r = 1 - this.bird.t / this.cfg.bird.duration;
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(Math.round(this.x - 11), Math.round(this.y - 36), 22, 4);
-    ctx.fillStyle = '#b67aff';
+    ctx.fillStyle = '#3fc2a8';
     ctx.fillRect(Math.round(this.x - 10), Math.round(this.y - 35), Math.round(20 * r), 2);
   }
 

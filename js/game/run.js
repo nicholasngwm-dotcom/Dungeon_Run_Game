@@ -152,12 +152,7 @@ class DungeonRun {
     const w = this.world;
     this.stage++;
     // fallen teammates get back up for the new stage, at half health
-    for (const p of w.players) {
-      if (!p.dead) continue;
-      p.dead = false;
-      p.hp = Math.round(p.maxHp * 0.5);
-      p.invulnerable = 1;
-    }
+    for (const p of w.players) if (p.dead) p.revive(0.5);
     w.enemies = [];
     w.enemyProjectiles = [];
     w.playerProjectiles = [];
@@ -168,6 +163,7 @@ class DungeonRun {
     w.boss = null;
     w.timers = w.timers.filter((t) => !t.spawn);
     w.pendingSpawns = 0;
+    w.pendingSummons = 0;
     this.buildStage();
     this.start();
     Music.play('battle');
@@ -534,6 +530,7 @@ class DungeonRun {
     w.enemies = [];
     w.timers = w.timers.filter((t) => !t.spawn);
     w.pendingSpawns = 0;
+    w.pendingSummons = 0;
     w.enemyProjectiles = [];
   }
 
@@ -971,7 +968,7 @@ class DungeonRun {
       case 'chef': {
         // the keeper stands behind a counter under a striped awning
         const frames = Sprites.npcs[pr.kind].idle;
-        drawSprite(ctx, frames[Math.floor((this.time + x * 0.01) * 2.5) % frames.length].img, x, y - 8, HERO_ANCHOR.x, HERO_ANCHOR.y, pr.kind !== 'shopkeeper', 1);
+        drawSprite(ctx, frames[Math.floor((this.time + x * 0.01) * CUTE.fps.idle) % frames.length].img, x, y - 8, HERO_ANCHOR.x, HERO_ANCHOR.y, pr.kind !== 'shopkeeper', 1);
         const enchant = pr.kind === 'enchanter';
         box(56, 18, enchant ? '#3e5a96' : '#9c6c3e', enchant ? '#22325e' : '#5b3922');
         ctx.fillStyle = enchant ? '#d4ac4c' : '#7d532f';

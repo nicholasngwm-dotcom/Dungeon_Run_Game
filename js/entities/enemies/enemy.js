@@ -23,6 +23,9 @@ class Enemy extends Entity {
     this.frozenTime = 0;
   }
 
+  /** Body centre for hits, on the scaled-down sprite (see Game.drawEnemy). */
+  get hy() { return this.y - this.hitOffY * CONFIG.enemyDrawScale; }
+
   setState(s) {
     this.state = s;
     this.stateTime = 0;
@@ -174,13 +177,16 @@ class Enemy extends Entity {
   // ---------- drawing ----------
 
   drawGround(ctx) {
-    drawShadow(ctx, this.x, this.y + 9, this.radius, this.radius * 0.4);
+    const s = CONFIG.enemyDrawScale;   // under the scaled-down sprite (see Game.drawEnemy)
+    drawShadow(ctx, this.x, this.y + 9 * s, this.radius * s, this.radius * 0.4 * s);
     this.drawTelegraph(ctx);
   }
 
   drawTelegraph() {}
 
   currentFrame() {
+    // cute-style bodies have the heroes' 8-frame idle and walk
+    if (this.frames.cute) return heroFrame(this.frames, this.moving, this.animTime);
     if (this.moving && this.frames.walk) return this.frames.walk[Math.floor(this.animTime * 7) % 4];
     return this.frames.idle[Math.floor(this.animTime * 2) % this.frames.idle.length];
   }

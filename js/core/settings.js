@@ -18,7 +18,7 @@ const KEY_ACTIONS = [
   ['item3', 'Inventory slot 3'],
   ['item4', 'Inventory slot 4'],
   ['item5', 'Inventory slot 5'],
-  ['interact', 'Interact (lobby)'],
+  ['interact', 'Interact / revive'],
   ['music', 'Toggle music'],
   ['cursor', 'Mouse / crosshair'],
 ];

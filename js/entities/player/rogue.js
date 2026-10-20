@@ -2,6 +2,15 @@
 // slash, bleeds wounded enemies, marks everything it hits; killing a marked
 // enemy resets it), E parry, F dagger storm, Q clone surprise.
 
+// pixel effect colours: the rogue's red scarf, charcoal smoke and amber eyes
+const ROGUE_FX = {
+  slash: ['#6a1622', '#c43a44', '#ff9a8a', '#ffffff'],
+  smoke: ['#2c2c3a', '#3e3e52', '#56566e'],
+  blood: ['#ffffff', '#c43a44', '#6a1622'],
+  amber: '240, 176, 48',
+  red: '#c43a44',
+};
+
 class Rogue extends Player {
   constructor(x, y) {
     super('rogue', x, y);
@@ -88,17 +97,12 @@ class Rogue extends Player {
     const y = Math.round(this.y - 54);
     const k = clamp(this.streakTime / this.cfg.passive.duration, 0, 1);
     ctx.save();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = OUTLINE;
-    ctx.beginPath();
-    ctx.arc(x, y, 10, 0, TAU);
-    ctx.stroke();
-    ctx.strokeStyle = k < 0.3 && Math.floor(this.animTime * 10) % 2 ? '#ff6040' : '#f0c040';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y, 10, -Math.PI / 2, -Math.PI / 2 + TAU * k);
-    ctx.stroke();
-    ctx.font = `7px ${PIXEL_FONT}`;
+    PFX.ring(ctx, x, y, 11, 11, OUTLINE, 2, { thick: 2 });
+    if (k > 0) {
+      PFX.ring(ctx, x, y, 10, 10, k < 0.3 && Math.floor(this.animTime * 10) % 2 ? '#ff6040' : '#f0c040', 2,
+        { from: -Math.PI / 2, to: -Math.PI / 2 + TAU * k });
+    }
+    ctx.font = uiFont(7);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = OUTLINE;
@@ -176,7 +180,17 @@ class Rogue extends Player {
     this.iframes = Math.max(this.iframes, c.invulnerability);
     this.facing = Math.cos(angle) >= 0 ? 1 : -1;
     Sound.play('dash');
-    world.effects.burst(this.x, this.y, { count: 10, colors: ['#8a8aaa', '#c8c8e0'], speed: [40, 100], life: [0.2, 0.4] });
+    world.effects.burst(this.x, this.y, { count: 10, colors: ROGUE_FX.smoke, speed: [40, 100], life: [0.2, 0.4] });
+    // a red slash streak along the dash path
+    const x0 = this.pivotX;
+    const y0 = this.pivotY;
+    world.effects.add(0.3, (ctx, t) => {
+      ctx.save();
+      ctx.globalAlpha = 1 - t;
+      const len = c.distance * Math.min(1, t / 0.55 + 0.1);
+      PFX.beam(ctx, x0, y0, angle, len, 10 * (1 - t * 0.6), ROGUE_FX.slash);
+      ctx.restore();
+    });
   }
 
   updateDash(dt, world) {
@@ -197,7 +211,7 @@ class Rogue extends Player {
         world.addDot(t, c.bleedDps, c.bleedDuration);
         world.effects.text(t.hx, t.hy - 34, 'BLEED', { color: '#ff6060', size: 7 });
       }
-      world.effects.burst(t.hx, t.hy, { count: 8, colors: ['#ffffff', '#b52c3e'], speed: [80, 180] });
+      world.effects.burst(t.hx, t.hy, { count: 8, colors: ROGUE_FX.blood, speed: [80, 180] });
     }
 
     d.ghostTimer -= dt;
@@ -225,6 +239,17 @@ class Rogue extends Player {
     this.haste = c.speedDuration;
     world.effects.text(this.hx, this.hy - 30, 'PARRY!', { color: '#f0c040', size: 9 });
     world.effects.burst(this.hx, this.hy - 10, { count: 16, colors: ['#ffffff', '#f0c040'], speed: [80, 200], life: [0.15, 0.35] });
+    // an amber ring flashing out from the blocked blow
+    const x = this.hx;
+    const y = this.hy - 10;
+    world.effects.add(0.3, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const r = 10 + t * 30;
+      PFX.ring(ctx, x, y, r, r, `rgba(${ROGUE_FX.amber}, ${1 - t})`, 2, { thick: Math.max(1, Math.round(3 * (1 - t))) });
+      PFX.star(ctx, x, y, Math.round(6 * (1 - t)) + 1, '#f0c040', '#ffffff', 2);
+      ctx.restore();
+    });
     world.shake(3, 0.1);
     Sound.play('crit');
     return 0;
@@ -298,13 +323,18 @@ class Rogue extends Player {
       }
     }
     if (this.stormReady || this.storm) {
+      // a ring of little blades circling the rogue
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.strokeStyle = `rgba(240, 192, 64, ${0.4 + Math.sin(this.animTime * 15) * 0.2})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(this.x, this.hy, 22, 0, TAU);
-      ctx.stroke();
+      const a = 0.55 + Math.sin(this.animTime * 15) * 0.2;
+      PFX.ring(ctx, this.x, this.hy, 22, 22, `rgba(${ROGUE_FX.amber}, ${a})`, 2, { dash: [2, 3], spin: this.animTime * 6 });
+      ctx.restore();
+    }
+    if (this.parryTime > 0) {
+      // parry stance: an amber guard arc in front
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.ring(ctx, this.x, this.hy, 20, 20, `rgba(${ROGUE_FX.amber}, 0.8)`, 2, { thick: 2, from: this.aim - 1.1, to: this.aim + 1.1 });
       ctx.restore();
     }
   }
@@ -394,7 +424,7 @@ class RogueClone extends Entity {
     this.hp -= dmg;
     this.invulnerable = 0.3;
     this.flashTime = 0.1;
-    world.effects.text(this.hx, this.hy - 24, `-${dmg}`, { color: '#c08aff', size: 8 });
+    world.effects.text(this.hx, this.hy - 24, `-${dmg}`, { color: '#ff8a8a', size: 8 });
     if (fromX !== undefined) this.knockback(angleTo(fromX, fromY, this.x, this.y), 140);
     if (this.hp <= 0) this.die(world);
     return true;
@@ -411,7 +441,7 @@ class RogueClone extends Entity {
         x: this.x, y: this.hy,
         vx: Math.cos(a) * 520, vy: Math.sin(a) * 520,
         radius: 6, damage: c.burstDamage, pierce: c.burstPierce, life: 0.8, knockback: 90,
-        sprite: Sprites.weapons.dagger.img, trail: ['#c08aff', '#ffffff'], fromUlt: true,
+        sprite: Sprites.weapons.dagger.img, trail: ['#c43a44', '#ffffff'], fromUlt: true,
         onStrike: (p, w, t) => {
           if (p.stunned) return;
           p.stunned = true;
@@ -419,7 +449,7 @@ class RogueClone extends Entity {
         },
       }));
     }
-    world.effects.burst(this.hx, this.hy, { count: 30, colors: ['#3e3e52', '#9a2230', '#c08aff', '#ffffff'], speed: [80, 220], life: [0.3, 0.6] });
+    world.effects.burst(this.hx, this.hy, { count: 30, colors: ['#3e3e52', '#9a2230', '#c43a44', '#ffffff'], speed: [80, 220], life: [0.3, 0.6] });
     world.shake(6, 0.25);
     Sound.play('explosion');
   }
@@ -430,20 +460,21 @@ class RogueClone extends Entity {
 
   draw(ctx) {
     if (this.dead) return;
-    const frame = this.moving ? this.frames.walk[Math.floor(this.animTime * 9) % 4] : this.frames.idle[Math.floor(this.animTime * 2.5) % 2];
+    const frame = heroFrame(this.frames, this.moving, this.animTime);
     const fade = Math.min(1, this.life * 2);
     this.drawFrame(ctx, frame, HERO_ANCHOR, 0.7 * fade);
-    // ghostly purple sheen
+    // shadowy red sheen (red silhouettes are made once per frame and kept)
+    frame.redSheen ??= PixelArt.silhouette(frame.img, ROGUE_FX.red);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    drawSprite(ctx, frame.flash, this.x, this.y, HERO_ANCHOR.x, HERO_ANCHOR.y, this.facing < 0, 0.12 * fade);
+    drawSprite(ctx, frame.redSheen, this.x, this.y, HERO_ANCHOR.x, HERO_ANCHOR.y, this.facing < 0, 0.25 * fade);
     ctx.restore();
     const w = 24;
     const x = Math.round(this.x - w / 2);
     const y = Math.round(this.y - 50);
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(x - 1, y - 1, w + 2, 4);
-    ctx.fillStyle = '#c08aff';
+    ctx.fillStyle = '#c43a44';
     ctx.fillRect(x, y, Math.round(w * clamp(this.hp / this.maxHp, 0, 1)), 2);
   }
 }

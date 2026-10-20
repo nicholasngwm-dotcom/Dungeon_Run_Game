@@ -80,7 +80,7 @@ class Slime extends Enemy {
   }
 
   // shift the hit centre up while airborne
-  get hy() { return this.y - this.hitOffY - this.height; }
+  get hy() { return this.y - (this.hitOffY + this.height) * CONFIG.enemyDrawScale; }
 
   onDeath(world) {
     if (!this.cfg.splitCount) return;

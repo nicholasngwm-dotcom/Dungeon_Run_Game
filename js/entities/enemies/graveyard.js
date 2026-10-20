@@ -208,7 +208,7 @@ class Bomber extends Enemy {
     this.drawFrame(ctx, this.currentFrame(), this.anchor, this.spawnAlpha);
     // bomb held over its head
     const x = Math.round(this.x + this.facing * 2);
-    const y = Math.round(this.y - 54);
+    const y = Math.round(this.y - 50);
     const lit = this.state === 'fuse';
     const blink = lit && Math.floor(this.stateTime * 14) % 2;
     ctx.fillStyle = OUTLINE;
@@ -364,15 +364,18 @@ class Necromancer extends Enemy {
     if (this.summonTimer <= 0) {
       this.summonTimer = c.summonEvery;
       const alive = world.enemies.filter((e) => e.owner === this && !e.dead).length;
-      if (alive < c.summonMax) { this.setState('cast'); Sound.play('graveRumble'); }
+      if (alive < c.summonMax && world.summonRoom() > 0) { this.setState('cast'); Sound.play('graveRumble'); }
     }
   }
 
   raise(world) {
     const c = this.cfg;
-    for (let i = 0; i < c.summonCount; i++) {
-      const a = (i / c.summonCount) * TAU + rand(-0.3, 0.3);
-      world.spawnEnemy(choose(c.summonTypes), this.x + Math.cos(a) * 50, this.y + Math.sin(a) * 34, (e) => { e.owner = this; });
+    // its own limit and the cap shared by every summoner in the fight
+    const alive = world.enemies.filter((e) => e.owner === this && !e.dead).length;
+    const n = Math.min(c.summonCount, c.summonMax - alive, world.summonRoom());
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + rand(-0.3, 0.3);
+      world.summon(this, choose(c.summonTypes), this.x + Math.cos(a) * 50, this.y + Math.sin(a) * 34);
     }
   }
 
@@ -563,7 +566,8 @@ class Minigunner extends Enemy {
         while (this.fireTimer <= 0) {
           this.fireTimer += c.fireEvery;
           const a = this.aim + rand(-0.5, 0.5) * c.spreadDegrees * DEG;
-          enemyShot(world, this.hx + Math.cos(this.aim) * 30, this.hy + 4 + Math.sin(this.aim) * 30, a, c.bulletSpeed, {
+          const s = CONFIG.enemyDrawScale;   // the muzzle of the scaled-down gun
+          enemyShot(world, this.hx + Math.cos(this.aim) * 30 * s, this.hy + (4 + Math.sin(this.aim) * 30) * s, a, c.bulletSpeed, {
             radius: 5, damage: c.damage, sprite: Sprites.projectiles.heavyBullet, trail: ['#ff8a4a'],
           });
           Sound.play('enemyArrow', 0.05);
@@ -708,8 +712,10 @@ class SkeletonSorcerer extends Enemy {
       this.setState('cast');
     } else if (this.skullsTimer <= 0) {
       this.skullsTimer = c.skullsEvery;
-      this.casting = 'skulls';
-      this.setState('cast');
+      if (this.skullsLeft(world) > 0) {
+        this.casting = 'skulls';
+        this.setState('cast');
+      }
     }
   }
 
@@ -751,10 +757,16 @@ class SkeletonSorcerer extends Enemy {
     removeDead(this.hands);
   }
 
+  /** How many more skulls it may raise: its own skullMax and the summon cap shared by every summoner. */
+  skullsLeft(world) {
+    const alive = world.enemies.filter((e) => e.owner === this && !e.dead).length;
+    return Math.min(this.cfg.skullMax - alive, world.summonRoom());
+  }
+
   castSkulls(world) {
-    const c = this.cfg;
-    for (let i = 0; i < c.skullCount; i++) {
-      const a = (i / c.skullCount) * TAU;
+    const n = Math.min(this.cfg.skullCount, this.skullsLeft(world));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
       const pt = world.dungeon.freePoint(this.x + Math.cos(a) * 30, this.y + Math.sin(a) * 20, 8, 6);
       const skull = createEnemy('flyingSkull', pt.x, pt.y);
       skull.owner = this;

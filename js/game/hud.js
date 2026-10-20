@@ -2,7 +2,7 @@
 
 const HUD = {
   text(ctx, str, x, y, { size = 8, color = '#f4ead7', align = 'left', baseline = 'top', shadow = true } = {}) {
-    ctx.font = `${size}px ${PIXEL_FONT}`;
+    ctx.font = uiFont(size);
     ctx.textAlign = align;
     ctx.textBaseline = baseline;
     if (shadow) {
@@ -46,10 +46,10 @@ const HUD = {
     const p = game.player;
     if (p.targeting) {
       const msg = p.classId === 'mage' ? 'LEFT CLICK: PICK LIGHTNING TARGET   RIGHT CLICK: CANCEL' : 'LEFT CLICK: FIRE VOLLEY   RIGHT CLICK: CANCEL';
-      this.text(ctx, msg, 480, 440, { size: 8, align: 'center', color: p.classId === 'mage' ? '#9ad0ff' : '#8cff9a' });
+      this.text(ctx, msg, 480, 440, { size: 8, align: 'center', color: p.classId === 'mage' ? '#9cf0d8' : '#a8cc6a' });
     }
     if (p.placing) {
-      this.text(ctx, 'LEFT CLICK: PLACE DRAIN CIRCLE   RIGHT CLICK: CANCEL', 480, 440, { size: 8, align: 'center', color: '#c8a8ff' });
+      this.text(ctx, 'LEFT CLICK: PLACE DRAIN CIRCLE   RIGHT CLICK: CANCEL', 480, 440, { size: 8, align: 'center', color: '#9cf0d8' });
     }
     if (p.placingRune) {
       this.text(ctx, 'LEFT CLICK: PLACE HEALING RUNE   RIGHT CLICK: CANCEL', 480, 440, { size: 8, align: 'center', color: '#9cf0a0' });
@@ -95,7 +95,14 @@ const HUD = {
     }
     if (me.dead && !game.finished) {
       this.text(ctx, 'YOU ARE DOWN', 480, 96, { size: 12, align: 'center', color: '#e04545' });
-      this.text(ctx, game.run ? 'Your team carries on - you get back up at the next stage' : 'Watching your team...', 480, 116, { size: 7, align: 'center', color: '#d8c8a0' });
+      const helper = game.players.find((p) => !p.dead && p.reviveTarget === me && me.reviveProgress > 0);
+      if (helper) {
+        this.text(ctx, `${helper.name.toUpperCase()} IS REVIVING YOU`, 480, 120, { size: 7, align: 'center', color: '#8cff9a' });
+        this.bar(ctx, 400, 136, 160, 6, me.reviveProgress / CONFIG.multiplayer.revive.time, '#8cff9a', '#1a2a1e');
+      } else {
+        const how = `A teammate can revive you: hold ${Settings.label('interact')} by your body for ${CONFIG.multiplayer.revive.time}s`;
+        this.text(ctx, game.run ? `${how} (or you get up at the next stage)` : how, 480, 120, { size: 7, align: 'center', color: '#d8c8a0' });
+      }
     }
   },
 
@@ -156,7 +163,9 @@ const HUD = {
       const icon = s.icon || (s.slot === 'dodge' ? Sprites.icons.dodge : icons[s.slot]);
       const cd = s.cd ?? p.cooldowns[s.slot];
       const max = s.max ?? p.maxCooldowns[s.slot];
-      this.abilitySlot(ctx, x0 + i * 70, 474, s.key, s.name, cd, max, icon, s.slot ? p.slotCharges?.[s.slot] : null, s.armed, s.slot || s.name);
+      // a slot glows while its ability is held (the knight's raised shield), or when an extra is armed
+      const armed = s.slot && p.slotHeld(s.slot) ? 'held' : !!s.armed;
+      this.abilitySlot(ctx, x0 + i * 70, 474, s.key, s.name, cd, max, icon, s.slot ? p.slotCharges?.[s.slot] : null, armed, s.slot || s.name);
     });
     this.ultSlot(ctx, 960 - 14 - 70, 474, p);
     this.drawInventory(ctx, p);
@@ -167,10 +176,10 @@ const HUD = {
    * x with its bottom at y, kept on screen.
    */
   tooltip(ctx, x, y, title, color = '#f4ead7', sub = '') {
-    ctx.font = `7px ${PIXEL_FONT}`;
+    ctx.font = uiFont(7);
     const tw = ctx.measureText(title).width;
     // the sub line wraps at about 280px
-    ctx.font = `5px ${PIXEL_FONT}`;
+    ctx.font = uiFont(5);
     const lines = [];
     for (const word of sub ? sub.split(' ') : []) {
       const last = lines[lines.length - 1];
@@ -179,7 +188,7 @@ const HUD = {
     }
     const sw = Math.max(0, ...lines.map((l) => ctx.measureText(l).width));
     const w = Math.ceil(Math.max(tw, sw)) + 12;
-    const h = 16 + lines.length * 9;
+    const h = 17 + lines.length * 10;
     const bx = Math.round(clamp(x - w / 2, 4, 960 - w - 4));
     const by = Math.round(y - h);
     ctx.fillStyle = OUTLINE;
@@ -189,7 +198,7 @@ const HUD = {
     ctx.fillStyle = color;
     ctx.fillRect(bx, by, w, 1);
     this.text(ctx, title, bx + w / 2, by + 4, { size: 7, align: 'center', color });
-    lines.forEach((l, i) => this.text(ctx, l, bx + w / 2, by + 16 + i * 9, { size: 5, align: 'center', color: '#d8cfe4' }));
+    lines.forEach((l, i) => this.text(ctx, l, bx + w / 2, by + 16 + i * 10, { size: 5, align: 'center', color: '#d8cfe4' }));
   },
 
   /** The name of the potion on the floor under the mouse / crosshair. */
@@ -274,8 +283,8 @@ const HUD = {
     const drag = this.bagDrag && p.inventory[this.bagDrag.from] ? this.bagDrag : null;
     const m = Input._mouse;
     const first = this.bagSlotRect(0);
-    this.text(ctx, 'BAG', first.x + 2, first.y - 19, { size: 5, color: '#7a6a8a' });
-    this.text(ctx, 'DRAG: MOVE / OUT TO DROP  RMB: DRINK', first.x + 24, first.y - 19, { size: 5, color: '#4a3d5e' });
+    this.text(ctx, 'BAG', first.x + 2, first.y - 19, { size: 5, color: '#a99bbd' });
+    this.text(ctx, 'DRAG: MOVE / OUT TO DROP  RMB: DRINK', first.x + 24, first.y - 19, { size: 5, color: '#7a6a8a' });
     const hover = this.bagSlotAt(m.x, m.y);
     p.inventory.forEach((slot, i) => {
       const { x: sx, y: sy, s } = this.bagSlotRect(i);
@@ -289,20 +298,29 @@ const HUD = {
       }
       const key = Settings.label(`item${i + 1}`);
       if (!slot) {
-        this.text(ctx, key, sx + 3, sy + 3, { size: 5, color: '#4a3d5e' });
+        this.text(ctx, key, sx + 3, sy + 3, { size: 5, color: '#6a5a7e' });
         return;
       }
       const icon = Sprites.potions[slot.id];
       if (drag && drag.from === i) ctx.globalAlpha = 0.3;
       ctx.drawImage(icon, sx + s / 2 - icon.width / 2, sy + s / 2 - icon.height / 2 + 2);
       ctx.globalAlpha = 1;
+      // its effect is still running (and this one isn't stronger): greyed out with the time left
+      const blocking = p.brewBlocking(POTIONS[slot.id]);
+      if (blocking) {
+        ctx.fillStyle = 'rgba(10, 6, 18, 0.65)';
+        ctx.fillRect(sx, sy, s, s);
+        this.text(ctx, `${Math.ceil(blocking.t)}s`, sx + s / 2, sy + s / 2 - 4, { size: 6, align: 'center', color: '#d8c8a0' });
+      }
       this.text(ctx, key, sx + 3, sy + 3, { size: 6, color: '#f2a541' });
       if (slot.count > 1) this.text(ctx, `x${slot.count}`, sx + s - 3, sy + s - 9, { size: 6, align: 'right', color: '#ffffff' });
     });
     if (!drag && hover >= 0 && p.inventory[hover]) {
       const pot = POTIONS[p.inventory[hover].id];
       const r = this.bagSlotRect(hover);
-      this.tooltip(ctx, r.x + r.s / 2, r.y - 24, pot.name, POTION_COLORS[pot.family][1], pot.desc);
+      const blocking = p.brewBlocking(pot);
+      const note = blocking ? ` Can't drink yet: ${BREW_LABELS[pot.family]} ${TIER_MARKS[blocking.tier]} is still running.` : '';
+      this.tooltip(ctx, r.x + r.s / 2, r.y - 24, `${pot.name} (${TIER_MARKS[pot.tier]})`, POTION_COLORS[pot.family][1], pot.desc + note);
     }
     if (drag) {
       const icon = Sprites.potions[p.inventory[drag.from].id];
@@ -404,26 +422,43 @@ const HUD = {
       ctx.fillRect(cx + 21, y + 13, Math.round((w - 24) * clamp(t / (p.buffMax[type] || b.duration), 0, 1)), 3);
       cx += w + 6;
     }
-    // potion effects: a small bottle, the effect's name and time left, wrapping onto a second row
+    // potion effects: the bottle of the tier that's running, the effect's name with its tier
+    // (I / II / III) and time left; a weaker one still running underneath shows as a small
+    // second bar with its own tier and time. Wraps onto more rows.
     let row = 0;
     for (const [family, b] of Object.entries(p.brews)) {
-      const w = 92;
-      if (cx + w > x + 300) { cx = x; row++; }
-      const by = y + row * 24;
+      const w = 112;
+      const h = b.under ? 28 : 20;
+      if (cx + w > x + 330) { cx = x; row++; }
+      const by = y + row * 32;
       const color = POTION_COLORS[family][1];
       const blink = b.t < 2 && Math.floor(b.t * 6) % 2;
-      this.panel(ctx, cx, by, w, 20);
+      this.panel(ctx, cx, by, w, h);
+      if (b.tier > 1) {
+        // stronger tiers get a rim in their tier colour
+        ctx.fillStyle = TIER_COLORS[b.tier];
+        ctx.fillRect(cx, by, w, 1);
+        ctx.fillRect(cx, by + h - 1, w, 1);
+      }
       ctx.globalAlpha = blink ? 0.5 : 1;
-      const icon = Object.values(POTIONS).find((pot) => pot.family === family);
-      ctx.drawImage(Sprites.potions[icon.id], cx - 3, by - 4, 24, 24);
-      const label = family === 'regen' && b.v > 1 ? `REGEN x${b.v}` : BREW_LABELS[family];
-      this.text(ctx, label, cx + 21, by + 3, { size: 5, color });
-      this.text(ctx, `${Math.ceil(b.t)}s`, cx + w - 3, by + 3, { size: 6, align: 'right' });
+      const pot = Object.values(POTIONS).find((o) => o.family === family && o.tier === b.tier)
+        || Object.values(POTIONS).find((o) => o.family === family);
+      ctx.drawImage(Sprites.potions[pot.id], cx - 3, by - 4, 24, 24);
+      this.text(ctx, BREW_LABELS[family], cx + 21, by + 1, { size: 5, color });
+      ctx.font = uiFont(5);
+      const lw = ctx.measureText(BREW_LABELS[family]).width;
+      this.text(ctx, TIER_MARKS[b.tier], cx + 25 + lw, by + 1, { size: 5, color: TIER_COLORS[b.tier] });
+      this.text(ctx, `${Math.ceil(b.t)}s`, cx + w - 3, by + 1, { size: 5, align: 'right' });
       ctx.globalAlpha = 1;
       ctx.fillStyle = '#1a1a30';
       ctx.fillRect(cx + 21, by + 13, w - 24, 3);
       ctx.fillStyle = color;
       ctx.fillRect(cx + 21, by + 13, Math.round((w - 24) * clamp(b.t / (b.max || b.t), 0, 1)), 3);
+      if (b.under) {
+        const u = b.under;
+        this.text(ctx, `${TIER_MARKS[u.tier]} UNDER`, cx + 21, by + 17, { size: 5, color: '#7a6a8a', shadow: false });
+        this.text(ctx, `${Math.ceil(u.t)}s`, cx + w - 3, by + 17, { size: 5, align: 'right', color: '#7a6a8a', shadow: false });
+      }
       cx += w + 6;
     }
   },
@@ -451,13 +486,13 @@ const HUD = {
   },
 
   /** charges (optional): { count, max, refill 0-1 } for abilities with stored uses. */
-  /** armed: the ability can be used right now (e.g. bash while the shield is up) - the slot glows. */
+  /** armed: the slot glows - true while the ability can be used right now, 'held' while it is being held (glows even on cooldown). */
   abilitySlot(ctx, x, y, key, name, cd, max, icon, charges = null, armed = false, id = null) {
     const w = 62;
     const h = 50;
     this.panel(ctx, x, y, w, h);
     const ready = cd <= 0;
-    if (armed && ready) {
+    if ((armed && ready) || armed === 'held') {
       ctx.fillStyle = `rgba(255, 210, 90, ${0.14 + Math.sin(performance.now() / 110) * 0.08})`;
       ctx.fillRect(x, y, w, h);
       ctx.strokeStyle = '#ffd34a';

@@ -428,7 +428,7 @@ const Menus = {
     Dialog.drawPortrait(time);
     const p = this.heroPreview;
     if (!p || this.screens.hero.classList.contains('hidden')) return;
-    const frame = Sprites.heroes[p.id].walk[Math.floor(time * 9) % 4];
+    const frame = heroFrame(Sprites.heroes[p.id], true, time);
     p.ctx.clearRect(0, 0, 64, 64);
     p.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
     p.ctx.beginPath();

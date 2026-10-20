@@ -111,11 +111,16 @@ class Projectile {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const r = this.radius * 3;
-      const g = ctx.createRadialGradient(this.x, this.y, 1, this.x, this.y, r);
-      g.addColorStop(0, `rgba(${this.glow}, 0.55)`);
-      g.addColorStop(1, `rgba(${this.glow}, 0)`);
-      ctx.fillStyle = g;
-      ctx.fillRect(this.x - r, this.y - r, r * 2, r * 2);
+      if (this.friendly) {
+        // heroes' shots glow in stepped pixel bands, like the rest of their effects
+        PFX.glow(ctx, this.x, this.y, r, this.glow, 0.7);
+      } else {
+        const g = ctx.createRadialGradient(this.x, this.y, 1, this.x, this.y, r);
+        g.addColorStop(0, `rgba(${this.glow}, 0.55)`);
+        g.addColorStop(1, `rgba(${this.glow}, 0)`);
+        ctx.fillStyle = g;
+        ctx.fillRect(this.x - r, this.y - r, r * 2, r * 2);
+      }
       ctx.restore();
     }
     if (this.sprite) {

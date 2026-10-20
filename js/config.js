@@ -83,14 +83,15 @@ const CONFIG = {
       name: 'Mage',
       hp: 250,
       speed: 186,
-      resource:  { name: 'MANA', max: 200, regen: 5, color: '#4a8aff' },
+      resource:  { name: 'MANA', max: 200, regen: 5, color: '#3fc2a8' },
       bolt:      { damage: 24, cost: 3, cooldown: 0.3, speed: 360, turnRate: 7, seekRange: 420, life: 2.2 },
       fireball:  { damage: 90, cost: 20, cooldown: 3, speed: 340, radius: 95, maxRange: 450 },
       // E: pick a target with LMB, lightning strikes after `delay` and arcs
       lightning: { damage: 240, cost: 120, cooldown: 3, delay: 1, selectRadius: 70,
                    arcRange: 240, arcDamage: 140, arcCount: 4 },
       // F: turn into a small, fast bird (tiny hitbox, can't cast). F again lands early.
-      bird:      { cost: 50, cooldown: 6, duration: 4, speedMultiplier: 1.8, radius: 5 },
+      // F: bird form; flying restores manaPerSecond mana (more than it costs over a full flight)
+      bird:      { cost: 50, cooldown: 6, duration: 4, speedMultiplier: 1.8, radius: 5, manaPerSecond: 22 },
       // Q: place a magic circle (LMB, RMB cancels) that drains enemies in it into mana.
       // While a circle is active, RMB / E / F cooldowns are capped at activeCooldown seconds.
       ult:       { charge: 1400, duration: 5, radius: 130, dps: 50, tick: 0.25, manaSteal: 0.35, maxRange: 300, activeCooldown: 1 },
@@ -146,6 +147,12 @@ const CONFIG = {
   //  stunResist = fraction of stun duration ignored
   //  contactDamage (optional) overrides the shared enemyContactDamage
   enemyContactDamage: 10,   // touching an enemy's body hurts (hero i-frames limit the rate)
+  // a knob for how big enemies draw (around their feet). Their sprites are drawn in the
+  // heroes' chibi proportions, so 1; hit boxes, reaches and telegraphs never scale
+  enemyDrawScale: 1,
+  // all summoners together (gravestones, necromancers, sorcerer skulls) keep at most this many
+  // summoned enemies up at once (x the party's enemy count scaling), on top of their own limits
+  summonCap: 8,
   enemies: {
     zombie: {
       hp: 125, speed: 48, radius: 14, damage: 22,
@@ -236,7 +243,7 @@ const CONFIG = {
     // Candlehead: skeleton that fires souls; a soul knocks you back hard
     candlehead: {
       hp: 95, speed: 58, radius: 13, damage: 14,
-      preferredMin: 170, preferredMax: 300, windup: 0.6, cooldown: 1., soulSpeed: 230, knockback: 400,
+      preferredMin: 170, preferredMax: 300, windup: 0.6, cooldown: 1.5, soulSpeed: 230, knockback: 400,
     },
     // Shadowalker: poison dagger; every blinkInterval it teleports behind you and stabs
     shadowalker: {
@@ -249,7 +256,7 @@ const CONFIG = {
     necromancer: {
       hp: 280, speed: 46, radius: 14, damage: 16,
       preferredMin: 200, preferredMax: 330, soulEvery: 2.2, soulSpeed: 220, knockback: 200,
-      summonEvery: 7, summonCount: 3, summonMax: 6, summonTypes: ['zombie', 'skeleton', 'skeletonWarrior'],
+      summonEvery: 7, summonCount: 3, summonMax: 6, summonTypes: ['zombie', 'skeleton', 'skeletonWarrior','bomber','candlehead'],
     },
     // stage 2+: Reaper swings a scythe, sends waves of darkness and teleports in close
     reaper: {
@@ -264,7 +271,7 @@ const CONFIG = {
     },
     // stage 2+: big skeleton with a minigun: spins up, then sprays slow bullets
     minigunner: {
-      hp: 460, speed: 34, radius: 20, damage: 9,
+      hp: 460, speed: 34, radius: 20, damage: 14,
       preferredMin: 180, preferredMax: 320, spinUp: 1.0, fireTime: 2.0, fireEvery: 0.08, bulletSpeed: 210,
       spreadDegrees: 14, cooldown: 2.6, knockbackResist: 0.8, stunResist: 0.5,
     },
@@ -278,11 +285,11 @@ const CONFIG = {
     skeletonSorcerer: {
       hp: 240, speed: 44, radius: 14, damage: 18,
       preferredMin: 190, preferredMax: 320,
-      handsEvery: 3.5, handsCount: 7, handsSpacing: 40, handsDelay: 0.55, handsStep: 0.08, handsRadius: 22, stun: 1.0,
-      skullsEvery: 8, skullCount: 3,
+      handsEvery: 3.5, handsCount: 7, handsSpacing: 40, handsDelay: 0.55, handsStep: 0.08, handsRadius: 27, stun: 1.0,
+      skullsEvery: 8, skullCount: 3, skullMax: 3,
     },
     // summoned by the sorcerer: flies straight at you and explodes on contact
-    flyingSkull: { hp: 22, speed: 150, radius: 9, damage: 22, blastRadius: 50, contactDamage: 0, coins: 0 },
+    flyingSkull: { hp: 20, speed: 150, radius: 9, damage: 35, blastRadius: 50, contactDamage: 0, coins: 0 },
   },
 
   // ---------------------------------------------------------
@@ -316,10 +323,12 @@ const CONFIG = {
   //  DUNGEON RUNS: 3 stages, each a generated floor of rooms and hallways.
   // ---------------------------------------------------------
   run: {
-    stages: [                                     // enemy + boss scaling per stage
-      { hp: 1, damage: 1 },
-      { hp: 1.55, damage: 1.25 },
-      { hp: 2.2, damage: 1.5 },
+    // enemy + boss scaling per stage. Later stages get tougher enemies (hp, damage, a little speed)
+    // rather than many more of them; the counts below only creep up
+    stages: [
+      { hp: 1, damage: 1, speed: 1 },
+      { hp: 1.85, damage: 1.35, speed: 1.06 },
+      { hp: 2.8, damage: 1.65, speed: 1.12 },
     ],
     // random mode: chance weight of rolling a theme already used this run (vs 1 for a new one)
     repeatThemeWeight: 0.05,
@@ -327,8 +336,8 @@ const CONFIG = {
     grid: { cols: 5, rows: 5, cellW: 28, cellH: 22 },
     roomCount: [11, 12, 13],                      // per stage, including start and boss
     // room objectives
-    combat: { waves: [2, 3, 3], perWave: [4, 6, 7], perWaveRandom: 2 },
-    defend: { duration: [30, 36, 42], totemHp: [1000, 1300, 1650], waveEvery: 6, perWave: [3, 4, 5] },
+    combat: { waves: [2, 3, 3], perWave: [4, 5, 5], perWaveRandom: 1 },
+    defend: { duration: [30, 36, 42], totemHp: [1000, 1300, 1650], waveEvery: 6, perWave: [3, 4, 4] },
     // defend-room enemies chase the hero once within spotRange, and give up (back to the lantern) past loseRange
     defendAI: { spotRange: 230, loseRange: 380 },
     // coins: roughly one per hpPerCoin of an enemy's base hp (at least 1); summoned enemies drop 1 coin
@@ -344,7 +353,7 @@ const CONFIG = {
     // further into the dungeon cost more. Upgrades: one pick of three per shop, each owned at most once
     // per run; rerolling the three costs reroll.base, + reroll.step more each time at the same shop
     shop: { stagePrice: [1, 1.4, 1.8], reroll: { base: 6, step: 4 } },
-    survival: { duration: [30, 40, 50], spawnEvery: [1.3, 1.05, 0.85], perSpawn: 2, maxAlive: [12, 15, 18] },
+    survival: { duration: [30, 40, 50], spawnEvery: [1.3, 1.2, 1.1], perSpawn: 2, maxAlive: [12, 13, 14] },
     // spike traps (combat rooms only): pop up every `period` seconds for `up` seconds
     spikes: { period: 4, up: 0.8, warn: 0.4, damage: 16, perRoom: [6, 10] },
     // special rooms (one or two per floor); not functional yet
@@ -359,8 +368,10 @@ const CONFIG = {
     maxPlayers: 8,
     maxDuplicates: 2,          // at most this many of the same hero in one lobby
     // enemies scale with the party: each extra hero adds this much enemy hp / this many more enemies
-    hpPerExtraPlayer: 0.5,
-    countPerExtraPlayer: 0.3,
+    hpPerExtraPlayer: 0.6,
+    countPerExtraPlayer: 0.2,
+    // a downed hero is picked up by a teammate holding interact by their body for `time` seconds
+    revive: { time: 4, range: 40, hp: 0.35, decay: 2 },   // hp: share of max hp back; decay: progress lost per second once let go
     tickRate: 60,              // simulation steps per second (everyone steps in lockstep)
     codeLength: 5,             // room code letters
     peerPrefix: 'dungeonrun-v1-',   // room code -> PeerJS id (bump to keep old versions out)
@@ -488,9 +499,9 @@ const CONFIG = {
   //  Per-phase values are [phase 1, phase 2, phase 3].
   // ---------------------------------------------------------
   phantom: {
-    hp: 7200,              // phase 3 (below phase3At) gets 1800 of this
-    phase2At: 0.5,
-    phase3At: 0.25,
+    hp: 7000,              // phase 3 (below phase3At) gets 1800 of this
+    phase2At: 0.6,
+    phase3At: 0.3,
     contactDamage: 22,
     floatSpeed: 170,       // how fast he chases his spot near the hero
     orbitRadius: 180,      // how close he circles the hero
@@ -508,12 +519,14 @@ const CONFIG = {
     barrageSpreadDegrees: 60,
 
     // Dash
-    dashWindup: 0.8,
+    dashWindup: 0.7,
     dashAimLockAt: 0.3,
-    dashSpeeds: [760, 960, 1180],  // 1st, 2nd, 3rd dash of a chain: each one faster than the last
-    dashRange: 440,
-    dashDamage: 38,
-    dashWidth: 56,          // hit lane, same width as the red telegraph on the ground
+    dashSpeeds: [780, 980, 1280],  // 1st, 2nd, 3rd dash of a chain: each one faster than the last
+    dashRange: 560,
+    dashOvershoot: 160,     // the dash carries on this far past the hero
+    dashDamage: 40,
+    dashWidth: 84,          // hit lane, same width as the red telegraph on the ground
+    contactRadius: 28,      // touching his shadow hurts within this distance (dashes use the lane above)
     dashRecover: 0.5,
     dashCycle: [1, 2, 3],          // dashes per dash attack, repeating 1, 2, 3, 1, 2, 3...
 
@@ -536,10 +549,10 @@ const CONFIG = {
     pulseCount: 4,
     pulseInterval: 0.7,
     pulseSpeed: 300,        // rings start at pulseRadius and close in on the king
-    pulseRadius: 360,
-    pullSpeed: 55,          // steady drag toward the king while pulsing (px/s)
-    pullSurge: 240,         // extra drag added when a ring sweeps over the hero...
-    pullSurgeDecay: 3.5,    // ...fading out at this rate (per second)
+    pulseRadius: 420,
+    pullSpeed: 100,         // steady drag toward the king while pulsing (px/s)
+    pullSurge: 420,         // extra drag added when a ring sweeps over the hero...
+    pullSurgeDecay: 3,      // ...fading out at this rate (per second)
     pulseLaserEvery: 0.08,  // seconds between random lasers sprayed in every direction
   },
 };

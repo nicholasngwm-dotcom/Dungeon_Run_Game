@@ -25,6 +25,7 @@ const App = {
   init() {
     this.canvas = document.getElementById('game');
     this.ctx = this.canvas.getContext('2d');
+    this.ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
     this.ctx.imageSmoothingEnabled = false;
     this.stage = document.getElementById('stage');
     this.practicePanel = document.getElementById('practice-panel');
@@ -393,6 +394,7 @@ const App = {
 
   loop(now) {
     const dt = Math.min((now - this.lastTime) / 1000 || 0, 1 / 30);
+    this.ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
     this.lastTime = now;
 
     if (Input.wasPressed('Escape')) {

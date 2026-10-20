@@ -32,13 +32,23 @@ const BESTIARY_SCALE = { undeadKnight: 1.15, minigunner: 1.05, gravestone: 1.4, 
 const BESTIARY_ROLES = ['all', 'melee', 'ranged', 'summoner', 'special', 'boss'];
 const BESTIARY_STAGES = ['all', 1, 2, 3];
 
+// the turning page: hinged strips it bends along, and the page width they divide (CSS .book-page)
+const LEAF_STRIPS = 8;
+const LEAF_PAGE_W = 300;
+
+/** Page numbers in the grimoire's old style. */
+function romanNumeral(n) {
+  let out = '';
+  for (const [v, s] of [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]) while (n >= v) { out += s; n -= v; }
+  return out;
+}
+
 const Bestiary = {
   theme: 'graveyard',
   stage: 'all',
   role: 'all',
   spread: 0,          // which two-page spread is open
-  previews: [],       // { canvas, entry } for the open spread
-  flipping: false,
+  previews: [],       // { canvas, entry, index, enemy } for every portrait on show
 
   /** First stage the enemy shows up in (from the theme's enemy lists unless the entry says). */
   firstStage(e) {
@@ -83,21 +93,22 @@ const Bestiary = {
       .map((r) => chip('role', r, r === 'all' ? 'ALL' : r.toUpperCase(), this.role === r)).join('');
   },
 
+  /** The HTML of page `i` of the filtered list (left pages are even), or the empty-book note. */
+  pageHtml(i) {
+    const list = this.entries;
+    const e = list[i];
+    if (e) return this.entryHtml(e, i);
+    return i === 0 && !list.length ? '<p class="b-empty">No enemies match these filters.</p>' : '';
+  },
+
   /** Fills both pages of the current spread. */
   render() {
+    this.dropLeaf();
     const list = this.entries;
     this.spread = clamp(this.spread, 0, this.spreads - 1);
-    this.previews = [];
-    ['left', 'right'].forEach((side, i) => {
-      const page = document.getElementById(`bestiary-${side}`);
-      const e = list[this.spread * 2 + i];
-      page.innerHTML = e ? this.entryHtml(e) : (i === 0 && !list.length ? '<p class="b-empty">No enemies match these filters.</p>' : '');
-      const canvas = page.querySelector('canvas');
-      if (canvas) {
-        canvas.getContext('2d').imageSmoothingEnabled = false;
-        this.previews.push({ canvas, entry: e });
-      }
-    });
+    document.getElementById('bestiary-left').innerHTML = this.pageHtml(this.spread * 2);
+    document.getElementById('bestiary-right').innerHTML = this.pageHtml(this.spread * 2 + 1);
+    this.collectPreviews();
     const n = list.length;
     document.getElementById('bestiary-count').textContent =
       n ? `PAGE ${this.spread + 1} / ${this.spreads}   (${n} ${n === 1 ? 'ENTRY' : 'ENTRIES'})` : 'NO ENTRIES';
@@ -105,7 +116,20 @@ const Bestiary = {
     document.getElementById('bestiary-next').disabled = this.spread >= this.spreads - 1;
   },
 
-  entryHtml(e) {
+  /** Every portrait canvas in the book right now (pages and a turning leaf) gets animated. */
+  collectPreviews() {
+    const list = this.entries;
+    const old = this.previews;
+    this.previews = [...document.querySelectorAll('#bestiary-book canvas[data-entry]')].map((canvas) => {
+      const i = Number(canvas.dataset.entry);
+      canvas.getContext('2d').imageSmoothingEnabled = false;
+      // keep the stand-in enemy of an entry already on show, so its animation carries on
+      const prev = old.find((pv) => pv.index === i);
+      return { canvas, entry: list[i], index: i, enemy: prev && prev.enemy };
+    });
+  },
+
+  entryHtml(e, i) {
     const first = this.firstStage(e);
     const stageText = e.role === 'boss' ? 'ALL STAGES' : e.note ? `${e.note} - STAGE ${first}+` : first === 1 ? 'STAGES 1-3' : first === 3 ? 'STAGE 3 ONLY' : `STAGE ${first}+`;
     let stats;
@@ -118,29 +142,227 @@ const Bestiary = {
     }
     const exclusive = first > 1 && e.role !== 'boss' && !e.note;
     return `
-      <canvas width="112" height="104"></canvas>
+      <canvas width="112" height="104" data-entry="${i}"></canvas>
       <h3>${e.name}</h3>
       <div class="b-tags"><span class="b-role ${e.role}">${e.role.toUpperCase()}</span><span class="b-stage${exclusive ? ' excl' : ''}">${stageText}</span></div>
       <div class="b-stats">${stats}</div>
-      <p class="b-desc">${e.desc}</p>`;
+      <p class="b-desc">${e.desc}</p>
+      <div class="b-folio">${romanNumeral(i + 1)}</div>`;
   },
 
-  /** Turns the page (dir +1 / -1) with a little flip animation. */
-  flip(dir) {
-    const next = this.spread + dir;
-    if (this.flipping || next < 0 || next >= this.spreads) return;
-    this.flipping = true;
+  // ---------- page turning ----------
+  // A turning page is a "leaf": a two-sided page hinged on the spine, at an angle
+  // from 0 (lying where it started) to 180 (turned over onto the other side).
+  // The leaf is cut into LEAF_STRIPS hinged strips so it bends like old paper:
+  // `curl` spreads extra turn along it, so the outer edge leads while you pull
+  // it, trails behind as it falls, and peels up first when you hover near the
+  // corner. The angle and the curl are both soft damped springs.
+  // Arrow keys and the side buttons throw a page over the same way.
+  //   leaf: { dir: +1 next / -1 back, a, v (deg/s), target, curl, cv, tilt, held, el, strips, under }
+
+  leaf: null,
+  grab: null,          // { dir } while the mouse holds a page
+  pointer: null,       // last cursor position over the book, in client px
+  lastStep: 0,
+
+  /** Hooks up the mouse once; listeners only act while the book is open. */
+  initPointer() {
+    if (this.pointerReady) return;
+    this.pointerReady = true;
     const book = document.getElementById('bestiary-book');
-    book.classList.add(dir > 0 ? 'flip-next' : 'flip-prev');
+    book.addEventListener('pointerdown', (e) => {
+      const side = this.sideAt(e.clientX, e.clientY);
+      if (!side) return;
+      const dir = side === 'right' ? 1 : -1;
+      if (!this.canTurn(dir) || (this.leaf && this.leaf.dir !== dir)) return;
+      e.preventDefault();
+      this.grab = { dir };
+      this.startLeaf(dir).held = true;
+    });
+    window.addEventListener('pointermove', (e) => { this.pointer = { x: e.clientX, y: e.clientY }; });
+    window.addEventListener('pointerup', () => this.release());
+    window.addEventListener('blur', () => this.release());
+  },
+
+  /** The book's layout in client pixels (the stage is CSS-scaled, so measure it live). */
+  bookRect() {
+    const spine = document.querySelector('#bestiary-book .book-spine').getBoundingClientRect();
+    const right = document.getElementById('bestiary-right').getBoundingClientRect();
+    return { spineX: spine.left + spine.width / 2, pageW: right.width, top: right.top, bottom: right.bottom };
+  },
+
+  /** 'left' / 'right' when the point is on a page, else null. */
+  sideAt(x, y) {
+    const r = this.bookRect();
+    if (y < r.top || y > r.bottom || Math.abs(x - r.spineX) > r.pageW + 6) return null;
+    return x >= r.spineX ? 'right' : 'left';
+  },
+
+  canTurn(dir) {
+    const next = this.spread + dir;
+    return next >= 0 && next < this.spreads;
+  },
+
+  /**
+   * Builds the leaf for turning toward `dir` (or returns the one already up).
+   * Its front is the page being lifted, its back the page that lands on the
+   * other side; the page underneath already shows the spread it reveals.
+   * Each strip shows its slice of both pages and holds the next strip, so
+   * turning one strip carries everything beyond it.
+   */
+  startLeaf(dir) {
+    if (this.leaf && this.leaf.dir === dir) return this.leaf;
+    this.dropLeaf();
+    const s = this.spread;
+    const t = s + dir;
+    const W = LEAF_PAGE_W;
+    const n = LEAF_STRIPS;
+    const sw = W / n;
+    // next: lift the right page (front) whose back is the next spread's left page
+    // back: lift the left page (front) whose back is the previous spread's right page
+    const frontHtml = this.pageHtml(dir > 0 ? s * 2 + 1 : s * 2);
+    const backHtml = this.pageHtml(dir > 0 ? t * 2 : t * 2 + 1);
+    const frontSide = dir > 0 ? 'right' : 'left';
+    const backSide = dir > 0 ? 'left' : 'right';
+    let inner = '';
+    for (let i = n - 1; i >= 0; i--) {
+      // which slice of each page this strip shows (strip 0 is at the spine)
+      const fx = dir > 0 ? i * sw : W - (i + 1) * sw;
+      const bx = dir > 0 ? W - (i + 1) * sw : i * sw;
+      const pos = i === 0 ? (dir > 0 ? 0 : W - sw) : (dir > 0 ? sw : -sw);
+      inner = `<div class="leaf-strip" style="left:${pos}px;width:${sw}px">`
+        + `<div class="leaf-face"><div class="book-page ${frontSide} leaf-sheet" style="left:${-fx}px">${frontHtml}</div><i class="leaf-shade"></i></div>`
+        + `<div class="leaf-face leaf-back"><div class="book-page ${backSide} leaf-sheet" style="left:${-bx}px">${backHtml}</div><i class="leaf-shade"></i></div>`
+        + `${inner}</div>`;
+    }
+    const book = document.getElementById('bestiary-book');
+    const el = document.createElement('div');
+    el.className = `book-leaf ${dir > 0 ? 'next' : 'prev'}`;
+    el.innerHTML = inner;
+    book.appendChild(el);
+    // the page under the leaf now shows what turning reveals
+    const under = document.getElementById(dir > 0 ? 'bestiary-right' : 'bestiary-left');
+    under.innerHTML = this.pageHtml(dir > 0 ? t * 2 + 1 : t * 2) + '<i class="under-shade"></i>';
+    const strips = [...el.querySelectorAll('.leaf-strip')];
+    this.leaf = { dir, a: 0, v: 0, target: 0, curl: 0, cv: 0, tilt: 0, held: false, el, strips, under };
+    this.collectPreviews();
+    this.applyLeaf();
+    return this.leaf;
+  },
+
+  /** Puts the pages back to plain (no leaf) without changing the spread. */
+  dropLeaf() {
+    if (!this.leaf) return;
+    const { dir, el } = this.leaf;
+    el.remove();
+    this.leaf = null;
+    document.getElementById(dir > 0 ? 'bestiary-right' : 'bestiary-left').innerHTML = this.pageHtml(this.spread * 2 + (dir > 0 ? 1 : 0));
+    this.collectPreviews();
+  },
+
+  /** Letting go of a held page: past the spine (or flicked) it turns over, otherwise it falls back. */
+  release() {
+    if (!this.grab) return;
+    this.grab = null;
+    const L = this.leaf;
+    if (!L) return;
+    L.held = false;
+    const turn = L.a + L.v * 0.2 > 90;
+    L.target = turn ? 180 : 0;
+    if (turn) Sound.play('uiHover');
+  },
+
+  /** Arrow keys / side buttons: throw the page over (dir +1 / -1). */
+  flip(dir) {
+    if (this.grab || !this.canTurn(dir)) return;
+    if (this.leaf && this.leaf.dir !== dir) {
+      if (this.leaf.a > 20) return;   // the other page is mid-turn
+      this.dropLeaf();
+    }
+    const L = this.startLeaf(dir);
+    L.target = 180;
+    L.v = Math.max(L.v, 220);
+    L.cv = Math.min(L.cv, -180);       // flung from the spine, the edge trails behind
     Sound.play('uiHover');
-    setTimeout(() => {
-      this.spread = next;
+  },
+
+  /** One physics step for the leaf (and the hover peel that starts one). */
+  step(time) {
+    const dt = clamp(time - (this.lastStep || time), 0, 1 / 20);
+    this.lastStep = time;
+    this.initPointer();
+    let peel = 0;
+    // hovering near a page's outer edge lifts its corner toward the cursor
+    if (!this.grab && this.pointer && (!this.leaf || this.leaf.target < 90)) {
+      const side = this.sideAt(this.pointer.x, this.pointer.y);
+      const r = this.bookRect();
+      const reach = side ? 1 - Math.abs(Math.abs(this.pointer.x - r.spineX) - r.pageW) / (r.pageW * 0.35) : 0;
+      const dir = side === 'right' ? 1 : -1;
+      if (reach > 0 && this.canTurn(dir) && (!this.leaf || this.leaf.dir === dir)) {
+        peel = reach;
+        this.startLeaf(dir).target = 14 * reach;
+      } else if (this.leaf) this.leaf.target = 0;
+    }
+    const L = this.leaf;
+    if (!L) return;
+    const r = this.bookRect();
+    if (L.held && this.pointer) {
+      // the page edge goes where the cursor is: its angle from how far across the spread it is
+      const across = ((this.pointer.x - r.spineX) * L.dir) / r.pageW;
+      L.target = Math.acos(clamp(across, -1, 1)) * (180 / Math.PI);
+    }
+    // the angle: a soft spring with a little bounce (heavy old paper, not card)
+    const k = L.held ? 90 : 55;
+    const damp = L.held ? 12 : 7.5;
+    L.v += (k * (L.target - L.a) - damp * L.v) * dt;
+    L.a += L.v * dt;
+    if (L.a < 0) { L.a = 0; L.v = -L.v * 0.3; }
+    if (L.a > 180) { L.a = 180; L.v = -L.v * 0.3; }
+    // the curl: pulled by its edge it leads; falling, the air holds the edge back; hovered, the corner peels up
+    const lift = Math.sin((L.a * Math.PI) / 180);
+    const curlTarget = L.held ? 34 * lift : peel > 0 ? 20 * peel : -0.09 * L.v;
+    L.cv += (70 * (curlTarget - L.curl) - 9 * L.cv) * dt;
+    L.curl += L.cv * dt;
+    // a held page twists a little toward the corner it's held by
+    const tiltTarget = L.held && this.pointer ? clamp(((this.pointer.y - (r.top + r.bottom) / 2) / (r.bottom - r.top)) * -10, -5, 5) : 0;
+    L.tilt += (tiltTarget - L.tilt) * Math.min(1, dt * 8);
+    if (!L.held && L.target >= 180 && L.a > 178 && Math.abs(L.v) < 40 && Math.abs(L.curl) < 4) {
+      // landed on the other side: that spread is open now
+      this.spread += L.dir;
       this.render();
-    }, 160);
-    setTimeout(() => {
-      book.classList.remove('flip-next', 'flip-prev');
-      this.flipping = false;
-    }, 330);
+      return;
+    }
+    if (!L.held && L.target === 0 && L.a < 0.4 && Math.abs(L.v) < 4 && Math.abs(L.curl) < 0.6) {
+      this.dropLeaf();
+      return;
+    }
+    this.applyLeaf();
+  },
+
+  /**
+   * Bends the leaf: strip 0 turns by the angle less half the curl and each
+   * further strip adds its share of the curl, so the paper arcs. Every strip is
+   * shaded by its own angle, and the page underneath darkens under the leaf.
+   */
+  applyLeaf() {
+    const L = this.leaf;
+    const n = L.strips.length;
+    const a = L.a;
+    const curl = clamp(L.curl, -2 * a, 2 * (180 - a));   // the paper can't fold through the book
+    L.el.style.transform = `rotateX(${L.tilt.toFixed(2)}deg)`;
+    let total = 0;
+    L.strips.forEach((s, i) => {
+      const turn = i === 0 ? a - curl / 2 : curl / (n - 1);
+      total += turn;
+      s.style.transform = `rotateY(${(-L.dir * turn).toFixed(2)}deg)`;
+      const mid = clamp(total, 0, 180);
+      const [front, back] = s.querySelectorAll(':scope > .leaf-face > .leaf-shade');
+      const crease = Math.abs(turn) / 40;   // where the paper bends it catches more shadow
+      front.style.opacity = ((mid / 180) * 0.6 + crease * 0.12).toFixed(3);
+      back.style.opacity = ((1 - mid / 180) * 0.6 + crease * 0.12).toFixed(3);
+    });
+    const shade = L.under.querySelector('.under-shade');
+    if (shade) shade.style.opacity = (Math.sin((a * Math.PI) / 180) * 0.5).toFixed(3);
   },
 
   /**
@@ -150,6 +372,7 @@ const Bestiary = {
    */
   drawPreviews(time) {
     if (!this.isOpen) return;
+    this.step(time);
     for (const pv of this.previews) {
       const { canvas, entry } = pv;
       const ctx = canvas.getContext('2d');

@@ -45,6 +45,7 @@ class Game {
     this.hazards = [];
     this.boss = null;
     this.pendingSpawns = 0;
+    this.pendingSummons = 0;       // summoned enemies still in their summoning circle (see summonRoom)
     this.time = 0;
     this.kills = 0;
     this.bannerData = null;
@@ -236,13 +237,14 @@ class Game {
       enemy.maxHp = Math.round(enemy.maxHp * s.hp);
       enemy.hp = enemy.maxHp;
     }
+    if (s.speed) enemy.speed *= s.speed;
     this.enemies.push(enemy);
   }
 
   /** Stage / wave scaling times party size (boss minions and the practice range don't scale with waves). */
   get enemyScale() {
     const party = this.playerScale.hp;
-    if (this.run) return { hp: this.run.scale.hp * party, damage: this.run.scale.damage };
+    if (this.run) return { hp: this.run.scale.hp * party, damage: this.run.scale.damage, speed: this.run.scale.speed };
     const d = this.director;
     if (this.practice) return { hp: 1, damage: 1 };
     if (d.state === 'boss' || d.waveIndex <= 0) return { hp: party, damage: 1 };
@@ -285,6 +287,26 @@ class Game {
       if (setup) setup(enemy);
       this.effects.burst(x, y - 10, { count: 12, colors: ['#b45aff', '#6a28c8', '#e0c0ff'], speed: [30, 100], up: 60 });
     }).spawn = true;
+  }
+
+  /**
+   * Summoners (gravestones, necromancers, skeleton sorcerers) share one cap: at
+   * most CONFIG.summonCap summoned enemies alive or rising at once (more with a
+   * bigger party). Returns how many more can be raised right now.
+   */
+  summonRoom() {
+    const alive = this.enemies.filter((e) => e.owner && !e.dead).length;
+    return Math.max(0, Math.round(CONFIG.summonCap * this.playerScale.count) - alive - this.pendingSummons);
+  }
+
+  /** Raises an enemy for a summoner, counted against the summon cap until it dies. then(enemy) runs once it appears. */
+  summon(owner, type, x, y, then = null) {
+    this.pendingSummons++;
+    this.spawnEnemy(type, x, y, (e) => {
+      this.pendingSummons = Math.max(0, this.pendingSummons - 1);
+      e.owner = owner;
+      if (then) then(e);
+    });
   }
 
   maybeDropHeart(x, y, chance = CONFIG.drops.heartChance) {
@@ -357,7 +379,9 @@ class Game {
     return timer;
   }
 
+  /** Camera shake. A hero's own attacks only shake their own screen; the world (bosses, blasts) shakes everyone's. */
   shake(magnitude, duration) {
+    if (this.actor && this.actor !== this.localPlayer) return;
     this.camera.shake(magnitude, duration);
   }
 
@@ -513,6 +537,7 @@ class Game {
     this.hazards = [];
     this.timers = this.timers.filter((t) => !t.spawn); // cancel summons in progress
     this.pendingSpawns = 0;
+    this.pendingSummons = 0;
   }
 
   resetDps() {
@@ -589,9 +614,11 @@ class Game {
       // stations / props get the interact key before the hero, so E there never casts an ability
       if (this.lobby) this.lobby.interact(p);
       if (this.run && !this.finished) this.run.preUpdate(p);
+      this.updateRevive(p, dt);
       if (!p.dead) p.update(dt, this);
     }
     Input.override = null;
+    this.decayRevives(dt);
     for (const c of this.clones) { this.setActor(c.owner); c.update(dt, this); }
     this.setActor(null);
     for (const b of this.barriers) b.update(dt, this);
@@ -655,6 +682,40 @@ class Game {
     }
   }
 
+  /**
+   * Multiplayer: a living hero holding interact by a downed teammate picks them
+   * up after CONFIG.multiplayer.revive.time seconds (one helper at a time). The
+   * press is used up here, so it never also casts the hero's E ability.
+   * Runs while this hero's input is the active one.
+   */
+  updateRevive(p, dt) {
+    p.reviveTarget = null;
+    if (!this.multiplayer || p.dead || this.finished) return;
+    const c = CONFIG.multiplayer.revive;
+    let body = null;
+    let bestD = c.range;
+    for (const o of this.players) {
+      if (!o.dead || o === p) continue;
+      const d = dist(p.x, p.y, o.x, o.y);
+      if (d < bestD) { bestD = d; body = o; }
+    }
+    p.reviveTarget = body;   // for the prompt over the body
+    if (!body) return;
+    if (Input.pressed('interact')) Input.consume('interact');
+    if (!Input.down('interact') || (body.revivedBy && body.revivedBy !== p)) return;
+    body.revivedBy = p;
+    body.reviveProgress += dt;
+    if (body.reviveProgress >= c.time) body.revive(c.hp, this);
+  }
+
+  /** Revive progress drains from bodies nobody held interact by this tick. */
+  decayRevives(dt) {
+    for (const p of this.players) {
+      if (p.dead && !p.revivedBy) p.reviveProgress = Math.max(0, p.reviveProgress - dt * CONFIG.multiplayer.revive.decay);
+      p.revivedBy = null;
+    }
+  }
+
   /** Projectiles fired from here on belong to `hero` (for damage credit). */
   setActor(hero) {
     this.actor = hero;
@@ -711,10 +772,11 @@ class Game {
     for (const e of this.enemies) e.drawGround(ctx);
     for (const cl of this.clones) cl.drawGround(ctx);
     for (const d of this.dummies) d.drawGround(ctx);
+    for (const p of this.players) if (p.dead && this.multiplayer) p.drawDowned(ctx, this.time);
     for (const p of this.heroes) p.drawGround(ctx);
 
     // y-sorted characters
-    const items = this.enemies.map((e) => ({ y: e.y, draw: (c) => e.draw(c) }));
+    const items = this.enemies.map((e) => ({ y: e.y, draw: (c) => Game.drawEnemy(c, e) }));
     for (const p of this.heroes) items.push({ y: p.y, draw: (c) => p.draw(c) });
     for (const cl of this.clones) items.push({ y: cl.y, draw: (c) => cl.draw(c) });
     for (const d of this.dummies) items.push({ y: d.y, draw: (c) => d.draw(c) });
@@ -743,6 +805,12 @@ class Game {
   /** Multiplayer: every other hero's name and health over their head. */
   drawNameTags(ctx) {
     const me = this.localPlayer;
+    const body = !me.dead && me.reviveTarget;
+    if (body) {
+      const helping = body.reviveProgress > 0;
+      const text = helping ? `REVIVING ${body.name.toUpperCase()}... ${Math.floor((body.reviveProgress / CONFIG.multiplayer.revive.time) * 100)}%` : `HOLD [${Settings.label('interact')}] TO REVIVE`;
+      HUD.text(ctx, text, Math.round(body.x), Math.round(body.y + 14), { size: 7, align: 'center', color: '#8cff9a' });
+    }
     for (const p of this.players) {
       if (p === me) continue;
       const x = Math.round(p.x);
@@ -754,6 +822,19 @@ class Game {
       ctx.fillStyle = '#e84a4a';
       ctx.fillRect(x - 12, y + 10, Math.round(24 * clamp(p.hp / p.maxHp, 0, 1)), 2);
     }
+  }
+
+  /** An enemy (sprite, weapon, hp bar, stun stars) drawn CONFIG.enemyDrawScale smaller around its feet. */
+  static drawEnemy(ctx, e) {
+    const s = CONFIG.enemyDrawScale;
+    const x = Math.round(e.x);
+    const y = Math.round(e.y);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.translate(-x, -y);
+    e.draw(ctx);
+    ctx.restore();
   }
 
   static buildVignette() {

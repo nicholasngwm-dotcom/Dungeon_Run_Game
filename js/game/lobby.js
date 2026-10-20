@@ -231,8 +231,7 @@ class LobbyHub {
       ctx.fillRect(x - 34, y - 64, 68, 68);
       ctx.restore();
     }
-    const frames = Sprites.heroes[s.id];
-    const frame = frames.idle[Math.floor((this.time + s.x * 0.01) * 2.5) % 2];
+    const frame = heroFrame(Sprites.heroes[s.id], false, this.time + s.x * 0.01);
     drawSprite(ctx, frame.img, x, y - 8, HERO_ANCHOR.x, HERO_ANCHOR.y, false, current ? 0.3 : 1);
   }
 

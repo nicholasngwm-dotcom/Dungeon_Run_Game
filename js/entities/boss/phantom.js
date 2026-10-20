@@ -322,7 +322,7 @@ class PhantomKing {
     const c = this.cfg;
     const p = world.player;
     const a = angleTo(this.x, this.y, p.x, p.y);
-    let len = Math.min(c.dashRange, dist(this.x, this.y, p.x, p.y) + 110);
+    let len = Math.min(c.dashRange, dist(this.x, this.y, p.x, p.y) + c.dashOvershoot);
     const b = world.dungeon.floorBounds;
     const cos = Math.cos(a);
     const sin = Math.sin(a);
@@ -360,6 +360,9 @@ class PhantomKing {
     if (D.ghost <= 0) {
       D.ghost = 0.035;
       this.afterimage(world);
+      this.wake(world, D.wakeX ?? px, D.wakeY ?? py, c.dashWidth);
+      D.wakeX = this.x;
+      D.wakeY = this.y;
     }
     // the hit lane is the ground path the telegraph showed, not the floating body
     // every hero in the lane gets hit, once each per dash
@@ -369,10 +372,36 @@ class PhantomKing {
       if (h.hurt(c.dashDamage, world, this.x, this.y)) D.hitHeroes.add(h);
     }
     if (D.traveled >= D.len - 0.01) {
-      world.shake(4, 0.2);
-      world.effects.burst(this.hx, this.hy, { count: 14, colors: ['#7048b4', '#c8b8ff', '#ff4ad8'], speed: [60, 180], life: [0.3, 0.6] });
+      world.shake(5, 0.25);
+      world.effects.burst(this.hx, this.hy, { count: 24, colors: ['#7048b4', '#c8b8ff', '#ff4ad8'], speed: [80, 240], life: [0.3, 0.7] });
       this.setState('dashRecover');
     }
+  }
+
+  /**
+   * Spectral wake on the floor from (x0, y0) to where he is now, as wide as the
+   * dash lane: a dark streak with a brighter core and magenta edges, fading out.
+   * Laid piece by piece, so a dash leaves one long trail.
+   */
+  wake(world, x0, y0, width) {
+    const x1 = this.x;
+    const y1 = this.y;
+    const len = dist(x0, y0, x1, y1) + 1;   // a pixel of overlap, so there are no gaps between pieces
+    const angle = angleTo(x0, y0, x1, y1);
+    world.effects.add(0.5, (ctx, t) => {
+      const k = 1 - t;
+      ctx.save();
+      ctx.translate(Math.round(x0), Math.round(y0));
+      ctx.rotate(angle);
+      ctx.fillStyle = `rgba(60, 24, 110, ${0.4 * k})`;
+      ctx.fillRect(0, -width / 2, len, width);
+      ctx.fillStyle = `rgba(150, 90, 230, ${0.35 * k})`;
+      ctx.fillRect(0, -width / 4, len, width / 2);
+      ctx.fillStyle = `rgba(255, 110, 220, ${0.6 * k})`;
+      ctx.fillRect(0, -width / 2, len, 2);
+      ctx.fillRect(0, width / 2 - 2, len, 2);
+      ctx.restore();
+    }, true);
   }
 
   afterimage(world) {
@@ -494,7 +523,7 @@ class PhantomKing {
     if (this.state === 'dash' || this.alpha < 0.6) return;
     // measured at ground level (its shadow), like the dash lane
     for (const p of world.heroes) {
-      if (dist(this.x, this.y, p.x, p.y) < this.cfg.dashWidth / 2 + p.hw) p.hurt(this.cfg.contactDamage, world, this.x, this.y);
+      if (dist(this.x, this.y, p.x, p.y) < this.cfg.contactRadius + p.hw) p.hurt(this.cfg.contactDamage, world, this.x, this.y);
     }
   }
 

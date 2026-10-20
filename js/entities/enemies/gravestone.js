@@ -36,7 +36,7 @@ class Gravestone extends Enemy {
     if (this.spawnTimer > 0) return;
     this.spawnTimer = c.spawnInterval;
     const alive = world.enemies.filter((e) => e.owner === this && !e.dead).length + this.pending;
-    if (alive < c.maxAlive) this.summon(world);
+    if (alive < c.maxAlive && world.summonRoom() > 0) this.summon(world);
   }
 
   summon(world) {
@@ -46,10 +46,7 @@ class Gravestone extends Enemy {
     this.pending++;
     this.shakeTime = 0.45;
     // in a dungeon run, tombstones raise whatever undead the theme lists
-    world.spawnEnemy(choose(world.run ? world.run.summonPool : this.cfg.spawnTypes), x, y, (e) => {
-      e.owner = this;
-      this.pending--;
-    });
+    world.summon(this, choose(world.run ? world.run.summonPool : this.cfg.spawnTypes), x, y, () => { this.pending--; });
     world.effects.burst(this.x, this.y, { count: 8, colors: ['#4a3426', '#6a4c36', '#3a8a5a'], speed: [30, 90], life: [0.3, 0.5], up: 40, gravity: 200 });
     Sound.play('graveRumble', 0.2);
   }

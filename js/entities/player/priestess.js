@@ -2,6 +2,12 @@
 // LMB ray of light at the cursor, RMB light missiles that mark enemies,
 // E healing rune, F guardian aegis (LMB ally / RMB self), Q charged light bomb.
 
+// pixel effect colours: holy gold and white, with her blue and a healing green
+const PRIESTESS_FX = {
+  beam: ['#a07a24', '#dcb44c', '#fbe796', '#ffffff'],
+  gold: '255, 230, 128',
+};
+
 class Priestess extends Player {
   constructor(x, y) {
     super('priestess', x, y);
@@ -27,7 +33,7 @@ class Priestess extends Player {
 
   /** Cursor position, pulled in to at most maxRange from the priestess. */
   aimPoint(world, maxRange) {
-    const m = world.mouseWorld;
+    const m = this.cursor;
     const d = Math.min(dist(this.x, this.y, m.x, m.y), maxRange);
     const a = angleTo(this.x, this.y, m.x, m.y);
     return { x: this.x + Math.cos(a) * d, y: this.y + Math.sin(a) * d };
@@ -68,20 +74,14 @@ class Priestess extends Player {
       this.hitCircle(world, r.x, r.y, c.radius, c.damage, { knockback: 60 });
       const { x, y } = r;
       world.effects.add(0.3, (ctx, t) => {
+        // a pixel pillar of light falling from above onto a glowing pool
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 1 - t;
-        const w = c.radius * 0.7 * (1 - t * 0.5);
-        const g = ctx.createLinearGradient(x - w, 0, x + w, 0);
-        g.addColorStop(0, 'rgba(255, 230, 128, 0)');
-        g.addColorStop(0.5, 'rgba(255, 250, 220, 0.9)');
-        g.addColorStop(1, 'rgba(255, 230, 128, 0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(x - w, y - 300, w * 2, 300);
-        ctx.fillStyle = 'rgba(255, 230, 128, 0.5)';
-        ctx.beginPath();
-        ctx.ellipse(x, y, c.radius, c.radius * 0.55, 0, 0, TAU);
-        ctx.fill();
+        const w = c.radius * 1.2 * (1 - t * 0.5);
+        PFX.disc(ctx, x, y, c.radius, c.radius * 0.55, 'rgba(255, 230, 128, 0.35)', 3);
+        PFX.ring(ctx, x, y, c.radius, c.radius * 0.55, '#fbe796', 3);
+        PFX.beam(ctx, x, y - 300, Math.PI / 2, 300, w, PRIESTESS_FX.beam, 3, false);
         ctx.restore();
       });
       world.effects.burst(x, y, { count: 12, colors: ['#ffffff', '#fff6c8', '#ffe680'], speed: [40, 140], life: [0.2, 0.4], up: 60 });
@@ -208,7 +208,7 @@ class Priestess extends Player {
 
   /** The ally (hero or clone) nearest the cursor that can carry an aegis; yourself if none is close. */
   allyAtCursor(world) {
-    const m = world.mouseWorld;
+    const m = this.cursor;
     let best = this;
     let bestD = this.cfg.aegis.selectRadius;
     for (const a of world.allies) {
@@ -276,26 +276,19 @@ class Priestess extends Player {
       const { x1: x, y1: y } = b;
       world.effects.burst(x, y, { count: 50, colors: ['#ffffff', '#fff6c8', '#ffe680', '#ffd34a'], speed: [100, 340], life: [0.3, 0.8], size: [2, 5] });
       world.effects.add(0.5, (ctx, t) => {
+        // stepped burst of light with chunky rays turning out of it
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 1 - t;
-        ctx.fillStyle = 'rgba(255, 240, 180, 0.6)';
-        ctx.beginPath();
-        ctx.arc(x, y, radius * (0.4 + t * 0.7), 0, TAU);
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(x, y, radius * 0.4 * (1 - t), 0, TAU);
-        ctx.fill();
-        // light rays
-        ctx.strokeStyle = 'rgba(255, 250, 220, 0.9)';
-        ctx.lineWidth = 3;
+        const r = radius * (0.4 + t * 0.7);
+        PFX.disc(ctx, x, y, r, r, 'rgba(255, 220, 110, 0.35)', 4);
+        PFX.disc(ctx, x, y, r * 0.7, r * 0.7, 'rgba(255, 240, 180, 0.45)', 4);
+        PFX.disc(ctx, x, y, radius * 0.4 * (1 - t), radius * 0.4 * (1 - t), '#ffffff', 4);
+        PFX.ring(ctx, x, y, r, r, '#fbe796', 4);
         for (let i = 0; i < 12; i++) {
           const a = (i / 12) * TAU + t;
-          ctx.beginPath();
-          ctx.moveTo(x + Math.cos(a) * radius * 0.3, y + Math.sin(a) * radius * 0.3);
-          ctx.lineTo(x + Math.cos(a) * radius * (0.6 + t), y + Math.sin(a) * radius * (0.6 + t));
-          ctx.stroke();
+          const r0 = radius * 0.3;
+          PFX.beam(ctx, x + Math.cos(a) * r0, y + Math.sin(a) * r0, a, radius * (0.3 + t) * (i % 2 ? 0.7 : 1), 8, PRIESTESS_FX.beam, 3);
         }
         ctx.restore();
       });
@@ -339,29 +332,21 @@ class Priestess extends Player {
       this.drawRune(ctx, { x: pt.x, y: pt.y, t: 1 + (this.animTime % 1) }, 0.55 + Math.sin(this.animTime * 8) * 0.15);
     }
     for (const r of this.rays) {
-      Telegraph.circle(ctx, r.x, r.y, this.cfg.ray.radius, r.t / this.cfg.ray.delay, '255, 230, 128');
+      PFX.zone(ctx, r.x, r.y, this.cfg.ray.radius, r.t / this.cfg.ray.delay, PRIESTESS_FX.gold, { spin: r.t * 3 });
     }
     if (this.bomb && this.world) {
       const c = this.cfg.ult;
       const pt = this.aimPoint(this.world, c.maxRange);
       const power = this.bombPower;
-      Telegraph.circle(ctx, pt.x, pt.y, lerp(c.minRadius, c.radius, power), power, power >= 1 ? '255, 250, 200' : '255, 230, 128');
+      PFX.zone(ctx, pt.x, pt.y, lerp(c.minRadius, c.radius, power), power, power >= 1 ? '255, 250, 200' : PRIESTESS_FX.gold, { spin: this.animTime * 0.5 });
     }
     if (this.choosingAegis && this.world) {
       const a = this.allyAtCursor(this.world);
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255, 230, 128, 0.85)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
-      ctx.lineDashOffset = -this.animTime * 20;
-      ctx.beginPath();
-      ctx.ellipse(a.x, a.y + 4, 20, 9, 0, 0, TAU);
-      ctx.stroke();
-      ctx.restore();
+      PFX.ring(ctx, a.x, a.y + 4, 20, 9, 'rgba(255, 230, 128, 0.85)', 2, { dash: [2, 2], spin: this.animTime * 3 });
     }
   }
 
-  /** Healing rune on the floor: green-gold rings with a turning cross. */
+  /** Pixel healing rune on the floor: green and gold rings, a slowly turning cross, rising motes. */
   drawRune(ctx, r, alpha = 1) {
     const c = this.cfg.rune;
     const fade = Math.min(1, r.t * 5, (c.duration - r.t) * 2) * alpha;
@@ -369,33 +354,22 @@ class Priestess extends Player {
     const sy = MAGIC_CIRCLE_SY;
     ctx.save();
     ctx.globalAlpha = fade;
-    ctx.fillStyle = 'rgba(120, 230, 140, 0.14)';
-    ctx.beginPath();
-    ctx.ellipse(r.x, r.y, rad, rad * sy, 0, 0, TAU);
-    ctx.fill();
+    PFX.disc(ctx, r.x, r.y, rad, rad * sy, 'rgba(120, 230, 140, 0.14)', 4);
     ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = '#9cf0a0';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.strokeStyle = '#ffe680';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.ellipse(r.x, r.y, rad * 0.8, rad * 0.8 * sy, 0, 0, TAU);
-    ctx.stroke();
+    PFX.ring(ctx, r.x, r.y, rad, rad * sy, '#9cf0a0', 2, { thick: 2 });
+    PFX.ring(ctx, r.x, r.y, rad * 0.8, rad * 0.8 * sy, '#ffe680', 2, { dash: [3, 2], spin: -r.t * 0.5 });
     // cross arms turning slowly
     for (let i = 0; i < 4; i++) {
       const a = r.t * 0.7 + (i * TAU) / 4;
-      ctx.beginPath();
-      ctx.moveTo(r.x, r.y);
-      ctx.lineTo(r.x + Math.cos(a) * rad * 0.7, r.y + Math.sin(a) * rad * 0.7 * sy);
-      ctx.stroke();
+      PFX.line(ctx, r.x, r.y, r.x + Math.cos(a) * rad * 0.7, r.y + Math.sin(a) * rad * 0.7 * sy, '#ffe680', 2);
     }
+    PFX.star(ctx, r.x, r.y, 2, '#9cf0a0', '#ffffff', 2);
     // rising motes
     ctx.fillStyle = '#c8ffd0';
     for (let i = 0; i < 8; i++) {
       const a = (i * TAU) / 8;
       const h = ((r.t * 30 + i * 9) % 36);
-      ctx.fillRect(Math.round(r.x + Math.cos(a) * rad * 0.6), Math.round(r.y + Math.sin(a) * rad * 0.6 * sy - h), 2, 2);
+      ctx.fillRect(PFX.snap(r.x + Math.cos(a) * rad * 0.6, 2), PFX.snap(r.y + Math.sin(a) * rad * 0.6 * sy - h, 2), 2, 2);
     }
     ctx.restore();
   }
@@ -431,15 +405,14 @@ class Priestess extends Player {
     if (this.bomb) this.drawOrb(ctx, this.tipX, this.tipY, 3 + 9 * this.bombPower);
   }
 
+  /** Pixel light orb: stepped gold glow, white core, a sparkle turning on it. */
   drawOrb(ctx, x, y, r) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(x, y, 1, x, y, r * 2.2);
-    g.addColorStop(0, 'rgba(255, 255, 240, 0.95)');
-    g.addColorStop(0.4, 'rgba(255, 230, 128, 0.6)');
-    g.addColorStop(1, 'rgba(255, 200, 80, 0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(x - r * 2.2, y - r * 2.2, r * 4.4, r * 4.4);
+    PFX.glow(ctx, x, y, r * 2.2, '255, 210, 100', 1.1);
+    PFX.disc(ctx, x, y, r * 0.8, r * 0.8, 'rgba(255, 246, 200, 0.9)', 2);
+    PFX.disc(ctx, x, y, r * 0.45, r * 0.45, '#ffffff', 2);
+    if (Math.floor(this.animTime * 10) % 2) PFX.star(ctx, x, y, Math.max(2, Math.round(r * 0.6)), '#fbe796', '#ffffff', 2);
     ctx.restore();
   }
 

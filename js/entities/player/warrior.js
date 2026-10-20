@@ -1,6 +1,16 @@
 // Knight (class id 'warrior'): LMB slash-slash-stab combo, RMB (hold) carried barrier shield,
 // E spin attack, F stunning charge, Q world-cutting slash.
 
+// pixel effect colours, outer edge first: steel and white with the knight's red and gold
+const KNIGHT_FX = {
+  slash: ['#ffffff', '#e4e7ee', '#adb2c0', '#cc5046'],
+  thrust: ['#adb2c0', '#e4e7ee', '#ffffff'],
+  cleave: ['#a07a24', '#dcb44c', '#fbe796', '#ffffff'],
+  sparks: ['#ffffff', '#e4e7ee', '#cc5046'],
+  lane: '225, 230, 245',
+  goldLane: '251, 220, 120',
+};
+
 class Warrior extends Player {
   constructor(x, y) {
     super('warrior', x, y);
@@ -71,16 +81,11 @@ class Warrior extends Player {
       world.damageTarget(t, c.damage, { angle: aim, knockback: c.knockback });
     }
     const dir = this.swingDir;
-    world.effects.add(0.16, (ctx, t) => {
-      ctx.save();
-      ctx.globalAlpha = 1 - t;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 12 * (1 - t) + 2;
-      ctx.beginPath();
+    world.effects.add(0.18, (ctx, t) => {
       const start = aim - (arc / 2) * dir;
-      const sweep = arc * Math.min(1, t * 3) * dir;
-      ctx.arc(px, py, c.range * 0.75, Math.min(start, start + sweep), Math.max(start, start + sweep));
-      ctx.stroke();
+      ctx.save();
+      ctx.globalAlpha = 1 - t * t;
+      PFX.slash(ctx, px, py, c.range * 0.62, start, start + arc * Math.min(1, t * 3) * dir, 18 * (1 - t * 0.5) + 4, KNIGHT_FX.slash);
       ctx.restore();
     });
     Sound.play('slash');
@@ -93,7 +98,7 @@ class Warrior extends Player {
     const x1 = this.pivotX;
     const y1 = this.pivotY;
     this.hitLine(world, x1, y1, this.aim, c.stabRange, c.stabWidth, c.stabDamage, { knockback: c.stabKnockback });
-    this.lineFx(world, x1, y1, this.aim, c.stabRange, c.stabWidth, '#ffffff', 0.2);
+    this.lineFx(world, x1, y1, this.aim, c.stabRange, c.stabWidth, KNIGHT_FX.thrust, 0.2);
     world.shake(3, 0.1);
     Sound.play('thrust');
   }
@@ -123,11 +128,14 @@ class Warrior extends Player {
     this.barrier.follow();
   }
 
-  /** The shield bash has its own HUD slot beside the shield; it glows while the shield is up (when LMB bashes). */
+  /** The shield slot glows while the shield is held up. */
+  slotHeld(slot) { return slot === 'secondary' && this.barrier.raised; }
+
+  /** The shield bash has its own HUD slot beside the shield. */
   get extraSlots() {
     return [{
       after: 'secondary', key: 'RMB+LMB', name: 'BASH', cd: this.bashCooldown, max: this.cfg.bash.cooldown,
-      icon: Sprites.icons.warrior.bash, armed: this.barrier.raised,
+      icon: Sprites.icons.warrior.bash,
     }];
   }
 
@@ -139,7 +147,7 @@ class Warrior extends Player {
     this.bash = { t: 0, angle: this.aim, hit: new Set() };
     this.busy = c.time;
     this.cooldowns.primary = 0.3; // so the combo doesn't swing the moment the shield drops
-    world.effects.burst(this.barrier.x, this.barrier.hy, { count: 10, colors: ['#ffffff', '#9ad0ff'], speed: [40, 120], life: [0.15, 0.3] });
+    world.effects.burst(this.barrier.x, this.barrier.hy, { count: 10, colors: KNIGHT_FX.sparks, speed: [40, 120], life: [0.15, 0.3] });
     Sound.play('dash');
   }
 
@@ -159,7 +167,7 @@ class Warrior extends Player {
       world.damageTarget(t, c.damage, { angle: b.angle, knockback: c.knockback, sound: 'impact' });
       t.stun?.(c.stun);
       this.barrier.flash = 0.15;
-      world.effects.burst(t.hx, t.hy, { count: 14, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [80, 220], life: [0.2, 0.4] });
+      world.effects.burst(t.hx, t.hy, { count: 14, colors: KNIGHT_FX.sparks, speed: [80, 220], life: [0.2, 0.4] });
       world.shake(4, 0.12);
     }
     this.afterimage(world, 0.15, 0.35);
@@ -275,15 +283,12 @@ class Warrior extends Player {
     const x1 = this.pivotX;
     const y1 = this.pivotY;
     this.hitLine(world, x1, y1, this.aim, c.length, width, c.damage * mult, { knockback: 400 * mult, fromUlt: true });
-    this.lineFx(world, x1, y1, this.aim, c.length, width, '#ffe08a', 0.45);
+    this.lineFx(world, x1, y1, this.aim, c.length, width, KNIGHT_FX.cleave, 0.45);
     if (power >= 1) world.effects.text(this.hx, this.hy - 40, 'FULL POWER!', { color: '#ffd34a', size: 9 });
+    const aim = this.aim;
     world.effects.add(2.5, (ctx, t) => {
-      ctx.save();
-      ctx.translate(x1, y1 + 10);
-      ctx.rotate(this.aim);
-      ctx.fillStyle = `rgba(20, 10, 10, ${0.5 * (1 - t)})`;
-      ctx.fillRect(0, -6, c.length, 12);
-      ctx.restore();
+      // a scorched cut in the floor
+      PFX.beam(ctx, x1, y1 + 10, aim, c.length, 12, [`rgba(20, 10, 10, ${0.3 * (1 - t)})`, `rgba(20, 10, 10, ${0.55 * (1 - t)})`], 3);
     }, true);
     world.shake(6 + 8 * power, 0.6);
     Sound.play('explosion');
@@ -292,19 +297,14 @@ class Warrior extends Player {
 
   // ---------- shared ----------
 
-  /** Bright fading beam along an attack line. */
-  lineFx(world, x1, y1, angle, length, width, color, life) {
+  /** Bright pixel streak along an attack line, pointed at the far end. colors = edge first. */
+  lineFx(world, x1, y1, angle, length, width, colors, life) {
+    const k = length > 250 ? 3 : 2;
     world.effects.add(life, (ctx, t) => {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 1 - t;
-      ctx.strokeStyle = color;
-      ctx.lineCap = 'round';
-      ctx.lineWidth = width * 0.6 * (1 - t * 0.6);
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x1 + Math.cos(angle) * length, y1 + Math.sin(angle) * length);
-      ctx.stroke();
+      ctx.globalAlpha = 1 - t * t;
+      PFX.beam(ctx, x1, y1, angle, length * Math.min(1, 0.6 + t * 3), width * 0.6 * (1 - t * 0.6), colors, k);
       ctx.restore();
     });
   }
@@ -348,25 +348,20 @@ class Warrior extends Player {
 
   drawGroundExtras(ctx) {
     if (this.spin) {
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.cfg.spin.radius, 0, TAU);
-      ctx.stroke();
-      ctx.restore();
+      // the spin's reach: a dashed steel ring turning with the blade
+      PFX.ring(ctx, this.x, this.y, this.cfg.spin.radius, this.cfg.spin.radius, 'rgba(228, 231, 238, 0.45)', 2, { dash: [4, 3], spin: this.spin.t * 3 });
     }
     if (this.charge && !this.charge.dashing) {
       const c = this.cfg.charge;
       const end = { x: this.x + Math.cos(this.charge.angle) * c.distance, y: this.y + Math.sin(this.charge.angle) * c.distance };
-      Telegraph.line(ctx, this.x, this.y, end.x, end.y, c.width, this.charge.t / c.windup, '120, 200, 255');
+      PFX.lane(ctx, this.x, this.y, end.x, end.y, c.width, this.charge.t / c.windup, KNIGHT_FX.lane);
     }
     if (this.cleave) {
       const c = this.cfg.ult;
       const ex = this.pivotX + Math.cos(this.aim) * c.length;
       const ey = this.pivotY + Math.sin(this.aim) * c.length;
       const power = this.cleavePower;
-      Telegraph.line(ctx, this.pivotX, this.pivotY, ex, ey, c.width * lerp(0.6, 1, power), power, power >= 1 ? '255, 240, 140' : '255, 210, 80');
+      PFX.lane(ctx, this.pivotX, this.pivotY, ex, ey, c.width * lerp(0.6, 1, power), power, power >= 1 ? '255, 240, 160' : KNIGHT_FX.goldLane);
     }
   }
 
@@ -390,11 +385,8 @@ class Warrior extends Player {
     world.effects.add(0.35, (ctx, t) => {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.strokeStyle = `rgba(255, 211, 74, ${1 - t})`;
-      ctx.lineWidth = 4 * (1 - t) + 1;
-      ctx.beginPath();
-      ctx.arc(x, y, 16 + t * 26, 0, TAU);
-      ctx.stroke();
+      const r = 16 + t * 26;
+      PFX.ring(ctx, x, y, r, r, `rgba(255, 211, 74, ${1 - t})`, 2, { thick: Math.max(1, Math.round(3 * (1 - t))) });
       ctx.restore();
     });
     world.shake(3, 0.12);
@@ -411,44 +403,59 @@ class Warrior extends Player {
     };
   }
 
-  /** A glowing shield over the warrior's head while the free block is ready. */
+  /** The knight's red kite shield, glowing gold over his head while the free block is ready. */
   drawPassive(ctx) {
     if (!this.tankerReady || this.dead) return;
     const x = Math.round(this.x);
-    const y = Math.round(this.y - 52 + Math.sin(this.animTime * 4) * 2);
+    const y = Math.round(this.y - 54 + Math.sin(this.animTime * 4) * 2);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(x, y, 1, x, y, 16);
-    g.addColorStop(0, `rgba(255, 211, 74, ${0.45 + Math.sin(this.animTime * 8) * 0.15})`);
-    g.addColorStop(1, 'rgba(255, 211, 74, 0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(x - 16, y - 16, 32, 32);
+    PFX.glow(ctx, x, y, 15, '255, 211, 74', 0.8 + Math.sin(this.animTime * 8) * 0.25);
     ctx.restore();
-    // pixel shield
+    // pixel kite shield: outline, steel rim, red field, steel cross with a ruby
     ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x - 6, y - 7, 12, 10);
-    ctx.fillRect(x - 5, y + 3, 10, 2);
-    ctx.fillRect(x - 3, y + 5, 6, 2);
-    ctx.fillStyle = '#ffd34a';
+    ctx.fillRect(x - 7, y - 8, 14, 10);
+    ctx.fillRect(x - 6, y + 2, 12, 3);
+    ctx.fillRect(x - 4, y + 5, 8, 2);
+    ctx.fillRect(x - 2, y + 7, 4, 2);
+    ctx.fillStyle = '#adb2c0';
+    ctx.fillRect(x - 6, y - 7, 12, 9);
+    ctx.fillRect(x - 5, y + 2, 10, 2);
+    ctx.fillRect(x - 3, y + 4, 6, 2);
+    ctx.fillRect(x - 1, y + 6, 2, 2);
+    ctx.fillStyle = '#a63036';
     ctx.fillRect(x - 5, y - 6, 10, 8);
-    ctx.fillRect(x - 4, y + 2, 8, 2);
-    ctx.fillRect(x - 2, y + 4, 4, 2);
-    ctx.fillStyle = '#fff2a0';
-    ctx.fillRect(x - 4, y - 5, 3, 3);
-    ctx.fillStyle = '#b8862a';
+    ctx.fillRect(x - 4, y + 2, 8, 1);
+    ctx.fillRect(x - 2, y + 3, 4, 2);
+    ctx.fillStyle = '#7c1f2a';
+    ctx.fillRect(x + 1, y - 6, 4, 8);
+    ctx.fillStyle = '#e4e7ee';
     ctx.fillRect(x - 1, y - 6, 2, 11);
+    ctx.fillRect(x - 5, y - 3, 10, 2);
+    ctx.fillStyle = '#d0303a';
+    ctx.fillRect(x - 1, y - 3, 2, 2);
+    ctx.fillStyle = '#fff2a0';
+    ctx.fillRect(x - 6, y - 7, 3, 1);
   }
 
   drawExtras(ctx) {
     if (this.cleave) {
-      const r = 20 + Math.sin(this.animTime * 25) * 4;
+      // gold light gathering on the blade
+      const r = 18 + Math.sin(this.animTime * 25) * 4 + this.cleavePower * 10;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const g = ctx.createRadialGradient(this.pivotX, this.pivotY, 2, this.pivotX, this.pivotY, r * 2);
-      g.addColorStop(0, 'rgba(255, 220, 120, 0.6)');
-      g.addColorStop(1, 'rgba(255, 140, 40, 0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(this.pivotX - r * 2, this.pivotY - r * 2, r * 4, r * 4);
+      PFX.glow(ctx, this.pivotX, this.pivotY, r, '255, 200, 90', 1.2);
+      if (Math.floor(this.animTime * 12) % 2) PFX.star(ctx, this.pivotX + Math.cos(this.animTime * 9) * r * 0.7, this.pivotY - 6 + Math.sin(this.animTime * 9) * r * 0.4, 2, '#fbe796');
+      ctx.restore();
+    }
+    if (this.spin) {
+      // two crescents whirling with the blade
+      const a = this.spin.t * 22;
+      const r = this.cfg.spin.radius * 0.55;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.75;
+      for (const off of [0, Math.PI]) PFX.slash(ctx, this.x, this.hy, r, a + off - 1.5, a + off, 10, KNIGHT_FX.slash);
       ctx.restore();
     }
   }
@@ -522,17 +529,17 @@ class KnightBarrier {
     if (!this.raised) return;
     this.hp -= amount;
     this.flash = 0.12;
-    world.effects.burst(x, y, { count: 10, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [60, 180], life: [0.15, 0.35] });
+    world.effects.burst(x, y, { count: 10, colors: ['#ffffff', '#e4e7ee', '#adb2c0'], speed: [60, 180], life: [0.15, 0.35] });
     Sound.play('bounce');
     if (this.hp > 0) return;
     this.hp = 0;
     this.raised = false;
     this.owner.cooldowns.secondary = this.cfg.breakCooldown;
-    world.effects.text(this.x, this.hy - 36, 'SHIELD BROKEN', { color: '#9ad0ff', size: 8 });
+    world.effects.text(this.x, this.hy - 36, 'SHIELD BROKEN', { color: '#e4e7ee', size: 8 });
     for (let i = 0; i <= 4; i++) {
       const t = i / 4;
       world.effects.burst(lerp(this.ax, this.bx, t), lerp(this.ay, this.by, t) - 6, {
-        count: 8, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [40, 160], life: [0.25, 0.5],
+        count: 8, colors: ['#ffffff', '#e4e7ee', '#adb2c0', '#cc5046'], speed: [40, 160], life: [0.25, 0.5],
       });
     }
     world.shake(4, 0.15);
@@ -557,44 +564,37 @@ class KnightBarrier {
     const top = 26 * this.raise;   // wall height above the collision line
     const foot = 14;               // ...and down to the floor
     const { ax, ay, bx, by } = this;
+    const k = 2;
+    const n = Math.max(2, Math.round(dist(ax, ay, bx, by) / k));
+    const seamEvery = Math.max(1, Math.round(n / 5));
+    const s = (this.age * 0.8) % 1;            // a band of light sweeping up the wall
+    const h = PFX.snap(top + foot, k);
     ctx.save();
     ctx.globalAlpha = this.raise;
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = this.flash > 0 ? 'rgba(220, 240, 255, 0.5)' : `rgba(80, 150, 255, ${0.14 + 0.2 * frac})`;
-    ctx.beginPath();
-    ctx.moveTo(ax, ay + foot);
-    ctx.lineTo(bx, by + foot);
-    ctx.lineTo(bx, by - top);
-    ctx.lineTo(ax, ay - top);
-    ctx.closePath();
-    ctx.fill();
-    // panel seams
-    ctx.strokeStyle = `rgba(160, 210, 255, ${0.3 + 0.3 * frac})`;
-    ctx.lineWidth = 1;
-    for (let i = 1; i < 5; i++) {
-      const x = lerp(ax, bx, i / 5);
-      const y = lerp(ay, by, i / 5);
-      ctx.beginPath();
-      ctx.moveTo(x, y + foot);
-      ctx.lineTo(x, y - top);
-      ctx.stroke();
+    const fill = this.flash > 0 ? 'rgba(235, 240, 255, 0.5)' : `rgba(150, 175, 225, ${0.12 + 0.18 * frac})`;
+    const seam = `rgba(228, 231, 238, ${0.25 + 0.3 * frac})`;
+    const edge = `rgba(240, 244, 255, ${0.65 + Math.sin(this.age * 12) * 0.15})`;
+    const band = `rgba(228, 231, 238, ${0.5 * (1 - s)})`;
+    for (let i = 0; i <= n; i++) {
+      const x = PFX.snap(lerp(ax, bx, i / n), k);
+      const y0 = PFX.snap(lerp(ay, by, i / n) - top, k);
+      ctx.fillStyle = i % seamEvery === 0 ? seam : fill;
+      ctx.fillRect(x, y0, k, h);
+      ctx.fillStyle = edge;
+      ctx.fillRect(x, y0, k, k);
+      ctx.fillRect(x, y0 + h, k, k);
+      ctx.fillStyle = band;
+      ctx.fillRect(x, PFX.snap(y0 + h - s * h, k), k, k);
     }
-    // a band of light sweeping up the wall
-    const s = (this.age * 0.8) % 1;
-    ctx.strokeStyle = `rgba(200, 235, 255, ${0.5 * (1 - s)})`;
-    ctx.beginPath();
-    ctx.moveTo(ax, ay + foot - s * (top + foot));
-    ctx.lineTo(bx, by + foot - s * (top + foot));
-    ctx.stroke();
-    // bright edges
-    ctx.strokeStyle = `rgba(190, 230, 255, ${0.65 + Math.sin(this.age * 12) * 0.15})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(ax, ay - top);
-    ctx.lineTo(bx, by - top);
-    ctx.moveTo(ax, ay + foot);
-    ctx.lineTo(bx, by + foot);
-    ctx.stroke();
+    // the knight's cross glowing in the middle of the wall
+    if (this.raise > 0.6) {
+      const cx = PFX.snap(this.x, k);
+      const cy = PFX.snap(this.hy - 6 * this.raise, k);
+      ctx.fillStyle = `rgba(204, 80, 70, ${0.55 + 0.25 * frac})`;
+      ctx.fillRect(cx - 2, cy - 8, 4, 16);
+      ctx.fillRect(cx - 7, cy - 4, 14, 4);
+    }
     ctx.restore();
     // hp bar over the knight
     const o = this.owner;
@@ -603,7 +603,7 @@ class KnightBarrier {
     const y = Math.round(o.y - 46);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.fillRect(x - 1, y - 1, w + 2, 5);
-    ctx.fillStyle = frac > 0.3 ? '#9ad0ff' : '#ff8a6a';
+    ctx.fillStyle = frac > 0.3 ? '#e4e7ee' : '#ff8a6a';
     ctx.fillRect(x, y, Math.round(w * frac), 3);
   }
 }

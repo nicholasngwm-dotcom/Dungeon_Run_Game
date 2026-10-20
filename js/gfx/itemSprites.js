@@ -6,6 +6,10 @@ function buildItemSprites() {
   const L = RAMP.leather;
   const G = RAMP.gold;
   const R = RAMP.red;
+  const B = CUTE.brass;                                                   // antique brass
+  const YEW = ['#3a2010', '#6a3e1c', '#9a6430', '#c8904a'];               // longbow wood
+  const TEAL = ['#0e3a3a', '#1f7a72', '#3fc2a8', '#9cf0d8', '#f0fff8'];   // the mage's ghostly magic
+  const GO = ['#5a3c10', '#a07a24', '#dcb44c', '#fbe796'];                // the priestess's holy gold
   const weapon = (w, h, pivotX, pivotY, fn) => ({ img: PixelArt.make(w, h, fn, OUTLINE, 0.5), pivotX, pivotY });
 
   /** Straight blade from x0 to x1 centred on row cy, half-height hh, with a point. */
@@ -18,17 +22,22 @@ function buildItemSprites() {
   };
 
   Sprites.weapons = {
-    // the warrior's oversized blade
-    greatblade: weapon(56, 16, 6, 8, (p) => {
-      p.rect(1, 6, 9, 4, L[2]);
-      for (let x = 2; x < 9; x += 2) p.rect(x, 6, 1, 4, L[1]); // grip wrap
-      p.rect(1, 6, 9, 1, L[3]);
-      p.round(0, 6, 3, 4, G[2], 1);                          // pommel
-      p.rect(10, 1, 4, 14, G[1]);                            // crossguard
-      p.rect(10, 1, 2, 14, G[2]);
-      p.rect(10, 1, 1, 6, G[3]);
-      p.rect(11, 7, 2, 2, R[3]);
-      blade(p, 14, 55, 7, 3, S);
+    // the knight's greatblade: red-wrapped grip, brass guard with a ruby, broad steel blade
+    greatblade: weapon(54, 16, 6, 8, (p) => {
+      p.rect(2, 6, 8, 4, R[2]);
+      for (let x = 3; x < 10; x += 2) p.rect(x, 6, 1, 4, R[1]); // grip wrap
+      p.rect(2, 6, 8, 1, R[3]);
+      p.round(0, 5, 4, 6, B[2], 1);                          // pommel
+      p.px(1, 6, B[3]);
+      p.rect(10, 2, 4, 12, B[1]);                            // crossguard with curled tips
+      p.rect(10, 2, 2, 12, B[2]);
+      p.rect(10, 2, 1, 5, B[3]);
+      p.rect(9, 1, 3, 2, B[2]);
+      p.rect(9, 13, 3, 2, B[1]);
+      p.rect(11, 7, 2, 2, '#d0303a');
+      p.px(11, 7, '#ff9a8a');
+      blade(p, 14, 53, 7, 3, S);
+      p.rect(16, 7, 20, 1, R[2]);                            // red etched fuller
     }),
     sword: weapon(38, 12, 4, 6, (p) => {
       p.rect(1, 5, 6, 3, L[2]);
@@ -37,18 +46,22 @@ function buildItemSprites() {
       p.rect(7, 1, 2, 10, G[2]);
       blade(p, 10, 37, 6, 2, S);
     }),
-    bow: weapon(16, 34, 3, 17, (p) => {
-      // recurve limbs with leather grip and gold tips
-      for (let y = 1; y < 33; y++) {
-        const t = (y - 1) / 31;
-        const x = 2 + Math.round(9 * Math.sin(Math.PI * t) - (t < 0.08 || t > 0.92 ? 2 : 0));
-        const grip = y > 13 && y < 21;
-        p.rect(x, y, 3, 1, grip ? L[1] : L[3]);
-        p.px(x, y, grip ? L[2] : L[4]);
+    // the archer's medieval yew longbow: tall D-shaped stave, leather grip, horn nocks
+    bow: weapon(14, 42, 3, 21, (p) => {
+      for (let y = 1; y < 41; y++) {
+        const t = (y - 1) / 39;
+        const x = 2 + Math.round(7 * Math.sin(Math.PI * t));
+        const grip = y > 17 && y < 25;
+        const w = t < 0.1 || t > 0.9 ? 2 : 3;
+        p.rect(x, y, w, 1, grip ? L[1] : YEW[2]);
+        p.px(x, y, grip ? L[3] : YEW[3]);
+        if (w === 3) p.px(x + 2, y, grip ? L[0] : YEW[1]);
       }
-      p.rect(1, 1, 2, 2, G[2]);
-      p.rect(1, 31, 2, 2, G[2]);
-      p.rect(2, 3, 1, 28, '#efe6d2');
+      p.rect(9, 17, 3, 1, '#c84040');                        // red cloth binding the grip
+      p.rect(9, 25, 3, 1, '#c84040');
+      p.rect(1, 0, 2, 2, '#e8dcc0');                         // horn nocks
+      p.rect(1, 40, 2, 2, '#e8dcc0');
+      p.rect(2, 2, 1, 38, '#efe6d2');                        // string
     }),
     boneBow: weapon(14, 32, 3, 16, (p) => {
       for (let y = 1; y < 31; y++) {
@@ -58,42 +71,58 @@ function buildItemSprites() {
       }
       p.rect(2, 2, 1, 28, '#8a8070');
     }),
-    // dark wood staff with a silver claw holding an amethyst
+    // the mage's dark wood staff: brass bands, teal wrap, a brass crescent moon cradling a ghost-teal orb
     staff: weapon(46, 16, 10, 8, (p) => {
-      p.rect(1, 7, 33, 3, L[2]);
-      p.rect(1, 7, 33, 1, L[3]);
-      p.rect(1, 9, 33, 1, L[1]);
-      for (let x = 6; x < 30; x += 7) p.px(x, 8, L[1]);
-      p.rect(14, 6, 3, 5, '#5a2a9a');                       // purple wrap
-      p.line(32, 5, 37, 2, S[4]);                            // claw prongs
-      p.line(32, 11, 37, 14, S[3]);
-      p.rect(31, 5, 3, 7, S[3]);
-      p.rect(31, 5, 1, 7, S[5]);
-      p.poly([[36, 8], [40, 3], [44, 8], [40, 14]], '#5a2a9a');
-      p.poly([[36, 8], [40, 3], [44, 8]], '#8e4ee0');
-      p.poly([[38, 7], [40, 4], [42, 7]], '#c79aff');
-      p.px(39, 5, '#f0e0ff');
-    }),
-    // the priestess's white-and-gold scepter with a radiant sun head
-    scepter: weapon(44, 16, 10, 8, (p) => {
-      p.rect(1, 7, 30, 2, '#e8e0c8');
-      p.rect(1, 7, 30, 1, '#fff6dc');
-      for (const x of [2, 12, 22]) p.rect(x, 6, 2, 4, G[2]);  // gold bands
-      p.rect(29, 5, 3, 6, G[1]);
-      p.rect(29, 5, 1, 6, G[3]);
-      for (let i = 0; i < 8; i++) {                           // sun rays
-        const a = (i / 8) * TAU;
-        p.line(37, 8, 37 + Math.cos(a) * 6, 8 + Math.sin(a) * 6, G[2]);
+      p.rect(1, 7, 32, 3, L[2]);
+      p.rect(1, 7, 32, 1, L[3]);
+      p.rect(1, 9, 32, 1, L[1]);
+      for (const x of [4, 22]) { p.rect(x, 6, 2, 5, B[1]); p.rect(x, 6, 2, 1, B[2]); }
+      p.rect(12, 6, 4, 5, TEAL[1]);
+      p.rect(12, 6, 4, 1, TEAL[2]);
+      p.rect(30, 6, 4, 5, B[1]);                             // collar
+      p.rect(30, 6, 4, 1, B[3]);
+      for (let y = 2; y <= 14; y++) {                        // crescent: disc minus an offset disc
+        for (let x = 33; x <= 45; x++) {
+          const d1 = (x - 39) ** 2 + (y - 8) ** 2;
+          const d2 = (x - 41) ** 2 + (y - 6) ** 2;
+          if (d1 > 26 || d2 <= 17) continue;
+          p.px(x, y, x < 37 && y < 9 ? B[3] : y > 10 ? B[1] : B[2]);
+        }
       }
-      p.circle(37, 8, 4, G[2]);
-      p.circle(37, 8, 3, '#fff6c8');
-      p.px(36, 7, '#ffffff');
+      for (let y = 4; y <= 10; y++) {                        // orb resting in the crescent
+        for (let x = 37; x <= 43; x++) {
+          if ((x - 40) ** 2 + (y - 7) ** 2 > 5) continue;
+          p.px(x, y, x + y < 46 ? TEAL[3] : x + y > 48 ? TEAL[1] : TEAL[2]);
+        }
+      }
+      p.px(39, 6, TEAL[4]);
     }),
+    // the priestess's ivory scepter: gold bands, a gold sun with a blue gem heart
+    scepter: weapon(44, 16, 10, 8, (p) => {
+      p.rect(1, 7, 29, 2, '#d2ccd8');
+      p.rect(1, 7, 29, 1, '#ffffff');
+      for (const x of [2, 12, 22]) { p.rect(x, 6, 2, 4, GO[1]); p.rect(x, 6, 2, 1, GO[2]); }
+      p.rect(28, 5, 3, 6, GO[1]);
+      p.rect(28, 5, 1, 6, GO[3]);
+      for (let i = 0; i < 8; i++) {                           // long and short sun rays
+        const a = (i / 8) * TAU + TAU / 16;
+        const len = i % 2 ? 5 : 7;
+        p.line(37, 8, 37 + Math.cos(a) * len, 8 + Math.sin(a) * len, i % 2 ? GO[1] : GO[2], 2);
+      }
+      p.circle(37, 8, 4, GO[2]);
+      p.circle(37, 8, 3, GO[3]);
+      p.circle(37, 8, 2, '#4a6ad0');
+      p.px(36, 7, '#8aa8ff');
+      p.px(36, 6, '#ffffff');
+    }),
+    // the rogue's dagger (also thrown): red-wrapped grip, brass guard, keen steel
     dagger: weapon(20, 8, 4, 4, (p) => {
-      p.rect(1, 3, 5, 2, L[1]);
-      p.px(1, 3, L[3]);
-      p.rect(6, 1, 2, 6, G[1]);
-      p.px(6, 1, G[3]);
+      p.rect(1, 3, 5, 2, '#9a2230');
+      p.px(2, 3, '#3a0c14');
+      p.px(4, 4, '#3a0c14');
+      p.px(0, 3, B[2]);
+      p.rect(6, 1, 2, 6, B[1]);
+      p.px(6, 1, B[3]);
       p.poly([[8, 2], [16, 2], [19, 4], [16, 6], [8, 6]], S[3]);
       p.poly([[8, 2], [16, 2], [19, 4], [8, 4]], S[4]);
       p.rect(8, 2, 8, 1, S[5]);
@@ -113,12 +142,35 @@ function buildItemSprites() {
 
   const sprite = (w, h, fn, outline) => PixelArt.make(w, h, fn, outline);
   Sprites.projectiles = {
+    // the archer's arrows: yew shaft, red-and-linen fletching like her quiver, steel bodkin
     arrow: sprite(20, 7, (p) => {
-      p.rect(1, 1, 4, 2, '#efe6d2');
-      p.rect(1, 4, 4, 2, '#c8bca2');
-      p.rect(3, 3, 13, 1, L[3]);
+      p.rect(1, 1, 4, 2, '#c84040');
+      p.rect(1, 4, 4, 2, '#e0d2aa');
+      p.px(1, 1, '#e86060');
+      p.rect(3, 3, 13, 1, YEW[2]);
+      p.px(5, 3, YEW[3]);
       p.poly([[15, 1], [19, 3.5], [15, 6]], S[3]);
       p.px(16, 2, S[5]);
+    }),
+    // F: fire arrow, its head wrapped in flame
+    fireArrow: sprite(24, 11, (p) => {
+      p.rect(1, 3, 4, 2, '#c84040');
+      p.rect(1, 6, 4, 2, '#e0d2aa');
+      p.rect(3, 5, 12, 1, YEW[2]);
+      p.poly([[12, 5.5], [16, 1], [19, 3], [23, 5.5], [19, 8], [16, 10]], '#a8400e');
+      p.poly([[14, 5.5], [17, 2.5], [22, 5.5], [17, 8.5]], '#e87a1c');
+      p.poly([[16, 5.5], [18, 4], [21, 5.5], [18, 7]], '#ffc040');
+      p.rect(18, 5, 2, 1, '#fff4c0');
+    }),
+    // F: ice arrow, a frost crystal for a head
+    iceArrow: sprite(24, 11, (p) => {
+      p.rect(1, 3, 4, 2, '#9ad0ff');
+      p.rect(1, 6, 4, 2, '#e6f6ff');
+      p.rect(3, 5, 13, 1, YEW[2]);
+      p.poly([[14, 5.5], [18, 1], [23, 5.5], [18, 10]], '#4a8aff');
+      p.poly([[15, 5.5], [18, 2], [22, 5.5]], '#9ad0ff');
+      p.line(18, 2, 18, 9, '#e6f6ff');
+      p.px(19, 4, '#ffffff');
     }),
     enemyArrow: sprite(20, 7, (p) => {
       p.rect(1, 2, 4, 3, '#d84a4a');
@@ -126,29 +178,31 @@ function buildItemSprites() {
       p.rect(15, 2, 2, 3, '#8a8070');
       p.rect(17, 3, 2, 1, '#8a8070');
     }),
-    // arcane missile (purple, to match the mage)
+    // the mage's magic missile: a spinning ghost-teal star, like the sparkles off her staff
     bolt: sprite(14, 14, (p) => {
-      p.circle(7, 7, 5, '#5a2a9a');
-      p.circle(7, 7, 4, '#8e4ee0');
-      p.circle(6, 6, 2, '#c79aff');
-      p.px(5, 5, '#ffffff');
+      p.poly([[7, 0.5], [8.5, 5.5], [13.5, 7], [8.5, 8.5], [7, 13.5], [5.5, 8.5], [0.5, 7], [5.5, 5.5]], TEAL[1]);
+      p.poly([[7, 2.5], [8, 6], [11.5, 7], [8, 8], [7, 11.5], [6, 8], [2.5, 7], [6, 6]], TEAL[2]);
+      p.rect(6, 5, 3, 4, TEAL[3]);
+      p.rect(5, 6, 5, 2, TEAL[3]);
+      p.rect(6, 6, 2, 2, '#ffffff');
     }),
-    // the priestess's homing missile of light
+    // the priestess's homing missile of light: a little gold star with a white heart
     lightMissile: sprite(12, 12, (p) => {
-      p.circle(6, 6, 4, '#d8a640');
-      p.circle(6, 6, 3, '#ffe680');
-      p.circle(5, 5, 1, '#ffffff');
+      p.poly([[6, 0.5], [7.5, 4.5], [11.5, 6], [7.5, 7.5], [6, 11.5], [4.5, 7.5], [0.5, 6], [4.5, 4.5]], GO[2]);
+      p.rect(5, 4, 2, 4, GO[3]);
+      p.rect(4, 5, 4, 2, GO[3]);
+      p.rect(5, 5, 2, 2, '#ffffff');
     }),
-    // the mage's frostfire ball: blue flame with spiky tongues, unlike the golem's orange one
+    // the mage's frostfire ball: ghost-teal flame with spiky tongues, unlike the golem's orange one
     fireball: sprite(20, 20, (p) => {
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * TAU;
-        p.poly([[10 + Math.cos(a - 0.4) * 6, 10 + Math.sin(a - 0.4) * 6], [10 + Math.cos(a) * 9.5, 10 + Math.sin(a) * 9.5], [10 + Math.cos(a + 0.4) * 6, 10 + Math.sin(a + 0.4) * 6]], '#2a5ad0');
+        p.poly([[10 + Math.cos(a - 0.4) * 6, 10 + Math.sin(a - 0.4) * 6], [10 + Math.cos(a) * 9.5, 10 + Math.sin(a) * 9.5], [10 + Math.cos(a + 0.4) * 6, 10 + Math.sin(a + 0.4) * 6]], TEAL[1]);
       }
-      p.circle(10, 10, 7, '#2a5ad0');
-      p.circle(10, 10, 6, '#4a8aff');
-      p.circle(10, 10, 4, '#9ad0ff');
-      p.circle(9, 9, 2, '#e6f6ff');
+      p.circle(10, 10, 7, TEAL[1]);
+      p.circle(10, 10, 6, TEAL[2]);
+      p.circle(10, 10, 4, TEAL[3]);
+      p.circle(9, 9, 2, TEAL[4]);
       p.rect(8, 8, 2, 2, '#ffffff');
     }),
     golemFireball: sprite(22, 22, (p) => {
@@ -170,10 +224,11 @@ function buildItemSprites() {
       p.rect(3, 3, 2, 2, '#ffb0b8');
       p.px(5, 3, '#ffffff');
     }),
+    // mana for the mage, in her ghost-teal
     mana: sprite(12, 12, (p) => {
-      p.circle(6, 6, 5, '#2a5ad0');
-      p.circle(6, 6, 4, '#4a8aff');
-      p.circle(5, 5, 2, '#9ac4ff');
+      p.circle(6, 6, 5, TEAL[1]);
+      p.circle(6, 6, 4, TEAL[2]);
+      p.circle(5, 5, 2, TEAL[3]);
       p.px(4, 4, '#ffffff');
     }),
   };
@@ -202,19 +257,26 @@ function buildItemSprites() {
     p.rect(5, 12, 2, 2, '#5a2a10');
   });
 
-  // mage's bird form (faces right): wings up / wings down
+  // mage's bird form (faces right): a little charcoal raven in her witch hat,
+  // ghost-teal eye and wing tips. Wings up / wings down.
+  const D = ['#100c10', '#1c161c', '#2a2129', '#3c3038', '#54444e'];
   const bird = (up) => {
     const img = PixelArt.make(24, 18, (p) => {
-      if (up) p.poly([[8, 9], [10, 1], [16, 2], [14, 9]], '#4a2a8a');
-      else p.poly([[8, 9], [14, 9], [14, 17], [9, 16]], '#4a2a8a');
-      p.poly([[2, 8], [6, 6], [6, 11]], '#6a28c8');             // tail
-      p.ellipse(11, 9, 6, 3, '#8e4ee0');                        // body
-      p.ellipse(11, 10, 4, 1, '#c79aff');
-      p.circle(17, 7, 3, '#8e4ee0');                            // head
-      p.poly([[19, 6], [23, 7], [19, 8]], '#ffd34a');           // beak
-      p.px(18, 6, '#ffffff');
-      if (up) p.poly([[10, 8], [12, 0], [15, 1], [14, 8]], '#b67aff');
-      else p.poly([[10, 9], [14, 9], [13, 16], [10, 15]], '#b67aff');
+      if (up) p.poly([[8, 9], [10, 2], [16, 3], [14, 9]], D[1]);
+      else p.poly([[8, 9], [14, 9], [14, 17], [9, 16]], D[1]);
+      p.poly([[2, 8], [6, 6], [6, 11]], D[1]);                  // tail
+      p.px(2, 8, TEAL[2]);
+      p.ellipse(11, 10, 6, 3, D[2]);                            // body
+      p.ellipse(11, 11, 4, 1, '#6e2032');                       // wine breast
+      p.circle(17, 9, 3, D[2]);                                 // head
+      p.poly([[19, 8], [23, 9], [19, 10]], B[2]);               // brass beak
+      p.px(18, 8, TEAL[3]);
+      p.poly([[14, 6], [20, 6], [17, 0]], D[3]);                // tiny witch hat
+      p.rect(15, 5, 5, 1, TEAL[2]);
+      p.rect(13, 6, 9, 1, D[2]);
+      if (up) p.poly([[10, 8], [12, 1], [15, 2], [14, 8]], D[3]);
+      else p.poly([[10, 9], [14, 9], [13, 16], [10, 15]], D[3]);
+      if (up) p.px(12, 1, TEAL[2]); else p.px(13, 16, TEAL[2]);
     }, OUTLINE, 0.5);
     return { img, flash: PixelArt.silhouette(img) };
   };

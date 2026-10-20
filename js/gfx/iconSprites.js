@@ -5,6 +5,11 @@ function buildIconSprites() {
   const S = RAMP.steel;
   const L = RAMP.leather;
   const G = RAMP.gold;
+  const R = RAMP.red;
+  const B = CUTE.brass;
+  const TEAL = ['#0e3a3a', '#1f7a72', '#3fc2a8', '#9cf0d8', '#f0fff8'];   // the mage's magic
+  const FLETCH = '#c84040';                                               // the archer's red fletching
+  const DAGGER = { w: 1.5, grip: 4, guard: 3, guardCol: B[2], gripCol: '#9a2230' };
   const N = 28;
   const icon = (fn) => PixelArt.make(N, N, fn, OUTLINE);
 
@@ -46,7 +51,7 @@ function buildIconSprites() {
   };
 
   const FIRE = ['#e0461e', '#ff8a1e', '#ffd34a'];
-  const FROSTFIRE = ['#2a5ad0', '#4a8aff', '#e6f6ff'];
+  const FROSTFIRE = ['#1f7a72', '#3fc2a8', '#f0fff8'];
   const flame = (p, cx, cy, r, cols = FIRE) => {
     p.poly([[cx - r, cy], [cx - r * 0.4, cy - r * 1.6], [cx, cy - r * 0.8], [cx + r * 0.5, cy - r * 2], [cx + r, cy]], cols[0]);
     p.circle(cx, cy, r, cols[0]);
@@ -62,16 +67,27 @@ function buildIconSprites() {
     p.px(cx, cy, '#ffffff');
   };
 
+  /** The knight's red kite shield with its steel cross and ruby, offset by (dx, dy). */
+  const kite = (p, dx, dy, s = 1) => {
+    const pt = (pts) => pts.map(([x, y]) => [dx + x * s, dy + y * s]);
+    p.poly(pt([[0, 0], [16, 0], [16, 9], [12, 17], [8, 21], [4, 17], [0, 9]]), S[3]);
+    p.poly(pt([[2, 2], [14, 2], [14, 9], [11, 15], [8, 18], [5, 15], [2, 9]]), R[3]);
+    p.poly(pt([[8, 2], [14, 2], [14, 9], [11, 15], [8, 18]]), R[2]);
+    p.rect(dx + 7 * s, dy + 3 * s, 2 * s, 14 * s, S[5]);
+    p.rect(dx + 3 * s, dy + 6 * s, 10 * s, 2 * s, S[5]);
+    p.rect(dx + 7 * s, dy + 6 * s, 2 * s, 2 * s, '#d0303a');
+    p.rect(dx + 1 * s, dy, 6 * s, 1, S[5]);
+  };
+
   Sprites.icons = {
     warrior: {
-      primary: icon((p) => blade(p, 4, 24, 24, 4, { w: 2, grip: 5, guard: 4 })),
-      // energy barrier: curved blue panels
+      primary: icon((p) => blade(p, 4, 24, 24, 4, { w: 2, grip: 5, guard: 4, guardCol: B[2], gripCol: R[2] })),
+      // shield wall: the knight's kite shield before panels of steel light
       secondary: icon((p) => {
-        p.poly([[4, 6], [14, 3], [24, 6], [24, 20], [14, 25], [4, 20]], '#2a5ad0');
-        p.poly([[6, 8], [14, 5], [22, 8], [22, 19], [14, 23], [6, 19]], '#4a8aff');
-        p.line(14, 5, 14, 23, '#9ad0ff', 1);
-        p.line(6, 13, 22, 13, '#9ad0ff', 1);
-        p.rect(8, 8, 2, 4, '#e6f6ff');
+        for (const x of [2, 6, 21, 25]) p.rect(x, 4, 2, 20, 'rgba(173, 178, 192, 0.6)');
+        p.rect(2, 3, 25, 1, S[5]);
+        p.rect(2, 24, 25, 1, S[5]);
+        kite(p, 6, 4);
       }),
       e: icon((p) => {
         ring(p, 14, 14, 11, S[4], 0.3, 2.6);
@@ -83,27 +99,25 @@ function buildIconSprites() {
       f: icon((p) => {
         p.poly([[8, 6], [20, 14], [8, 22], [12, 14]], S[3]);
         p.poly([[8, 6], [20, 14], [12, 14]], S[4]);
-        p.poly([[14, 6], [26, 14], [14, 22], [18, 14]], '#9ad0ff');
+        p.poly([[14, 6], [26, 14], [14, 22], [18, 14]], R[3]);
+        p.poly([[14, 6], [26, 14], [18, 14]], R[4]);
         for (const y of [9, 14, 19]) p.rect(1, y, 5, 1, '#c9d3dd');
       }),
       q: icon((p) => {
         for (let i = 0; i < 3; i++) p.rect(5 + i * 8, 2 + (i % 2) * 3, 1, 4, G[3]);
         blade(p, 14, 2, 14, 26, { w: 3, grip: 5, guard: 6, ramp: ['', '', '', G[2], '', G[3]], guardCol: S[4] });
       }),
-      // shield bash: the barrier lunging forward into an impact
+      // shield bash: the kite shield lunging forward into an impact
       bash: icon((p) => {
-        for (const y of [8, 14, 20]) p.rect(1, y, 6, 1, '#c9d3dd');
-        p.poly([[7, 7], [15, 4], [19, 7], [19, 20], [15, 24], [7, 20]], '#2a5ad0');
-        p.poly([[9, 9], [15, 6], [17, 9], [17, 19], [15, 22], [9, 19]], '#4a8aff');
-        p.line(13, 6, 13, 22, '#9ad0ff', 1);
-        p.rect(10, 9, 2, 3, '#e6f6ff');
+        for (const y of [8, 14, 20]) p.rect(1, y, 5, 1, '#c9d3dd');
+        kite(p, 5, 4);
         // impact star
         p.poly([[23, 8], [24, 12], [27, 13], [24, 15], [23, 19], [22, 15], [19, 14], [22, 12]], G[3]);
         p.px(23, 13, '#ffffff');
       }),
     },
     ranger: {
-      primary: icon((p) => arrow(p, 4, 24, 21, 7)),
+      primary: icon((p) => arrow(p, 4, 24, 21, 7, { fletch: FLETCH })),
       // camo leaf
       secondary: icon((p) => {
         p.poly([[4, 24], [6, 10], [14, 3], [24, 4], [22, 14], [14, 22]], '#4f6a45');
@@ -113,8 +127,8 @@ function buildIconSprites() {
         p.line(15, 12, 20, 12, '#3a5030', 1);
       }),
       e: icon((p) => {
-        arrow(p, 3, 18, 19, 4, { head: '#8cff9a', fletch: '#8cff9a' });
-        arrow(p, 8, 25, 24, 11, { head: '#8cff9a', fletch: '#8cff9a' });
+        arrow(p, 3, 18, 19, 4, { head: '#a8cc6a', fletch: FLETCH });
+        arrow(p, 8, 25, 24, 11, { head: '#a8cc6a', fletch: FLETCH });
       }),
       // fire arrow over ice arrow
       f: icon((p) => {
@@ -125,63 +139,67 @@ function buildIconSprites() {
       }),
       // arrow volley
       q: icon((p) => {
-        arrow(p, 7, 2, 7, 18);
-        arrow(p, 14, 6, 14, 22);
-        arrow(p, 21, 2, 21, 18);
+        arrow(p, 7, 2, 7, 18, { fletch: FLETCH });
+        arrow(p, 14, 6, 14, 22, { fletch: FLETCH });
+        arrow(p, 21, 2, 21, 18, { fletch: FLETCH });
       }),
     },
     mage: {
+      // magic missile: a teal star trailing sparkles
       primary: icon((p) => {
-        for (let i = 0; i < 4; i++) p.circle(5 + i * 3, 22 - i * 3, 1 + i * 0.4, i % 2 ? '#e6ccff' : '#b67aff');
-        p.circle(18, 10, 6, '#6a28c8');
-        p.circle(18, 10, 4, '#b67aff');
-        p.circle(17, 9, 2, '#e6ccff');
+        for (let i = 0; i < 4; i++) p.rect(4 + i * 3, 21 - i * 3, 2, 2, i % 2 ? TEAL[3] : TEAL[2]);
+        p.poly([[18, 2], [20, 8], [26, 10], [20, 12], [18, 18], [16, 12], [10, 10], [16, 8]], TEAL[1]);
+        p.poly([[18, 4], [19, 9], [24, 10], [19, 11], [18, 16], [17, 11], [12, 10], [17, 9]], TEAL[2]);
+        p.rect(17, 8, 3, 5, TEAL[3]);
+        p.rect(16, 9, 5, 3, TEAL[3]);
+        p.rect(17, 9, 2, 2, '#ffffff');
       }),
       secondary: icon((p) => {
-        for (let i = 0; i < 3; i++) p.rect(3 + i * 3, 21 - i * 3, 3, 3, i ? '#9ad0ff' : '#4a8aff');
+        for (let i = 0; i < 3; i++) p.rect(3 + i * 3, 21 - i * 3, 3, 3, i ? TEAL[3] : TEAL[2]);
         flame(p, 16, 15, 7, FROSTFIRE);
       }),
+      // teal lightning with a white-hot edge
       e: icon((p) => {
-        p.poly([[16, 1], [6, 15], [13, 15], [9, 27], [22, 11], [15, 11], [20, 1]], '#ffd34a');
-        p.poly([[16, 1], [8, 14], [13, 14], [18, 3]], '#fff6c8');
+        p.poly([[16, 1], [6, 15], [13, 15], [9, 27], [22, 11], [15, 11], [20, 1]], TEAL[2]);
+        p.poly([[16, 1], [8, 14], [13, 14], [18, 3]], TEAL[4]);
       }),
       // the bird-form sprite, enlarged
       f: icon((p) => p.ctx.drawImage(Sprites.items.birdFrames[0].img, 2, 5, 24, 18)),
-      // the drain circle as seen on the floor: purple rings, cyan inner ring, two turning squares
+      // the drain circle as seen on the floor: brass rim, teal rings, two turning squares
       q: icon((p) => {
         const ell = (rx, color, size = 1) => {
           for (let a = 0; a < TAU; a += 0.1) p.rect(14 + Math.cos(a) * rx - size / 2, 15 + Math.sin(a) * rx * 0.6 - size / 2, size, size, color);
         };
-        p.ellipse(14, 15, 12, 7, '#2a1850');
-        ell(12, '#a07aff', 2);
-        ell(10, '#6ad8ff');
-        ell(5, '#6ad8ff');
-        for (const off of [0, Math.PI / 4]) {
+        p.ellipse(14, 15, 12, 7, TEAL[0]);
+        ell(12, B[2], 2);
+        ell(10, TEAL[2]);
+        ell(5, TEAL[2]);
+        for (const [off, col] of [[0, TEAL[2]], [Math.PI / 4, B[2]]]) {
           for (let i = 0; i < 4; i++) {
             const a = off + (i * TAU) / 4;
             const b = off + ((i + 1) * TAU) / 4;
-            p.line(14 + Math.cos(a) * 10, 15 + Math.sin(a) * 6, 14 + Math.cos(b) * 10, 15 + Math.sin(b) * 6, '#a07aff', 1);
+            p.line(14 + Math.cos(a) * 10, 15 + Math.sin(a) * 6, 14 + Math.cos(b) * 10, 15 + Math.sin(b) * 6, col, 1);
           }
         }
         // drained life rising out of it
-        p.rect(13, 3, 2, 4, '#b67aff');
-        p.rect(7, 6, 2, 3, '#6ad8ff');
-        p.rect(19, 5, 2, 3, '#6ad8ff');
+        p.rect(13, 3, 2, 4, TEAL[3]);
+        p.rect(7, 6, 2, 3, TEAL[2]);
+        p.rect(19, 5, 2, 3, TEAL[2]);
       }),
     },
     rogue: {
       primary: icon((p) => {
-        blade(p, 14, 26, 14, 6, { w: 1.5, grip: 4, guard: 3 });
-        blade(p, 12, 26, 3, 9, { w: 1.5, grip: 4, guard: 3 });
-        blade(p, 16, 26, 25, 9, { w: 1.5, grip: 4, guard: 3 });
+        blade(p, 14, 26, 14, 6, DAGGER);
+        blade(p, 12, 26, 3, 9, DAGGER);
+        blade(p, 16, 26, 25, 9, DAGGER);
       }),
       secondary: icon((p) => {
-        for (const y of [8, 13, 18]) p.rect(1, y, 7 - Math.abs(y - 13) / 2, 1, '#c8c8e0');
-        blade(p, 9, 20, 25, 6, { w: 1.5, grip: 4, guard: 3 });
+        for (const y of [8, 13, 18]) p.rect(1, y, 7 - Math.abs(y - 13) / 2, 1, '#c43a44');
+        blade(p, 9, 20, 25, 6, DAGGER);
       }),
       e: icon((p) => {
-        blade(p, 4, 24, 22, 6, { w: 1.5, grip: 4, guard: 3 });
-        blade(p, 24, 24, 6, 6, { w: 1.5, grip: 4, guard: 3 });
+        blade(p, 4, 24, 22, 6, DAGGER);
+        blade(p, 24, 24, 6, 6, DAGGER);
         p.poly([[14, 8], [16, 13], [21, 14], [16, 15], [14, 20], [12, 15], [7, 14], [12, 13]], '#ffe680');
         p.rect(13, 13, 3, 3, '#ffffff');
       }),
@@ -195,14 +213,15 @@ function buildIconSprites() {
         p.circle(14, 14, 2, '#f0c040');
       }),
       q: icon((p) => {
-        // faded clone behind the rogue
-        p.round(13, 4, 12, 12, '#5a3a8a', 3);
-        p.round(12, 14, 14, 12, '#5a3a8a', 3);
-        p.rect(16, 9, 2, 2, '#e6ccff'); p.rect(21, 9, 2, 2, '#e6ccff');
-        p.round(3, 6, 12, 12, '#3a3a50', 3);
-        p.round(2, 16, 14, 11, '#3a3a50', 3);
-        p.rect(5, 11, 8, 3, RAMP.skin[2]);
-        p.rect(6, 12, 2, 1, OUTLINE); p.rect(10, 12, 2, 1, OUTLINE);
+        // a red shadow clone behind the hooded rogue
+        p.round(13, 4, 12, 12, '#6a1622', 3);
+        p.round(12, 14, 14, 12, '#6a1622', 3);
+        p.rect(16, 9, 2, 2, '#f0b030'); p.rect(21, 9, 2, 2, '#f0b030');
+        p.round(3, 6, 12, 12, '#3e3e52', 3);
+        p.round(2, 16, 14, 11, '#2c2c3a', 3);
+        p.rect(5, 10, 8, 2, RAMP.skin[2]);
+        p.rect(6, 10, 2, 1, '#f0b030'); p.rect(10, 10, 2, 1, '#f0b030');
+        p.rect(4, 12, 10, 3, '#9a2230');
       }),
     },
     priestess: {

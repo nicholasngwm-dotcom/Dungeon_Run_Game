@@ -2,6 +2,14 @@
 // attacking), E rapid fire, F fire/ice arrow (choose with LMB/RMB),
 // Q arrow volley (mark an area, then LMB rains arrows).
 
+// pixel effect colours: the archer's hood greens and linen, plus fire and frost
+const ARCHER_FX = {
+  leaves: ['#4a6e32', '#6a8e44', '#a8cc6a', '#e0d2aa'],
+  rapidGlow: '168, 204, 106',
+  zone: '168, 204, 106',
+  frost: ['#4a8aff', '#9ad0ff', '#e6f6ff'],
+};
+
 class Ranger extends Player {
   constructor(x, y) {
     super('ranger', x, y);
@@ -45,7 +53,7 @@ class Ranger extends Player {
   breakCamo(world) {
     if (!(this.camo > 0)) return;
     this.camo = 0;
-    world.effects.burst(this.hx, this.hy, { count: 12, colors: ['#62802f', '#88a446', '#e0d2aa'], speed: [40, 120], life: [0.2, 0.4] });
+    world.effects.burst(this.hx, this.hy, { count: 12, colors: ARCHER_FX.leaves, speed: [40, 120], life: [0.2, 0.4] });
     world.effects.text(this.hx, this.hy - 30, 'REVEALED', { color: '#d8c8a0', size: 7 });
   }
 
@@ -71,8 +79,8 @@ class Ranger extends Player {
       pierce: rapid ? Math.ceil(c.pierce * (1 + r.pierceBonus)) : c.pierce,
       life: 1.5, knockback: 140,
       sprite: Sprites.projectiles.arrow,
-      glow: rapid ? '120, 255, 140' : null,
-      trail: rapid ? ['#8cff9a', '#efe6d2'] : ['#efe6d2'],
+      glow: rapid ? ARCHER_FX.rapidGlow : null,
+      trail: rapid ? ['#a8cc6a', '#e0d2aa'] : ['#e0d2aa'],
     }));
     Sound.play('arrow');
   }
@@ -85,8 +93,8 @@ class Ranger extends Player {
     this.camo = c.duration;
     this.slowTime = 0; // cleanse
     this.chillTime = 0;
-    world.effects.burst(this.hx, this.hy, { count: 24, colors: ['#62802f', '#88a446', '#e0d2aa'], speed: [60, 160], life: [0.3, 0.6] });
-    world.effects.text(this.hx, this.hy - 30, 'CAMO', { color: '#8cff9a', size: 8 });
+    world.effects.burst(this.hx, this.hy, { count: 24, colors: ARCHER_FX.leaves, speed: [60, 160], life: [0.3, 0.6] });
+    world.effects.text(this.hx, this.hy - 30, 'CAMO', { color: '#a8cc6a', size: 8 });
     Sound.play('dash');
   }
 
@@ -97,8 +105,8 @@ class Ranger extends Player {
     this.cooldowns.e = r.cooldown;
     this.rapidArrows = r.arrows;
     this.cooldowns.primary = 0;
-    world.effects.text(this.hx, this.hy - 30, 'RAPID FIRE', { color: '#8cff9a', size: 8 });
-    world.effects.burst(this.hx, this.hy, { count: 12, colors: ['#8cff9a', '#ffffff'], speed: [40, 100], up: 30 });
+    world.effects.text(this.hx, this.hy - 30, 'RAPID FIRE', { color: '#a8cc6a', size: 8 });
+    world.effects.burst(this.hx, this.hy, { count: 12, colors: ['#a8cc6a', '#ffffff'], speed: [40, 100], up: 30 });
     Sound.play('aim');
   }
 
@@ -123,7 +131,6 @@ class Ranger extends Player {
       vx: Math.cos(this.aim) * c.speed,
       vy: Math.sin(this.aim) * c.speed,
       radius: 6, damage: c.damage, life: 1.4, knockback: 160,
-      sprite: Sprites.projectiles.arrow,
       ...opts,
     }));
     Sound.play('arrow');
@@ -133,6 +140,7 @@ class Ranger extends Player {
   fireArrow(world) {
     const c = this.cfg.elemental.fire;
     this.shootElemental(world, c, {
+      sprite: Sprites.projectiles.fireArrow,
       pierce: c.pierce, glow: '255, 130, 40', trail: ['#ff8a1e', '#ffd34a', '#e0461e'],
       onStrike: (p, w, t) => {
         if (t.dead) return;
@@ -147,6 +155,7 @@ class Ranger extends Player {
   iceArrow(world) {
     const c = this.cfg.elemental.ice;
     this.shootElemental(world, c, {
+      sprite: Sprites.projectiles.iceArrow,
       glow: '140, 220, 255', trail: ['#9ad0ff', '#e6f6ff'],
       onHit: (p, w) => this.iceNova(w, p.x, p.y),
     });
@@ -160,25 +169,29 @@ class Ranger extends Player {
       else t.stun?.(c.freeze);
     }
     world.effects.burst(x, y, { count: 28, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [80, 240], life: [0.3, 0.6], size: [2, 4] });
+    const spin = rand(0, TAU);
     world.effects.add(0.4, (ctx, t) => {
+      // an expanding frost ring with ice shards bursting out
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 1 - t;
-      ctx.fillStyle = 'rgba(140, 220, 255, 0.5)';
-      ctx.beginPath();
-      ctx.arc(x, y, c.radius * (0.3 + t * 0.7), 0, TAU);
-      ctx.fill();
-      ctx.strokeStyle = '#e6f6ff';
-      ctx.lineWidth = 3;
-      ctx.stroke();
+      const r = c.radius * (0.3 + t * 0.7);
+      PFX.disc(ctx, x, y, r, r, 'rgba(140, 220, 255, 0.3)', 3);
+      PFX.ring(ctx, x, y, r, r, '#e6f6ff', 3, { thick: 2 });
+      for (let i = 0; i < 8; i++) {
+        const a = spin + (i / 8) * TAU;
+        PFX.beam(ctx, x + Math.cos(a) * r * 0.35, y + Math.sin(a) * r * 0.35, a, r * (i % 2 ? 0.45 : 0.6), 8, ARCHER_FX.frost);
+      }
       ctx.restore();
     });
-    // frost left on the floor
+    // frost left on the floor, glinting with crystals
+    const glints = Array.from({ length: 7 }, () => [rand(-0.6, 0.6) * c.radius, rand(-0.6, 0.6) * c.radius]);
     world.effects.add(c.freeze, (ctx, t) => {
-      ctx.fillStyle = `rgba(160, 220, 255, ${0.25 * (1 - t)})`;
-      ctx.beginPath();
-      ctx.arc(x, y, c.radius * 0.8, 0, TAU);
-      ctx.fill();
+      PFX.disc(ctx, x, y, c.radius * 0.8, c.radius * 0.8, `rgba(160, 220, 255, ${0.22 * (1 - t)})`, 4);
+      PFX.ring(ctx, x, y, c.radius * 0.8, c.radius * 0.8, `rgba(230, 246, 255, ${0.35 * (1 - t)})`, 2, { dash: [2, 3] });
+      ctx.globalAlpha = 1 - t;
+      for (const [gx, gy] of glints) PFX.star(ctx, x + gx, y + gy, 2, '#9ad0ff', '#ffffff');
+      ctx.globalAlpha = 1;
     }, true);
     world.shake(4, 0.2);
     Sound.play('explosion');
@@ -249,36 +262,24 @@ class Ranger extends Player {
     if (this.choosingArrow) {
       // aim line, half fire / half ice
       const len = 90;
-      ctx.save();
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      for (const [col, off] of [['rgba(255, 140, 50, 0.8)', -1.5], ['rgba(150, 220, 255, 0.8)', 1.5]]) {
-        ctx.strokeStyle = col;
-        ctx.beginPath();
-        ctx.moveTo(this.pivotX - Math.sin(this.aim) * off, this.pivotY + Math.cos(this.aim) * off);
-        ctx.lineTo(this.pivotX + Math.cos(this.aim) * len - Math.sin(this.aim) * off, this.pivotY + Math.sin(this.aim) * len + Math.cos(this.aim) * off);
-        ctx.stroke();
+      const cos = Math.cos(this.aim);
+      const sin = Math.sin(this.aim);
+      for (const [col, off] of [['rgba(255, 140, 50, 0.85)', -2], ['rgba(150, 220, 255, 0.85)', 2]]) {
+        const x0 = this.pivotX - sin * off;
+        const y0 = this.pivotY + cos * off;
+        PFX.line(ctx, x0, y0, x0 + cos * len, y0 + sin * len, col, 2, [3, 2], -this.animTime * 12);
       }
-      ctx.restore();
     }
     if (this.targeting) {
       const pulse = 1 + Math.sin(this.animTime * 8) * 0.04;
-      ctx.save();
-      ctx.strokeStyle = 'rgba(120, 255, 140, 0.85)';
-      ctx.fillStyle = 'rgba(120, 255, 140, 0.12)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.beginPath();
-      ctx.arc(this.targetPos.x, this.targetPos.y, c.radius * pulse, 0, TAU);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+      PFX.zone(ctx, this.targetPos.x, this.targetPos.y, c.radius * pulse, 0, ARCHER_FX.zone, { spin: this.animTime * 0.6 });
+      // crosshair in the middle
+      PFX.line(ctx, this.targetPos.x - 8, this.targetPos.y, this.targetPos.x + 8, this.targetPos.y, 'rgba(168, 204, 106, 0.85)');
+      PFX.line(ctx, this.targetPos.x, this.targetPos.y - 8, this.targetPos.x, this.targetPos.y + 8, 'rgba(168, 204, 106, 0.85)');
     }
     for (const v of this.volleys) {
-      ctx.fillStyle = 'rgba(120, 255, 140, 0.1)';
-      ctx.beginPath();
-      ctx.arc(v.x, v.y, c.radius, 0, TAU);
-      ctx.fill();
+      PFX.disc(ctx, v.x, v.y, c.radius, c.radius, 'rgba(168, 204, 106, 0.1)', 3);
+      PFX.ring(ctx, v.x, v.y, c.radius, c.radius, 'rgba(168, 204, 106, 0.35)', 2, { dash: [3, 3], spin: v.t });
     }
   }
 
@@ -292,22 +293,13 @@ class Ranger extends Player {
   drawDetectRing(ctx) {
     const range = this.detectRange;
     const seen = this.spotters().length > 0;
-    ctx.save();
-    ctx.strokeStyle = seen ? 'rgba(255, 80, 70, 0.8)' : 'rgba(140, 255, 154, 0.6)';
-    ctx.fillStyle = seen ? 'rgba(255, 80, 70, 0.07)' : 'rgba(140, 255, 154, 0.05)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 6]);
-    ctx.lineDashOffset = -this.animTime * 20;
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, range, 0, TAU);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
+    PFX.disc(ctx, this.x, this.y, range, range, seen ? 'rgba(255, 80, 70, 0.07)' : 'rgba(168, 204, 106, 0.05)', 4);
+    PFX.ring(ctx, this.x, this.y, range, range, seen ? 'rgba(255, 80, 70, 0.8)' : 'rgba(168, 204, 106, 0.6)', 2, { dash: [4, 3], spin: this.animTime * 0.4 });
   }
 
   // passive: Agility (faster base speed in CONFIG, shorter dodge via dodgeCooldown)
   get passiveInfo() {
-    return { name: 'AGILITY', color: '#8cff9a', text: `FAST, ${this.dodgeCooldown}s DODGE` };
+    return { name: 'AGILITY', color: '#a8cc6a', text: `FAST, ${this.dodgeCooldown}s DODGE` };
   }
 
   drawExtras(ctx) {
