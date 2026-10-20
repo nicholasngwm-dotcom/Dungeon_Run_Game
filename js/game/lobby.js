@@ -20,19 +20,21 @@ class LobbyHub {
     });
     this.stations.push({ kind: 'workshop', x: 27 * T, y: 9 * T, r: 56, prompt: 'WORKSHOP' });
     this.stations.push({ kind: 'practice', x: 27 * T, y: 16 * T, r: 50, prompt: 'PRACTICE RANGE' });
-    this.stations.push({ kind: 'legend', x: 6 * T, y: 16 * T, r: 48, prompt: 'MAP LEGEND' });
-    this.stations.push({ kind: 'bestiary', x: 11 * T, y: 16 * T, r: 44, prompt: 'BESTIARY' });
-    this.stations.push({ kind: 'potions', x: 15.8 * T, y: 16.2 * T, r: 44, prompt: 'POTION GUIDE' });
+    // the library: a carpeted corner (bottom left) with the map legend, bestiary and potion guide
+    this.library = { x0: 1.1 * T, y0: 15.2 * T, x1: 10.2 * T, y1: 20.9 * T };
+    this.stations.push({ kind: 'legend', x: 3.1 * T, y: 18.6 * T, r: 48, prompt: 'MAP LEGEND' });
+    this.stations.push({ kind: 'bestiary', x: 5.9 * T, y: 17.4 * T, r: 44, prompt: 'BESTIARY' });
+    this.stations.push({ kind: 'potions', x: 8.5 * T, y: 19.1 * T, r: 44, prompt: 'POTION GUIDE' });
     this.stations.push({ kind: 'gate', x: d.width / 2, y: 4 * T + 18, r: 54, prompt: 'CHOOSE A DUNGEON' });
 
     // set dressing (tile coordinates): banners in the hero hall, plants by the gate,
-    // shelves round the bestiary, hay and a dummy at the practice range, a bench to rest on
+    // a wall of shelves behind the library, hay and a dummy at the practice range, a bench to rest on
     const g = d.width / 2 / T;
     this.decor = [
       ['bannerRed', 2.4, 7.4], ['bannerBlue', 15.2, 7.4],
       ['plant', g - 3, 4.9], ['plant', g + 3, 4.9],
-      ['bookshelf', 8.6, 14.6], ['bookshelf', 13.4, 14.6], ['candelabra', 11, 18.2],
-      ['plant', 3.2, 16.4], ['flowers', 8.4, 18.6],
+      ['bookshelf', 1.85, 15.4], ['bookshelf', 3.2, 15.4], ['bookshelf', 4.55, 15.4], ['bookshelf', 5.9, 15.4], ['bookshelf', 7.25, 15.4],
+      ['plant', 9.3, 15.6], ['candelabra', 1.7, 20.6], ['candelabra', 9.7, 20.6],
       ['dummy', 30.5, 16.4], ['hayBale', 23.8, 17.2], ['hayBale', 30.8, 19], ['bannerGreen', 24.2, 14],
       ['crate', 31.6, 6.6], ['sacks', 22.4, 6.4], ['barrel', 32, 12.2],
       ['bench', g - 3.8, 12.4], ['bench', g + 3.8, 12.4], ['plant', g - 5.6, 12.6], ['plant', g + 5.6, 12.6],
@@ -72,6 +74,7 @@ class LobbyHub {
 
   /** Floor-level art: the gate in the back wall and the station footprints. */
   drawGround(ctx) {
+    this.drawLibraryCarpet(ctx);
     for (const s of this.stations) {
       if (s.kind === 'gate') this.drawGate(ctx, s);
       if (s.kind === 'practice') this.drawPracticePad(ctx, s);
@@ -80,6 +83,37 @@ class LobbyHub {
     // the hero hall plaque
     const T = CONFIG.tileSize;
     HUD.text(ctx, 'HEROES', 8.8 * T, 6.6 * T, { size: 8, align: 'center', color: '#f2a541' });
+  }
+
+  /** A deep blue carpet with a gold border marking out the library corner, and its plaque above the shelves. */
+  drawLibraryCarpet(ctx) {
+    const L = this.library;
+    const x = Math.round(L.x0);
+    const y = Math.round(L.y0);
+    const w = Math.round(L.x1 - L.x0);
+    const h = Math.round(L.y1 - L.y0);
+    ctx.fillStyle = '#141a30';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#a07a24';
+    ctx.fillRect(x + 4, y + 4, w - 8, h - 8);
+    ctx.fillStyle = '#22305a';
+    ctx.fillRect(x + 6, y + 6, w - 12, h - 12);
+    ctx.fillStyle = '#2a3a6a';
+    ctx.fillRect(x + 14, y + 14, w - 28, h - 28);
+    // a gold diamond pattern down the middle
+    ctx.fillStyle = '#7a5c1c';
+    for (let i = 0; i < 6; i++) {
+      const dx = x + 30 + i * ((w - 60) / 5);
+      const dy = y + h / 2;
+      ctx.beginPath();
+      ctx.moveTo(dx, dy - 6); ctx.lineTo(dx + 6, dy); ctx.lineTo(dx, dy + 6); ctx.lineTo(dx - 6, dy);
+      ctx.fill();
+    }
+    // fringe tassels along the open edges
+    ctx.fillStyle = '#d4ac4c';
+    for (let tx = x + 4; tx < x + w - 4; tx += 6) ctx.fillRect(tx, y + h, 2, 3);
+    for (let ty = y + 8; ty < y + h - 4; ty += 6) ctx.fillRect(x + w, ty, 3, 2);
+    HUD.text(ctx, 'LIBRARY', (L.x0 + L.x1) / 2 - 16, L.y0 - 76, { size: 8, align: 'center', color: '#8ab8ff' });
   }
 
   /** Statues and props, y-sorted with the hero. */
