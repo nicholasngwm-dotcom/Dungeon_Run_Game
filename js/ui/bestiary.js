@@ -49,6 +49,8 @@ const Bestiary = {
   role: 'all',
   spread: 0,          // which two-page spread is open
   previews: [],       // { canvas, entry, index, enemy } for every portrait on show
+  queue: 0,           // more pages to turn after the one falling now (quick presses, searches)
+  found: null,        // entry index a search landed on (its name glows)
 
   /** First stage the enemy shows up in (from the theme's enemy lists unless the entry says). */
   firstStage(e) {
@@ -67,6 +69,10 @@ const Bestiary = {
 
   open() {
     this.spread = 0;
+    this.queue = 0;
+    this.found = null;
+    const input = document.getElementById('bestiary-search');
+    if (input) input.value = '';
     this.renderFilters();
     this.render();
     Menus.show('bestiary');
@@ -74,23 +80,136 @@ const Bestiary = {
 
   get isOpen() { return !document.getElementById('screen-bestiary').classList.contains('hidden'); },
 
+  /** A bookmark was pulled: the book turns over from the pages on show to the first of the marked entries. */
   setFilter(kind, value) {
+    this.found = null;
+    const oldList = this.entries;
+    this.applyFilter(kind, value);
+    this.renderFilters();
+    this.turnToNewList(0, oldList);
+  },
+
+  applyFilter(kind, value) {
     if (kind === 'stage') this.stage = value === 'all' ? 'all' : Number(value);
     if (kind === 'role') this.role = value;
-    this.spread = 0;
-    this.renderFilters();
-    this.render();
+  },
+
+  /**
+   * The entries just changed (bookmarks): rather than swapping the text in place,
+   * a page turns over from what's showing now to spread `target` of the new list.
+   * The pages on show must still hold the old list when this is called.
+   */
+  turnToNewList(target, oldList) {
+    this.queue = 0;
+    this.grab = null;
+    this.oldList = oldList;
+    // the pages on show belong to the old list now
+    const stale = (id) => document.getElementById(id).innerHTML.replace(/data-entry="/g, 'data-old-entry="');
+    const left = stale('bestiary-left');
+    const right = stale('bestiary-right');
+    this.dropLeaf(false);
+    document.getElementById('bestiary-left').innerHTML = left.replace(/<i class="under-shade"><\/i>/, '');
+    document.getElementById('bestiary-right').innerHTML = right.replace(/<i class="under-shade"><\/i>/, '');
+    target = clamp(target, 0, this.spreads - 1);
+    const dir = target < this.spread ? -1 : 1;
+    const L = this.startLeaf(dir, {
+      front: dir > 0 ? right : left,
+      back: this.pageHtml(dir > 0 ? target * 2 : target * 2 + 1),
+      under: this.pageHtml(dir > 0 ? target * 2 + 1 : target * 2),
+      to: target,
+    });
+    L.target = 180;
+    L.fast = true;
+    L.v = 520;
+    L.cv = -180;
+    Sound.play('uiHover', 0.06);
   },
 
   renderFilters() {
-    const chip = (kind, value, label, on) => `<button class="chip${on ? ' on' : ''}" data-action="bestiaryFilter:${kind}:${value}">${label}</button>`;
+    const mark = (kind, value, label, on, cls = '', tip = '') => `<button class="bookmark ${cls}${on ? ' on' : ''}" title="${tip}" data-action="bestiaryFilter:${kind}:${value}">${label}</button>`;
+    // dungeon bookmarks: an emblem tab that slides out to show the dungeon's name when hovered
+    const emblem = (type) => {
+      const c = document.createElement('canvas');
+      c.width = 16;
+      c.height = 16;
+      drawRoomIcon(c.getContext('2d'), type, 0, 0, 2);
+      return c.toDataURL();
+    };
+    this.emblems ??= { boss: emblem('boss'), puzzle: emblem('puzzle') };
+    const theme = (name, icon, on, locked) => `<button class="bookmark dungeon${on ? ' on' : ''}${locked ? ' locked' : ''}"${locked ? ' disabled' : ''}>`
+      + `<img src="${icon}" alt=""><span>${name}</span></button>`;
     document.getElementById('bestiary-themes').innerHTML = Object.keys(BESTIARY)
-      .map((id) => `<button class="chip on">${CONFIG.themes[id].name.toUpperCase()}</button>`).join('')
-      + '<button class="chip locked" disabled>???</button><button class="chip locked" disabled>???</button>';
+      .map((id) => theme(CONFIG.themes[id].name.toUpperCase(), this.emblems.boss, id === this.theme, false)).join('')
+      + theme('UNDISCOVERED', this.emblems.puzzle, false, true) + theme('UNDISCOVERED', this.emblems.puzzle, false, true);
+    // stage ribbons read "STAGE I" / "STAGE II" ... so it's clear what they filter
     document.getElementById('bestiary-stages').innerHTML = BESTIARY_STAGES
-      .map((s) => chip('stage', s, s === 'all' ? 'ALL STAGES' : `STAGE ${s}`, this.stage === s)).join('');
+      .map((s) => mark('stage', s, s === 'all' ? '<small>STAGES</small><b>ALL</b>' : `<small>STAGE</small><b>${romanNumeral(s)}</b>`, this.stage === s, '',
+        s === 'all' ? 'Show enemies from every stage' : s === 1 ? 'Show only enemies you can meet in stage 1' : `Show enemies you can meet by stage ${s}`)).join('');
     document.getElementById('bestiary-roles').innerHTML = BESTIARY_ROLES
-      .map((r) => chip('role', r, r === 'all' ? 'ALL' : r.toUpperCase(), this.role === r)).join('');
+      .map((r) => mark('role', r, r === 'all' ? 'ALL' : r === 'summoner' ? 'SUMMON' : r.toUpperCase(), this.role === r, r,
+        r === 'all' ? 'Show every kind of enemy' : `Show only ${r === 'boss' ? 'the boss' : `${r} enemies`}`)).join('');
+    this.initSearch();
+  },
+
+  // ---------- searching ----------
+
+  /** Hooks up the search box once: it searches as you type (after a pause) and on Enter. */
+  initSearch() {
+    if (this.searchReady) return;
+    this.searchReady = true;
+    const input = document.getElementById('bestiary-search');
+    input.addEventListener('input', () => {
+      clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => this.search(input.value), 450);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      clearTimeout(this.searchTimer);
+      this.search(input.value);
+    });
+  },
+
+  /**
+   * Finds an enemy by (part of) its name and flips the book through to its page.
+   * If the bookmarks hide it, they go back to ALL first.
+   */
+  search(query) {
+    const q = query.trim().toLowerCase();
+    if (!q) return;
+    const match = (e) => e.name.toLowerCase().includes(q) || (e.type || e.boss || '').toLowerCase().includes(q);
+    const input = document.getElementById('bestiary-search');
+    let i = this.entries.findIndex(match);
+    if (i < 0 && BESTIARY[this.theme].some(match)) {
+      // the bookmarks hide it: back to ALL, and turn straight to it in the full book
+      const oldList = this.entries;
+      this.stage = 'all';
+      this.role = 'all';
+      this.renderFilters();
+      this.found = this.entries.findIndex(match);
+      this.turnToNewList(Math.floor(this.found / 2), oldList);
+      return;
+    }
+    if (i < 0) {
+      input.classList.remove('miss');
+      void input.offsetWidth;
+      input.classList.add('miss');
+      document.getElementById('bestiary-count').textContent = 'NOT IN THIS BOOK';
+      return;
+    }
+    this.found = i;
+    const target = Math.floor(i / 2);
+    if (target === this.spread) { this.render(); this.found = null; }   // already open: just make it glow
+    else this.goTo(target);
+  },
+
+  /** Riffles through to spread `target`, a page at a time (fast when it's far). */
+  goTo(target) {
+    target = clamp(target, 0, this.spreads - 1);
+    const dir = Math.sign(target - this.spread);
+    if (!dir) return;
+    this.dropLeaf();
+    this.queue = Math.abs(target - this.spread) - 1;
+    this.flip(dir, true);
   },
 
   /** The HTML of page `i` of the filtered list (left pages are even), or the empty-book note. */
@@ -120,13 +239,16 @@ const Bestiary = {
   collectPreviews() {
     const list = this.entries;
     const old = this.previews;
-    this.previews = [...document.querySelectorAll('#bestiary-book canvas[data-entry]')].map((canvas) => {
-      const i = Number(canvas.dataset.entry);
+    // pages still showing the list from before a bookmark changed it point into oldList
+    this.previews = [...document.querySelectorAll('#bestiary-book canvas[data-entry], #bestiary-book canvas[data-old-entry]')].map((canvas) => {
+      const stale = canvas.dataset.oldEntry != null;
+      const i = Number(stale ? canvas.dataset.oldEntry : canvas.dataset.entry);
+      const entry = stale ? this.oldList?.[i] : list[i];
       canvas.getContext('2d').imageSmoothingEnabled = false;
       // keep the stand-in enemy of an entry already on show, so its animation carries on
-      const prev = old.find((pv) => pv.index === i);
-      return { canvas, entry: list[i], index: i, enemy: prev && prev.enemy };
-    });
+      const prev = old.find((pv) => pv.entry === entry);
+      return { canvas, entry, index: i, enemy: prev && prev.enemy };
+    }).filter((pv) => pv.entry);
   },
 
   entryHtml(e, i) {
@@ -143,7 +265,7 @@ const Bestiary = {
     const exclusive = first > 1 && e.role !== 'boss' && !e.note;
     return `
       <canvas width="112" height="104" data-entry="${i}"></canvas>
-      <h3>${e.name}</h3>
+      <h3${this.found === i ? ' class="found"' : ''}>${e.name}</h3>
       <div class="b-tags"><span class="b-role ${e.role}">${e.role.toUpperCase()}</span><span class="b-stage${exclusive ? ' excl' : ''}">${stageText}</span></div>
       <div class="b-stats">${stats}</div>
       <p class="b-desc">${e.desc}</p>
@@ -210,18 +332,19 @@ const Bestiary = {
    * Each strip shows its slice of both pages and holds the next strip, so
    * turning one strip carries everything beyond it.
    */
-  startLeaf(dir) {
-    if (this.leaf && this.leaf.dir === dir) return this.leaf;
-    this.dropLeaf();
+  startLeaf(dir, custom = null) {
+    if (this.leaf && this.leaf.dir === dir && !custom) return this.leaf;
+    if (!custom) this.dropLeaf();
     const s = this.spread;
-    const t = s + dir;
+    const t = custom ? custom.to : s + dir;
     const W = LEAF_PAGE_W;
     const n = LEAF_STRIPS;
     const sw = W / n;
     // next: lift the right page (front) whose back is the next spread's left page
     // back: lift the left page (front) whose back is the previous spread's right page
-    const frontHtml = this.pageHtml(dir > 0 ? s * 2 + 1 : s * 2);
-    const backHtml = this.pageHtml(dir > 0 ? t * 2 : t * 2 + 1);
+    // (custom: explicit pages, when the list itself changed under the book)
+    const frontHtml = custom ? custom.front : this.pageHtml(dir > 0 ? s * 2 + 1 : s * 2);
+    const backHtml = custom ? custom.back : this.pageHtml(dir > 0 ? t * 2 : t * 2 + 1);
     const frontSide = dir > 0 ? 'right' : 'left';
     const backSide = dir > 0 ? 'left' : 'right';
     let inner = '';
@@ -242,21 +365,22 @@ const Bestiary = {
     book.appendChild(el);
     // the page under the leaf now shows what turning reveals
     const under = document.getElementById(dir > 0 ? 'bestiary-right' : 'bestiary-left');
-    under.innerHTML = this.pageHtml(dir > 0 ? t * 2 + 1 : t * 2) + '<i class="under-shade"></i>';
+    under.innerHTML = (custom ? custom.under : this.pageHtml(dir > 0 ? t * 2 + 1 : t * 2)) + '<i class="under-shade"></i>';
     const strips = [...el.querySelectorAll('.leaf-strip')];
-    this.leaf = { dir, a: 0, v: 0, target: 0, curl: 0, cv: 0, tilt: 0, held: false, el, strips, under };
+    this.leaf = { dir, a: 0, v: 0, target: 0, curl: 0, cv: 0, tilt: 0, held: false, el, strips, under, to: custom ? custom.to : null };
     this.collectPreviews();
     this.applyLeaf();
     return this.leaf;
   },
 
   /** Puts the pages back to plain (no leaf) without changing the spread. */
-  dropLeaf() {
+  /** restore = false leaves the page under the leaf as it is (the caller fills it). */
+  dropLeaf(restore = true) {
     if (!this.leaf) return;
     const { dir, el } = this.leaf;
     el.remove();
     this.leaf = null;
-    document.getElementById(dir > 0 ? 'bestiary-right' : 'bestiary-left').innerHTML = this.pageHtml(this.spread * 2 + (dir > 0 ? 1 : 0));
+    if (restore) document.getElementById(dir > 0 ? 'bestiary-right' : 'bestiary-left').innerHTML = this.pageHtml(this.spread * 2 + (dir > 0 ? 1 : 0));
     this.collectPreviews();
   },
 
@@ -272,18 +396,31 @@ const Bestiary = {
     if (turn) Sound.play('uiHover');
   },
 
-  /** Arrow keys / side buttons: throw the page over (dir +1 / -1). */
-  flip(dir) {
-    if (this.grab || !this.canTurn(dir)) return;
-    if (this.leaf && this.leaf.dir !== dir) {
-      if (this.leaf.a > 20) return;   // the other page is mid-turn
+  /**
+   * Arrow keys / side buttons: throw the page over (dir +1 / -1). Pressing again
+   * while a page is still falling queues another, so you can riffle quickly;
+   * the turning speeds up while pages are queued. fast: a search / bookmark riffle.
+   */
+  flip(dir, fast = false) {
+    if (this.grab) return;
+    const L0 = this.leaf;
+    if (L0 && L0.target >= 180) {
+      if (L0.dir === dir) {
+        if (this.canTurn(dir * (2 + this.queue))) this.queue++;
+      } else if (this.queue > 0) this.queue--;   // pressing back cancels a queued page
+      return;
+    }
+    if (!this.canTurn(dir)) return;
+    if (L0 && L0.dir !== dir) {
+      if (L0.a > 20) return;   // the other page is mid-turn
       this.dropLeaf();
     }
     const L = this.startLeaf(dir);
     L.target = 180;
-    L.v = Math.max(L.v, 220);
+    L.fast = fast || this.queue > 0;
+    L.v = Math.max(L.v, L.fast ? 520 : 380);
     L.cv = Math.min(L.cv, -180);       // flung from the spine, the edge trails behind
-    Sound.play('uiHover');
+    Sound.play('uiHover', 0.06);
   },
 
   /** One physics step for the leaf (and the hover peel that starts one). */
@@ -311,9 +448,10 @@ const Bestiary = {
       const across = ((this.pointer.x - r.spineX) * L.dir) / r.pageW;
       L.target = Math.acos(clamp(across, -1, 1)) * (180 / Math.PI);
     }
-    // the angle: a soft spring with a little bounce (heavy old paper, not card)
-    const k = L.held ? 90 : 55;
-    const damp = L.held ? 12 : 7.5;
+    // the angle: a soft spring with a little give (heavy old paper, not card); a riffle turns quicker
+    const rush = !L.held && L.target >= 180 && (L.fast || this.queue > 0) ? 2.6 : 1;
+    const k = (L.held ? 90 : 70) * rush;
+    const damp = (L.held ? 12 : 11) * Math.sqrt(rush);
     L.v += (k * (L.target - L.a) - damp * L.v) * dt;
     L.a += L.v * dt;
     if (L.a < 0) { L.a = 0; L.v = -L.v * 0.3; }
@@ -326,10 +464,20 @@ const Bestiary = {
     // a held page twists a little toward the corner it's held by
     const tiltTarget = L.held && this.pointer ? clamp(((this.pointer.y - (r.top + r.bottom) / 2) / (r.bottom - r.top)) * -10, -5, 5) : 0;
     L.tilt += (tiltTarget - L.tilt) * Math.min(1, dt * 8);
-    if (!L.held && L.target >= 180 && L.a > 178 && Math.abs(L.v) < 40 && Math.abs(L.curl) < 4) {
-      // landed on the other side: that spread is open now
-      this.spread += L.dir;
+    if (!L.held && L.target >= 180 && L.a > 166) {
+      // as good as down on the other side: that spread is open now (no slow settle at the end),
+      // and the next queued page goes straight over
+      const dir = L.dir;
+      this.spread = L.to != null ? L.to : this.spread + dir;
+      this.oldList = null;
       this.render();
+      if (this.queue > 0 && this.canTurn(dir)) {
+        this.queue--;
+        this.flip(dir, true);
+      } else {
+        this.queue = 0;
+        this.found = null;   // the glow has played on the landed page
+      }
       return;
     }
     if (!L.held && L.target === 0 && L.a < 0.4 && Math.abs(L.v) < 4 && Math.abs(L.curl) < 0.6) {

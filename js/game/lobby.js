@@ -119,9 +119,15 @@ class LobbyHub {
     const desk = this.decor.find((o) => o.name === 'desk');
     this.librarian = { x: desk.x + 4, y: desk.y - 10 };
     const lectern = this.stations.find((s) => s.kind === 'bestiary');
+    // the wanderers each live in a slot on one of the library shelves: they wriggle loose,
+    // fly a lap of the library, then come home and slide back in (see drawBooks)
+    const shelves = this.decor.filter((o) => o.name === 'bookshelf');
     this.books = [
       ...[0, 1, 2, 3].map((i) => ({ orbit: lectern, r: 34, h: 50, phase: (i * TAU) / 4, speed: 0.9, color: ['#7a2a3a', '#2a4a7a', '#3a6a3a', '#5a2a7a'][i] })),
-      ...[0, 1, 2].map((i) => ({ wander: true, phase: i * 2.1, speed: 0.35 + i * 0.07, color: ['#7a5a24', '#2a6a6a', '#8a3a2a'][i] })),
+      ...shelves.map((s, i) => ({
+        wander: true, phase: i * 2.1, speed: 0.35 + (i % 3) * 0.07, offset: i * 4.3, color: ['#7a5a24', '#2a6a6a', '#8a3a2a', '#4a3a7a'][i % 4],
+        home: { x: s.x - 21 + [9, 27, 15, 31][i % 4], y: s.y - 54 + [5, 18, 31, 18][i % 4] + 5 },
+      })),
     ];
     // wooden signs naming the rooms: [text, x, y (board centre), sort y]
     this.signs = [
@@ -225,135 +231,30 @@ class LobbyHub {
   // ---------- doors ----------
 
   /**
-   * A pair of wooden doors in every doorway, hinged at the sides of the opening.
+   * A pair of wooden doors in every doorway (see SwingDoors), hinged at the sides of the opening.
    * ns: the door plane runs north-south (a doorway through a side wall), else east-west.
-   * open: 0 shut .. 1 swung right round; dir: which side they swing into (+1 east/south).
    */
   buildDoors() {
     const T = CONFIG.tileSize;
     const d = this.world.dungeon;
-    return (typeof KEEP_DOORS === 'undefined' ? [] : KEEP_DOORS).map(([x0, y0, x1, y1]) => {
+    return new SwingDoors((typeof KEEP_DOORS === 'undefined' ? [] : KEEP_DOORS).map(([x0, y0, x1, y1]) => {
       const ns = d.tileAt(x0 - 1, Math.floor((y0 + y1) / 2)) === TILE.FLOOR;
+      // the doorway's tiles: solid while the door is shut
+      const tiles = [];
+      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) tiles.push(ty * d.cols + tx);
       return ns
-        ? { ns, x: (x0 + x1 + 1) / 2 * T, a: y0 * T, b: (y1 + 1) * T, open: 0, dir: 1, idle: 0 }
-        : { ns, y: (y0 + y1 + 1) / 2 * T, a: x0 * T, b: (x1 + 1) * T, open: 0, dir: 1, idle: 0 };
-    });
+        ? { ns, x: (x0 + x1 + 1) / 2 * T, a: y0 * T, b: (y1 + 1) * T, tiles }
+        : { ns, y: (y0 + y1 + 1) / 2 * T, a: x0 * T, b: (x1 + 1) * T, tiles };
+    }));
   }
 
-  /** Doors swing open away from a hero walking up to them, stay open while anyone's near, then slowly shut. */
   updateDoors(dt) {
     this.doors ??= this.buildDoors();
-    for (const dr of this.doors) {
-      const cx = dr.ns ? dr.x : (dr.a + dr.b) / 2;
-      const cy = dr.ns ? (dr.a + dr.b) / 2 : dr.y;
-      let near = null;
-      let best = 84;
-      for (const p of this.world.players) {
-        if (p.dead) continue;
-        const dd = dist(p.x, p.y, cx, cy);
-        if (dd < best) { best = dd; near = p; }
-      }
-      if (near) {
-        // only pick the swing direction from shut, so a door never flips through someone
-        if (dr.open < 0.05) dr.dir = dr.ns ? (near.x < dr.x ? 1 : -1) : (near.y < dr.y ? 1 : -1);
-        if (dr.open === 0 && near === this.world.localPlayer) Sound.play('uiClick', 0.2);
-        dr.open = Math.min(1, dr.open + dt * 3.2);
-        dr.idle = 0;
-      } else {
-        dr.idle += dt;
-        if (dr.idle > 0.6) dr.open = Math.max(0, dr.open - dt * 0.65);
-      }
-    }
+    this.doors.update(dt, this.world);
   }
 
-  /**
-   * The two leaves of a door as y-sorted drawables. Each leaf turns about its
-   * hinge on the floor; it's drawn as an upright wooden panel (planks, two iron
-   * bands, a ring pull) from its base line up to the door's height.
-   */
   doorDrawables() {
-    const items = [];
-    for (const dr of this.doors || []) {
-      // eased swing with a little overshoot when it bangs open
-      const k = dr.open;
-      const e = k < 1 ? 1 - (1 - k) ** 3 + Math.sin(k * Math.PI) * 0.06 : 1;
-      const turn = (Math.PI / 2) * e * dr.dir;
-      const half = (dr.b - dr.a) / 2;
-      const leaves = dr.ns
-        ? [{ hx: dr.x, hy: dr.a, phi: Math.PI / 2 - turn }, { hx: dr.x, hy: dr.b, phi: -Math.PI / 2 + turn }]
-        : [{ hx: dr.a, hy: dr.y, phi: turn }, { hx: dr.b, hy: dr.y, phi: Math.PI - turn }];
-      for (const l of leaves) {
-        const ex = l.hx + Math.cos(l.phi) * half;
-        const ey = l.hy + Math.sin(l.phi) * half;
-        items.push({ y: Math.max(l.hy, ey) - 1, draw: (ctx) => this.drawDoorLeaf(ctx, l.hx, l.hy, ex, ey) });
-      }
-    }
-    return items;
-  }
-
-  drawDoorLeaf(ctx, hx, hy, ex, ey) {
-    const H = 54;
-    const wide = Math.abs(ex - hx);
-    // face-on leaves are lit; leaves turned edge-on to us are in shade
-    const lit = wide / Math.max(1, Math.hypot(ex - hx, ey - hy));
-    const body = lit > 0.5 ? '#7a4e2c' : '#5e3a20';
-    const quad = (pts, color) => {
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(Math.round(pts[0][0]), Math.round(pts[0][1]));
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(Math.round(pts[i][0]), Math.round(pts[i][1]));
-      ctx.closePath();
-      ctx.fill();
-    };
-    // a leaf seen almost edge-on still shows its thickness
-    const t = wide < 4 ? (4 - wide) / 2 : 0;
-    const l = Math.min(hx, ex) - t;
-    const r = Math.max(hx, ex) + t;
-    const pts = wide < 4
-      ? [[l, Math.max(hy, ey)], [r, Math.max(hy, ey)], [r, Math.min(hy, ey) - H], [l, Math.min(hy, ey) - H]]
-      : [[hx, hy], [ex, ey], [ex, ey - H], [hx, hy - H]];
-    quad(pts, body);
-    ctx.strokeStyle = OUTLINE;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(Math.round(pts[0][0]), Math.round(pts[0][1]));
-    for (let i = 1; i < 4; i++) ctx.lineTo(Math.round(pts[i][0]), Math.round(pts[i][1]));
-    ctx.closePath();
-    ctx.stroke();
-    if (wide < 4) return;
-    // planks
-    ctx.strokeStyle = '#3e2716';
-    ctx.lineWidth = 1;
-    for (let i = 1; i < 4; i++) {
-      const u = i / 4;
-      const px = lerp(hx, ex, u);
-      const py = lerp(hy, ey, u);
-      ctx.beginPath();
-      ctx.moveTo(Math.round(px) + 0.5, Math.round(py));
-      ctx.lineTo(Math.round(px) + 0.5, Math.round(py - H));
-      ctx.stroke();
-    }
-    // top edge highlight and two iron bands
-    ctx.strokeStyle = '#a8784a';
-    ctx.beginPath();
-    ctx.moveTo(hx, hy - H + 0.5);
-    ctx.lineTo(ex, ey - H + 0.5);
-    ctx.stroke();
-    ctx.strokeStyle = '#363a46';
-    ctx.lineWidth = 2;
-    for (const v of [0.22, 0.75]) {
-      ctx.beginPath();
-      ctx.moveTo(hx, hy - H * v);
-      ctx.lineTo(ex, ey - H * v);
-      ctx.stroke();
-    }
-    // a ring pull near the free edge
-    const rx = lerp(hx, ex, 0.82);
-    const ry = lerp(hy, ey, 0.82) - H * 0.48;
-    ctx.fillStyle = '#d4ac4c';
-    ctx.fillRect(Math.round(rx) - 1, Math.round(ry) - 1, 3, 3);
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(Math.round(rx), Math.round(ry), 1, 1);
+    return this.doors ? this.doors.drawables() : [];
   }
 
   /** The station the local hero is at (for prompts and highlights). */
@@ -578,25 +479,56 @@ class LobbyHub {
   }
 
   /**
-   * Enchanted books: four circle the bestiary lectern, three wander the library,
-   * flapping their covers like wings and trailing sparkles. Drawn above everything.
+   * Enchanted books: four circle the bestiary lectern; the rest live on the library
+   * shelves. Every so often one wriggles out of its slot (leaving a gap), flies a
+   * lap of the library flapping its covers like wings and trailing sparkles, then
+   * flies home and slides back in. Drawn above everything.
    */
   drawBooks(ctx) {
     const T = CONFIG.tileSize;
     const t = this.time;
+    const ease = (k) => k * k * (3 - 2 * k);
     for (const b of this.books) {
       let x;
       let y;
+      let wings = 1;   // how far the covers flap (0 = shut, in or near the shelf)
       if (b.orbit) {
         const a = b.phase + t * b.speed;
         x = b.orbit.x + Math.cos(a) * b.r;
         y = b.orbit.y - b.h + Math.sin(a) * b.r * 0.4 + Math.sin(t * 2 + b.phase) * 3;
       } else {
         const u = t * b.speed + b.phase;
-        x = (6.6 + Math.sin(u) * 3.4 + Math.sin(u * 2.3) * 0.6) * T;
-        y = (21.5 + Math.sin(u * 1.4 + 1) * 3 + Math.cos(u * 0.7) * 1) * T - 40;
+        const fx = (6.6 + Math.sin(u) * 3.4 + Math.sin(u * 2.3) * 0.6) * T;
+        const fy = (21.5 + Math.sin(u * 1.4 + 1) * 3 + Math.cos(u * 0.7) * 1) * T - 40;
+        // its 18 second round: 0.9 wriggling loose, 1.5 out to the lap, ~10 flying,
+        // 1.6 back home, 0.6 sliding in, then a rest on the shelf
+        const k = (t + b.offset) % 18;
+        const h = b.home;
+        if (k >= 15) continue;                       // resting on the shelf (part of the shelf art)
+        this.drawShelfGap(ctx, h, k);
+        if (k < 0.9) {
+          this.drawShelvedBook(ctx, b, h.x + Math.round(Math.sin(k * 45) * 1.5 * (k / 0.9)), h.y);
+          continue;
+        } else if (k < 2.4) {
+          const e = ease((k - 0.9) / 1.5);
+          x = lerp(h.x, fx, e);
+          y = lerp(h.y, fy, e) + Math.sin(e * Math.PI) * 10;   // dips as it pulls free, then climbs
+          wings = e;
+        } else if (k < 12.8) {
+          x = fx;
+          y = fy;
+        } else if (k < 14.4) {
+          const e = ease((k - 12.8) / 1.6);
+          x = lerp(fx, h.x, e);
+          y = lerp(fy, h.y, e);
+          wings = 1 - e;
+        } else {
+          // sliding back into its slot
+          this.drawShelvedBook(ctx, b, h.x, h.y + Math.round((1 - (k - 14.4) / 0.6) * 2));
+          continue;
+        }
       }
-      const flap = Math.abs(Math.sin(t * 6 + b.phase * 3));   // 0 = closed, 1 = wide open
+      const flap = Math.abs(Math.sin(t * 6 + b.phase * 3)) * wings;   // 0 = closed, 1 = wide open
       const bx = Math.round(x);
       const by = Math.round(y);
       drawGlow(ctx, bx, by, 14, '200, 170, 255', 0.25);
@@ -626,6 +558,33 @@ class LobbyHub {
         ctx.fillRect(bx - 4 + Math.round(Math.sin(t * 5 + b.phase) * 4), by + 6 + Math.round((t * 20) % 8), 2, 2);
       }
     }
+  }
+
+  /** A wandering book's empty slot while it's out: a dark gap among the spines. */
+  drawShelfGap(ctx, h, k) {
+    ctx.fillStyle = '#1a1018';
+    ctx.fillRect(Math.round(h.x) - 2, Math.round(h.y) - 5, 4, 10);
+    // a few sparkles where it pulled free / is about to land
+    if (k < 1.4 || k > 13.8) {
+      ctx.fillStyle = '#e8d8ff';
+      const s = (this.time * 7) % 1;
+      ctx.fillRect(Math.round(h.x - 5 + s * 10), Math.round(h.y - 7 - s * 4), 1, 1);
+      ctx.fillRect(Math.round(h.x + 4 - s * 8), Math.round(h.y + 2 - s * 6), 1, 1);
+    }
+  }
+
+  /** A wandering book standing in its slot (spine out), with a faint glow while it stirs. */
+  drawShelvedBook(ctx, b, x, y) {
+    const bx = Math.round(x);
+    const by = Math.round(y);
+    drawGlow(ctx, bx, by, 10, '200, 170, 255', 0.3);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(bx - 2, by - 6, 5, 12);
+    ctx.fillStyle = b.color;
+    ctx.fillRect(bx - 1, by - 5, 3, 10);
+    ctx.fillStyle = '#d4ac4c';
+    ctx.fillRect(bx - 1, by - 3, 3, 1);
+    ctx.fillRect(bx - 1, by + 2, 3, 1);
   }
 
   /** Elowen's word bubble when a hero comes up to her desk. */
@@ -972,59 +931,19 @@ class LobbyHub {
    */
   drawLighting(ctx, cam) {
     const { dark, tint } = this.daylight;
-    if (dark <= 0.01 && !tint) return;
-    const W = cam.width;
-    const H = cam.height;
-    if (!this.lightCanvas) {
-      this.lightCanvas = document.createElement('canvas');
-      this.lightCanvas.width = W;
-      this.lightCanvas.height = H;
-    }
-    const lc = this.lightCanvas.getContext('2d');
-    lc.globalCompositeOperation = 'source-over';
-    lc.clearRect(0, 0, W, H);
-    lc.fillStyle = `rgba(12, 14, 40, ${dark})`;
-    lc.fillRect(0, 0, W, H);
-    const lights = this.lights();
-    lc.globalCompositeOperation = 'destination-out';
-    const ox = Math.round(cam.x + cam.offsetX);   // follow the screen shake too
-    const oy = Math.round(cam.y + cam.offsetY);
-    // moonlight outdoors: the yard is never as dark as the halls
     const T = CONFIG.tileSize;
-    lc.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    for (const id of ['yard', 'garden']) {
-      const r = KEEP_ROOMS[id];
-      lc.fillRect(r.x0 * T - ox, r.y0 * T - oy, (r.x1 - r.x0 + 1) * T, (r.y1 - r.y0 + 1) * T);
-    }
-    for (const l of lights) {
-      const x = l.x - ox;
-      const y = l.y - oy;
-      if (x < -l.r || y < -l.r || x > W + l.r || y > H + l.r) continue;
-      const g = lc.createRadialGradient(x, y, 0, x, y, l.r);
-      g.addColorStop(0, `rgba(0, 0, 0, ${l.s})`);
-      g.addColorStop(0.55, `rgba(0, 0, 0, ${l.s * 0.6})`);
-      g.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      lc.fillStyle = g;
-      lc.fillRect(x - l.r, y - l.r, l.r * 2, l.r * 2);
-    }
-    ctx.drawImage(this.lightCanvas, ox, oy);
-    // the lights' own colour blooming on top, stronger the darker it is
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    for (const l of lights) {
-      if (!l.rgb) continue;
-      if (l.x < ox - l.r || l.y < oy - l.r || l.x > ox + W + l.r || l.y > oy + H + l.r) continue;
-      const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r * 0.7);
-      g.addColorStop(0, `rgba(${l.rgb}, ${0.22 * dark})`);
-      g.addColorStop(1, `rgba(${l.rgb}, 0)`);
-      ctx.fillStyle = g;
-      ctx.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
-    }
-    ctx.restore();
-    if (tint) {
-      ctx.fillStyle = tint;
-      ctx.fillRect(ox, oy, W, H);
-    }
+    Lighting.draw(ctx, cam, this.lights(), {
+      dark,
+      tint,
+      // moonlight outdoors: the yard is never as dark as the halls
+      cut: (lc, ox, oy) => {
+        lc.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        for (const id of ['yard', 'garden']) {
+          const r = KEEP_ROOMS[id];
+          lc.fillRect(r.x0 * T - ox, r.y0 * T - oy, (r.x1 - r.x0 + 1) * T, (r.y1 - r.y0 + 1) * T);
+        }
+      },
+    });
   }
 
   /** Every light in the keep: { x, y, r (reach), s (how much darkness it cuts), rgb (its glow) }. */

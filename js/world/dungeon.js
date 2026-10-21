@@ -56,32 +56,28 @@ class Dungeon {
         const x = tx * T;
         const y = ty * T;
         const t = this.grid[ty][tx];
+        const edges = { left: this.tileAt(tx - 1, ty) === TILE.FLOOR, right: this.tileAt(tx + 1, ty) === TILE.FLOOR };
+        // the keep's warm sandstone (see Castle): flagstones, brick faces, timber-and-stone wall tops
         if (t === TILE.FLOOR) {
-          Tiles.floor(p, x, y, rng);
+          Castle.flag(p, x, y, rng);
         } else if (t === TILE.PILLAR) {
-          Tiles.pillarTop(p, x, y, rng, {
-            left: this.tileAt(tx - 1, ty) === TILE.FLOOR,
-            right: this.tileAt(tx + 1, ty) === TILE.FLOOR,
-          });
+          Castle.wallTop(p, x, y, rng, edges);
+          p.rect(x, y, T, 3, KEEP_COLORS.wallRim);
         } else if (t === TILE.PILLAR_FACE) {
-          Tiles.wallFace(p, x, y, 1, rng);
+          Castle.wallFace(p, x, y, 1, rng, false);
         } else if (t === TILE.FACE) {
-          Tiles.wallFace(p, x, y, ty - 2, rng);
+          Castle.wallFace(p, x, y, ty - 2, rng, false);
         } else {
-          Tiles.wallTop(p, x, y, rng);
-          Tiles.wallEdges(p, x, y, {
-            down: this.tileAt(tx, ty + 1) === TILE.FLOOR,
-            left: this.tileAt(tx - 1, ty) === TILE.FLOOR,
-            right: this.tileAt(tx + 1, ty) === TILE.FLOOR,
-          });
+          Castle.wallTop(p, x, y, rng, edges);
+          if (this.tileAt(tx, ty + 1) === TILE.FLOOR) p.rect(x, y + T - 3, T, 3, KEEP_COLORS.wallRim);
         }
       }
     }
 
     // shadow cast by the back wall
-    p.ctx.fillStyle = 'rgba(10, 6, 18, 0.45)';
+    p.ctx.fillStyle = 'rgba(16, 8, 6, 0.45)';
     p.ctx.fillRect(T, 4 * T, this.width - 2 * T, 10);
-    p.ctx.fillStyle = 'rgba(10, 6, 18, 0.25)';
+    p.ctx.fillStyle = 'rgba(16, 8, 6, 0.25)';
     p.ctx.fillRect(T, 4 * T + 10, this.width - 2 * T, 8);
 
     // wall decorations
@@ -92,14 +88,14 @@ class Dungeon {
     }
     for (let tx = 7; tx < this.cols - 4; tx += 6) {
       if (Math.abs(tx * T + 16 - this.center.x) < 40) continue;
-      Tiles.banner(p, tx * T, 2 * T + 4);
+      Castle.tapestry(p, tx * T + 16, 2 * T + 2, ['#5a1a22', '#87262a', '#d4ac4c']);
     }
 
     // shadows cast by the pillars
     for (const [tx, ty] of this.pillars) {
-      p.ctx.fillStyle = 'rgba(10, 6, 18, 0.4)';
+      p.ctx.fillStyle = 'rgba(16, 8, 6, 0.4)';
       p.ctx.fillRect(tx * T, (ty + 2) * T, 2 * T, 8);
-      p.ctx.fillStyle = 'rgba(10, 6, 18, 0.2)';
+      p.ctx.fillStyle = 'rgba(16, 8, 6, 0.2)';
       p.ctx.fillRect(tx * T + 2, (ty + 2) * T + 8, 2 * T - 4, 6);
     }
 
@@ -119,7 +115,6 @@ class Dungeon {
         const r = rng();
         if (r < 0.025) Tiles.bones(p, x, y, rng);
         else if (r < 0.035) Tiles.skull(p, x, y, rng);
-        else if (r < 0.08) Tiles.rubble(p, x, y, rng);
       }
     }
     return p.canvas;
@@ -140,8 +135,9 @@ class Dungeon {
 
   drawRitualCircle(p) {
     const { x: cx, y: cy } = this.center;
-    const col = '#36304a';
-    const glow = '#6a4a8a';
+    // a chalked training circle with brass studs
+    const col = '#b8a888';
+    const glow = '#8a6a26';
     for (const r of [96, 84]) {
       for (let a = 0; a < TAU; a += 0.012) {
         p.rect(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.6, 2, 2, col);
@@ -152,7 +148,7 @@ class Dungeon {
       const x = cx + Math.cos(a) * 90;
       const y = cy + Math.sin(a) * 54;
       p.rect(x - 3, y - 3, 6, 6, glow);
-      p.rect(x - 1, y - 1, 2, 2, '#9a7ac0');
+      p.rect(x - 1, y - 1, 2, 2, '#ffd34a');
     }
     const pts = [0, 1, 2, 3, 4].map((i) => {
       const a = -Math.PI / 2 + (i * TAU * 2) / 5;
@@ -196,6 +192,7 @@ class Dungeon {
 
   tileAt(tx, ty) {
     if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return TILE.WALL;
+    if (this.doorBlocks?.has(ty * this.cols + tx)) return TILE.WALL;   // a shut door (see SwingDoors)
     return this.grid[ty][tx];
   }
 

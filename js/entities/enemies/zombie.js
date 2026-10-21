@@ -14,7 +14,7 @@ class Zombie extends Enemy {
       Sound.play('zombieGroan', 0.5);
     }
     this.meleeThink(dt, world, () => {
-      this.swipeFx(world);
+      this.swipeFx(world, '150, 200, 110');
       Sound.play('slash');
     });
   }

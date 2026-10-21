@@ -151,6 +151,38 @@ class PixelArt {
     return p.canvas;
   }
 
+  /**
+   * The house lighting on a finished sprite (in place): every coloured pixel on an
+   * upper-left edge catches the light, every one on a lower-right edge falls into
+   * shade, so flat shapes read as rounded, lit from the top-left. Outline pixels
+   * and transparency count as edges. Returns the canvas.
+   */
+  static bevel(canvas, { light = 0.32, shade = 0.72, outline = OUTLINE } = {}) {
+    const ctx = canvas.getContext('2d');
+    const { width: w, height: h } = canvas;
+    const img = ctx.getImageData(0, 0, w, h);
+    const d = img.data;
+    const src = new Uint8ClampedArray(d);
+    const o = parseInt(outline.slice(1), 16);
+    const isEdge = (x, y) => {
+      if (x < 0 || y < 0 || x >= w || y >= h) return true;
+      const i = (y * w + x) * 4;
+      return src[i + 3] < 128 || (src[i] === (o >> 16) && src[i + 1] === ((o >> 8) & 255) && src[i + 2] === (o & 255));
+    };
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (isEdge(x, y)) continue;
+        const lit = isEdge(x, y - 1) || isEdge(x - 1, y);
+        const dark = isEdge(x, y + 1) || isEdge(x + 1, y);
+        if (lit === dark) continue;
+        const i = (y * w + x) * 4;
+        for (let c = 0; c < 3; c++) d[i + c] = lit ? d[i + c] + (255 - d[i + c]) * light : d[i + c] * shade;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return canvas;
+  }
+
   /** White silhouette of a sprite, used for hit flashes. */
   static silhouette(source, color = '#ffffff') {
     const c = document.createElement('canvas');

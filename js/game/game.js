@@ -26,6 +26,7 @@ class Game {
     this.roster = opts.roster || [{ id: 'local', name: '', classId }];
     this.localId = opts.localId || this.roster[0].id;
     this.multiplayer = !!opts.roster;
+    this.showcase = !!opts.showcase;   // the main menu's backdrop fights (no HUD or name tags)
     this.players = [];
     // a run builds its own floors (FloorMap) and sets this.dungeon
     this.run = opts.run ? new DungeonRun(this, opts.run) : null;
@@ -441,8 +442,12 @@ class Game {
     this.boss = Game.createBoss(type, this.dungeon.center);
     this.boss.maxHp = Math.round(this.boss.maxHp * this.playerScale.hp);
     this.boss.hp = this.boss.maxHp;
-    this.banner(this.boss.name, this.boss.title, 3);
-    Sound.play('bossRoar');
+    const announce = () => {
+      this.banner(this.boss.name, this.boss.title, 3);
+      Sound.play('bossRoar');
+    };
+    if ('onReveal' in this.boss) this.boss.onReveal = announce;   // announced when its entrance reveals it
+    else announce();
   }
 
   static rollBoss() {
@@ -844,6 +849,11 @@ class Game {
     if (this.run) items.push(...this.run.getDrawables());
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.draw(ctx);
+    // a gloomy theme's darkness and fog fall over the world; spells, effects and flames stay bright on top
+    if (this.run) {
+      this.run.drawLighting(ctx, this.camera);
+      this.run.drawFog(ctx, this.camera);
+    }
 
     for (const p of this.playerProjectiles) p.draw(ctx);
     for (const p of this.enemyProjectiles) p.draw(ctx);
@@ -853,13 +863,13 @@ class Game {
     this.dungeon.drawTorches(ctx, this.time, this.camera);
     if (this.lobby) this.lobby.drawLighting(ctx, this.camera);   // night falls over the keep (under the prompts and names)
     if (this.lobby) this.lobby.drawPrompts(ctx);
-    if (this.multiplayer) this.drawNameTags(ctx);
+    if (this.multiplayer && !this.showcase) this.drawNameTags(ctx);
     if (this.boss) this.drawBossSleep(ctx);
     this.effects.drawTexts(ctx);
     ctx.restore();
 
     ctx.drawImage(this.vignette, 0, 0);
-    HUD.draw(ctx, this);
+    if (!this.showcase) HUD.draw(ctx, this);
   }
 
   /**

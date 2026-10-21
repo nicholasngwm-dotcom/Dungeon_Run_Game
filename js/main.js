@@ -15,37 +15,43 @@ const App = {
   game: null,
   classId: 'warrior',   // hero used in the lobby and runs (picked at a lobby statue)
   lastTime: 0,
-  menuTime: 0,
   practiceMode: false,
   lastRun: null,        // the dungeon run picked at the gate (null = test dungeon)
   mp: null,             // the multiplayer Session while in an online game
   // practice-range cheats, kept when switching hero
   practiceOptions: { god: false, infiniteMana: false, infiniteEnergy: false },
 
-  init() {
+  async init() {
     this.canvas = document.getElementById('game');
     this.ctx = this.canvas.getContext('2d');
     this.ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
     this.ctx.imageSmoothingEnabled = false;
     this.stage = document.getElementById('stage');
     this.practicePanel = document.getElementById('practice-panel');
+    // fit the stage to the window before anything else, so it's never shown small in a corner
+    Display.init(this.stage);
 
-    buildHeroSprites();
-    buildEnemySprites();
-    buildBossSprites();
-    buildPhantomSprites();
-    buildItemSprites();
-    buildGraveyardSprites();   // after the items: it adds to Sprites.projectiles
-    buildNpcSprites();
-    buildPropSprites();
-    buildPotionSprites();
-    buildIconSprites();
+    // the sprites take a moment to draw: one batch per frame, so the loader's fire keeps burning
+    const steps = [
+      ['Forging the heroes...', buildHeroSprites],
+      ['Raising the dead...', () => { buildEnemySprites(); buildBossSprites(); buildPhantomSprites(); }],
+      ['Sharpening the blades...', () => { buildItemSprites(); buildGraveyardSprites(); }],   // graveyard after the items: it adds to Sprites.projectiles
+      ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); }],
+      ['Brewing potions...', () => { buildPotionSprites(); buildIconSprites(); }],
+      ['Rehearsing the battles...', () => MenuShowcase.start(0)],
+    ];
+    const started = performance.now();
+    for (let i = 0; i < steps.length; i++) {
+      this.loading(steps[i][0], i / steps.length);
+      await new Promise((r) => setTimeout(r, 30));   // a timer, not a frame: keeps loading in a background tab
+      steps[i][1]();
+    }
+    this.loading('Ready!', 1);
+    await document.fonts?.ready;
+    await new Promise((r) => setTimeout(r, Math.max(0, 900 - (performance.now() - started))));
 
     Input.init(this.canvas);
     Menus.init(this);
-    this.menuDungeon = new CastleKeep();   // the main menu drifts over the keep the party calls home
-
-    Display.init(this.stage);
 
     // Browsers only allow audio after a user gesture.
     const unlock = () => {
@@ -61,6 +67,15 @@ const App = {
 
     this.applyDevShortcuts();
     requestAnimationFrame((t) => this.loop(t));
+    const loader = document.getElementById('loader');
+    loader.classList.add('done');
+    setTimeout(() => loader.remove(), 700);
+  },
+
+  /** Startup progress: the loader's label and bar (0-1). */
+  loading(text, k) {
+    document.getElementById('loader-text').textContent = text;
+    document.getElementById('loader-fill').style.width = `${Math.round(k * 100)}%`;
   },
 
   applyDevShortcuts() {
@@ -448,7 +463,8 @@ const App = {
       if (this.mp) this.drawNetStatus(this.ctx);
       if (this.state === 'playing' && !Input.freeMouse) HUD.drawCrosshair(this.ctx, Input.mouse.x, Input.mouse.y);
     } else {
-      this.renderMenuBackground(dt);
+      MenuShowcase.update(dt);
+      MenuShowcase.render(this.ctx);
     }
     Menus.drawPreviews(now / 1000);
     this.practicePanel.classList.toggle('hidden', !(this.state === 'playing' && this.game && this.game.practice));
@@ -479,20 +495,6 @@ const App = {
     ctx.strokeStyle = s.desync ? '#ff6a6a' : '#ffd34a';
     ctx.strokeRect(CONFIG.screen.width / 2 - 250 + 0.5, y0 - 9.5, 499, h - 1);
     lines.forEach((l, i) => HUD.text(ctx, l.text, CONFIG.screen.width / 2, y0 + i * 13, { size: l.size, align: 'center', color: l.color }));
-  },
-
-  /** Slow pan across the dungeon behind the menus. */
-  renderMenuBackground(dt) {
-    this.menuTime += dt;
-    const d = this.menuDungeon;
-    const ctx = this.ctx;
-    const x = (Math.sin(this.menuTime * 0.08) * 0.5 + 0.5) * (d.width - CONFIG.screen.width);
-    ctx.save();
-    const y = 60 + (Math.sin(this.menuTime * 0.05) * 0.5 + 0.5) * 260;
-    ctx.translate(-Math.round(x), -Math.round(y));
-    d.draw(ctx);
-    d.drawTorches(ctx, this.menuTime);
-    ctx.restore();
   },
 };
 

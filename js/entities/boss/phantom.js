@@ -13,6 +13,12 @@
 //  (x, y) is the ground point under the king; it hovers above it.
 // =============================================================
 
+// The entrance: a huge cloud of smoke streams into the room (inflow), circles the
+// middle in a tightening, quickening vortex, then blasts outward (burst) to reveal
+// the king, who can be fought from `total`. Seconds from the start.
+const PHANTOM_INTRO = { inflow: 1.4, burst: 3.0, total: 3.8 };
+const PHANTOM_INTRO_PUFFS = 36;
+
 class PhantomKing {
   constructor(x, y) {
     const c = CONFIG.phantom;
@@ -25,7 +31,10 @@ class PhantomKing {
     this.hover = 22;         // float height above the ground point
     this.time = 0;
     this.phase = 1;
-    this.intro = 2.4;
+    this.intro = PHANTOM_INTRO.total;
+    this.introAt = 0;        // seconds into the entrance
+    this.revealed = false;
+    this.onReveal = null;    // fn(), called when the smoke bursts (the run announces the boss then)
     this.dying = 0;
     this.dead = false;
     this.flashTime = 0;
@@ -100,13 +109,7 @@ class PhantomKing {
     this.time += dt;
     this.flashTime -= dt;
 
-    if (this.intro > 0) {
-      this.intro -= dt;
-      this.alpha = clamp(1 - this.intro / 2.4, 0, 1);
-      world.shake(2, 0.1);
-      if (Math.random() < 0.6) this.wisp(world, 70);
-      return;
-    }
+    if (this.intro > 0) return this.updateIntro(dt, world);
     this.updatePulseRings(dt, world);
     if (this.dying > 0) return this.updateDeath(dt, world);
 
@@ -575,6 +578,133 @@ class PhantomKing {
   }
 
   /** Spectral motes drifting up around the king. */
+  /**
+   * The entrance (see PHANTOM_INTRO and drawIntro): a wail as the smoke pours in,
+   * a rumble and a growing shake as it whirls round the middle, then the burst
+   * that reveals the king with a flash, a shockwave and his roar.
+   */
+  updateIntro(dt, world) {
+    const I = PHANTOM_INTRO;
+    const before = this.introAt;
+    this.introAt += dt;
+    this.intro = I.total - this.introAt;
+    const e = this.introAt;
+    const crossed = (at) => before < at && e >= at;
+    if (crossed(0.05)) Sound.play('ghostWail');
+    if (crossed(I.inflow)) Sound.play('graveRumble');
+    if (crossed(I.inflow + 0.8)) Sound.play('graveRumble');
+    if (e > I.inflow * 0.6 && e < I.burst) world.shake(1 + ((e - I.inflow * 0.6) / (I.burst - I.inflow * 0.6)) * 3, 0.1);
+    if (crossed(I.burst)) {
+      this.revealed = true;
+      this.alpha = 1;
+      world.shake(10, 0.45);
+      world.effects.burst(this.x, this.drawY - 40, { count: 50, colors: ['#4e2a86', '#9a78e0', '#c8b8ff', '#7af8ff'], speed: [120, 380], life: [0.4, 1], size: [2, 5] });
+      const x = this.x;
+      const y = this.y;
+      world.effects.add(0.7, (ctx, t) => {
+        const r = 30 + t * 260;
+        ctx.save();
+        ctx.globalAlpha = (1 - t) * 0.9;
+        PFX.ring(ctx, x, y, r, r * 0.6, '#c8b8ff', 2, { thick: t < 0.3 ? 4 : 2 });
+        ctx.globalCompositeOperation = 'lighter';
+        PFX.glow(ctx, x, y - 50, 90 * (1 - t) + 20, '200, 160, 255', 1.6 * (1 - t));
+        ctx.restore();
+      });
+      Sound.play('explosion');
+      if (this.onReveal) this.onReveal();
+      else Sound.play('bossRoar');
+    }
+    if (this.intro <= 0) this.intro = 0;
+  }
+
+  /** Where puff i of the entrance smoke is at intro time e: { x, y, r, a (alpha) }. */
+  introPuff(i, e) {
+    const I = PHANTOM_INTRO;
+    const n = PHANTOM_INTRO_PUFFS;
+    const cx = this.x;
+    const cy = this.y - 40;
+    const base = (i / n) * TAU;
+    const size = 26 + (i % 5) * 7;
+    const delay = (i / n) * (I.inflow - 0.55);
+    const travel = 0.55;
+    const arrive = delay + travel;
+    // the vortex tightens and quickens until the burst
+    const v = clamp((e - I.inflow) / (I.burst - I.inflow), 0, 1);
+    const R = 150 - v * v * 95;
+    // one shared spin for the whole vortex (so the puffs spread evenly round the ring), quickening
+    const orbit = (at) => {
+      const s = Math.max(0, at - I.inflow);
+      const ang = base + at * 2.2 + s * s * 2.6;
+      return { x: cx + Math.cos(ang) * R, y: cy + Math.sin(ang) * R * 0.5, ang };
+    };
+    if (e < arrive) {
+      // pouring in from far off along a swooping curve
+      const k = clamp((e - delay) / travel, 0, 1);
+      if (k <= 0) return null;
+      const ease = 1 - (1 - k) ** 2;
+      const from = { x: cx - 620, y: cy - 360 };
+      const to = orbit(arrive);
+      const ctrl = { x: cx - 120, y: cy - 340 };
+      const u = 1 - ease;
+      return {
+        x: u * u * from.x + 2 * u * ease * ctrl.x + ease * ease * to.x,
+        y: u * u * from.y + 2 * u * ease * ctrl.y + ease * ease * to.y,
+        r: size * (0.7 + ease * 0.3), a: Math.min(1, k * 3),
+      };
+    }
+    if (e < I.burst) {
+      const p = orbit(e);
+      return { x: p.x, y: p.y, r: size, a: 1 };
+    }
+    // the burst: every puff shoots straight out and thins away
+    const b = clamp((e - I.burst) / (I.total - I.burst), 0, 1);
+    const p = orbit(I.burst);
+    const out = 1 - (1 - b) ** 3;
+    return { x: p.x + Math.cos(p.ang) * out * 420, y: p.y + Math.sin(p.ang) * out * 210, r: size * (1 + b * 1.4), a: 1 - b };
+  }
+
+  /** The entrance smoke: violet-black billows, a glow building at the heart of the vortex, eyes opening in it. */
+  drawIntro(ctx) {
+    const I = PHANTOM_INTRO;
+    const e = this.introAt;
+    const cx = this.x;
+    const cy = this.y - 40;
+    const v = clamp((e - I.inflow) / (I.burst - I.inflow), 0, 1);
+    if (e < I.burst) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, cx, cy, 40 + v * 70, '150, 100, 255', 0.4 + v * 0.9, 2, (40 + v * 70) * 0.6);
+      ctx.restore();
+    }
+    const puffs = [];
+    for (let i = 0; i < PHANTOM_INTRO_PUFFS; i++) {
+      const p = this.introPuff(i, e);
+      if (p) puffs.push({ ...p, i });
+    }
+    puffs.sort((a, b) => a.y - b.y);
+    for (const p of puffs) {
+      ctx.save();
+      ctx.globalAlpha = 0.9 * p.a;
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, p.x, p.y, p.r * 1.3, '110, 70, 200', 0.25 * p.a, 2, p.r);
+      ctx.globalCompositeOperation = 'source-over';
+      PFX.smokeBlob(ctx, p.x, p.y, p.r, ['#2a1648', '#5a3a9a', '#9a7ad8'], this.time + p.i, p.i, 0.75 + 0.25 * p.a, 2);
+      ctx.restore();
+    }
+    // eyes opening in the heart of the vortex just before it bursts
+    const look = clamp((e - (I.burst - 0.7)) / 0.5, 0, 1);
+    if (look > 0 && e < I.burst) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const dx of [-7, 7]) {
+        PFX.glow(ctx, cx + dx, cy - 6, 10 * look, '120, 240, 255', look, 1);
+        ctx.fillStyle = `rgba(200, 255, 255, ${look})`;
+        ctx.fillRect(Math.round(cx + dx - 2), Math.round(cy - 6 - look * 2), 4, Math.max(1, Math.round(look * 4)));
+      }
+      ctx.restore();
+    }
+  }
+
   wisp(world, spread) {
     world.effects.burst(this.x + rand(-spread, spread), this.y + rand(-spread * 0.4, spread * 0.4), {
       count: 1, colors: ['#4e2a86', '#7048b4', '#c8b8ff'], speed: [5, 25], life: [0.5, 0.9], size: [2, 4], up: 50,
@@ -681,8 +811,10 @@ class PhantomKing {
   }
 
   getDrawables() {
-    if (this.dead || this.alpha <= 0) return [];
-    return [{ y: this.y, draw: (ctx) => this.drawKing(ctx) }];
+    const out = [];
+    if (this.dead || this.alpha <= 0) return out;
+    out.push({ y: this.y, draw: (ctx) => this.drawKing(ctx) });
+    return out;
   }
 
   drawKing(ctx) {
@@ -704,8 +836,44 @@ class PhantomKing {
     ctx.fillRect(x - r, y - 46 - r, r * 2, r * 2);
     ctx.restore();
 
+    // ethereal: smoky wisps trailing off beneath it, faint afterimages drifting out of
+    // step with it, and souls circling it (visual only)
+    const t = this.time;
+    const rgb = this.angry ? '200, 70, 200' : '120, 90, 230';
+    for (let i = 0; i < 4; i++) {
+      const s = (t * 0.6 + i * 0.25) % 1;
+      const wx = x + Math.sin(i * 2.1 + t * 1.3) * 18;
+      const wy = y - 18 + s * 22;
+      ctx.save();
+      ctx.globalAlpha = 0.28 * (1 - s) * this.alpha;
+      PFX.smokeBlob(ctx, wx, wy, 10 + s * 10, ['#1e0f34', '#33195a', '#4e2a86'], t + i, i, 0.8 - s * 0.4, 2);
+      ctx.restore();
+    }
+    for (const k of [-1, 1]) {
+      const ex = x + Math.sin(t * 1.7 + k) * 6 * k;
+      const ey = y + Math.cos(t * 1.3 + k) * 3;
+      drawSprite(ctx, frame.img, ex, ey, PHANTOM_SPRITE.ax, PHANTOM_SPRITE.ay, false, a * 0.16);
+    }
     drawSprite(ctx, frame.img, x, y, PHANTOM_SPRITE.ax, PHANTOM_SPRITE.ay, false, a);
     if (this.flashTime > 0) drawSprite(ctx, frame.flash, x, y, PHANTOM_SPRITE.ax, PHANTOM_SPRITE.ay, false, a * 0.8);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 6; i++) {
+      const ang = t * 1.4 + (i / 6) * TAU;
+      const sx = x + Math.cos(ang) * 50;
+      const sy = y - 50 + Math.sin(ang) * 18;
+      const front = Math.sin(ang) > 0;
+      PFX.glow(ctx, sx, sy, 7, rgb, (front ? 0.7 : 0.35) * this.alpha, 1);
+      ctx.fillStyle = `rgba(240, 220, 255, ${(front ? 0.9 : 0.4) * this.alpha})`;
+      ctx.fillRect(Math.round(sx) - 1, Math.round(sy) - 1, 2, 2);
+      // a short trail behind each soul
+      for (let k = 1; k <= 3; k++) {
+        const ta = ang - k * 0.12;
+        ctx.fillStyle = `rgba(${rgb}, ${0.3 * (1 - k / 4) * this.alpha})`;
+        ctx.fillRect(Math.round(x + Math.cos(ta) * 50), Math.round(y - 50 + Math.sin(ta) * 18), 1, 1);
+      }
+    }
+    ctx.restore();
 
     // eyes flare while a volley or barrage charges, and stay lit while a barrage fires
     const k = this.eyeCharge >= 0 ? clamp(this.eyeCharge / this.cfg.eyeWindup, 0, 1)
@@ -759,8 +927,9 @@ class PhantomKing {
     ctx.restore();
   }
 
-  /** Aim lines for the eye volley, above everything. */
+  /** Aim lines for the eye volley, above everything (and the entrance smoke, above the gloom). */
   drawOverlay(ctx) {
+    if (this.intro > 0) this.drawIntro(ctx);
     this.drawTether(ctx);
     if (this.eyeCharge < 0 || this.dying > 0) return;
     const c = this.cfg;

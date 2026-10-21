@@ -14,7 +14,7 @@ class UndeadKnight extends Enemy {
 
   think(dt, world) {
     this.meleeThink(dt, world, () => {
-      this.swipeFx(world, '#ff8080');
+      this.swipeFx(world, '255, 110, 110');
       world.shake(8, 0.3);
       Sound.play('heavySwing');
       const tipX = this.x + Math.cos(this.attackAngle) * this.cfg.attackReach * 0.8;

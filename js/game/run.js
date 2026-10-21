@@ -10,7 +10,7 @@
 const ROOM_INFO = {
   start: { name: 'Entrance', color: '#d8c8a0', desc: 'Where each stage begins. Safe: no enemies.' },
   combat: { name: 'Combat', color: '#e84a4a', desc: 'Doors lock. Defeat every wave of enemies to leave. Watch for spike traps.' },
-  defend: { name: 'Defend', color: '#6ad8ff', desc: 'Doors lock. Keep the lantern alive until the timer runs out. If it breaks, the defense starts over.' },
+  defend: { name: 'Defend', color: '#6ad8ff', desc: 'Doors lock. Keep the lantern alive until the timer runs out. The souls of slain enemies mend it. If it breaks, the defense starts over.' },
   survival: { name: 'Survival', color: '#ff8a1e', desc: 'Doors lock. Enemies keep coming: stay alive until the timer runs out.' },
   puzzle: { name: 'Puzzle', color: '#b67aff', desc: 'Puzzles are coming soon.' },
   shop: { name: 'Shop', color: '#ffd34a', desc: 'Two stores: pick an upgrade (or reroll) at the enchanter, buy potions from Mira.' },
@@ -76,6 +76,9 @@ const SPECIAL_INFO = {
   helper: { name: 'HELPER ROOM', color: '#8cff9a' },
 };
 
+// seconds a chest rattles before its lid bursts open (and the loot flies out)
+const CHEST_POP = 0.14;
+
 // puzzle rooms exist as places but don't lock (puzzles aren't designed yet)
 const LOCKING_ROOMS = ['combat', 'defend', 'survival', 'boss'];
 
@@ -129,7 +132,16 @@ class DungeonRun {
       this.addProps(r);
     }
     this.addSecretHole(f);
+    // swinging doors at both ends of every hallway (each room door knows its pair of leaves)
+    const leaves = [];
+    for (const r of f.rooms) for (const d of r.doors) { d.swing = leaves.length; leaves.push({ ...d.leaf, tiles: d.tiles }); }
+    // the graveyard's are creaking wrought-iron gates
+    const iron = this.themeId === 'graveyard';
+    this.doors = new SwingDoors(leaves, iron
+      ? { reach: 72, height: 70, edge: 8, style: 'iron', sounds: { open: 'gateCreak', shut: 'gateShut', slam: 'gateClang' } }
+      : { reach: 72, height: 64, edge: 10 });
     this.decor = new FloorDecor(f, this);
+    this.fog = this.theme.night ? this.placeFog(f) : [];
     const s = f.startRoom;
     s.state = 'cleared';
     this.visit(s);
@@ -198,19 +210,9 @@ class DungeonRun {
     this.updateSpikes(dt);
     this.updateProps(dt);
     this.decor.update(dt, w);
-    if (this.totem) this.totem.update(dt);
+    this.doors.update(dt, w);
+    if (this.totem) this.totem.update(dt, w);
     for (const p of w.players) p.coinFlash -= dt;
-    // the portal only works once every hero has stepped away from it (so it can't grab
-    // someone the moment it opens); then any hero stepping in takes the whole party
-    if (this.portal) {
-      const heroes = w.heroes;
-      if (heroes.every((p) => dist(p.x, p.y, this.portal.x, this.portal.y) > 50)) this.portal.armed = true;
-      if (this.portal.armed && heroes.some((p) => dist(p.x, p.y, this.portal.x, this.portal.y) < 26)) {
-        this.portal = null;
-        if (this.stage < 3) this.nextStage();
-        else this.victory();
-      }
-    }
   }
 
   /** Marks a room visited, and its neighbours as seen on the minimap (secret rooms stay hidden). */
@@ -239,7 +241,10 @@ class DungeonRun {
     this.active = r;
     r.state = 'active';
     f.activeRoom = r;
-    for (const d of r.doors) if (!d.secret) f.lock(d.tiles);
+    for (const d of r.doors) {
+      f.lock(d.tiles);
+      this.doors.doors[d.swing].locked = true;   // the doors slam shut
+    }
     for (const e of [...w.players, ...w.clones, ...w.enemies]) e.strayTime = 0;
     if (by) {
       let i = 0;
@@ -310,7 +315,10 @@ class DungeonRun {
     r.state = 'cleared';
     this.active = null;
     this.floor.activeRoom = null;
-    for (const d of r.doors) if (!d.secret) this.floor.unlock(d.tiles);
+    for (const d of r.doors) {
+      this.floor.unlock(d.tiles);
+      this.doors.doors[d.swing].locked = false;
+    }
     this.totem = null;
     Sound.play('waveStart');
     if (r.type !== 'boss') w.banner('ROOM CLEARED', 'A chest appeared', 1.6);
@@ -445,6 +453,7 @@ class DungeonRun {
    * spawners can't be farmed. Self-destructs (bombs, skulls) drop nothing.
    */
   onEnemyKilled(e) {
+    this.releaseSoul(e);
     const c = CONFIG.run.coins;
     if (e.exploded || e.cfg.coins === 0) return;
     let n;
@@ -454,6 +463,15 @@ class DungeonRun {
       n = Math.max(1, randInt(Math.floor(base * 0.7), Math.ceil(base * 1.3)));
     }
     if (n > 0) this.spawnCoins(e.x, e.y - 4, n);
+  }
+
+  /** Defend rooms: a slain enemy's soul flies into the lantern and mends it (tougher enemies mend more). */
+  releaseSoul(e) {
+    const t = this.totem;
+    if (!t || t.dead || e.exploded) return;
+    const c = CONFIG.run.defendSouls;
+    const tough = clamp((e.cfg.hp || e.maxHp) / c.soulRefHp, c.soulScale[0], c.soulScale[1]);
+    t.addSoul(e.hx, e.hy, t.maxHp * c.soulHeal * tough * (e.owner ? c.summonedSoul : 1));
   }
 
   // ---------- defend rooms: who enemies go after ----------
@@ -514,8 +532,8 @@ class DungeonRun {
       case 'boss':
         if (r.bossDown && !w.boss) {
           this.finish(r);
-          this.portal = { x: r.cx, y: r.cy, armed: false };
-          w.banner(`${r.bossName} DEFEATED`, this.stage < 3 ? 'Step into the portal to go deeper' : 'Step into the portal to escape', 3);
+          this.portal = { kind: 'portal', x: r.cx, y: r.cy, label: this.stage < 3 ? 'ENTER PORTAL' : 'ESCAPE' };
+          w.banner(`${r.bossName} DEFEATED`, this.stage < 3 ? 'Enter the portal to go deeper' : 'Enter the portal to escape', 3);
         }
         break;
     }
@@ -618,8 +636,13 @@ class DungeonRun {
     r.bossName = b.name;
     r.bossDown = false;
     Music.play('boss');
-    w.banner(b.name, `${b.title} - Stage ${this.stage}`, 3);
-    Sound.play('bossRoar');
+    const announce = () => {
+      w.banner(b.name, `${b.title} - Stage ${this.stage}`, 3);
+      Sound.play('bossRoar');
+    };
+    // a boss with an entrance (the Phantom King's smoke) is announced when it appears
+    if ('onReveal' in b) b.onReveal = announce;
+    else announce();
   }
 
   onBossDefeated() {
@@ -628,8 +651,23 @@ class DungeonRun {
       r.bossDown = true;
       const [lo, hi] = CONFIG.run.coins.boss;
       this.spawnCoins(r.cx, r.cy, randInt(lo, hi));
+      // a ring of hearts around where the portal will open, to patch up before going deeper
+      const n = CONFIG.run.bossHearts;
+      for (let i = 0; i < n; i++) {
+        const a = -Math.PI / 2 + (i / n) * TAU;
+        const pt = this.floor.freePoint(r.cx + Math.cos(a) * 70, r.cy + Math.sin(a) * 50, 6, 6);
+        this.world.pickups.push(new HeartPickup(pt.x, pt.y));
+      }
+      this.world.effects.burst(r.cx, r.cy - 10, { count: 24, colors: ['#ff5a6a', '#ffb0b8', '#ffffff'], speed: [60, 160], life: [0.3, 0.7], up: 40 });
     }
     Music.play('battle');
+  }
+
+  /** Someone used the portal: the whole party goes on to the next stage (or out, after the last). */
+  enterPortal() {
+    this.portal = null;
+    if (this.stage < 3) this.nextStage();
+    else this.victory();
   }
 
   // ---------- spike traps (combat rooms) ----------
@@ -757,16 +795,21 @@ class DungeonRun {
     const p = hero;
     p.nearProp = null;
     if (this.active || p.dead) return;
-    for (const pr of this.props) {
+    // the portal out of a beaten boss room waits for someone to step up and use it
+    if (this.portal && dist(p.x, p.y, this.portal.x, this.portal.y) < 48) p.nearProp = this.portal;
+    else for (const pr of this.props) {
       if (pr.opened) continue;
+      if (pr.kind === 'hole' && (pr.reveal || 0) < 1) continue;   // still under its trapdoor
       const reach = pr.kind === 'hole' || pr.kind === 'holeExit' ? dist(p.x, p.y, pr.x, pr.y) < 40 : dist(p.x, p.y, pr.x, pr.y + 10) < 44;
       if (reach) { p.nearProp = pr; break; }
     }
     const pr = p.nearProp;
     if (!pr || !Input.pressed('interact')) return;
     Input.consume('interact');
+    if (pr.kind === 'portal') return this.enterPortal();
     if (pr.kind === 'rewardChest') return this.openChest(pr);
     if (pr.kind === 'secretChest') return this.openSecretChest(pr);
+    if (pr.kind === 'chest') return this.openTreasureChest(pr);
     if (pr.kind === 'wishingWell') return this.wish(pr, p);
     if (pr.kind === 'hole') return this.descend(p);
     if (pr.kind === 'holeExit') return this.ascend(p);
@@ -781,17 +824,49 @@ class DungeonRun {
   /** Opened chests animate their lid. */
   updateProps(dt = 0) {
     for (const pr of this.props) if (pr.opened) pr.t += dt;
+    // the secret hole stays under its trapdoor until its room is cleared, then the trapdoor scrapes aside
+    const h = this.hole;
+    if (h && h.room.state === 'cleared' && (h.reveal || 0) < 1) {
+      if (!h.reveal) {
+        const w = this.world;
+        w.effects.burst(h.x, h.y - 4, { count: 22, colors: ['#8a7a6a', '#6a5a48', '#fff6c8'], speed: [30, 110], life: [0.4, 0.9], up: 30 });
+        w.effects.smoke(h.x + 20, h.y - 6, { count: 6, radius: 18, life: 0.8, rise: 16 });
+        Sound.play('graveRumble');
+      }
+      h.reveal = Math.min(1, (h.reveal || 0) + dt / 0.9);
+    }
+  }
+
+  /**
+   * Opens a chest: it rattles, then (CHEST_POP later) the lid bursts open with a
+   * flash, a puff of sparkles and a little shake, and loot() spills out.
+   */
+  chestPop(pr, loot, colors = ['#ffd34a', '#fff2a0', '#ffffff']) {
+    const w = this.world;
+    pr.opened = true;
+    pr.t = 0;
+    Sound.play('bounce', 0.05);
+    w.after(CHEST_POP, () => {
+      w.effects.burst(pr.x, pr.y - 16, { count: 36, colors, speed: [70, 200], life: [0.3, 0.8], up: 80, size: [1, 3] });
+      w.effects.add(0.35, (ctx, t) => {
+        ctx.save();
+        ctx.globalAlpha = 1 - t;
+        PFX.ring(ctx, pr.x, pr.y - 6, 12 + t * 40, (12 + t * 40) * 0.45, colors[1], 2, { thick: t < 0.3 ? 2 : 1 });
+        ctx.restore();
+      });
+      w.shake(2, 0.12);
+      Sound.play('chestOpen');
+      loot();
+    });
   }
 
   openChest(pr) {
     const w = this.world;
-    pr.opened = true;
-    pr.t = 0;
-    // 5 coins for every hero in the party
-    this.spawnCoins(pr.x, pr.y - 12, CONFIG.run.coins.roomChest * this.world.players.length);
-    w.effects.burst(pr.x, pr.y - 14, { count: 30, colors: ['#ffd34a', '#fff2a0', '#ffffff'], speed: [60, 180], life: [0.3, 0.7], up: 60 });
-    w.effects.text(pr.x, pr.y - 40, `+${CONFIG.run.coins.roomChest} COINS`, { color: '#ffd34a', size: 9, life: 1.2 });
-    Sound.play('chestOpen');
+    this.chestPop(pr, () => {
+      // 5 coins for every hero in the party
+      this.spawnCoins(pr.x, pr.y - 12, CONFIG.run.coins.roomChest * w.players.length);
+      w.effects.text(pr.x, pr.y - 40, `+${CONFIG.run.coins.roomChest} COINS`, { color: '#ffd34a', size: 9, life: 1.2 });
+    });
   }
 
   /**
@@ -823,17 +898,41 @@ class DungeonRun {
       Sound.play('windup');
       return;
     }
-    w.effects.burst(pr.x, pr.y - 14, { count: 30, colors: ['#fff6c8', '#ffd34a', '#ffffff'], speed: [60, 180], life: [0.3, 0.7], up: 60 });
-    Sound.play('chestOpen');
-    if (Math.random() < 0.5) {
-      const n = randInt(c.coins[0], c.coins[1]);
-      this.spawnCoins(pr.x, pr.y - 12, n);
-      w.effects.text(pr.x, pr.y - 44, `+${n} COINS`, { color: '#ffd34a', size: 9, life: 1.2 });
-    } else {
+    this.chestPop(pr, () => {
+      if (Math.random() < 0.5) {
+        const n = randInt(c.coins[0], c.coins[1]);
+        this.spawnCoins(pr.x, pr.y - 12, n);
+        w.effects.text(pr.x, pr.y - 44, `+${n} COINS`, { color: '#ffd34a', size: 9, life: 1.2 });
+      } else {
+        const n = randInt(c.potions[0], c.potions[1]);
+        this.spawnPotions(pr.x, pr.y, n, () => choose(Object.keys(POTIONS)));
+        w.effects.text(pr.x, pr.y - 44, `${n} POTIONS!`, { color: '#ff8aa0', size: 9, life: 1.2 });
+      }
+    }, ['#fff6c8', '#d8c8ff', '#ffffff']);
+  }
+
+  /** Treasure room chest: a pile of coins, or a handful of healing potions (mostly the small ones). */
+  openTreasureChest(pr) {
+    const w = this.world;
+    const c = CONFIG.run.treasure;
+    this.chestPop(pr, () => {
+      if (Math.random() >= c.potionChance) {
+        const n = randInt(c.coins[0], c.coins[1]);
+        this.spawnCoins(pr.x, pr.y - 12, n);
+        w.effects.text(pr.x, pr.y - 44, `+${n} COINS`, { color: '#ffd34a', size: 9, life: 1.2 });
+        return;
+      }
+      const heals = Object.values(POTIONS).filter((p) => p.family === 'heal');
+      const total = heals.reduce((s, p) => s + (c.healTierWeights[p.tier - 1] || 0), 0);
+      const pick = () => {
+        let r = Math.random() * total;
+        for (const p of heals) if ((r -= c.healTierWeights[p.tier - 1] || 0) < 0) return p.id;
+        return heals[0].id;
+      };
       const n = randInt(c.potions[0], c.potions[1]);
-      this.spawnPotions(pr.x, pr.y, n, () => choose(Object.keys(POTIONS)));
-      w.effects.text(pr.x, pr.y - 44, `${n} POTIONS!`, { color: '#ff8aa0', size: 9, life: 1.2 });
-    }
+      this.spawnPotions(pr.x, pr.y, n, pick);
+      w.effects.text(pr.x, pr.y - 44, `${n} HEALING POTIONS!`, { color: '#ff8aa0', size: 9, life: 1.2 });
+    });
   }
 
   /** Potions spill out in front of a spot, one pickup each; pick(i) chooses each potion's id. */
@@ -903,7 +1002,9 @@ class DungeonRun {
       }
     }
     if (this.totem) items.push({ y: this.totem.y, draw: (ctx) => this.totem.draw(ctx) });
+    if (this.totem && this.totem.souls.length) items.push({ y: this.totem.y + 1000, draw: (ctx) => this.totem.drawSouls(ctx) });
     items.push(...this.decor.getDrawables(this.world.camera));
+    items.push(...this.doors.drawables(this.world.camera));
     return items;
   }
 
@@ -934,26 +1035,6 @@ class DungeonRun {
         }
       }
     }
-    // locked doors: iron bars
-    if (this.active) {
-      for (const d of this.active.doors) {
-        if (d.secret) continue;
-        for (const t of d.tiles) {
-          const x = (t % this.floor.cols) * T;
-          const y = Math.floor(t / this.floor.cols) * T;
-          ctx.fillStyle = 'rgba(10, 6, 18, 0.6)';
-          ctx.fillRect(x, y, T, T);
-          ctx.fillStyle = OUTLINE;
-          ctx.fillRect(x, y + 2, T, 4);
-          ctx.fillRect(x, y + T - 6, T, 4);
-          for (let i = 0; i < 4; i++) ctx.fillRect(x + 3 + i * 8, y, 4, T);
-          ctx.fillStyle = '#80869a';
-          ctx.fillRect(x, y + 3, T, 2);
-          for (let i = 0; i < 4; i++) ctx.fillRect(x + 4 + i * 8, y, 2, T);
-        }
-      }
-    }
-
     if (this.portal) this.drawPortal(ctx);
   }
 
@@ -975,7 +1056,9 @@ class DungeonRun {
     ctx.fillStyle = g;
     ctx.fillRect(x - 40, y - 40, 80, 80);
     ctx.restore();
-    HUD.text(ctx, this.stage < 3 ? 'NEXT STAGE' : 'EXIT', x, y - 46, { size: 7, align: 'center', color: '#e0c0ff' });
+    const near = this.world.localPlayer.nearProp === this.portal;
+    if (near) HUD.text(ctx, `[${Settings.label('interact')}] ${this.portal.label}`, x, y - 50, { size: 8, align: 'center', color: '#ffe680' });
+    else HUD.text(ctx, this.stage < 3 ? 'NEXT STAGE' : 'EXIT', x, y - 46, { size: 7, align: 'center', color: '#e0c0ff' });
   }
 
   /** Placeholder props: a simple stand per kind, with a label. */
@@ -1045,37 +1128,13 @@ class DungeonRun {
         }
         break;
       }
+      case 'chest':          // treasure room chests
       case 'rewardChest':
       case 'secretChest': {
         if (pr.gone) return;   // it was a mimic
-        const secret = pr.kind === 'secretChest';
-        const lift = pr.opened && !pr.sealed ? Math.min(1, pr.t * 6) : 0;
-        if (secret && !pr.opened) drawGlints(ctx, [[x - 10, y - 22], [x + 11, y - 14], [x + 3, y - 26]], this.time + x * 0.01);
-        if (pr.opened && !pr.sealed && pr.t < 1.5) {
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          const g = ctx.createRadialGradient(x, y - 14, 2, x, y - 14, 40);
-          g.addColorStop(0, `rgba(255, 220, 120, ${0.6 * (1 - pr.t / 1.5)})`);
-          g.addColorStop(1, 'rgba(255, 220, 120, 0)');
-          ctx.fillStyle = g;
-          ctx.fillRect(x - 40, y - 54, 80, 80);
-          ctx.restore();
-        }
-        // secret chests: dark violet wood with silver trim
-        const trim = secret ? '#cfc7e8' : '#dcb44c';
+        if ((pr.kind === 'secretChest' || pr.kind === 'chest') && !pr.opened) drawGlints(ctx, [[x - 10, y - 22], [x + 11, y - 14], [x + 3, y - 26]], this.time + x * 0.01);
         if (pr.sealed) ctx.globalAlpha = 0.55;
-        box(28, 14, secret ? '#4a3a5e' : '#7d532f', secret ? '#2e2440' : '#5b3922');
-        ctx.fillStyle = trim;
-        ctx.fillRect(x - 14, y - 9, 28, 2);
-        // the lid tips back when opened
-        const ly = y - 14 - lift * 8;
-        ctx.fillStyle = OUTLINE;
-        ctx.fillRect(x - 15, ly - 10 + lift * 4, 30, 11 - lift * 4);
-        ctx.fillStyle = secret ? '#5c4a74' : '#9c6c3e';
-        ctx.fillRect(x - 14, ly - 9 + lift * 4, 28, 9 - lift * 4);
-        ctx.fillStyle = trim;
-        ctx.fillRect(x - 14, ly - 2, 28, 2);
-        if (!pr.opened || pr.sealed) ctx.fillRect(x - 2, y - 17, 4, 6);
+        this.drawChest(ctx, pr, x, y);
         ctx.globalAlpha = 1;
         if (pr.sealed) {
           // chained shut
@@ -1090,13 +1149,28 @@ class DungeonRun {
         }
         break;
       }
-      case 'chest':
-        drawProp(ctx, 'chest', x, y + 2);
-        drawGlints(ctx, [[x - 8, y - 18], [x + 9, y - 10], [x + 2, y - 22]], this.time + x * 0.01);
-        break;
       case 'puzzle': {
-        // a rune-carved stone tablet with runes glowing in turn
-        box(26, 34, '#78738a', '#5c586c');
+        // a weathered rune stone with an arched top, moss at its foot and runes glowing in turn
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(x - 14, y - 32, 28, 34);
+        ctx.fillRect(x - 11, y - 36, 22, 4);
+        ctx.fillStyle = '#6e6c80';
+        ctx.fillRect(x - 13, y - 31, 26, 32);
+        ctx.fillRect(x - 10, y - 35, 20, 4);
+        ctx.fillStyle = '#9492a8';
+        ctx.fillRect(x - 10, y - 35, 20, 1);
+        ctx.fillRect(x - 13, y - 31, 1, 30);
+        ctx.fillStyle = '#56546a';
+        ctx.fillRect(x + 11, y - 31, 2, 32);
+        ctx.fillRect(x - 13, y - 1, 26, 2);
+        ctx.fillStyle = '#3e3c4c';
+        ctx.fillRect(x + 4, y - 30, 1, 6);
+        ctx.fillRect(x + 5, y - 24, 1, 4);
+        ctx.fillStyle = '#4e6e44';
+        ctx.fillRect(x - 13, y - 4, 8, 4);
+        ctx.fillRect(x + 6, y - 3, 7, 3);
+        ctx.fillStyle = '#6a8e58';
+        ctx.fillRect(x - 12, y - 5, 3, 1);
         for (let i = 0; i < 3; i++) {
           const on = Math.floor(this.time * 1.5) % 3 === i;
           ctx.fillStyle = on ? '#e0c0ff' : '#9a6ae0';
@@ -1124,6 +1198,110 @@ class DungeonRun {
     this.drawPropLabel(ctx, pr);
   }
 
+  /**
+   * A chest (bottom centre at x, y) and its opening: a quick rattle, then the lid
+   * flies open with an overshoot as the box squashes and springs back, light pours
+   * out of it in rays, sparkles drift up, and the mouth glows gold before going
+   * dark. Reward chests are oak with gold bands, secret chests violet with silver.
+   */
+  drawChest(ctx, pr, x, y) {
+    const secret = pr.kind === 'secretChest';
+    const wood = secret ? ['#2e2440', '#4a3a5e', '#5c4a74'] : ['#5b3922', '#7d532f', '#9c6c3e'];
+    const trim = secret ? '#cfc7e8' : '#dcb44c';
+    const trimD = secret ? '#8a82a8' : '#a07a24';
+    const t = pr.opened && !pr.sealed ? pr.t : -1;
+    const P = CHEST_POP;
+    // rattle, then squash-and-stretch as the lid bursts open
+    let dx = 0;
+    let sy = 1;
+    if (t >= 0 && t < P) dx = Math.round(Math.sin(t * 95) * 2);
+    else if (t >= P && t < P + 0.3) {
+      const u = (t - P) / 0.3;
+      sy = 1 - Math.sin(u * Math.PI * 2) * 0.1 * (1 - u);
+    }
+    // how far the lid is open: eased out with an overshoot
+    let k = 0;
+    if (t >= P) {
+      const u = Math.min(1, (t - P) / 0.22);
+      const c = 2.2;
+      k = 1 + (c + 1) * (u - 1) ** 3 + c * (u - 1) ** 2;
+    } else if (t >= 0) k = Math.max(0, Math.sin(t * 60)) * 0.08;   // the lid jumps on its hinge
+    const glow = t >= P ? Math.max(0, 1 - (t - P) / 1.6) : 0;
+    // light pouring up out of the chest
+    if (glow > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const rgb = secret ? '210, 190, 255' : '255, 225, 130';
+      for (let i = 0; i < 7; i++) {
+        const a = -Math.PI / 2 + (i - 3) * 0.26 + Math.sin(this.time * 2 + i) * 0.04;
+        const len = (40 + (i % 3) * 14) * Math.min(1, (t - P) * 6) * (0.4 + glow * 0.6);
+        const w = 4 + (i % 2) * 3;
+        ctx.fillStyle = `rgba(${rgb}, ${0.22 * glow})`;
+        ctx.beginPath();
+        ctx.moveTo(x - w, y - 16);
+        ctx.lineTo(x + w, y - 16);
+        ctx.lineTo(x + Math.cos(a) * len + Math.cos(a + Math.PI / 2) * w * 2, y - 16 + Math.sin(a) * len);
+        ctx.lineTo(x + Math.cos(a) * len - Math.cos(a + Math.PI / 2) * w * 2, y - 16 + Math.sin(a) * len);
+        ctx.closePath();
+        ctx.fill();
+      }
+      PFX.glow(ctx, x, y - 16, 40, rgb, 0.9 * glow, 2, 26);
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.translate(x + dx, y);
+    ctx.scale(1 + (1 - sy) * 0.6, sy);
+    const R = (px, py, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(px, py, w, h); };
+    const ok = Math.min(1.15, k);
+    if (ok >= 0.5) {
+      // swung open: the lid stands up from its hinge at the back, its underside facing us
+      const h = Math.round(6 + ok * 9);
+      R(-15, -16 - h, 30, h + 1, OUTLINE);
+      R(-14, -15 - h, 28, h - 1, wood[0]);
+      R(-14, -15 - h, 28, 2, trimD);
+      R(-12, -12 - h, 24, h - 4, secret ? '#3a2e4c' : '#4a2e1c');
+    }
+    // the box: planks, gold bands at the corners, a lock plate
+    R(-15, -16, 30, 17, OUTLINE);
+    R(-14, -15, 28, 15, wood[1]);
+    R(-14, -15, 28, 2, wood[2]);
+    R(-14, -2, 28, 2, wood[0]);
+    R(-6, -14, 1, 12, wood[0]);
+    R(5, -14, 1, 12, wood[0]);
+    R(-14, -15, 3, 15, trimD);
+    R(11, -15, 3, 15, trimD);
+    R(-14, -15, 1, 15, trim);
+    R(11, -15, 1, 15, trim);
+    // the open mouth: glowing gold at first, then the dark, empty inside
+    if (k > 0.05) {
+      R(-13, -18, 26, 4, glow > 0 ? (secret ? '#e8dcff' : '#fff2a0') : '#1e140e');
+      if (glow > 0) R(-13, -15, 26, 1, secret ? '#b8a8e8' : '#ffd34a');
+    }
+    // the lid while shut (or just starting to lift): a rounded front with a band and the lock
+    if (ok < 0.5) {
+      const lidH = Math.round(11 - ok * 8);
+      const lidY = Math.round(-26 - ok * 9);
+      R(-15, lidY, 30, lidH + 1, OUTLINE);
+      R(-14, lidY + 1, 28, lidH - 1, wood[2]);
+      R(-14, lidY + 1, 28, 2, secret ? '#7a6898' : '#b8844c');
+      R(-14, lidY + lidH - 3, 28, 2, trim);
+      R(-2, lidY + lidH - 5, 4, 6, trim);
+      R(-1, lidY + lidH - 3, 2, 2, OUTLINE);
+    }
+    ctx.restore();
+    // sparkles drifting up out of it
+    if (glow > 0) {
+      for (let i = 0; i < 8; i++) {
+        const s = ((t - P) * 0.9 + i * 0.13) % 1;
+        const sx = x + Math.sin(i * 2.7 + s * 4) * (6 + s * 14);
+        const syy = y - 18 - s * 46;
+        const a = (1 - s) * glow;
+        ctx.fillStyle = `rgba(255, 245, 200, ${a})`;
+        ctx.fillRect(Math.round(sx), Math.round(syy), i % 3 ? 1 : 2, i % 3 ? 1 : 2);
+      }
+    }
+  }
+
   /** The prop's name, or "[E] ..." when the local hero can use it. */
   drawPropLabel(ctx, pr) {
     const x = Math.round(pr.x);
@@ -1131,7 +1309,7 @@ class DungeonRun {
     if (pr.opened) return;
     const near = this.world.localPlayer.nearProp === pr;
     const npc = ['shopkeeper', 'chef', 'enchanter', 'restaurant5'].includes(pr.kind);
-    const labelY = npc || Scenes[pr.kind] ? y - 86 : pr.kind === 'rewardChest' || pr.kind === 'secretChest' ? y - 36 : y - 62;
+    const labelY = npc || Scenes[pr.kind] ? y - 86 : pr.kind === 'rewardChest' || pr.kind === 'secretChest' || pr.kind === 'chest' ? y - 36 : y - 62;
     let label = near && npc ? 'TALK' : pr.label;
     if (pr.kind === 'wishingWell') {
       const st = pr.wishes?.[this.world.localPlayer.netId || 'solo'];
@@ -1152,10 +1330,11 @@ class DungeonRun {
     const y = Math.round(pr.y);
     const t = this.time;
     const pulse = 0.5 + Math.sin(t * 3) * 0.25;
+    const shown = pr.kind === 'hole' ? pr.reveal || 0 : 1;   // how far the trapdoor has slid off it
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     const g = ctx.createRadialGradient(x, y, 4, x, y, 60);
-    g.addColorStop(0, `rgba(255, 220, 140, ${0.25 * pulse + 0.1})`);
+    g.addColorStop(0, `rgba(255, 220, 140, ${(0.25 * pulse + 0.1) * shown})`);
     g.addColorStop(1, 'rgba(255, 220, 140, 0)');
     ctx.fillStyle = g;
     ctx.fillRect(x - 60, y - 60, 120, 120);
@@ -1193,14 +1372,151 @@ class DungeonRun {
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.ellipse(x, y, 18, 8, 0, 0, TAU); ctx.stroke();
     }
+    if (pr.kind === 'hole' && shown < 1.01) this.drawTrapdoor(ctx, x, y, shown);
     // sparks drifting up
     for (let i = 0; i < 5; i++) {
       const s = (t * 0.5 + i * 0.2) % 1;
-      ctx.fillStyle = `rgba(255, 230, 150, ${1 - s})`;
+      ctx.fillStyle = `rgba(255, 230, 150, ${(1 - s) * shown})`;
       ctx.fillRect(Math.round(x + Math.sin(i * 2.3 + t) * 12), Math.round(y - s * 50), 2, 2);
     }
     const near = this.world.localPlayer.nearProp === pr;
     if (near) HUD.text(ctx, `[${Settings.label('interact')}] ${pr.label}`, x, y - 40, { size: 7, align: 'center', color: '#ffe680' });
+  }
+
+  /**
+   * The wooden trapdoor over the secret hole: oak planks with two iron straps and a
+   * ring pull. k = 0 sits over the hole; as the room is cleared it scrapes aside
+   * (eased, lifting a touch as it goes) and comes to rest beside the hole.
+   */
+  drawTrapdoor(ctx, x, y, k) {
+    const e = k * k * (3 - 2 * k);
+    const ox = Math.round(x + e * 58);
+    const oy = Math.round(y + e * 6 - Math.sin(k * Math.PI) * 3);
+    drawShadow(ctx, ox, oy + 3, 26, 9, 0.35);
+    // the round hatch: an outline, then planks clipped to it
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(ox, oy, 27, 14, 0, 0, TAU);
+    ctx.fillStyle = OUTLINE;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(ox, oy, 25, 12, 0, 0, TAU);
+    ctx.clip();
+    const planks = ['#7d532f', '#8a5c34', '#74502c', '#86582f'];
+    for (let i = 0; i < 6; i++) {
+      const px = ox - 25 + i * 9;
+      ctx.fillStyle = planks[i % planks.length];
+      ctx.fillRect(px, oy - 12, 9, 24);
+      ctx.fillStyle = '#9c6c3e';
+      ctx.fillRect(px, oy - 12, 1, 24);
+      ctx.fillStyle = '#4a2e1c';
+      ctx.fillRect(px + 8, oy - 12, 1, 24);
+    }
+    ctx.fillStyle = 'rgba(30, 16, 8, 0.35)';
+    ctx.fillRect(ox - 25, oy + 6, 50, 6);   // shaded lower edge
+    // two iron straps with rivets
+    for (const sy of [-6, 4]) {
+      ctx.fillStyle = '#363a46';
+      ctx.fillRect(ox - 25, oy + sy, 50, 3);
+      ctx.fillStyle = '#80869a';
+      ctx.fillRect(ox - 25, oy + sy, 50, 1);
+      for (let rx = -18; rx <= 18; rx += 12) { ctx.fillStyle = '#c9d3dd'; ctx.fillRect(ox + rx, oy + sy + 1, 1, 1); }
+    }
+    ctx.restore();
+    // the ring pull
+    ctx.strokeStyle = OUTLINE;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(ox + 12, oy - 1, 4, 3, 0, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = '#d4ac4c';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // ---------- gloom and fog (themes with `night`) ----------
+
+  /** Where fog lies on this floor: a few low banks in every room and hallway (visual only). */
+  placeFog(f) {
+    const T = f.T;
+    const out = [];
+    const bank = (x, y) => out.push({ x, y, r: vrand(46, 84), seed: vrand(0, 100), drift: vrand(20, 60), speed: vrand(0.05, 0.12) });
+    for (const r of f.rooms) {
+      if (r.type === 'secret') continue;
+      const n = Math.round(((r.x1 - r.x0) * (r.y1 - r.y0)) / 110);
+      for (let i = 0; i < n; i++) bank((vrand(r.x0 + 1, r.x1)) * T, (vrand(r.y0 + 1, r.y1)) * T);
+    }
+    for (const l of f.links) {
+      const a = f.rooms[l.a];
+      const b = f.rooms[l.b];
+      if (vrand(0, 1) < 0.7) bank((a.cx + b.cx) / 2, (a.cy + b.cy) / 2);
+    }
+    return out;
+  }
+
+  /** Every light on the floor, for the gloom: { x, y, r, s, rgb } (see Lighting). */
+  lights() {
+    const t = this.time;
+    const f = this.floor;
+    const out = [];
+    for (const tr of f.torches) {
+      const k = Math.sin(t * 12 + tr.seed) * 0.5 + Math.sin(t * 23 + tr.seed * 2) * 0.5;
+      out.push({ x: tr.x, y: tr.y + 24, r: 150 + k * 8, s: 0.95, rgb: '255, 150, 60' });
+    }
+    for (const d of this.decor.items) {
+      const flick = Math.sin(t * 9 + d.seed);
+      if (d.kind === 'lampPost') out.push({ x: d.x, y: d.y - 40, r: 150 + flick * 5, s: 0.95, rgb: d.warm ? '255, 200, 110' : '110, 255, 170' });
+      else if (d.kind === 'candles') out.push({ x: d.x, y: d.y - 8, r: 74 + flick * 4, s: 0.8, rgb: '255, 190, 90' });
+      else if (d.kind === 'campfire') out.push({ x: d.x, y: d.y - 10, r: 200 + flick * 10, s: 1, rgb: '255, 150, 60' });
+      else if (d.kind === 'prop' && (d.name === 'candelabra' || d.name === 'cauldron')) out.push({ x: d.x, y: d.y - 24, r: 90, s: 0.85, rgb: d.name === 'cauldron' ? '140, 255, 140' : '255, 190, 90' });
+    }
+    for (const pr of this.props) {
+      if (pr.kind === 'hole' || pr.kind === 'holeExit') { if (pr.kind === 'holeExit' || pr.reveal > 0) out.push({ x: pr.x, y: pr.y, r: 110 * (pr.kind === 'hole' ? pr.reveal : 1), s: 0.85, rgb: '255, 220, 140' }); }
+      else if (pr.kind === 'rewardChest' || pr.kind === 'secretChest' || pr.kind === 'chest') out.push({ x: pr.x, y: pr.y - 10, r: 70, s: 0.6, rgb: '255, 210, 120' });
+      else if (!pr.opened) out.push({ x: pr.x, y: pr.y - 30, r: 150, s: 0.85, rgb: '255, 200, 120' });   // shops, special rooms
+    }
+    if (this.portal) out.push({ x: this.portal.x, y: this.portal.y, r: 190, s: 1, rgb: '180, 90, 255' });
+    if (this.totem) out.push({ x: this.totem.x, y: this.totem.y - 24, r: 180, s: 1, rgb: '106, 216, 255' });
+    for (const s of this.spikes) if (this.spikeState(s) === 1) out.push({ x: s.x + 16, y: s.y + 16, r: 30, s: 0.3 });
+    const w = this.world;
+    if (w.boss) out.push({ x: w.boss.x, y: w.boss.y - 40, r: 130, s: 0.6, rgb: '200, 120, 255' });
+    // each hero carries a little light; spells and souls in flight glow as they go
+    for (const p of w.players) if (!p.dead) out.push({ x: p.x, y: p.y - 16, r: 130, s: 0.7 });
+    for (const p of w.playerProjectiles) out.push({ x: p.x, y: p.y, r: 44, s: 0.55 });
+    for (const p of w.enemyProjectiles) out.push({ x: p.x, y: p.y, r: 36, s: 0.5, rgb: '255, 120, 110' });
+    if (this.totem) for (const s of this.totem.souls) out.push({ x: s.x, y: s.y, r: 40, s: 0.7, rgb: '106, 216, 255' });
+    return out;
+  }
+
+  /** The gloom: cold night darkness with every torch, lamp, candle and spell glowing out of it. */
+  drawLighting(ctx, cam) {
+    const night = this.theme.night;
+    if (!night) return;
+    Lighting.draw(ctx, cam, this.lights(), { dark: night.dark, color: night.color, bloom: 0.32 });
+  }
+
+  /**
+   * Low banks of fog lying over the graveyard (like Terraria's graveyard mist):
+   * soft, pale, slowly drifting and breathing, a touch brighter where light falls.
+   */
+  drawFog(ctx, cam) {
+    if (!this.fog.length) return;
+    const t = this.time;
+    ctx.save();
+    for (const b of this.fog) {
+      const x = b.x + Math.sin(t * b.speed + b.seed) * b.drift;
+      const y = b.y + Math.sin(t * b.speed * 0.7 + b.seed * 2) * 10;
+      if (x < cam.x - b.r * 2 || x > cam.x + cam.width + b.r * 2 || y < cam.y - b.r || y > cam.y + cam.height + b.r) continue;
+      const breathe = 0.6 + 0.4 * Math.sin(t * 0.4 + b.seed);
+      ctx.globalAlpha = 0.16 * breathe;
+      // a bank is a few wide, flat billows side by side
+      for (let i = -1; i <= 1; i++) {
+        ctx.save();
+        ctx.translate(x + i * b.r * 0.8, y + Math.abs(i) * 4);
+        ctx.scale(1, 0.42);
+        PFX.smokeBlob(ctx, 0, 0, b.r * (1 - Math.abs(i) * 0.25), ['#7a8c90', '#a8b8b8', '#d4e0dc'], t * 0.15 + i, b.seed + i, 0.9, 4);
+        ctx.restore();
+      }
+    }
+    ctx.restore();
   }
 
   /** Top-right: theme + stage, the room objective, and the minimap. */
@@ -1214,7 +1530,7 @@ class DungeonRun {
   objectiveText() {
     const r = this.active;
     const w = this.world;
-    if (this.portal) return 'STEP INTO THE PORTAL';
+    if (this.portal) return 'ENTER THE PORTAL';
     if (!r) return '';
     switch (r.type) {
       case 'combat': return `DEFEAT ALL ENEMIES  WAVE ${r.wave}/${r.waves}`;
@@ -1225,37 +1541,70 @@ class DungeonRun {
     return '';
   }
 
+  /**
+   * The minimap (scaled by the Minimap size setting): seen rooms and the hallways
+   * between them, the room or hallway the hero is in highlighted, and a dot for
+   * each hero at their real position. The secret room never shows on it.
+   */
   drawMinimap(ctx, right, top) {
     const f = this.floor;
     const g = CONFIG.run.grid;
-    const cw = 20;
-    const ch = 15;
+    const s = Settings.data.minimapSize || 1.4;
+    const cw = Math.round(20 * s);
+    const ch = Math.round(15 * s);
+    const bw = Math.round(16 * s);
+    const bh = Math.round(12 * s);
+    const hall = Math.max(2, Math.round(2 * s));
+    const iconPx = s >= 1.75 ? 2 : 1;
     const left = right - g.cols * cw;
-    ctx.fillStyle = 'rgba(10, 6, 18, 0.55)';
+    ctx.fillStyle = 'rgba(10, 6, 18, 0.6)';
     ctx.fillRect(left - 4, top - 4, g.cols * cw + 8, g.rows * ch + 8);
+    ctx.strokeStyle = 'rgba(160, 122, 36, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(left - 4.5, top - 4.5, g.cols * cw + 9, g.rows * ch + 9);
     const pos = (r) => ({ x: left + r.gx * cw + cw / 2, y: top + r.gy * ch + ch / 2 });
-    ctx.fillStyle = '#5a4d78';
+    // where a point on the floor lands on the map
+    const mapAt = (x, y) => ({ x: left + ((x / f.T - 1) / g.cellW) * cw, y: top + ((y / f.T - 1) / g.cellH) * ch });
+    const me = this.world.localPlayer;
+    const here = f.roomAt(me.x, me.y);
+    const inHall = here ? null : f.hallAt(me.x, me.y);
     for (const l of f.links) {
       const a = f.rooms[l.a];
       const b = f.rooms[l.b];
       if (!(a.seen && b.seen)) continue;
       const pa = pos(a);
       const pb = pos(b);
-      ctx.fillRect(Math.min(pa.x, pb.x) - 1, Math.min(pa.y, pb.y) - 1, Math.abs(pa.x - pb.x) + 2, Math.abs(pa.y - pb.y) + 2);
+      ctx.fillStyle = l === inHall ? '#c8b8e8' : '#5a4d78';
+      ctx.fillRect(Math.min(pa.x, pb.x) - hall / 2, Math.min(pa.y, pb.y) - hall / 2, Math.abs(pa.x - pb.x) + hall, Math.abs(pa.y - pb.y) + hall);
     }
-    const here = f.roomAt(this.world.localPlayer.x, this.world.localPlayer.y);
     for (const r of f.rooms) {
-      if (!r.seen) continue;
+      if (!r.seen || r.type === 'secret') continue;
       const { x, y } = pos(r);
       ctx.fillStyle = r.visited ? (r.state === 'cleared' ? '#4a4058' : '#6a2a3a') : '#2a2438';
-      ctx.fillRect(x - 8, y - 6, 16, 12);
-      drawRoomIcon(ctx, r.type, x - 4, y - 4);
+      ctx.fillRect(Math.round(x - bw / 2), Math.round(y - bh / 2), bw, bh);
+      drawRoomIcon(ctx, r.type, Math.round(x - 4 * iconPx), Math.round(y - 4 * iconPx), iconPx);
       if (r === here) {
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
-        ctx.strokeRect(x - 8.5, y - 6.5, 17, 13);
+        ctx.strokeRect(Math.round(x - bw / 2) - 0.5, Math.round(y - bh / 2) - 0.5, bw + 1, bh + 1);
       }
     }
+    // the heroes (not while down in the secret room: that stays off the map)
+    if (here && here.type === 'secret') return;
+    for (const p of this.world.players) {
+      if (p.dead || p === me || f.roomAt(p.x, p.y)?.type === 'secret') continue;
+      const d = mapAt(p.x, p.y);
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(Math.round(d.x) - 2, Math.round(d.y) - 2, 4, 4);
+      ctx.fillStyle = '#8ad0ff';
+      ctx.fillRect(Math.round(d.x) - 1, Math.round(d.y) - 1, 2, 2);
+    }
+    const d = mapAt(me.x, me.y);
+    const blink = Math.floor(this.time * 3) % 2 === 0;
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(Math.round(d.x) - 3, Math.round(d.y) - 3, 6, 6);
+    ctx.fillStyle = blink ? '#ffffff' : '#ffe680';
+    ctx.fillRect(Math.round(d.x) - 2, Math.round(d.y) - 2, 4, 4);
   }
 }
 
@@ -1289,20 +1638,92 @@ class DefendTotem {
     this.invulnerable = 0;
     this.flashTime = 0;
     this.time = 0;
+    this.souls = [];      // slain enemies' souls on their way in
+    this.mendGlow = 0;
   }
 
   get hx() { return this.x; }
   get hy() { return this.y - 18; }
+
+  /** A soul rises out of a slain enemy, then curls into the lantern's flame. */
+  addSoul(x, y, heal) {
+    const n = this.souls.length;
+    const a = -Math.PI / 2 + (n % 2 ? 1 : -1) * (0.5 + (n % 3) * 0.35);
+    this.souls.push({ x, y, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90, heal, t: 0, trail: [] });
+  }
   get invisible() { return false; }
   /** Enemies bumping into it don't hurt it; only their actual attacks do. */
   get contactImmune() { return true; }
 
   knockback() {}
 
-  update(dt) {
+  update(dt, world) {
     this.time += dt;
     this.invulnerable -= dt;
     this.flashTime -= dt;
+    this.mendGlow -= dt;
+    const speed = CONFIG.run.defendSouls.soulSpeed;
+    const tx = this.x;
+    const ty = this.y - 24;
+    for (const s of this.souls) {
+      s.t += dt;
+      // drift up for a moment, then home in harder and harder
+      const dx = tx - s.x;
+      const dy = ty - s.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const pull = Math.min(1, s.t * 1.6);
+      const want = speed * (0.4 + pull);
+      const steer = Math.min(1, dt * (1.5 + pull * 6));
+      s.vx += ((dx / d) * want - s.vx) * steer;
+      s.vy += ((dy / d) * want - s.vy) * steer;
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.trail.push({ x: s.x, y: s.y });
+      if (s.trail.length > 9) s.trail.shift();
+      if (d < 9 || s.t > 4) {
+        s.dead = true;
+        if (!this.dead) this.mend(s.heal, world);
+      }
+    }
+    this.souls = this.souls.filter((s) => !s.dead);
+  }
+
+  /** A soul reaches the flame: it flares and the lantern mends. */
+  mend(amount, world) {
+    const before = this.hp;
+    this.hp = Math.min(this.maxHp, this.hp + amount);
+    this.mendGlow = 0.35;
+    world.effects.burst(this.x, this.y - 24, { count: 8, colors: ['#6ad8ff', '#e6f6ff', '#b4f0ff'], speed: [20, 70], life: [0.3, 0.6], up: 30, size: [1, 2] });
+    const gained = Math.round(this.hp - before);
+    if (gained > 0) world.effects.text(this.x, this.y - 54, `+${gained}`, { color: '#8cf0c8', size: 8 });
+    Sound.play('pickup');
+  }
+
+  drawSouls(ctx) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const s of this.souls) {
+      const fade = Math.min(1, s.t * 5);
+      // a fading wispy tail
+      s.trail.forEach((p, i) => {
+        const k = (i + 1) / s.trail.length;
+        ctx.fillStyle = `rgba(106, 216, 255, ${0.35 * k * fade})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1 + k * 2.5, 0, TAU);
+        ctx.fill();
+      });
+      const wob = Math.sin(this.time * 14 + s.heal) * 1.2;
+      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 12);
+      g.addColorStop(0, `rgba(200, 245, 255, ${0.8 * fade})`);
+      g.addColorStop(1, 'rgba(106, 216, 255, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(s.x - 12, s.y - 12, 24, 24);
+      ctx.fillStyle = `rgba(255, 255, 255, ${fade})`;
+      ctx.fillRect(Math.round(s.x - 2 + wob), Math.round(s.y - 2), 4, 4);
+      ctx.fillStyle = `rgba(106, 216, 255, ${fade})`;
+      ctx.fillRect(Math.round(s.x - 1 + wob), Math.round(s.y - 4), 2, 2);
+    }
+    ctx.restore();
   }
 
   hurt(amount, world) {
@@ -1338,14 +1759,14 @@ class DefendTotem {
     ctx.fillStyle = this.flashTime > 0 ? '#ffffff' : '#383b48';
     ctx.fillRect(x - 7, y - 35, 14, 23);
     const flick = Math.sin(this.time * 12) * 1.5;
-    ctx.fillStyle = '#6ad8ff';
+    ctx.fillStyle = this.mendGlow > 0 ? '#b4f0ff' : '#6ad8ff';
     ctx.fillRect(x - 4, y - 30 + flick, 8, 14 - flick);
     ctx.fillStyle = '#e6f6ff';
     ctx.fillRect(x - 2, y - 24, 4, 7);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     const g = ctx.createRadialGradient(x, y - 24, 2, x, y - 24, 46);
-    g.addColorStop(0, 'rgba(106, 216, 255, 0.35)');
+    g.addColorStop(0, `rgba(106, 216, 255, ${0.35 + Math.max(0, this.mendGlow) * 1.2})`);
     g.addColorStop(1, 'rgba(106, 216, 255, 0)');
     ctx.fillStyle = g;
     ctx.fillRect(x - 46, y - 70, 92, 92);

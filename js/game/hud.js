@@ -13,13 +13,47 @@ const HUD = {
     ctx.fillText(str, x, y);
   },
 
+  /** A HUD frame in the keep's style: dark walnut with a gold trim, lit along the top, shaded along the bottom. */
   panel(ctx, x, y, w, h) {
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
-    ctx.fillStyle = '#241c33';
+    ctx.fillStyle = '#8a6a26';
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = '#2e1f17';
     ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = '#3a2d52';
+    // faint wood grain
+    ctx.fillStyle = 'rgba(255, 220, 170, 0.035)';
+    for (let gy = y + 5; gy < y + h - 3; gy += 6) ctx.fillRect(x + 2, gy, w - 4, 1);
+    ctx.fillStyle = '#4e3524';
     ctx.fillRect(x, y, w, 2);
+    ctx.fillStyle = '#1c120c';
+    ctx.fillRect(x, y + h - 1, w, 1);
+    // little gold studs in the corners
+    if (w >= 20 && h >= 14) {
+      ctx.fillStyle = '#d4ac4c';
+      for (const [cx, cy] of [[x + 1, y + 2], [x + w - 3, y + 2], [x + 1, y + h - 3], [x + w - 3, y + h - 3]]) ctx.fillRect(cx, cy, 2, 2);
+    }
+  },
+
+  /** A recessed socket for an ability icon: a rounded dark well, shaded at the top, lit along the bottom lip. */
+  socket(ctx, cx, top, size, glow = null) {
+    const x = Math.round(cx - size / 2);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 1, top, size + 2, size);
+    ctx.fillRect(x, top - 1, size, size + 2);
+    ctx.fillStyle = '#1a110c';
+    ctx.fillRect(x, top, size, size);
+    ctx.fillStyle = '#0e0906';
+    ctx.fillRect(x, top, size, 3);
+    ctx.fillStyle = '#5a3e26';
+    ctx.fillRect(x + 1, top + size - 1, size - 2, 1);
+    if (glow) {
+      const g = ctx.createRadialGradient(cx, top + size / 2, 1, cx, top + size / 2, size * 0.7);
+      g.addColorStop(0, `rgba(${glow}, 0.35)`);
+      g.addColorStop(1, `rgba(${glow}, 0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(x, top, size, size);
+    }
   },
 
   bar(ctx, x, y, w, h, ratio, fill, back = '#3a1a24') {
@@ -80,14 +114,14 @@ const HUD = {
     const me = game.localPlayer;
     const others = game.players.filter((p) => p !== me);
     let y = 170;
-    if (others.length) this.text(ctx, 'PARTY', 14, y - 12, { size: 6, color: '#7a6a8a' });
+    if (others.length) this.text(ctx, 'PARTY', 14, y - 12, { size: 6, color: '#8a7660' });
     for (const p of others) {
       this.panel(ctx, 12, y, 150, 18);
       const icon = Sprites.heroes[p.classId].idle[0].img;
       ctx.globalAlpha = p.dead ? 0.4 : 1;
       ctx.drawImage(icon, 22, 8, 22, 22, 13, y, 18, 18);
       ctx.globalAlpha = 1;
-      this.text(ctx, p.name, 34, y + 2, { size: 6, color: p.dead ? '#7a6a8a' : '#f4ead7' });
+      this.text(ctx, p.name, 34, y + 2, { size: 6, color: p.dead ? '#8a7660' : '#f4ead7' });
       if (p.dead) {
         this.text(ctx, 'DOWN', 158, y + 2, { size: 6, align: 'right', color: '#e04545' });
       } else {
@@ -141,7 +175,7 @@ const HUD = {
     let y = 36;
     if (p.resource) {
       const r = p.resource;
-      this.bar(ctx, 60, 34, 170, 8, r.value / r.max, r.color, '#1a1a30');
+      this.bar(ctx, 60, 34, 170, 8, r.value / r.max, r.color, '#1c1410');
       this.text(ctx, `${r.name} ${Math.floor(r.value)}`, 145, 34, { size: 6, align: 'center' });
       y = 50;
     }
@@ -198,7 +232,7 @@ const HUD = {
     const by = Math.round(y - h);
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(bx - 2, by - 2, w + 4, h + 4);
-    ctx.fillStyle = 'rgba(20, 14, 32, 0.95)';
+    ctx.fillStyle = 'rgba(34, 23, 16, 0.96)';
     ctx.fillRect(bx, by, w, h);
     ctx.fillStyle = color;
     ctx.fillRect(bx, by, w, 1);
@@ -289,7 +323,7 @@ const HUD = {
     const m = Input._mouse;
     const first = this.bagSlotRect(0);
     this.text(ctx, 'BAG', first.x + 2, first.y - 19, { size: 5, color: '#a99bbd' });
-    this.text(ctx, 'DRAG: MOVE / OUT TO DROP  RMB: DRINK', first.x + 24, first.y - 19, { size: 5, color: '#7a6a8a' });
+    this.text(ctx, 'DRAG: MOVE / OUT TO DROP  RMB: DRINK', first.x + 24, first.y - 19, { size: 5, color: '#8a7660' });
     const hover = this.bagSlotAt(m.x, m.y);
     p.inventory.forEach((slot, i) => {
       const { x: sx, y: sy, s } = this.bagSlotRect(i);
@@ -378,7 +412,7 @@ const HUD = {
       ctx.fillStyle = `rgba(255, 220, 120, ${0.12 + Math.sin(performance.now() / 120) * 0.08})`;
       ctx.fillRect(x, y, w, h);
     }
-    this.text(ctx, 'PASSIVE', x + 4, y + 4, { size: 5, color: '#7a6a8a' });
+    this.text(ctx, 'PASSIVE', x + 4, y + 4, { size: 5, color: '#8a7660' });
     this.text(ctx, info.name, x + 44, y + 3, { size: 6, color: info.color });
     this.text(ctx, info.text, x + w - 4, y + 3, { size: 6, align: 'right', color: info.ready ? '#ffe680' : '#d8c8a0' });
     if (!hasRow) return;
@@ -392,7 +426,7 @@ const HUD = {
         const lit = i < info.pips;
         ctx.fillStyle = OUTLINE;
         ctx.fillRect(px - 1, rowY - 1, pw + 2, 8);
-        ctx.fillStyle = lit ? info.color : '#2a2438';
+        ctx.fillStyle = lit ? info.color : '#2e2018';
         ctx.fillRect(px, rowY, pw, 6);
         if (lit) {
           ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
@@ -403,7 +437,7 @@ const HUD = {
     }
     if (info.bar != null) {
       const bw = x + w - 4 - barX;
-      if (bw > 10) this.bar(ctx, barX + 1, rowY + 1, bw - 2, 4, info.bar, info.color, '#1a1a30');
+      if (bw > 10) this.bar(ctx, barX + 1, rowY + 1, bw - 2, 4, info.bar, info.color, '#1c1410');
     }
   },
 
@@ -421,7 +455,7 @@ const HUD = {
       this.text(ctx, b.name, cx + 21, y + 3, { size: 6, color: b.color });
       this.text(ctx, `${Math.ceil(t)}s`, cx + w - 3, y + 3, { size: 6, align: 'right' });
       ctx.globalAlpha = 1;
-      ctx.fillStyle = '#1a1a30';
+      ctx.fillStyle = '#1c1410';
       ctx.fillRect(cx + 21, y + 13, w - 24, 3);
       ctx.fillStyle = b.color;
       ctx.fillRect(cx + 21, y + 13, Math.round((w - 24) * clamp(t / (p.buffMax[type] || b.duration), 0, 1)), 3);
@@ -455,14 +489,14 @@ const HUD = {
       this.text(ctx, TIER_MARKS[b.tier], cx + 25 + lw, by + 1, { size: 5, color: TIER_COLORS[b.tier] });
       this.text(ctx, `${Math.ceil(b.t)}s`, cx + w - 3, by + 1, { size: 5, align: 'right' });
       ctx.globalAlpha = 1;
-      ctx.fillStyle = '#1a1a30';
+      ctx.fillStyle = '#1c1410';
       ctx.fillRect(cx + 21, by + 13, w - 24, 3);
       ctx.fillStyle = color;
       ctx.fillRect(cx + 21, by + 13, Math.round((w - 24) * clamp(b.t / (b.max || b.t), 0, 1)), 3);
       if (b.under) {
         const u = b.under;
-        this.text(ctx, `${TIER_MARKS[u.tier]} UNDER`, cx + 21, by + 17, { size: 5, color: '#7a6a8a', shadow: false });
-        this.text(ctx, `${Math.ceil(u.t)}s`, cx + w - 3, by + 17, { size: 5, align: 'right', color: '#7a6a8a', shadow: false });
+        this.text(ctx, `${TIER_MARKS[u.tier]} UNDER`, cx + 21, by + 17, { size: 5, color: '#8a7660', shadow: false });
+        this.text(ctx, `${Math.ceil(u.t)}s`, cx + w - 3, by + 17, { size: 5, align: 'right', color: '#8a7660', shadow: false });
       }
       cx += w + 6;
     }
@@ -504,9 +538,14 @@ const HUD = {
       ctx.lineWidth = 2;
       ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
     }
-    this.text(ctx, key, x + 4, y + 4, { size: key.length > 3 ? 5 : 6, color: ready ? '#f2a541' : '#7a6a8a' });
-    if (icon) ctx.drawImage(icon, x + w / 2 - icon.width / 2, y + 8);
-    this.text(ctx, name, x + w / 2, y + 39, { size: 5, align: 'center', color: ready ? '#f4ead7' : '#7a6a8a' });
+    this.socket(ctx, x + w / 2, y + 7, 30, ready ? '255, 214, 120' : null);
+    if (icon) {
+      ctx.globalAlpha = ready ? 1 : 0.7;
+      ctx.drawImage(icon, x + w / 2 - icon.width / 2, y + 8);
+      ctx.globalAlpha = 1;
+    }
+    this.text(ctx, key, x + 4, y + 4, { size: key.length > 3 ? 5 : 6, color: ready ? '#f2a541' : '#8a7660' });
+    this.text(ctx, name, x + w / 2, y + 39, { size: 5, align: 'center', color: ready ? '#f4ead7' : '#8a7660' });
     if (!ready) {
       const r = clamp(cd / max, 0, 1);
       ctx.fillStyle = 'rgba(10, 6, 18, 0.6)';
@@ -517,7 +556,7 @@ const HUD = {
       ctx.fillRect(x + 6, y + h - 4, w - 12, 2);
     }
     if (charges) {
-      this.text(ctx, `x${charges.count}`, x + w - 4, y + 4, { size: 7, align: 'right', color: charges.count ? '#ffe680' : '#7a6a8a' });
+      this.text(ctx, `x${charges.count}`, x + w - 4, y + 4, { size: 7, align: 'right', color: charges.count ? '#ffe680' : '#8a7660' });
       // the next charge filling up
       if (charges.count < charges.max) {
         ctx.fillStyle = OUTLINE;
@@ -538,11 +577,12 @@ const HUD = {
     const ready = p.ultReady;
     ctx.fillStyle = ready ? `rgba(255, 200, 60, ${0.35 + Math.sin(performance.now() / 150) * 0.15})` : 'rgba(255, 180, 60, 0.25)';
     ctx.fillRect(x, y + h * (1 - r), w, h * r);
-    this.text(ctx, Settings.label('ult'), x + 4, y + 4, { size: 6, color: ready ? '#ffe680' : '#7a6a8a' });
+    this.socket(ctx, x + w / 2, y + 7, 30, ready ? '255, 200, 60' : null);
     const icon = Sprites.icons[p.classId].q;
     ctx.globalAlpha = ready ? 1 : 0.55;
     ctx.drawImage(icon, x + w / 2 - icon.width / 2, y + 8);
     ctx.globalAlpha = 1;
+    this.text(ctx, Settings.label('ult'), x + 4, y + 4, { size: 6, color: ready ? '#ffe680' : '#8a7660' });
     this.text(ctx, ready ? 'READY' : `${Math.floor(r * 100)}%`, x + w / 2, y + 39, { size: 6, align: 'center', color: ready ? '#ffe680' : '#f4ead7' });
     // flash the moment it fills (treated as a cooldown of "how much is left to charge")
     this.readyFlash(ctx, 'ult', ready ? 0 : Math.max(1, (1 - r) * 10), x, y, w, h);

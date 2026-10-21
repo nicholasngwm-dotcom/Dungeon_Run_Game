@@ -325,6 +325,8 @@ const CONFIG = {
     graveyard: {
       name: 'Graveyard',
       blurb: 'Restless dead, poison and bone. Ruled by the Phantom King.',
+      // the floor is gloomy: night darkness (rgb tint, 0-1) that torches, lamps and candles cut through, and drifting fog
+      night: { dark: 0.55, color: '6, 12, 22' },
       boss: 'phantom',
       enemies: {
         1: [['zombie', 5], ['bletcher', 2], ['skeleton', 3], ['skeletonWarrior', 3], ['bomber', 2], ['wraith', 2],
@@ -357,21 +359,29 @@ const CONFIG = {
     // random mode: chance weight of rolling a theme already used this run (vs 1 for a new one)
     repeatThemeWeight: 0.05,
     // floor layout: rooms sit in a grid of cells; hallways join neighbouring cells
-    grid: { cols: 5, rows: 5, cellW: 28, cellH: 22 },
+    grid: { cols: 5, rows: 5, cellW: 38, cellH: 28, hall: 5 },   // hall: hallway width in tiles (odd)
     roomCount: [11, 12, 13],                      // per stage, including start and boss
     // room objectives
     combat: { waves: [2, 3, 3], perWave: [4, 5, 5], perWaveRandom: 1 },
     // anyone (hero, body, clone or enemy) outside a locked room is warped back in after this many seconds
     strayReturn: 2,
-    defend: { duration: [30, 36, 42], totemHp: [1000, 1300, 1650], waveEvery: 6, perWave: [3, 4, 4] },
+    defend: { duration: [30, 36, 42], totemHp: [650, 850, 1100], waveEvery: 6, perWave: [3, 4, 4] },
+    // a defend-room kill frees a soul that flies into the lantern, mending soulHeal of its max hp
+    // scaled by how tough the enemy was (base hp / soulRefHp, clamped to soulScale); summoned
+    // enemies give summonedSoul of that. soulSpeed: how fast souls home in (px/s)
+    defendSouls: { soulHeal: 0.025, soulRefHp: 150, soulScale: [0.5, 2.5], summonedSoul: 0.35, soulSpeed: 260 },
     // defend-room enemies chase the hero once within spotRange, and give up (back to the lantern) past loseRange
     defendAI: { spotRange: 230, loseRange: 380 },
     // coins: roughly one per hpPerCoin of an enemy's base hp (at least 1); summoned enemies drop 1 coin
     // summonedChance of the time; the boss drops boss[0]-boss[1]; every cleared room's chest holds roomChest
     coins: { hpPerCoin: 60, summonedChance: 0.3, boss: [25, 35], roomChest: 5 },
+    bossHearts: 5,                                // hearts a stage boss drops when beaten
     // secret room: 3 chests, the party opens up to `picks` (then the rest seal shut); one is a mimic
     // that drops every buff for mimicBuffTime seconds; the others hold coins or potions (any kind)
     secret: { chests: 3, picks: 2, coins: [20, 35], potions: [2, 4], mimicBuffTime: 60 },
+    // treasure room (a special room): each of its 3 chests holds coins (coins[0]-coins[1]) or, potionChance of the
+    // time, potions[0]-potions[1] healing potions, mostly the small ones (healTierWeights: tier 1, 2, 3)
+    treasure: { coins: [5, 35], potions: [2, 5], potionChance: 0.5, healTierWeights: [6, 3, 1] },
     // wishing well: each coin tossed in has `chance` to grant a wish (guaranteed on the pity-th coin);
     // a wish is one random kind of potion, potions[0]-potions[1] of it. One wish per hero per well
     well: { chance: 0.15, pity: 12, potions: [2, 6] },
@@ -422,7 +432,7 @@ const CONFIG = {
   },
 
   // mana orbs only drop for mana users; picking one up triggers the Mage's Mana Surge passive
-  drops: { heartChance: 0.1, heartHeal: 45, manaChance: 0.3, manaRestore: 15 },
+  drops: { heartChance: 0.1, heartHeal: 45, manaChance: 0.3, manaRestore: 15, coinMagnet: 220 },   // coinMagnet: how far coins fly to you from (px)
 
   // buff orbs dropped by mimics (one random type each); picking one up again refreshes it
   buffs: {

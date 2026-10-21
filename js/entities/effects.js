@@ -273,43 +273,111 @@ class Effects {
 //  Telegraphs: ground markings that warn the player.
 //  progress goes 0 -> 1 as the attack charges up.
 // ---------------------------------------------------------------
+// Drawn in the house style: a dark outline under a bright rim, a soft gradient
+// that's strongest at the edge, the charge filling outward with a glowing
+// leading edge, chevrons showing which way the attack goes, and a quick pulse
+// in the last moment before it lands. Shapes match the real hit areas exactly.
 const Telegraph = {
   red: '255, 60, 60',
   orange: '255, 150, 40',
 
+  /** 0..1 flicker for the final moments of a windup (visual only). */
+  pulse(progress) {
+    return progress > 0.8 ? 0.5 + Math.sin(performance.now() / 45) * 0.5 : 0;
+  },
+
+  /** Dark outline then a bright rim along whatever path is current. */
+  rim(ctx, rgb, alpha, width = 2) {
+    ctx.strokeStyle = 'rgba(26, 16, 32, 0.55)';
+    ctx.lineWidth = width + 2;
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(${rgb}, ${alpha})`;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  },
+
   circle(ctx, x, y, r, progress, rgb = this.red) {
+    const k = clamp(progress, 0, 1);
+    const flash = this.pulse(k);
     ctx.save();
-    ctx.fillStyle = `rgba(${rgb}, 0.14)`;
-    ctx.strokeStyle = `rgba(${rgb}, 0.75)`;
-    ctx.lineWidth = 2;
+    const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
+    g.addColorStop(0, `rgba(${rgb}, 0.05)`);
+    g.addColorStop(1, `rgba(${rgb}, ${0.22 + flash * 0.12})`);
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, TAU);
     ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = `rgba(${rgb}, 0.3)`;
+    this.rim(ctx, rgb, 0.8 + flash * 0.2);
+    // a slow dashed ring turning inside the edge
+    ctx.setLineDash([6, 6]);
+    ctx.lineDashOffset = -performance.now() / 60;
+    ctx.strokeStyle = `rgba(${rgb}, 0.35)`;
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(x, y, r * clamp(progress, 0, 1), 0, TAU);
-    ctx.fill();
+    ctx.arc(x, y, Math.max(1, r - 6), 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // the charge filling outward, its edge glowing
+    if (k > 0) {
+      ctx.fillStyle = `rgba(${rgb}, ${0.22 + flash * 0.15})`;
+      ctx.beginPath();
+      ctx.arc(x, y, r * k, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255, 240, 220, ${0.35 + k * 0.4})`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
     ctx.restore();
   },
 
   line(ctx, x1, y1, x2, y2, width, progress, rgb = this.red) {
     const a = angleTo(x1, y1, x2, y2);
     const len = dist(x1, y1, x2, y2);
+    const k = clamp(progress, 0, 1);
+    const flash = this.pulse(k);
+    const hw = width / 2;
     ctx.save();
     ctx.translate(x1, y1);
     ctx.rotate(a);
-    ctx.fillStyle = `rgba(${rgb}, 0.14)`;
-    ctx.fillRect(0, -width / 2, len, width);
-    ctx.fillStyle = `rgba(${rgb}, 0.35)`;
-    ctx.fillRect(0, -width / 2, len * clamp(progress, 0, 1), width);
-    ctx.strokeStyle = `rgba(${rgb}, 0.7)`;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0, -width / 2, len, width);
+    const g = ctx.createLinearGradient(0, -hw, 0, hw);
+    g.addColorStop(0, `rgba(${rgb}, ${0.24 + flash * 0.1})`);
+    g.addColorStop(0.5, `rgba(${rgb}, 0.08)`);
+    g.addColorStop(1, `rgba(${rgb}, ${0.24 + flash * 0.1})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, -hw, len, width);
+    ctx.fillStyle = `rgba(${rgb}, ${0.26 + flash * 0.15})`;
+    ctx.fillRect(0, -hw, len * k, width);
+    // edges
+    ctx.beginPath();
+    ctx.moveTo(0, -hw); ctx.lineTo(len, -hw);
+    ctx.moveTo(0, hw); ctx.lineTo(len, hw);
+    this.rim(ctx, rgb, 0.8 + flash * 0.2, width > 10 ? 2 : 1);
+    // the charge's leading edge
+    if (k > 0) {
+      ctx.fillStyle = `rgba(255, 240, 220, ${0.4 + k * 0.4})`;
+      ctx.fillRect(Math.round(len * k) - 1, -hw, 2, width);
+    }
+    // chevrons running down the lane
+    if (width >= 8) {
+      const step = Math.max(18, width * 1.2);
+      const s = Math.min(hw * 0.6, 7);
+      const shift = (performance.now() / 12) % step;
+      ctx.strokeStyle = `rgba(255, 230, 210, ${0.28 + flash * 0.2})`;
+      ctx.lineWidth = 2;
+      for (let d = shift; d < len - s; d += step) {
+        ctx.beginPath();
+        ctx.moveTo(d - s, -s);
+        ctx.lineTo(d, 0);
+        ctx.lineTo(d - s, s);
+        ctx.stroke();
+      }
+    }
     ctx.restore();
   },
 
   cone(ctx, x, y, angle, arc, range, progress, rgb = this.red) {
+    const k = clamp(progress, 0, 1);
+    const flash = this.pulse(k);
     ctx.save();
     const sector = (r) => {
       ctx.beginPath();
@@ -317,15 +385,35 @@ const Telegraph = {
       ctx.arc(x, y, r, angle - arc / 2, angle + arc / 2);
       ctx.closePath();
     };
-    ctx.fillStyle = `rgba(${rgb}, 0.14)`;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, range);
+    g.addColorStop(0, `rgba(${rgb}, 0.04)`);
+    g.addColorStop(1, `rgba(${rgb}, ${0.24 + flash * 0.12})`);
+    ctx.fillStyle = g;
     sector(range);
     ctx.fill();
-    ctx.strokeStyle = `rgba(${rgb}, 0.75)`;
+    this.rim(ctx, rgb, 0.8 + flash * 0.2);
+    if (k > 0) {
+      ctx.fillStyle = `rgba(${rgb}, ${0.24 + flash * 0.15})`;
+      sector(range * k);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255, 240, 220, ${0.35 + k * 0.45})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, range * k, angle - arc / 2, angle + arc / 2);
+      ctx.stroke();
+    }
+    // a chevron pointing the way the blow travels
+    const cr = range * 0.62;
+    const cx = x + Math.cos(angle) * cr;
+    const cy = y + Math.sin(angle) * cr;
+    const s = Math.min(9, range * 0.12);
+    ctx.strokeStyle = `rgba(255, 230, 210, ${0.35 + flash * 0.3})`;
     ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(angle + 2.4) * s, cy + Math.sin(angle + 2.4) * s);
+    ctx.lineTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(angle - 2.4) * s, cy + Math.sin(angle - 2.4) * s);
     ctx.stroke();
-    ctx.fillStyle = `rgba(${rgb}, 0.32)`;
-    sector(range * clamp(progress, 0, 1));
-    ctx.fill();
     ctx.restore();
   },
 };

@@ -178,6 +178,27 @@ const SFX = {
     s.noise({ dur: 0.45, vol: 0.2, filter: 'lowpass', freq: 300, to: 80 });
     s.tone({ type: 'triangle', freq: 70, to: 45, dur: 0.4, vol: 0.12 });
   },
+  // a rusty iron gate swinging: the hinge sticks and slips in a wandering, groaning squeal
+  gateCreak: (s) => {
+    let f = 260 + nativeRandom() * 60;
+    for (let i = 0; i < 20; i++) {
+      f += (nativeRandom() - 0.55) * 40;
+      s.tone({ type: 'sawtooth', freq: f, to: f * 0.93, dur: 0.035, vol: 0.022, delay: i * 0.034 });
+    }
+    s.noise({ dur: 0.7, vol: 0.035, filter: 'bandpass', freq: 1400, to: 900, q: 12 });
+  },
+  // ...and banging shut: a heavy clang with the iron ringing (out-of-tune overtones)
+  gateClang: (s) => {
+    s.tone({ type: 'triangle', freq: 170, to: 150, dur: 0.55, vol: 0.09 });
+    s.tone({ type: 'square', freq: 523, to: 509, dur: 0.3, vol: 0.025 });
+    s.tone({ type: 'triangle', freq: 1287, dur: 0.4, vol: 0.03 });
+    s.noise({ dur: 0.08, vol: 0.12, filter: 'highpass', freq: 2500 });
+  },
+  gateShut: (s) => {
+    s.tone({ type: 'triangle', freq: 190, to: 170, dur: 0.3, vol: 0.05 });
+    s.tone({ type: 'triangle', freq: 1287, dur: 0.2, vol: 0.015 });
+    s.noise({ dur: 0.05, vol: 0.06, filter: 'highpass', freq: 2500 });
+  },
   ghostWail: (s) => {
     s.tone({ type: 'sine', freq: 520, to: 380, dur: 0.6, vol: 0.05 });
     s.tone({ type: 'sine', freq: 530, to: 300, dur: 0.7, vol: 0.04, delay: 0.1 });

@@ -11,7 +11,7 @@ function buildIconSprites() {
   const FLETCH = '#c84040';                                               // the archer's red fletching
   const DAGGER = { w: 1.5, grip: 4, guard: 3, guardCol: B[2], gripCol: '#9a2230' };
   const N = 28;
-  const icon = (fn) => PixelArt.make(N, N, fn, OUTLINE);
+  const icon = (fn) => PixelArt.bevel(PixelArt.make(N, N, fn, OUTLINE));   // lit from the top-left like the rest of the art
 
   /** Sword/dagger from the pommel (x0, y0) to the tip (x1, y1). */
   const blade = (p, x0, y0, x1, y1, { w = 2, grip = 5, guard = 4, ramp = S, guardCol = G[2], gripCol = L[2] } = {}) => {

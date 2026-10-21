@@ -45,6 +45,7 @@ const Menus = {
     slider('set-sens', 'sensitivity', (v) => `${v.toFixed(1)}x`);
     slider('set-mvol', 'musicVolume', (v) => `${Math.round(v * 100)}%`, () => Sound.applyVolumes());
     slider('set-svol', 'sfxVolume', (v) => `${Math.round(v * 100)}%`, () => { Sound.applyVolumes(); Sound.play('uiClick', 0.15); });
+    slider('set-map', 'minimapSize', (v) => `${Math.round(v * 100)}%`);
     document.getElementById('set-keys').addEventListener('click', (e) => {
       const btn = e.target.closest('.keybind');
       if (btn) this.captureKey(btn);
@@ -142,6 +143,7 @@ const Menus = {
     set('set-sens', s.sensitivity, `${s.sensitivity.toFixed(1)}x`);
     set('set-mvol', s.musicVolume, `${Math.round(s.musicVolume * 100)}%`);
     set('set-svol', s.sfxVolume, `${Math.round(s.sfxVolume * 100)}%`);
+    set('set-map', s.minimapSize, `${Math.round(s.minimapSize * 100)}%`);
     this.musicChanged(s.music, false);
     this.displayChanged();
     const keys = document.getElementById('set-keys');

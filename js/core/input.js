@@ -30,6 +30,9 @@ const Input = {
         fn(e.code);
         return;
       }
+      // typing in a text box (names, room codes, the bestiary search) isn't playing
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && e.code !== 'Escape') return;
       if (e.code === 'Tab' || e.code === 'Space') e.preventDefault();
       if (!this.keys.has(e.code)) this.pressedKeys.add(e.code);
       this.keys.add(e.code);

@@ -29,6 +29,7 @@ const Settings = {
     music: true,
     musicVolume: 0.7,
     sfxVolume: 0.8,
+    minimapSize: 1.4,    // dungeon minimap scale
     display: 'default',   // default | fullscreen (see Display)
     keys: {
       up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',

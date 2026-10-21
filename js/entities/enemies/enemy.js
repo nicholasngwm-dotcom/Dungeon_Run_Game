@@ -177,21 +177,57 @@ class Enemy extends Entity {
     Telegraph.cone(ctx, this.x, this.y, this.attackAngle, c.attackArcDegrees * DEG, c.attackReach, this.stateTime / c.windup);
   }
 
-  /** Quick white slash arc shown when a melee attack lands. */
-  swipeFx(world, color = '#ffdddd') {
-    const { x, y, attackAngle: a } = this;
+  /**
+   * The slash a melee attack leaves: a crescent sweeping across the swing at body
+   * height, thick in the middle and tapering at both ends, a white-hot core inside
+   * a coloured edge, sparks thrown off its tip. rgb tints the edge.
+   */
+  swipeFx(world, rgb = '255, 120, 110') {
+    const a = this.attackAngle;
     const arc = this.cfg.attackArcDegrees * DEG;
-    const r = this.cfg.attackReach * 0.8;
-    world.effects.add(0.18, (ctx, t) => {
+    const r = this.cfg.attackReach * 0.85;
+    const x = this.x;
+    const y = this.y - 10;
+    const thick = Math.max(8, r * 0.22);
+    const from = a - arc / 2;
+    world.effects.add(0.26, (ctx, t) => {
+      const head = Math.min(1, t * 4);           // the blade sweeps across in the first quarter
+      const tail = Math.max(0, (t - 0.25) / 0.75); // then the trail fades from the back
+      if (head <= tail) return;
+      const n = 18;
+      const outer = [];
+      const inner = [];
+      for (let i = 0; i <= n; i++) {
+        const u = tail + (head - tail) * (i / n);
+        const ang = from + arc * u;
+        const w = thick * Math.sin(Math.PI * u) * (1 - t * 0.6);
+        outer.push([x + Math.cos(ang) * r, y + Math.sin(ang) * r * 0.85]);
+        inner.push([x + Math.cos(ang) * (r - w), y + Math.sin(ang) * (r - w) * 0.85]);
+      }
+      const shape = () => {
+        ctx.beginPath();
+        outer.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+        for (let i = inner.length - 1; i >= 0; i--) ctx.lineTo(inner[i][0], inner[i][1]);
+        ctx.closePath();
+      };
       ctx.save();
-      ctx.globalAlpha = 1 - t;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 8 * (1 - t) + 2;
+      ctx.globalAlpha = 1 - t * t;
+      ctx.fillStyle = `rgba(${rgb}, 0.85)`;
+      shape();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(26, 16, 32, 0.6)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // white-hot core along the outer edge
+      ctx.strokeStyle = 'rgba(255, 250, 240, 0.95)';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(x, y, r, a - arc / 2, a + arc / 2);
+      outer.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
       ctx.stroke();
       ctx.restore();
     });
+    const tip = from + arc;
+    world.effects.burst(x + Math.cos(tip) * r, y + Math.sin(tip) * r * 0.85, { count: 6, colors: ['#ffffff', `rgb(${rgb})`], speed: [40, 120], life: [0.15, 0.35], size: [1, 2] });
   }
 
   // ---------- drawing ----------

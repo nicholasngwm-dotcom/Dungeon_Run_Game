@@ -27,17 +27,29 @@ function enemyBlast(world, x, y, r, damage, colors = ['#ffb02e', '#ff5a1e', '#3a
   for (const a of world.allies) {
     if (dist(a.x, a.y, x, y) < r + a.radius) a.hurt(damage, world, x, y);
   }
-  world.effects.burst(x, y - 10, { count: 30, colors, speed: [80, 260], life: [0.3, 0.7], size: [2, 5] });
-  world.effects.add(0.35, (ctx, t) => {
+  // a scorch mark left on the ground, then the blast: a white-hot fireball, a shockwave
+  // racing out to the edge of the blast, licking flames and a rolling cloud of smoke
+  world.effects.add(1.4, (ctx, t) => {
+    ctx.save();
+    ctx.globalAlpha = 0.5 * (1 - t);
+    PFX.disc(ctx, x, y, r * 0.55, r * 0.3, '#1a1210');
+    ctx.restore();
+  }, true);
+  world.effects.add(0.45, (ctx, t) => {
+    const e = 1 - (1 - t) ** 3;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, x, y - 12, r * (0.5 + e * 0.5), '255, 140, 50', 1.3 * (1 - t), 2, r * 0.6 * (0.5 + e * 0.5));
+    PFX.glow(ctx, x, y - 14, r * 0.35 * (1 - t * 0.7), '255, 240, 200', 1.4 * (1 - t));
+    ctx.restore();
+    ctx.save();
     ctx.globalAlpha = 1 - t;
-    ctx.fillStyle = 'rgba(255, 150, 60, 0.55)';
-    ctx.beginPath();
-    ctx.ellipse(x, y, r * (0.4 + t * 0.6), r * 0.6 * (0.4 + t * 0.6), 0, 0, TAU);
-    ctx.fill();
+    PFX.ring(ctx, x, y, r * e, r * 0.55 * e, '#ffe0a0', 2, { thick: t < 0.3 ? 3 : 1 });
     ctx.restore();
   });
+  world.effects.flames(x, y, { count: 6, spread: r * 0.45, height: 26, width: 12, life: 0.55 });
+  world.effects.smoke(x, y - 14, { count: 10, radius: r * 0.45, life: 0.9, rise: 30 });
+  world.effects.burst(x, y - 10, { count: 30, colors, speed: [80, 260], life: [0.3, 0.7], size: [2, 5] });
   world.shake(5, 0.2);
   Sound.play('explosion');
 }
@@ -125,7 +137,7 @@ class SkeletonWarrior extends Enemy {
   }
 
   think(dt, world) {
-    this.meleeThink(dt, world, () => { this.swipeFx(world); Sound.play('slash'); });
+    this.meleeThink(dt, world, () => { this.swipeFx(world, '220, 214, 196'); Sound.play('slash'); });
   }
 
   drawTelegraph(ctx) { this.drawMeleeTelegraph(ctx); }
@@ -139,17 +151,22 @@ class SkeletonWarrior extends Enemy {
     ctx.globalAlpha = this.spawnAlpha;
     drawRotated(ctx, sword.img, this.x + f * 8, this.hy + 4, sword.pivotX, sword.pivotY, a, f < 0);
     if (this.shield) {
-      // round wooden shield on the off arm
+      // a battered round shield on the off arm: planks, an iron rim and boss, lit from the top-left
       const sx = Math.round(this.x + f * 2);
       const sy = Math.round(this.hy + 2);
-      ctx.fillStyle = OUTLINE;
-      ctx.fillRect(sx - 7, sy - 8, 14, 16);
-      ctx.fillStyle = '#7d532f';
-      ctx.fillRect(sx - 6, sy - 7, 12, 14);
+      PFX.disc(ctx, sx, sy, 8, 9, OUTLINE, 1);
+      PFX.disc(ctx, sx, sy, 7, 8, '#80869a', 1);
+      PFX.disc(ctx, sx, sy, 6, 7, '#7d532f', 1);
       ctx.fillStyle = '#9c6c3e';
-      ctx.fillRect(sx - 6, sy - 7, 12, 2);
-      ctx.fillStyle = '#adb2c0';
-      ctx.fillRect(sx - 2, sy - 2, 4, 4);
+      ctx.fillRect(sx - 4, sy - 6, 5, 2);
+      ctx.fillStyle = '#5b3922';
+      ctx.fillRect(sx - 1, sy - 6, 1, 13);
+      ctx.fillRect(sx + 3, sy - 5, 1, 11);
+      PFX.disc(ctx, sx, sy, 2, 2, '#adb2c0', 1);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(sx - 1, sy - 1, 1, 1);
+      ctx.fillStyle = '#c9d3dd';
+      ctx.fillRect(sx - 5, sy - 6, 2, 1);
     }
     ctx.globalAlpha = 1;
     this.drawHealthBar(ctx);
@@ -206,23 +223,74 @@ class Bomber extends Enemy {
 
   draw(ctx) {
     this.drawFrame(ctx, this.currentFrame(), this.anchor, this.spawnAlpha);
-    // bomb held over its head
-    const x = Math.round(this.x + this.facing * 2);
-    const y = Math.round(this.y - 50);
+    // a round black bomb hugged to its chest in both bony hands (bobbing as it runs): lit
+    // from the top-left, an iron cap, a curling fuse with a spark that sputters (and flares
+    // when lit), blinking red as it's about to go
+    const f = this.facing;
+    const bob = this.moving ? Math.round(Math.abs(Math.sin(this.animTime * 10)) * 2) : 0;
+    const x = Math.round(this.x + f * 7);
+    const y = Math.round(this.hy + 4 - bob);
     const lit = this.state === 'fuse';
-    const blink = lit && Math.floor(this.stateTime * 14) % 2;
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x - 7, y - 6, 14, 13);
-    ctx.fillStyle = blink ? '#d84a4a' : '#2a2a32';
-    ctx.fillRect(x - 6, y - 5, 12, 11);
-    ctx.fillStyle = '#4a4a56';
-    ctx.fillRect(x - 4, y - 4, 3, 3);
-    ctx.fillStyle = '#8a7a6a';
-    ctx.fillRect(x, y - 9, 2, 4);
-    if (lit || Math.floor(this.animTime * 8) % 2) {
-      ctx.fillStyle = '#ffd34a';
-      ctx.fillRect(x - 1 + Math.round(rand(-1, 1)), y - 12, 3, 3);
+    const blink = lit && Math.floor(this.stateTime * (6 + this.stateTime * 14)) % 2;
+    ctx.globalAlpha = this.spawnAlpha;
+    // arms reaching from the shoulders round the bomb
+    const shoulderY = Math.round(this.hy - 6);
+    for (const side of [-1, 1]) {
+      const sx0 = Math.round(this.x + side * 5);
+      const hx = x + side * 8;
+      ctx.strokeStyle = OUTLINE;
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(sx0, shoulderY); ctx.lineTo(hx, y); ctx.stroke();
+      ctx.strokeStyle = '#ebe5d3';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(sx0, shoulderY); ctx.lineTo(hx, y); ctx.stroke();
     }
+    PFX.disc(ctx, x, y, 8, 8, OUTLINE, 1);
+    PFX.disc(ctx, x, y, 7, 7, blink ? '#b8343a' : '#2c2a36', 1);
+    PFX.disc(ctx, x + 1, y + 1, 5, 5, blink ? '#8a2228' : '#22202a', 1);
+    ctx.fillStyle = blink ? '#ff8a80' : '#5a5868';
+    ctx.fillRect(x - 4, y - 4, 3, 2);
+    ctx.fillRect(x - 5, y - 2, 1, 2);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 3, y - 9, 6, 3);
+    ctx.fillStyle = '#80869a';
+    ctx.fillRect(x - 2, y - 8, 4, 1);
+    // the fuse curling up
+    ctx.fillStyle = '#8a7a6a';
+    ctx.fillRect(x + 1, y - 11, 1, 2);
+    ctx.fillRect(x + 2, y - 13, 1, 2);
+    ctx.fillRect(x + 3, y - 14, 2, 1);
+    const sx = x + 5;
+    const sy = y - 15;
+    const sputter = Math.floor(this.animTime * 10) % 2;
+    if (lit || sputter) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, sx, sy, lit ? 10 : 6, '255, 190, 80', lit ? 1 : 0.6, 1);
+      ctx.restore();
+      ctx.fillStyle = '#ffd34a';
+      ctx.fillRect(sx - 1, sy - 1, 3, 3);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(sx, sy, 1, 1);
+      if (lit) {
+        ctx.fillStyle = '#ffb030';
+        for (let i = 0; i < 3; i++) {
+          const a = this.animTime * 9 + i * 2.1;
+          ctx.fillRect(Math.round(sx + Math.cos(a) * 4), Math.round(sy + Math.sin(a) * 3 - 1), 1, 1);
+        }
+      }
+    }
+    // bony fingers gripping each side
+    for (const side of [-1, 1]) {
+      const hx = x + side * 8;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(hx - 2, y - 3, 5, 6);
+      ctx.fillStyle = '#ebe5d3';
+      ctx.fillRect(hx - 1, y - 2, 3, 4);
+      ctx.fillStyle = '#b5ad96';
+      ctx.fillRect(hx - 1, y, 3, 1);
+    }
+    ctx.globalAlpha = 1;
     this.drawHealthBar(ctx);
   }
 }
@@ -299,7 +367,7 @@ class Shadowalker extends Enemy {
       case 'windup':
         if (this.stateTime >= (this.quick ? c.blinkWindup : c.windup)) {
           meleeArc(this, world, (a) => a.poison?.(c.poisonDps, c.poisonTime, world));
-          this.swipeFx(world, '#c07aff');
+          this.swipeFx(world, '192, 122, 255');
           Sound.play('slash');
           this.setState('recover');
         }
@@ -431,7 +499,7 @@ class Reaper extends Enemy {
         return;
       }
     }
-    this.meleeThink(dt, world, () => { this.swipeFx(world, '#9a7ac0'); Sound.play('heavySwing'); });
+    this.meleeThink(dt, world, () => { this.swipeFx(world, '154, 122, 192'); Sound.play('heavySwing'); });
   }
 
   blink(world, p) {
@@ -743,15 +811,51 @@ class SkeletonSorcerer extends Enemy {
         if (a.hurt(c.damage, world, h.x, h.y)) a.stun?.(c.stun, world);
       }
       const { x, y } = h;
-      world.effects.add(0.45, (ctx, t) => {
-        // bony fingers clawing up out of the ground
+      // the ground cracks open...
+      world.effects.add(0.9, (ctx, t) => {
+        ctx.save();
+        ctx.globalAlpha = 0.8 * (1 - t);
+        PFX.disc(ctx, x, y, 14, 6, '#1e1612', 1);
+        ctx.strokeStyle = '#2a1e18';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+          const a = i * 1.26 + 0.4;
+          ctx.beginPath();
+          ctx.moveTo(x + Math.cos(a) * 8, y + Math.sin(a) * 3);
+          ctx.lineTo(x + Math.cos(a) * 18, y + Math.sin(a) * 7);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }, true);
+      // ...and a skeletal hand claws up out of it: bony fingers with knuckles, a wrist, a sickly glow
+      world.effects.add(0.5, (ctx, t) => {
         const up = Math.sin(Math.min(1, t * 2.5) * Math.PI / 2) * (1 - Math.max(0, t - 0.6) * 2.5);
-        ctx.fillStyle = OUTLINE;
-        ctx.fillRect(x - 9, y - 22 * up - 1, 18, 22 * up + 2);
-        ctx.fillStyle = '#ebe5d3';
-        for (let i = -2; i <= 2; i++) ctx.fillRect(x + i * 3.5 - 1, y - 20 * up + Math.abs(i) * 3, 3, 20 * up - Math.abs(i) * 3);
+        if (up <= 0) return;
+        const h = Math.round(24 * up);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        PFX.glow(ctx, x, y - h / 2, 14, '150, 230, 110', 0.5 * up, 1);
+        ctx.restore();
+        const bone = (bx, by, w, bh) => {
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(bx - 1, by - 1, w + 2, bh + 2);
+          ctx.fillStyle = '#ebe5d3';
+          ctx.fillRect(bx, by, w, bh);
+          ctx.fillStyle = '#b5ad96';
+          ctx.fillRect(bx + w - 1, by, 1, bh);
+        };
+        bone(x - 3, y - h * 0.45, 6, h * 0.45);                 // wrist
+        bone(x - 6, y - h * 0.6, 12, 5);                        // palm
+        for (let i = -2; i <= 2; i++) {
+          const len = h * (0.42 - Math.abs(i) * 0.06);
+          const fx = x + i * 3 - 1;
+          const fy = y - h * 0.6 - len + Math.abs(i) * 2;
+          bone(fx, fy, 2, len);
+          ctx.fillStyle = '#b5ad96';
+          ctx.fillRect(fx, fy + Math.round(len * 0.45), 2, 1);   // knuckle
+        }
       });
-      world.effects.burst(x, y, { count: 6, colors: ['#4a3426', '#ebe5d3'], speed: [30, 90], life: [0.2, 0.4], up: 40 });
+      world.effects.burst(x, y, { count: 8, colors: ['#4a3426', '#6a5040', '#ebe5d3'], speed: [30, 100], life: [0.2, 0.45], up: 50 });
       Sound.play('hit', 0.05);
     }
     removeDead(this.hands);
@@ -779,7 +883,7 @@ class SkeletonSorcerer extends Enemy {
 
   drawGround(ctx) {
     super.drawGround(ctx);
-    for (const h of this.hands) Telegraph.circle(ctx, h.x, h.y, this.cfg.handsRadius, h.t / h.delay, '235, 229, 211');
+    for (const h of this.hands) Telegraph.circle(ctx, h.x, h.y, this.cfg.handsRadius, h.t / h.delay, '150, 230, 110');
     if (this.state === 'cast') Telegraph.circle(ctx, this.x, this.y + 4, 26, this.stateTime / 0.5, '255, 80, 60');
   }
 }

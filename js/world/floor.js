@@ -1,5 +1,5 @@
 // A generated dungeon floor (one stage of a run): rooms on a grid of cells,
-// joined by straight 3-tile hallways, Soul Knight style. Rooms are a tree
+// joined by straight wide hallways (with swinging doors), Soul Knight style. Rooms are a tree
 // grown out from the start room; the boss sits in the farthest dead end.
 // One extra secret room sits on its own with no hallways: a glowing hole in a
 // combat room's floor drops the hero into it.
@@ -15,9 +15,10 @@ const ZONE = { WALL: 0, ROOM: 1, HALL: 2 };
 
 // floor size (tiles) per room type: [w, h] or [[wMin, wMax], [hMin, hMax]]
 const ROOM_SIZES = {
-  start: [13, 10], boss: [24, 18], shop: [17, 11], special: [13, 10], secret: [13, 9], puzzle: [15, 12],
-  combat: [[17, 21], [12, 15]], defend: [[22, 24], [16, 17]], survival: [[23, 25], [16, 17]],
+  start: [16, 12], boss: [30, 21], shop: [21, 13], special: [16, 12], secret: [15, 11], puzzle: [18, 14],
+  combat: [[23, 28], [16, 19]], defend: [[27, 30], [19, 21]], survival: [[28, 30], [19, 21]],
 };
+const MAX_CHUNKS = 48;            // painted chunks kept around (the least recently drawn go first)
 
 class FloorMap extends Dungeon {
   constructor(stage, themeId, seed = Math.floor(Math.random() * 1e9)) {
@@ -178,36 +179,63 @@ class FloorMap extends Dungeon {
   }
 
   /**
-   * A straight 3-wide hallway between neighbouring rooms. The hallway tiles in
-   * each room's wall line are that room's door (locked while it's active).
+   * A straight hallway (CONFIG.run.grid.hall tiles wide) between neighbouring rooms.
+   * The hallway tiles in each room's wall line are that room's door (locked while
+   * it's active); `leaf` is where its swinging doors stand (see SwingDoors).
    */
   carveLink(a, b) {
     if (a.gx > b.gx || a.gy > b.gy) [a, b] = [b, a];   // a is left of / above b
+    const T = this.T;
+    const half = Math.floor(CONFIG.run.grid.hall / 2);
     const tiles = [];
     const doorA = [];
     const doorB = [];
+    let leafA;
+    let leafB;
     if (a.gy === b.gy) {
       const y = a.midY;
       for (let x = a.x1 + 1; x <= b.x0 - 1; x++) {
-        for (let dy = -1; dy <= 1; dy++) {
+        for (let dy = -half; dy <= half; dy++) {
           tiles.push([x, y + dy]);
           if (x === a.x1 + 1) doorA.push(this.idx(x, y + dy));
           if (x === b.x0 - 1) doorB.push(this.idx(x, y + dy));
         }
       }
+      const span = { a: (y - half) * T, b: (y + half + 1) * T };
+      leafA = { ns: true, x: (a.x1 + 1.5) * T, ...span };
+      leafB = { ns: true, x: (b.x0 - 0.5) * T, ...span };
     } else {
       const x = a.midX;
       for (let y = a.y1 + 1; y <= b.y0 - 1; y++) {
-        for (let dx = -1; dx <= 1; dx++) {
+        for (let dx = -half; dx <= half; dx++) {
           tiles.push([x + dx, y]);
           if (y === a.y1 + 1) doorA.push(this.idx(x + dx, y));
           if (y === b.y0 - 1) doorB.push(this.idx(x + dx, y));
         }
       }
+      const span = { a: (x - half) * T, b: (x + half + 1) * T };
+      leafA = { ns: false, y: (a.y1 + 1.6) * T, ...span };   // stands in the low south wall
+      leafB = { ns: false, y: b.y0 * T, ...span };           // at the foot of the tall north wall
     }
     for (const [x, y] of tiles) this.setFloor(x, y, ZONE.HALL);
-    a.doors.push({ tiles: doorA, to: b.id });
-    b.doors.push({ tiles: doorB, to: a.id });
+    a.doors.push({ tiles: doorA, to: b.id, leaf: leafA });
+    b.doors.push({ tiles: doorB, to: a.id, leaf: leafB });
+  }
+
+  /** The hallway (as a link { a, b }) that (x, y) is standing in, or null. */
+  hallAt(x, y) {
+    const tx = Math.floor(x / this.T);
+    const ty = Math.floor(y / this.T);
+    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows || this.zone[this.idx(tx, ty)] !== ZONE.HALL) return null;
+    const half = Math.floor(CONFIG.run.grid.hall / 2);
+    return this.links.find((l) => {
+      let a = this.rooms[l.a];
+      let b = this.rooms[l.b];
+      if (a.gx > b.gx || a.gy > b.gy) [a, b] = [b, a];
+      return a.gy === b.gy
+        ? tx > a.x1 && tx < b.x0 && Math.abs(ty - a.midY) <= half
+        : ty > a.y1 && ty < b.y0 && Math.abs(tx - a.midX) <= half;
+    }) || null;
   }
 
   /** Torches along the top wall face of every room. */
@@ -248,6 +276,7 @@ class FloorMap extends Dungeon {
   tileAt(tx, ty) {
     if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return TILE.WALL;
     if (this.locked.has(this.idx(tx, ty))) return TILE.WALL;
+    if (this.doorBlocks?.has(this.idx(tx, ty))) return TILE.WALL;   // a shut door or gate (see SwingDoors)
     return this.grid[ty][tx];
   }
 
@@ -278,8 +307,12 @@ class FloorMap extends Dungeon {
       for (let cx = x0; cx <= x1; cx++) {
         if (cx * size >= this.width || cy * size >= this.height) continue;
         const k = `${cx},${cy}`;
-        if (!this.chunks.has(k)) this.chunks.set(k, this.renderChunk(cx, cy));
-        ctx.drawImage(this.chunks.get(k), cx * size, cy * size);
+        let chunk = this.chunks.get(k);
+        if (chunk) this.chunks.delete(k);   // re-inserted below: the Map keeps the most recently drawn last
+        else chunk = this.renderChunk(cx, cy);
+        this.chunks.set(k, chunk);
+        if (this.chunks.size > MAX_CHUNKS) this.chunks.delete(this.chunks.keys().next().value);
+        ctx.drawImage(chunk, cx * size, cy * size);
       }
     }
   }
@@ -291,30 +324,39 @@ class FloorMap extends Dungeon {
     p.ctx.translate(-cx * size, -cy * size);
     const rng = seededRandom((this.seed + cx * 7919 + cy * 104729) >>> 0);
     const B = (x, y) => this.baseTile(x, y);
+    const grave = this.themeId === 'graveyard';
     for (let ty = cy * CHUNK; ty < (cy + 1) * CHUNK && ty < this.rows; ty++) {
       for (let tx = cx * CHUNK; tx < (cx + 1) * CHUNK && tx < this.cols; tx++) {
         const x = tx * T;
         const y = ty * T;
         if (B(tx, ty) === TILE.FLOOR) {
           const zone = this.zone[this.idx(tx, ty)];
-          if (zone === ZONE.ROOM && this.themeId === 'graveyard') {
-            Tiles.graveGrass(p, x, y, rng);
+          if (grave && zone === ZONE.ROOM) {
+            Grave.grass(p, x, y, rng);
             if (rng() < 0.03 && B(tx, ty - 1) === TILE.FLOOR && B(tx, ty + 1) === TILE.FLOOR) Tiles.graveDecor(p, x, y, rng);
-            else if (rng() < 0.02) Tiles.bones(p, x, y, rng);
+            else if (rng() < 0.015) Tiles.bones(p, x, y, rng);
+          } else if (grave) {
+            Grave.path(p, x, y, rng);
           } else {
             Tiles.floor(p, x, y, rng);
           }
-          // shadow under walls above
+          // soft shadow under walls above
           if (B(tx, ty - 1) !== TILE.FLOOR) {
-            p.ctx.fillStyle = 'rgba(10, 6, 18, 0.45)';
+            p.ctx.fillStyle = 'rgba(10, 6, 18, 0.42)';
             p.ctx.fillRect(x, y, T, 8);
+            p.ctx.fillStyle = 'rgba(10, 6, 18, 0.18)';
+            p.ctx.fillRect(x, y + 8, T, 6);
           }
           continue;
         }
         // walls: brick face where floor lies one or two tiles below, flat top otherwise
         const below1 = B(tx, ty + 1) === TILE.FLOOR;
         const below2 = B(tx, ty + 1) !== TILE.FLOOR && B(tx, ty + 2) === TILE.FLOOR;
-        if (below1 || below2) {
+        if (grave && (below1 || below2)) {
+          Grave.wallFace(p, x, y, below1 ? 1 : 0, rng);
+        } else if (grave) {
+          Grave.hedge(p, x, y, rng, { left: B(tx - 1, ty) === TILE.FLOOR, right: B(tx + 1, ty) === TILE.FLOOR, up: B(tx, ty - 1) === TILE.FLOOR, down: false });
+        } else if (below1 || below2) {
           Tiles.wallFace(p, x, y, below1 ? 1 : 0, rng);
         } else {
           Tiles.wallTop(p, x, y, rng);

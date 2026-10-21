@@ -7,6 +7,8 @@ class Pickup {
     this.age = 0;
     this.dead = false;
     this.magnet = 70;      // pulled toward the hero inside this range
+    this.pullSpeed = 220;  // ...this fast (px/s), plus up to pullBoost times more as it closes in
+    this.pullBoost = 0;
     this.lifetime = 20;    // seconds before it vanishes (blinks for the last 3)
     this.sound = 'pickup';
   }
@@ -34,8 +36,9 @@ class Pickup {
     if (!p) return;
     if (d < this.magnet) {
       const a = angleTo(this.x, this.y, p.x, p.y);
-      this.x += Math.cos(a) * 220 * dt;
-      this.y += Math.sin(a) * 220 * dt;
+      const speed = this.pullSpeed * (1 + (1 - d / this.magnet) * this.pullBoost);
+      this.x += Math.cos(a) * speed * dt;
+      this.y += Math.sin(a) * speed * dt;
     }
     if (d < 18) {
       this.collect(p, world);
@@ -202,7 +205,9 @@ class CoinPickup extends Pickup {
   constructor(x, y, value = 1) {
     super(x, y);
     this.value = value;
-    this.magnet = 120;
+    this.magnet = CONFIG.drops.coinMagnet;
+    this.pullSpeed = 260;
+    this.pullBoost = 1.4;   // whooshes in faster the closer it gets
     this.lifetime = 35;
     this.sound = 'coin';
     const a = rand(0, TAU);
