@@ -362,3 +362,111 @@ const Music = {
     }
   },
 };
+
+/**
+ * The Bard's music: a plucked lute voice and real melodies for her abilities.
+ * Each strum plays the next three notes of her current tune's melody, so
+ * attacking plays the tune through; switching tunes, inspiring, the lullaby and
+ * the screech each have their own phrase. Notes are MIDI numbers.
+ */
+const Bardsong = {
+  // Energetic: a lively jig in D major. Calming: a slow air in A minor. Three notes per strum.
+  melodies: {
+    energetic: [74, 78, 81, 83, 81, 78, 79, 78, 76, 74, 76, 78, 81, 78, 74, 76, 73, 69,
+      74, 78, 81, 86, 85, 83, 81, 83, 81, 78, 76, 74],
+    calming: [69, 72, 76, 74, 72, 69, 67, 71, 74, 72, 71, 67, 69, 72, 76, 79, 77, 76,
+      74, 72, 71, 69, 64, 69],
+  },
+
+  /** One plucked lute string: a bright attack mellowing as it rings out. soft = the calming tune's gentler touch. */
+  pluck(midi, { delay = 0, vol = 0.1, dur = 0.55, soft = false, bus = null } = {}) {
+    const c = Sound.ctx;
+    if (!c) return;
+    const t = c.currentTime + delay;
+    const f = 440 * 2 ** ((midi - 69) / 12);
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(soft ? 1600 : 3200, t);
+    lp.frequency.exponentialRampToValueAtTime(soft ? 380 : 600, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + (soft ? 0.012 : 0.004));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    lp.connect(g).connect(bus || Sound.sfxBus);
+    for (const [type, mul, v] of [['sawtooth', 1, soft ? 0.25 : 0.5], ['triangle', 1, 0.6], ['triangle', 2, 0.3]]) {
+      const o = c.createOscillator();
+      const og = c.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f * mul, t);
+      og.gain.value = v;
+      o.connect(og).connect(lp);
+      o.start(t);
+      o.stop(t + dur + 0.05);
+    }
+  },
+
+  /** A strum: the next three notes of the tune, rippled like fingers across the strings. */
+  strum(bard) {
+    const tune = bard.tune;
+    const mel = this.melodies[tune];
+    const soft = tune === 'calming';
+    bard.melodyAt = bard.melodyAt || { energetic: 0, calming: 0 };
+    for (let i = 0; i < 3; i++) {
+      const n = mel[(bard.melodyAt[tune] + i) % mel.length];
+      this.pluck(n, { delay: i * (soft ? 0.09 : 0.055), vol: soft ? 0.08 : 0.09, dur: soft ? 0.8 : 0.45, soft });
+    }
+    bard.melodyAt[tune] = (bard.melodyAt[tune] + 3) % mel.length;
+  },
+
+  /** Swapping tunes: a run up (energetic) or a falling arpeggio (calming). */
+  flourish(tune) {
+    const notes = tune === 'energetic' ? [74, 76, 78, 81, 86] : [81, 76, 72, 69, 64];
+    notes.forEach((n, i) => this.pluck(n, { delay: i * 0.05, vol: 0.08, dur: 0.5, soft: tune === 'calming' }));
+  },
+
+  /** Moral support: a rising fanfare ending on a ringing chord. */
+  fanfare() {
+    [67, 71, 74, 79].forEach((n, i) => this.pluck(n, { delay: i * 0.08, vol: 0.09, dur: 0.4 }));
+    [79, 83, 86].forEach((n) => this.pluck(n, { delay: 0.36, vol: 0.08, dur: 1.1 }));
+  },
+
+  /** The sleeping song: a soft lullaby that fills its whole length (through its own bus, so stopLullaby can fade it). */
+  lullaby(seconds) {
+    const c = Sound.ctx;
+    if (!c) return;
+    this.stopLullaby();
+    const bus = c.createGain();
+    bus.connect(Sound.sfxBus);
+    this.lullabyBus = bus;
+    const phrase = [[76, 1], [76, 1], [79, 2], [76, 1], [76, 1], [79, 2], [76, 1], [79, 1], [84, 2], [83, 1.5], [81, 0.5], [81, 2],
+      [74, 1], [76, 1], [77, 2], [74, 1], [76, 1], [77, 2], [74, 1], [77, 1], [83, 1], [81, 1], [79, 2], [84, 3]];
+    const beat = 0.25;
+    let t = 0;
+    for (const [n, len] of phrase) {
+      if (t > seconds - 0.4) break;
+      this.pluck(n, { delay: t, vol: 0.07, dur: 1.0, soft: true, bus });
+      if (len >= 2) this.pluck(n - 12, { delay: t, vol: 0.05, dur: 1.4, soft: true, bus });   // a low note under the long ones
+      t += len * beat;
+    }
+  },
+
+  /** Fades out a lullaby that's still playing (its notes are already scheduled, so they're silenced instead). */
+  stopLullaby() {
+    const bus = this.lullabyBus;
+    if (!bus || !Sound.ctx) return;
+    const t = Sound.ctx.currentTime;
+    bus.gain.setValueAtTime(bus.gain.value, t);
+    bus.gain.linearRampToValueAtTime(0, t + 0.4);
+    setTimeout(() => bus.disconnect(), 600);
+    this.lullabyBus = null;
+  },
+
+  /** Screeching tuning: strings wrenched out of tune, a dissonant shriek sliding up. */
+  screech() {
+    const c = Sound.ctx;
+    if (!c) return;
+    for (const [f, to] of [[880, 1760], [932, 1980], [622, 1480]]) Sound.tone({ type: 'sawtooth', freq: f, to, dur: 0.55, vol: 0.06 });
+    Sound.noise({ dur: 0.4, vol: 0.12, filter: 'bandpass', freq: 2400, to: 5200, q: 4 });
+    [61, 62, 68].forEach((n) => this.pluck(n, { vol: 0.09, dur: 0.6 }));
+  },
+};

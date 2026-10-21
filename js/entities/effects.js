@@ -3,6 +3,11 @@
 
 const PIXEL_FONT = 'Alagard, monospace';
 
+// shared palettes for the elemental effects (rim / outer first)
+const SMOKE_COLORS = ['#1c1c26', '#3e3e52', '#62627c'];
+const ICE_COLORS = ['#4a8aff', '#9ad0ff', '#e6f6ff', '#ffffff'];
+const FIRE_COLORS = ['#a8200e', '#e0461e', '#ff8a1e', '#ffd34a', '#fff6c8'];
+
 /**
  * Canvas text font for a size on the game's old 8px-grid scale (5 = smallest
  * label, 8 = normal, 20 = banner). Alagard is drawn on a 16px grid and the
@@ -95,6 +100,87 @@ class Effects {
       ctx.restore();
     });
     this.burst(x, y, { count: huge ? 22 : 16, colors: ['#ffffff', '#fff2a0', '#ffd34a', '#ff9a2a'], speed: [90, 240], life: [0.2, 0.5], size: [2, 4] });
+  }
+
+  /**
+   * Billowing cloud of pixel smoke. Each wisp bursts outward, then keeps
+   * rising while it curls along a swirling path, trailing smaller billows
+   * behind it into a tendril, and frays apart strand by strand as it thins.
+   * colors = [shadow, body, light].
+   */
+  smoke(x, y, { count = 8, radius = 16, life = 0.7, rise = 22, colors = SMOKE_COLORS } = {}) {
+    const n = Math.round(count * 1.1);
+    const wisps = Array.from({ length: n }, (_, i) => {
+      const a = (i / n) * TAU + vrand(-0.5, 0.5);
+      return {
+        a, d0: vrand(0, 0.35) * radius, out: vrand(0.5, 1.1) * radius, r: vrand(0.38, 0.62) * radius,
+        swirl: vrand(4, 10) * vchoose([-1, 1]), freq: vrand(1.5, 3), rise: vrand(0.7, 1.3),
+        delay: vrand(0, 0.12), seed: vrand(0, 100),
+      };
+    });
+    // the biggest wisps first, so the small ones curl over them
+    wisps.sort((a, b) => b.r - a.r);
+    const at = (w, u) => {
+      const e = 1 - (1 - u) ** 2.5;                             // fast burst out, then a slow drift
+      const d = w.d0 + w.out * e;
+      const s = Math.sin(u * w.freq * Math.PI + w.seed) * w.swirl * u;
+      return [
+        x + Math.cos(w.a) * d + s,
+        y + Math.sin(w.a) * d * 0.6 - rise * w.rise * u + Math.cos(u * w.freq * Math.PI + w.seed) * w.swirl * 0.4 * u,
+        e,
+      ];
+    };
+    this.add(life, (ctx, t) => {
+      ctx.save();
+      const secs = t * life;
+      for (const w of wisps) {
+        const u = clamp((t - w.delay) / (1 - w.delay), 0, 1);
+        if (u <= 0) continue;
+        ctx.globalAlpha = u < 0.6 ? 1 : 1 - (u - 0.6) / 0.45;
+        const density = u < 0.4 ? 1 : 1 - ((u - 0.4) / 0.6) * 1.05;
+        const shrink = u > 0.7 ? 1 - (u - 0.7) : 1;
+        // the tendril: smaller billows trailing back along the path, then the head on top
+        for (const [lag, scale] of [[0.24, 0.4], [0.12, 0.65], [0, 1]]) {
+          if (u - lag <= 0) continue;
+          const [px, py, e] = at(w, u - lag);
+          PFX.smokeBlob(ctx, px, py, w.r * (0.5 + 0.7 * e) * shrink * scale, colors, secs, w.seed + lag * 10, density);
+        }
+      }
+      ctx.restore();
+    });
+  }
+
+  /** Spray of spinning ice shards that slow down and fade. */
+  shards(x, y, { count = 10, speed = [120, 260], life = 0.5, len = [7, 13], width = 5, colors = ICE_COLORS, angle = null, spread = TAU, glow = true } = {}) {
+    const list = Array.from({ length: count }, () => {
+      const a = angle === null ? vrand(0, TAU) : angle + vrand(-spread / 2, spread / 2);
+      return { a, v: vrand(speed[0], speed[1]), len: vrand(len[0], len[1]), spin: vrand(-8, 8) };
+    });
+    this.add(life, (ctx, t) => {
+      const travel = (1 - Math.exp(-5 * t * life)) / 5;   // seconds of flight, slowed by drag
+      ctx.save();
+      if (glow) ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+      for (const s of list) {
+        const d = s.v * travel;
+        PFX.shard(ctx, x + Math.cos(s.a) * d, y + Math.sin(s.a) * d, s.a + s.spin * t, s.len * (1 - t * 0.4), width, colors);
+      }
+      ctx.restore();
+    });
+  }
+
+  /** Flames licking up from (x, y) for `life` seconds. colors = outer first. */
+  flames(x, y, { count = 3, spread = 10, height = 18, width = 9, life = 0.5, colors = FIRE_COLORS } = {}) {
+    const tongues = Array.from({ length: count }, () => ({
+      dx: vrand(-spread, spread), h: vrand(0.6, 1) * height, w: vrand(0.7, 1) * width, phase: vrand(0, 10),
+    }));
+    this.add(life, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const s = t < 0.25 ? t / 0.25 : 1 - (t - 0.25) / 0.75;   // flare up, then die down
+      for (const f of tongues) PFX.flame(ctx, x + f.dx, y, f.w * s, f.h * s, f.phase + t * life, colors);
+      ctx.restore();
+    });
   }
 
   /** Custom effect: draw(ctx, t) where t goes 0 -> 1 over `life` seconds. */

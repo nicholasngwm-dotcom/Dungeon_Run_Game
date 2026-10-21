@@ -403,6 +403,221 @@ const PROP_DEFS = {
   catWalk1: [16, 14, (p) => cat(p, 'walk', 0)],
   catWalk2: [16, 14, (p) => cat(p, 'walk', 1)],
 
+  // the keep's fireplace: a stone surround under a wooden mantel (the fire is drawn live)
+  hearth: [66, 60, (p) => {
+    // chimney breast rising up the wall
+    p.rect(12, 0, 42, 16, STONE[2]);
+    for (let y = 2; y < 16; y += 5) for (let x = 12 + ((y / 5) % 2) * 6; x < 52; x += 12) { p.rect(x, y, 11, 4, STONE[3]); p.rect(x, y, 11, 1, STONE[4]); }
+    // mantel shelf with candles and a little clock
+    p.rect(2, 16, 62, 6, WOOD[2]);
+    p.rect(2, 16, 62, 2, WOOD[4]);
+    p.rect(2, 21, 62, 1, WOOD[0]);
+    p.rect(8, 9, 2, 7, '#f0e8d0'); p.rect(56, 10, 2, 6, '#f0e8d0');
+    p.round(28, 8, 10, 8, WOOD[3], 2); p.circle(33, 12, 2, '#f0e8d0');
+    // stone surround
+    p.rect(5, 22, 56, 38, STONE[2]);
+    for (let y = 24; y < 58; y += 6) for (let x = 5 + ((y / 6) % 2) * 5; x < 59; x += 10) { p.rect(x, y, 9, 5, STONE[3]); p.rect(x, y, 9, 1, STONE[4]); }
+    // firebox: a soot-black arch with a grate and logs
+    p.round(16, 30, 34, 28, '#140806', 8);
+    p.rect(18, 50, 30, 8, '#24100a');
+    p.rect(20, 52, 26, 2, IRON[2]);
+    p.line(21, 50, 44, 46, WOOD[1], 3);
+    p.line(22, 46, 45, 50, WOOD[2], 3);
+    // hearthstone
+    p.rect(2, 57, 62, 3, STONE[3]);
+    p.rect(2, 57, 62, 1, STONE[4]);
+  }],
+
+  bedRed: [34, 48, (p) => bed(p, ['#5a1a22', '#87262a', '#ad3a36'])],
+  bedBlue: [34, 48, (p) => bed(p, ['#1e2c4e', '#2c4270', '#3e5a96'])],
+  bedGreen: [34, 48, (p) => bed(p, ['#1e3a2a', '#2a5a3a', '#3a7a4a'])],
+
+  // padded armchair facing right (flip it to face left)
+  armchair: [24, 28, (p) => {
+    const V = ['#3a1018', '#6a1e2a', '#8a2e36', '#a8443c'];
+    p.rect(3, 22, 2, 6, WOOD[1]); p.rect(19, 22, 2, 6, WOOD[1]);
+    p.round(1, 2, 9, 22, V[1], 3);                 // tall back
+    p.rect(3, 4, 4, 16, V[2]);
+    p.round(4, 14, 19, 10, V[2], 2);               // seat
+    p.rect(6, 14, 15, 2, V[3]);
+    p.round(16, 10, 7, 12, V[1], 2);               // arm
+    p.rect(17, 10, 5, 2, V[3]);
+    for (const [x, y] of [[5, 7], [5, 12]]) p.px(x, y, '#d4ac4c');   // buttons
+  }],
+
+  // a tall grandfather clock (its hands and pendulum are drawn live)
+  grandfatherClock: [26, 72, (p) => {
+    // hood with a scrolled crown
+    p.poly([[2, 8], [6, 3], [13, 0], [20, 3], [24, 8]], WOOD[3]);
+    p.rect(12, 0, 2, 2, '#d4ac4c');
+    p.rect(1, 8, 24, 20, WOOD[2]);
+    p.rect(1, 8, 24, 2, WOOD[4]);
+    p.rect(1, 8, 2, 20, WOOD[3]);
+    p.rect(23, 8, 2, 20, WOOD[1]);
+    // the dial: brass bezel, ivory face, hour ticks
+    p.circle(13, 18, 9, '#a07a24');
+    p.circle(13, 18, 8, '#f0e8d0');
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU;
+      p.px(Math.round(13 + Math.cos(a) * 6.5), Math.round(18 + Math.sin(a) * 6.5), i % 3 === 0 ? '#2a1a10' : '#8a7a5a');
+    }
+    // waist with a glass door over the pendulum
+    p.rect(4, 28, 18, 30, WOOD[2]);
+    p.rect(4, 28, 2, 30, WOOD[3]);
+    p.rect(20, 28, 2, 30, WOOD[1]);
+    p.rect(7, 31, 12, 24, '#1e120a');
+    p.rect(7, 31, 12, 1, WOOD[0]);
+    p.rect(8, 32, 1, 22, '#4a3a4e');                     // glint on the glass
+    // plinth and feet
+    p.rect(1, 58, 24, 12, WOOD[2]);
+    p.rect(1, 58, 24, 2, WOOD[4]);
+    p.rect(4, 62, 18, 5, WOOD[1]);
+    p.rect(1, 70, 4, 2, WOOD[1]); p.rect(21, 70, 4, 2, WOOD[1]);
+  }],
+
+  // ---------- training grounds ----------
+
+  // straw archery butt on an easel, peppered with arrows
+  target: [36, 46, (p) => {
+    p.line(6, 45, 13, 8, WOOD[1], 3); p.line(30, 45, 23, 8, WOOD[1], 3);   // easel legs
+    p.line(18, 45, 18, 30, WOOD[0], 2);
+    p.circle(18, 20, 15, '#c8a85a');                 // straw boss
+    p.circle(18, 20, 13, '#efe6d2');
+    p.circle(18, 20, 10, '#d84a4a');
+    p.circle(18, 20, 7, '#efe6d2');
+    p.circle(18, 20, 4, '#d84a4a');
+    p.circle(18, 20, 2, '#ffd34a');
+    for (const [x, y, dx] of [[20, 18, 7], [12, 24, -6], [24, 26, 8], [16, 13, -7], [21, 21, 6]]) {   // arrows stuck in it
+      p.line(x, y, x + dx, y - 4, '#8c5e36');
+      p.rect(x + dx - (dx > 0 ? 0 : 2), y - 6, 3, 3, '#efe6d2');
+    }
+    p.line(4, 8, 7, 12, '#c8a85a'); p.line(30, 30, 33, 28, '#c8a85a');     // loose straw
+  }],
+
+  // a beaten straw dummy, sagging on its post with straw spilling out
+  dummyBroken: [30, 44, (p) => {
+    p.rect(14, 18, 3, 26, WOOD[2]);
+    p.rect(14, 18, 1, 26, WOOD[3]);
+    p.poly([[6, 14], [22, 10], [24, 30], [9, 32]], '#c8a85a');          // slumped body
+    p.poly([[6, 14], [12, 13], [13, 31], [9, 32]], '#e0c47a');
+    p.line(8, 22, 22, 20, '#7a5a24', 2);                                  // rope
+    p.round(16, 2, 11, 10, '#c8a85a', 3);                                 // head lolling to one side
+    p.px(19, 6, '#3a2a10'); p.px(23, 6, '#3a2a10');
+    p.rect(19, 9, 4, 1, '#3a2a10');
+    for (const [x, y, x2, y2] of [[10, 32, 6, 40], [14, 32, 13, 42], [20, 31, 25, 41], [4, 18, 0, 22], [24, 16, 29, 14]]) p.line(x, y, x2, y2, '#e0c47a');
+    p.line(9, 26, 20, 16, '#8a2a24', 2);                                  // a deep slash
+  }],
+
+  // a pell: a thick wooden post hacked full of notches
+  pell: [16, 40, (p) => {
+    p.rect(4, 2, 9, 36, WOOD[2]);
+    p.rect(4, 2, 3, 36, WOOD[3]);
+    p.rect(4, 2, 9, 2, WOOD[4]);
+    for (const y of [8, 13, 19, 24, 30]) { p.line(5, y, 12, y + 2, WOOD[0]); p.px(7, y + 1, WOOD[1]); }
+    p.rect(1, 36, 15, 4, STONE[2]);
+    p.rect(1, 36, 15, 1, STONE[3]);
+  }],
+
+  // a big shady oak for the yard
+  tree: [72, 92, (p) => {
+    p.poly([[30, 92], [42, 92], [40, 58], [44, 48], [36, 52], [32, 46], [32, 60]], WOOD[1]);   // trunk
+    p.rect(33, 58, 3, 32, WOOD[2]);
+    p.line(30, 92, 24, 90, WOOD[1], 2); p.line(42, 92, 49, 90, WOOD[1], 2);                     // roots
+    const G = ['#1a3a1e', '#24502a', '#2e6a34', '#3e8040', '#5a9a52'];
+    for (const [cx, cy, r] of [[36, 28, 26], [18, 36, 16], [54, 36, 16], [26, 16, 14], [48, 16, 14], [36, 44, 14]]) p.circle(cx, cy, r, G[1]);
+    for (const [cx, cy, r] of [[34, 24, 20], [18, 32, 11], [52, 32, 11], [26, 13, 10], [46, 13, 10]]) p.circle(cx, cy, r, G[2]);
+    for (const [cx, cy, r] of [[30, 18, 11], [16, 28, 6], [44, 10, 6], [24, 9, 5]]) p.circle(cx, cy, r, G[3]);
+    for (const [x, y] of [[26, 12], [28, 14], [14, 26], [42, 8], [33, 16]]) p.rect(x, y, 2, 2, G[4]);
+    for (const [x, y] of [[44, 30], [22, 40], [50, 20]]) p.circle(x, y, 2, '#d84a4a');           // apples
+  }],
+
+  // a lantern on an iron post, lighting the yard
+  lampPost: [14, 56, (p) => {
+    p.rect(6, 12, 3, 42, IRON[1]);
+    p.rect(6, 12, 1, 42, IRON[3]);
+    p.rect(3, 52, 9, 4, IRON[1]);
+    p.rect(2, 2, 11, 11, IRON[1]);
+    p.rect(4, 4, 7, 7, '#ffd36a');
+    p.rect(5, 5, 3, 3, '#fff6c8');
+    p.rect(1, 0, 13, 3, IRON[2]);
+  }],
+
+  // ---------- library ----------
+
+  // long reading table with open books, a candle and a stack of tomes
+  readingTable: [60, 32, (p) => {
+    p.rect(5, 16, 4, 15, WOOD[1]); p.rect(51, 16, 4, 15, WOOD[1]);
+    p.rect(1, 9, 58, 9, WOOD[2]);
+    p.rect(1, 9, 58, 2, WOOD[4]);
+    p.rect(1, 17, 58, 1, WOOD[0]);
+    p.rect(8, 6, 16, 6, '#e8dcc0'); p.rect(16, 6, 1, 6, '#a89878');      // open book
+    for (let i = 0; i < 2; i++) { p.rect(10, 8 + i * 2, 5, 1, '#8a7a5a'); p.rect(18, 8 + i * 2, 5, 1, '#8a7a5a'); }
+    p.rect(30, 4, 12, 4, '#7a2a3a'); p.rect(31, 1, 10, 3, '#2a4a7a'); p.rect(32, -1, 9, 2, '#3a6a3a');   // book stack
+    p.rect(48, 1, 2, 9, '#f0e8d0'); p.rect(46, 9, 6, 2, '#d4ac4c');     // candle
+    p.rect(26, 9, 3, 1, '#2a1a10'); p.line(27, 9, 29, 5, '#efe6d2');     // inkwell and quill
+  }],
+
+  // a carved wooden chair facing right (flip it to face left)
+  chair: [18, 28, (p) => {
+    p.rect(2, 0, 4, 28, WOOD[2]);                    // tall back
+    p.rect(2, 0, 4, 2, WOOD[4]);
+    p.rect(3, 4, 2, 10, WOOD[3]);
+    p.rect(2, 15, 15, 4, WOOD[3]);                   // seat
+    p.rect(2, 15, 15, 1, WOOD[4]);
+    p.rect(14, 19, 3, 9, WOOD[1]);
+    p.rect(6, 15, 9, 3, '#6a1e2a');                  // cushion
+  }],
+
+  // the librarian's front desk: a counter with a ledger, a bell and returned books
+  desk: [56, 30, (p) => {
+    p.rect(2, 8, 52, 22, WOOD[2]);
+    p.rect(2, 8, 52, 2, WOOD[4]);
+    p.rect(6, 13, 20, 13, WOOD[1]); p.rect(30, 13, 20, 13, WOOD[1]);    // panels
+    p.rect(7, 14, 18, 1, WOOD[3]); p.rect(31, 14, 18, 1, WOOD[3]);
+    p.rect(8, 4, 14, 5, '#e8dcc0'); p.rect(15, 4, 1, 5, '#a89878');      // ledger
+    p.circle(30, 6, 3, '#d4ac4c'); p.px(30, 2, '#d4ac4c');               // bell
+    p.rect(38, 3, 12, 3, '#3a6a3a'); p.rect(39, 0, 10, 3, '#7a2a3a');    // returned books
+  }],
+
+  // a globe on a brass stand
+  globe: [22, 34, (p) => {
+    p.rect(9, 22, 4, 10, '#a07a24');
+    p.rect(4, 31, 14, 3, '#7a5a24');
+    p.circle(11, 12, 10, '#2c4a7a');
+    p.circle(10, 11, 8, '#3a6aa8');
+    p.poly([[6, 6], [12, 5], [13, 10], [8, 13]], '#5a9a52');               // continents
+    p.poly([[12, 14], [17, 12], [16, 18]], '#5a9a52');
+    p.px(7, 7, '#cfe0ff');
+    p.line(1, 12, 21, 12, '#d4ac4c'); p.line(11, 1, 11, 23, '#d4ac4c');
+  }],
+
+  // a rack of scrolls in pigeonholes
+  scrollRack: [36, 44, (p) => {
+    p.rect(1, 0, 34, 44, WOOD[1]);
+    p.rect(1, 0, 34, 2, WOOD[3]);
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const x = 3 + c * 8;
+        const y = 4 + r * 10;
+        p.rect(x, y, 7, 8, WOOD[0]);
+        if ((r * 4 + c) % 5 === 3) continue;
+        p.circle(x + 3, y + 4, 3, '#e8dcc0');
+        p.px(x + 3, y + 4, '#a89878');
+        if ((r + c) % 3 === 0) p.rect(x + 1, y + 3, 5, 1, '#8a2a24');   // ribbon
+      }
+    }
+  }],
+
+  // a crooked stack of books on the floor
+  bookStack: [20, 18, (p) => {
+    const cols = ['#7a2a3a', '#2a4a7a', '#3a6a3a', '#7a5a24', '#5a2a7a'];
+    cols.forEach((c, i) => {
+      const off = [0, 2, -1, 1, 0][i];
+      p.rect(2 + off, 14 - i * 3, 16, 3, c);
+      p.rect(2 + off, 14 - i * 3, 16, 1, '#e8dcc0');
+    });
+  }],
+
   rugRound: [64, 30, (p) => {
     p.ellipse(32, 15, 30, 13, '#5a1a3a');
     p.ellipse(32, 15, 27, 11, '#7a2a4a');
@@ -439,6 +654,24 @@ function cat(p, mode, step) {
   for (const [x, s] of [[2, a], [4, -a], [8, a], [10, -a]]) p.rect(x + s, 9, 1, 4, C[1]);
 }
 
+/** A wooden bed seen from the foot, headboard against the wall. blanket = [dark, mid, light]. */
+function bed(p, blanket) {
+  p.rect(1, 0, 32, 14, WOOD[2]);                    // headboard
+  p.rect(1, 0, 32, 2, WOOD[4]);
+  p.rect(4, 4, 26, 8, WOOD[1]);
+  p.rect(1, 0, 3, 48, WOOD[1]); p.rect(30, 0, 3, 48, WOOD[1]);   // posts
+  p.rect(4, 12, 26, 32, '#e8e2d4');                 // sheet
+  p.round(7, 13, 20, 8, '#f8f4ec', 3);              // pillow
+  p.rect(9, 14, 16, 2, '#ffffff');
+  p.rect(4, 22, 26, 22, blanket[1]);                // blanket folded back
+  p.rect(4, 22, 26, 3, '#f0eadc');
+  p.rect(4, 25, 26, 2, blanket[2]);
+  p.rect(4, 38, 26, 6, blanket[0]);
+  for (let x = 6; x < 30; x += 6) p.rect(x, 30, 3, 3, blanket[2]);   // quilted squares
+  p.rect(1, 43, 32, 5, WOOD[2]);                    // footboard
+  p.rect(1, 43, 32, 1, WOOD[4]);
+}
+
 /** An iron pot on three legs, filled with something (dark, light). */
 function pot(p, dark, light) {
   p.line(5, 26, 9, 18, IRON[1], 2); p.line(25, 26, 21, 18, IRON[1], 2);   // legs
@@ -467,6 +700,30 @@ function buildPropSprites() {
   for (const [name, [w, h, fn]] of Object.entries(PROP_DEFS)) {
     Sprites.props[name] = { img: PixelArt.make(w + 2, h + 2, (p) => { p.ctx.translate(1, 1); fn(p); }, OUTLINE, 'soft'), ax: Math.round(w / 2) + 1, ay: h };
   }
+  // a dummy charred black by spell practice
+  const d = Sprites.props.dummy;
+  Sprites.props.dummyBurnt = { ...d, img: charred(d.img) };
+}
+
+/** A soot-blackened copy of a sprite, with embers glowing in its darkest cracks. */
+function charred(img) {
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const d = ctx.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < d.data.length; i += 4) {
+    if (d.data[i + 3] < 40) continue;
+    const l = (d.data[i] + d.data[i + 1] + d.data[i + 2]) / 765;
+    const v = 18 + l * 70;
+    const ember = (i / 4) % 23 === 0 && l > 0.3;
+    d.data[i] = ember ? 230 : v * 1.1;
+    d.data[i + 1] = ember ? 110 : v * 0.9;
+    d.data[i + 2] = ember ? 40 : v * 0.8;
+  }
+  ctx.putImageData(d, 0, 0);
+  return c;
 }
 
 /** Draws a prop with its bottom centre at (x, y). */

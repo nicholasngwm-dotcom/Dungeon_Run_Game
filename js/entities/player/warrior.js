@@ -4,12 +4,19 @@
 // pixel effect colours, outer edge first: steel and white with the knight's red and gold
 const KNIGHT_FX = {
   slash: ['#ffffff', '#e4e7ee', '#adb2c0', '#cc5046'],
+  slashGlow: ['#6a7290', '#7c1f2a'],   // soft underlay behind slashes ('lighter')
+  flare: '#fff2a0',
   thrust: ['#adb2c0', '#e4e7ee', '#ffffff'],
   cleave: ['#a07a24', '#dcb44c', '#fbe796', '#ffffff'],
   sparks: ['#ffffff', '#e4e7ee', '#cc5046'],
   lane: '225, 230, 245',
   goldLane: '251, 220, 120',
 };
+
+const SWING_TIME = 0.16;      // seconds the blade takes to sweep a combo slash
+const SLASH_FX_LIFE = 0.28;   // the slash effect lingers a little past the blade
+/** Ease-out shared by the blade and the slash effect, so they sweep together. */
+const swingEase = (u) => 1 - (1 - u) ** 3;
 
 class Warrior extends Player {
   constructor(x, y) {
@@ -68,27 +75,76 @@ class Warrior extends Player {
 
   slash(world) {
     const c = this.cfg.combo;
-    this.swingTime = 0.16;
+    this.swingTime = SWING_TIME;
     this.swingDir *= -1;
     const arc = c.arcDegrees * DEG;
     const px = this.pivotX;
     const py = this.pivotY;
     const aim = this.aim;
+    const dir = this.swingDir;
+    let hits = 0;
     for (const t of world.getTargets()) {
       const d = dist(px, py, t.hx, t.hy);
       if (d > c.range + t.radius) continue;
-      if (d > t.radius && Math.abs(angleDiff(aim, angleTo(px, py, t.hx, t.hy))) > arc / 2) continue;
-      world.damageTarget(t, c.damage, { angle: aim, knockback: c.knockback });
+      const a = angleTo(px, py, t.hx, t.hy);
+      if (d > t.radius && Math.abs(angleDiff(aim, a)) > arc / 2) continue;
+      if (world.damageTarget(t, c.damage, { angle: aim, knockback: c.knockback })) {
+        hits++;
+        Warrior.cutFx(world, t.hx, t.hy, a + (Math.PI / 2) * dir);
+      }
     }
-    const dir = this.swingDir;
-    world.effects.add(0.18, (ctx, t) => {
-      const start = aim - (arc / 2) * dir;
+    world.effects.add(SLASH_FX_LIFE, (ctx, t) => Warrior.drawSlashFx(ctx, px, py, aim, arc, c.range, dir, t));
+    if (hits && this === world.localPlayer) world.shake(1.5 + hits * 0.5, 0.08);
+    Sound.play('slash');
+  }
+
+  /**
+   * The combo slash at t (0..1 of SLASH_FX_LIFE). The crescent's bright outer
+   * edge sits on the hit range and sweeps the full hit arc in step with the
+   * blade, then its tail chases the head and it burns out.
+   */
+  static drawSlashFx(ctx, px, py, aim, arc, range, dir, t) {
+    const sweep = SWING_TIME / SLASH_FX_LIFE;                // the blade's share of the effect
+    const u = Math.min(1, t / sweep);
+    const start = aim - (arc / 2) * dir;
+    const head = start + arc * swingEase(u) * dir;
+    const tail = start + arc * swingEase(clamp((t - sweep * 0.4) / (1 - sweep * 0.4), 0, 1)) * 0.92 * dir;
+    const fade = t < sweep ? 1 : 1 - (t - sweep) / (1 - sweep);
+    const width = 24 * (0.5 + 0.5 * fade);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.45 * fade;
+    PFX.slash(ctx, px, py, range + 2, tail, head, width * 1.7, KNIGHT_FX.slashGlow, 2, true);
+    ctx.globalCompositeOperation = 'source-over';   // solid crescent, so overlapping chunks don't blow out
+    ctx.globalAlpha = fade;
+    PFX.slash(ctx, px, py, range, tail, head, width, KNIGHT_FX.slash, 2, true);
+    ctx.globalCompositeOperation = 'lighter';
+    // speed lines just outside the edge, and a flare riding the leading tip
+    ctx.globalAlpha = 0.6 * fade;
+    if (Math.abs(head - tail) > 0.5) for (const off of [6, 11]) PFX.ring(ctx, px, py, range + off, range + off, '#e4e7ee', 2, { from: lerp(tail, head, 0.35), to: head - 0.15 * dir });
+    if (u < 1) {
+      ctx.globalAlpha = 1;
+      const hx = px + Math.cos(head) * (range - 4);
+      const hy = py + Math.sin(head) * (range - 4);
+      PFX.glow(ctx, hx, hy, 10, '255, 242, 160', 0.9);
+      PFX.star(ctx, hx, hy, 4, KNIGHT_FX.flare, '#ffffff', 2);
+    }
+    ctx.restore();
+  }
+
+  /** A bright cut flashing across a struck enemy along the swing, with a spray of sparks. */
+  static cutFx(world, x, y, angle) {
+    const len = 30;
+    world.effects.add(0.16, (ctx, t) => {
       ctx.save();
-      ctx.globalAlpha = 1 - t * t;
-      PFX.slash(ctx, px, py, c.range * 0.62, start, start + arc * Math.min(1, t * 3) * dir, 18 * (1 - t * 0.5) + 4, KNIGHT_FX.slash);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1 - t;
+      const w = 7 * (1 - t);
+      PFX.beam(ctx, x - Math.cos(angle) * len / 2, y - Math.sin(angle) * len / 2, angle, len, w, ['#cc5046', '#e4e7ee', '#ffffff'], 1);
+      PFX.glow(ctx, x, y, 9 * (1 - t) + 2, '255, 255, 255', 0.8);
       ctx.restore();
     });
-    Sound.play('slash');
+    world.effects.burst(x, y, { count: 7, colors: KNIGHT_FX.sparks, speed: [90, 200], life: [0.12, 0.28], size: [2, 3], angle, spread: 1.2 });
   }
 
   stabAttack(world) {
@@ -231,6 +287,7 @@ class Warrior extends Player {
       if (Math.random() < 0.5) world.effects.burst(this.x, this.y, { count: 1, colors: ['#c9d3dd', '#8a7a6a'], speed: [20, 60], life: [0.2, 0.3] });
       if (ch.t >= c.windup) {
         ch.dashing = true;
+        world.effects.smoke(this.x, this.y + 4, { count: 7, radius: 14, life: 0.55, rise: 8, colors: ['#3a3028', '#6a5a48', '#9a8a72'] });
         Sound.play('dash');
         world.shake(4, 0.2);
       }
@@ -290,6 +347,14 @@ class Warrior extends Player {
       // a scorched cut in the floor
       PFX.beam(ctx, x1, y1 + 10, aim, c.length, 12, [`rgba(20, 10, 10, ${0.3 * (1 - t)})`, `rgba(20, 10, 10, ${0.55 * (1 - t)})`], 3);
     }, true);
+    // rubble and dust thrown up along the cut
+    for (let i = 1; i <= 4; i++) {
+      const d = (c.length * i) / 4.5;
+      const px = x1 + Math.cos(aim) * d;
+      const py = y1 + 10 + Math.sin(aim) * d;
+      world.effects.smoke(px, py, { count: 4, radius: 10 + 6 * power, life: 0.6, rise: 14, colors: ['#3a3028', '#6a5a48', '#9a8a72'] });
+      world.effects.burst(px, py, { count: 5, colors: ['#fbe796', '#dcb44c', '#8a7a6a'], speed: [60, 160], life: [0.2, 0.45], up: 60, gravity: 200 });
+    }
     world.shake(6 + 8 * power, 0.6);
     Sound.play('explosion');
     Sound.play('heavySwing');
@@ -297,16 +362,35 @@ class Warrior extends Player {
 
   // ---------- shared ----------
 
-  /** Bright pixel streak along an attack line, pointed at the far end. colors = edge first. */
+  /**
+   * Bright pixel streak along an attack line, pointed at the far end, as wide
+   * as the line's hitbox when it lands, with a glow and a flare at the tip.
+   * colors = edge first.
+   */
   lineFx(world, x1, y1, angle, length, width, colors, life) {
+    world.effects.add(life, (ctx, t) => Warrior.drawLineFx(ctx, x1, y1, angle, length, width, colors, t));
+  }
+
+  static drawLineFx(ctx, x1, y1, angle, length, width, colors, t) {
     const k = length > 250 ? 3 : 2;
-    world.effects.add(life, (ctx, t) => {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 1 - t * t;
-      PFX.beam(ctx, x1, y1, angle, length * Math.min(1, 0.6 + t * 3), width * 0.6 * (1 - t * 0.6), colors, k);
-      ctx.restore();
-    });
+    const len = length * Math.min(1, 0.75 + t * 8);
+    const w = width * (1 - t * 0.7);
+    const tipX = x1 + Math.cos(angle) * len;
+    const tipY = y1 + Math.sin(angle) * len;
+    const core = colors[colors.length - 1];
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // the glow fills the hitbox's width; the bright core runs down its middle
+    ctx.globalAlpha = 0.3 * (1 - t);
+    PFX.beam(ctx, x1, y1, angle, len, w, [colors[0]], k);
+    ctx.globalAlpha = 1 - t * t;
+    PFX.beam(ctx, x1, y1, angle, len, w * 0.5, colors, k);
+    // flare and a shock ring where the point lands
+    PFX.glow(ctx, tipX, tipY, width * 0.5 * (1 - t) + 4, '255, 245, 220', 1 - t);
+    PFX.star(ctx, tipX, tipY, Math.round(6 * (1 - t)) + 1, core, '#ffffff', 2);
+    const r = width * (0.3 + t * 0.6);
+    PFX.ring(ctx, tipX, tipY, r, r * 0.6, colors[1] || core, 2, { thick: t < 0.5 ? 2 : 1 });
+    ctx.restore();
   }
 
   /** Charges refill one at a time; F is only on cooldown once they're all spent. */
@@ -449,15 +533,35 @@ class Warrior extends Player {
       ctx.restore();
     }
     if (this.spin) {
-      // two crescents whirling with the blade
+      // two crescents whirling with the blade, their edges tracing the spin's reach
       const a = this.spin.t * 22;
-      const r = this.cfg.spin.radius * 0.55;
+      const r = this.cfg.spin.radius;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.75;
-      for (const off of [0, Math.PI]) PFX.slash(ctx, this.x, this.hy, r, a + off - 1.5, a + off, 10, KNIGHT_FX.slash);
+      ctx.globalAlpha = 0.35;
+      for (const off of [0, Math.PI]) PFX.slash(ctx, this.x, this.hy, r + 2, a + off - 2, a + off, 22, KNIGHT_FX.slashGlow, 2, true);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.85;
+      for (const off of [0, Math.PI]) {
+        PFX.slash(ctx, this.x, this.hy, r, a + off - 1.7, a + off, 14, KNIGHT_FX.slash, 2, true);
+        PFX.star(ctx, this.x + Math.cos(a + off) * (r - 3), this.hy + Math.sin(a + off) * (r - 3), 3, KNIGHT_FX.flare, '#ffffff', 2);
+      }
       ctx.restore();
     }
+  }
+
+  /** Ability outlines while a key is held: the spin's reach, the charge's lane, the cleave's line. */
+  abilityPreview(slot) {
+    if (slot === 'e') return { circle: { x: this.x, y: this.hy, r: this.cfg.spin.radius } };
+    if (slot === 'f') {
+      const c = this.cfg.charge;
+      return { lane: { x: this.x, y: this.y, angle: this.aim, length: c.distance, width: c.width } };
+    }
+    if (slot === 'q') {
+      const c = this.cfg.ult;
+      return { lane: { x: this.pivotX, y: this.pivotY, angle: this.aim, length: c.length, width: c.width } };
+    }
+    return null;
   }
 
   get weaponReach() {
@@ -471,8 +575,10 @@ class Warrior extends Player {
     if (this.stab) return this.stab.angle;
     if (this.cleave) return -Math.PI / 2 + 0.3 * this.facing;
     if (this.swingTime > 0) {
-      const t = 1 - this.swingTime / 0.16;
-      return this.aim + lerp(-1.4, 1.4, t) * this.swingDir;
+      // follows the slash effect across the same arc
+      const half = (this.cfg.combo.arcDegrees * DEG) / 2;
+      const t = 1 - this.swingTime / SWING_TIME;
+      return this.aim + lerp(-half, half, swingEase(t)) * this.swingDir;
     }
     return this.aim - 0.5 * this.facing;
   }

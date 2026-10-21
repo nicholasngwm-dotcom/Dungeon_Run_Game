@@ -66,6 +66,57 @@ function drawShopkeeper(p, P) {
   p.round(41, 31 + b, 4, 4, Sk[2], 1);
 }
 
+/**
+ * Elowen the librarian: dark hair up in a bun with a quill through it, round
+ * glasses, a long plum dress under a cream cardigan, an open book in her hands.
+ * P.page: 0/1 turns the page (her 'read' animation).
+ */
+function drawLibrarian(p, P) {
+  const { b, hb } = P;
+  const Hr = ['#1e1414', '#3a2422', '#55332c', '#704a3e', '#8a5e4c'];
+  const D = ['#2a1230', '#4a1e4e', '#6a2e6a', '#8a4a86'];
+  const C = ['#a89878', '#cdbd9a', '#e8dcc0', '#fff6e0'];
+  const Sk = RAMP.skin;
+  const G = RAMP.gold;
+  const hem = P.cf;
+  // long dress to the floor
+  p.poly([[27, 24 + b], [39, 24 + b], [41, 34 + b], [44 + hem, 57], [21 + hem, 57], [24, 34 + b]], D[2]);
+  p.poly([[27, 24 + b], [30, 24 + b], [26 + hem, 57], [21 + hem, 57], [24, 34 + b]], D[3]);
+  p.poly([[38, 30 + b], [41, 34 + b], [44 + hem, 57], [40 + hem, 57]], D[1]);
+  p.rect(21 + hem, 56, 24, 1, D[0]);
+  for (const y of [44, 50]) p.rect(23 + hem, y, 19, 1, D[1]);           // pleats
+  // cream cardigan over the shoulders, buttoned
+  p.poly([[25, 23 + b], [41, 23 + b], [42, 34 + b], [24, 34 + b]], C[2]);
+  p.rect(25, 23 + b, 4, 11, C[3]);
+  p.rect(33, 24 + b, 1, 10, C[0]);
+  for (const y of [26, 29, 32]) p.px(34, y + b, G[2]);
+  // back arm
+  p.poly([[25, 26 + b], [28, 26 + b], [27 + P.ba, 34 + b], [24 + P.ba, 34 + b]], C[1]);
+  // face, hair cap, and a big bun on the back of the head with a quill through it
+  cuteFace(p, P, NPC_EYES.brown);
+  npcHairCap(p, P, Hr);
+  p.circle(25, 10 + hb, 5, Hr[2]);
+  p.circle(24, 9 + hb, 3, Hr[3]);
+  p.line(19, 4 + hb, 29, 14 + hb, '#efe6d2');
+  p.px(19, 4 + hb, '#8a2a24');
+  cuteBangs(p, P, Hr);
+  // round glasses
+  for (const gx of [30, 35]) {
+    p.rect(gx, 16 + b, 4, 1, G[1]); p.rect(gx, 20 + b, 4, 1, G[1]);
+    p.rect(gx - 1, 17 + b, 1, 3, G[1]); p.rect(gx + 4, 17 + b, 1, 3, G[1]);
+  }
+  p.px(34, 18 + b, G[1]);
+  // both hands holding an open book in front
+  const pg = P.page || 0;
+  p.rect(36, 27 + b, 13, 8, '#5a2a3a');
+  p.rect(37, 26 + b, 5, 8, C[3]);
+  p.rect(43, 26 + b, 5, 8, pg ? C[2] : C[3]);
+  if (pg) p.poly([[42, 26 + b], [46, 22 + b], [47, 29 + b], [42, 33 + b]], C[3]);   // page mid-turn
+  for (let i = 0; i < 3; i++) p.rect(38, 28 + i * 2 + b, 3, 1, '#8a7a5a');
+  p.poly([[35, 25 + b], [39, 25 + b], [40, 31 + b], [37, 32 + b]], C[2]);
+  p.round(38, 30 + b, 4, 4, Sk[2], 1);
+}
+
 /** Chef Bruno: chubby, a big moustache, a tall puffy hat, white jacket and a red neckerchief, ladle in hand. */
 function drawChef(p, P) {
   const { b, s } = P;
@@ -471,6 +522,7 @@ function buildNpcSprites() {
   Sprites.npcs = {
     shopkeeper: buildCuteNpc(drawShopkeeper),
     chef: buildCuteNpc(drawChef),
+    librarian: buildCuteNpc(drawLibrarian, { read: [{ page: 0 }, { page: 1 }] }),
     enchanter: buildCuteNpc(drawEnchanter),
     // hammer raised, swinging, struck (held a beat with a little bounce)
     blacksmith: buildCuteNpc(drawBlacksmith, { work: [1, 2, 3, 3].map((swing, i) => ({ swing, b: i === 3 ? 1 : 0, hb: i === 3 ? 1 : 0 })) }),

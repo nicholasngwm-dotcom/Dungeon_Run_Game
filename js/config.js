@@ -138,6 +138,28 @@ const CONFIG = {
       ult:       { charge: 1600, powerTime: 4, moveMultiplier: 0.4, maxRange: 380, flightTime: 0.35,
                    damage: 480, minPower: 0.25, radius: 170, minRadius: 80, stun: 2.5, minStun: 0.8 },
     },
+    bard: {
+      // passive: her tune plays for every hero within `radius` of her (herself included)
+      passive: { name: 'Ensemble', radius: 190 },
+      name: 'Bard',
+      hp: 225,
+      speed: 200,
+      // LMB: strum `count` magic notes in a small fan; they bob side to side as they fly
+      strum:   { damage: 17, cooldown: 0.35, count: 3, spreadDegrees: 16, speed: 430, life: 0.95, wobble: 0.45 },
+      // RMB: swap tunes. Energetic: +speed (move speed). Calming: heal hp per second.
+      tunes:   { cooldown: 1, energetic: { speed: 0.2 }, calming: { heal: 3 } },
+      // E: inspire every hero in the ensemble (passive radius): faster attacks and more damage for `duration`s,
+      // and her song swells meanwhile: Energetic gives boostSpeed, Calming heals boostHeal per second
+      morale:  { cooldown: 12, duration: 5, attackSpeed: 0.15, damage: 0.15, boostSpeed: 0.3, boostHeal: 10 },
+      // F: play a lullaby for `duration`s, free to move. Enemies within `radius` fill a sleep meter while they
+      // hear it (it drains again at meterDecay/s out of range); after `exposure`s they fall asleep for `sleep`s
+      // (bosses for bossSleep). A hit wakes a sleeper: it takes `wake`s to come round.
+      lullaby: { cooldown: 18, duration: 6, radius: 180, exposure: 3, sleep: 6, bossSleep: 4, wake: 1, meterDecay: 1 },
+      // Q: a wave of piercing notes; each enemy is hit once, knocked back and weakened for `weaken`s
+      // (deals weakenDamage less damage and takes weakenTaken more)
+      ult:     { charge: 1500, notes: 11, spreadDegrees: 70, damage: 85, speed: 470, life: 0.9, knockback: 320,
+                 weaken: 4, weakenDamage: 0.3, weakenTaken: 0.3 },
+    },
   },
 
   // ---------------------------------------------------------
@@ -152,6 +174,8 @@ const CONFIG = {
   enemyDrawScale: 1,
   // all summoners together (gravestones, necromancers, sorcerer skulls) keep at most this many
   // summoned enemies up at once (x the party's enemy count scaling), on top of their own limits
+  // summoners: at most summonCap summons alive at once across the fight; each summoner also has a
+  // lifetime limit (summonTotal in its own config) after which it stops raising anything
   summonCap: 8,
   enemies: {
     zombie: {
@@ -197,7 +221,7 @@ const CONFIG = {
     // and releases 1-3 ghosts when destroyed
     gravestone: {
       hp: 220, speed: 0, radius: 18, damage: 0, contactDamage: 0,
-      firstSpawn: 1.5, spawnInterval: 2, maxAlive: 3, spawnTypes: ['zombie', 'skeleton'],
+      firstSpawn: 1.5, spawnInterval: 2, maxAlive: 3, summonTotal: 8, spawnTypes: ['zombie', 'skeleton'],
       ghosts: [1, 3], heartChance: 0.35,
     },
     // only comes out of broken gravestones: slow, contact damage only,
@@ -256,7 +280,7 @@ const CONFIG = {
     necromancer: {
       hp: 280, speed: 46, radius: 14, damage: 16,
       preferredMin: 200, preferredMax: 330, soulEvery: 2.2, soulSpeed: 220, knockback: 200,
-      summonEvery: 7, summonCount: 3, summonMax: 6, summonTypes: ['zombie', 'skeleton', 'skeletonWarrior','bomber','candlehead'],
+      summonEvery: 7, summonCount: 3, summonMax: 6, summonTotal: 12, summonTypes: ['zombie', 'skeleton', 'skeletonWarrior','bomber','candlehead'],
     },
     // stage 2+: Reaper swings a scythe, sends waves of darkness and teleports in close
     reaper: {
@@ -286,7 +310,7 @@ const CONFIG = {
       hp: 240, speed: 44, radius: 14, damage: 18,
       preferredMin: 190, preferredMax: 320,
       handsEvery: 3.5, handsCount: 7, handsSpacing: 40, handsDelay: 0.55, handsStep: 0.08, handsRadius: 27, stun: 1.0,
-      skullsEvery: 8, skullCount: 3, skullMax: 3,
+      skullsEvery: 8, skullCount: 3, skullMax: 3, summonTotal: 9,
     },
     // summoned by the sorcerer: flies straight at you and explodes on contact
     flyingSkull: { hp: 20, speed: 150, radius: 9, damage: 35, blastRadius: 50, contactDamage: 0, coins: 0 },
@@ -337,6 +361,8 @@ const CONFIG = {
     roomCount: [11, 12, 13],                      // per stage, including start and boss
     // room objectives
     combat: { waves: [2, 3, 3], perWave: [4, 5, 5], perWaveRandom: 1 },
+    // anyone (hero, body, clone or enemy) outside a locked room is warped back in after this many seconds
+    strayReturn: 2,
     defend: { duration: [30, 36, 42], totemHp: [1000, 1300, 1650], waveEvery: 6, perWave: [3, 4, 4] },
     // defend-room enemies chase the hero once within spotRange, and give up (back to the lantern) past loseRange
     defendAI: { spotRange: 230, loseRange: 380 },
@@ -368,8 +394,8 @@ const CONFIG = {
     maxPlayers: 8,
     maxDuplicates: 2,          // at most this many of the same hero in one lobby
     // enemies scale with the party: each extra hero adds this much enemy hp / this many more enemies
-    hpPerExtraPlayer: 0.6,
-    countPerExtraPlayer: 0.2,
+    hpPerExtraPlayer: 0.75,   // tougher enemies rather than many more: 8 heroes = x6.25 hp but only x1.84 enemies
+    countPerExtraPlayer: 0.12,
     // a downed hero is picked up by a teammate holding interact by their body for `time` seconds
     revive: { time: 4, range: 40, hp: 0.35, decay: 2 },   // hp: share of max hp back; decay: progress lost per second once let go
     tickRate: 60,              // simulation steps per second (everyone steps in lockstep)

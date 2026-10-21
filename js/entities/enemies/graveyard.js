@@ -364,7 +364,7 @@ class Necromancer extends Enemy {
     if (this.summonTimer <= 0) {
       this.summonTimer = c.summonEvery;
       const alive = world.enemies.filter((e) => e.owner === this && !e.dead).length;
-      if (alive < c.summonMax && world.summonRoom() > 0) { this.setState('cast'); Sound.play('graveRumble'); }
+      if (alive < c.summonMax && world.summonRoom(this) > 0) { this.setState('cast'); Sound.play('graveRumble'); }
     }
   }
 
@@ -372,7 +372,7 @@ class Necromancer extends Enemy {
     const c = this.cfg;
     // its own limit and the cap shared by every summoner in the fight
     const alive = world.enemies.filter((e) => e.owner === this && !e.dead).length;
-    const n = Math.min(c.summonCount, c.summonMax - alive, world.summonRoom());
+    const n = Math.min(c.summonCount, c.summonMax - alive, world.summonRoom(this));
     for (let i = 0; i < n; i++) {
       const a = (i / n) * TAU + rand(-0.3, 0.3);
       world.summon(this, choose(c.summonTypes), this.x + Math.cos(a) * 50, this.y + Math.sin(a) * 34);
@@ -760,7 +760,7 @@ class SkeletonSorcerer extends Enemy {
   /** How many more skulls it may raise: its own skullMax and the summon cap shared by every summoner. */
   skullsLeft(world) {
     const alive = world.enemies.filter((e) => e.owner === this && !e.dead).length;
-    return Math.min(this.cfg.skullMax - alive, world.summonRoom());
+    return Math.min(this.cfg.skullMax - alive, world.summonRoom(this));
   }
 
   castSkulls(world) {
@@ -770,6 +770,7 @@ class SkeletonSorcerer extends Enemy {
       const pt = world.dungeon.freePoint(this.x + Math.cos(a) * 30, this.y + Math.sin(a) * 20, 8, 6);
       const skull = createEnemy('flyingSkull', pt.x, pt.y);
       skull.owner = this;
+      world.countSummon(this);
       world.addEnemy(skull);
       world.effects.burst(pt.x, pt.y - 14, { count: 8, colors: ['#9cf06a', '#d8d0bc'], speed: [30, 90], life: [0.2, 0.4] });
     }

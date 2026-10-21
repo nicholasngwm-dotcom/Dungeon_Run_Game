@@ -36,7 +36,7 @@ class Gravestone extends Enemy {
     if (this.spawnTimer > 0) return;
     this.spawnTimer = c.spawnInterval;
     const alive = world.enemies.filter((e) => e.owner === this && !e.dead).length + this.pending;
-    if (alive < c.maxAlive && world.summonRoom() > 0) this.summon(world);
+    if (alive < c.maxAlive && world.summonRoom(this) > 0) this.summon(world);
   }
 
   summon(world) {

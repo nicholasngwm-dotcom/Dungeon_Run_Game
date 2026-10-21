@@ -42,6 +42,10 @@ class Player extends Entity {
     this.poisonDps = 0;
     this.poisonTick = 0;
     this.stunTime = 0;            // stunned by enemies: can't move or act
+    // Bard support: seconds left of the Energetic tune's speed boost (and how big it is), and of Moral Support
+    this.tuneSpeed = 0;
+    this.tuneSpeedAmount = 0;
+    this.inspired = 0;
     // shop upgrades (multipliers start at 1)
     this.attackSpeed = 1;         // primary attack cooldowns recover this much faster
     this.abilityHaste = 1;        // RMB / E / F cooldowns recover this much faster
@@ -79,7 +83,8 @@ class Player extends Entity {
   get moveMultiplier() { return 1; }
   get speedMultiplier() {
     return (this.slowTime > 0 ? CONFIG.golem.slowAmount : 1) * (this.chillTime > 0 ? this.chillAmount : 1)
-      * (this.buffs.speed > 0 ? CONFIG.buffs.speed.multiplier : 1) * this.moveMultiplier * (1 + this.brew('speed'));
+      * (this.buffs.speed > 0 ? CONFIG.buffs.speed.multiplier : 1) * this.moveMultiplier * (1 + this.brew('speed'))
+      * (this.tuneSpeed > 0 ? 1 + this.tuneSpeedAmount : 1);
   }
 
   /** The value of a running potion effect (0 when none). */
@@ -126,6 +131,8 @@ class Player extends Entity {
     this.updateBrews(dt, world);
     this.updatePoison(dt, world);
     this.stunTime -= dt;
+    this.tuneSpeed -= dt;
+    this.inspired -= dt;
     if (this.aegis) {
       this.aegis.t -= dt;
       this.aegis.flash -= dt;
@@ -135,7 +142,8 @@ class Player extends Entity {
     this.busy -= dt;
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
     for (const k of Object.keys(this.cooldowns)) {
-      const rate = k === 'primary' ? this.attackSpeed * (1 + this.brew('rage')) : k === 'dodge' ? 1 : this.abilityHaste;
+      const rate = k === 'primary' ? this.attackSpeed * (1 + this.brew('rage')) * (this.inspired > 0 ? 1 + CONFIG.classes.bard.morale.attackSpeed : 1)
+        : k === 'dodge' ? 1 : this.abilityHaste;
       this.cooldowns[k] -= dt * rate;
     }
     if (this.resource) {
@@ -149,6 +157,13 @@ class Player extends Entity {
     this.cursor = { x: m.x, y: m.y };   // kept for drawing aim previews (world.mouseWorld is only this hero's while it updates)
     this.aim = angleTo(this.pivotX, this.pivotY, m.x, m.y);
     if (this.busy <= 0) this.facing = Math.cos(this.aim) >= 0 ? 1 : -1;
+
+    // sitting on a lobby seat: no moving or fighting until the lobby stands them up
+    if (this.seat) {
+      this.moving = false;
+      this.facing = this.seat.facing;
+      return;
+    }
 
     // movement
     let mx = 0;
@@ -181,15 +196,76 @@ class Player extends Entity {
 
   handleInput(world) {
     if (Input.pressed('dodge')) this.startDodge(world);
-    if (this.busy > 0 || this.channeling) return;
-    if (Input.pressed('ult')) {
-      if (this.ultReady) { this.ult = 0; this.ultimate(world); }
-      else Sound.play('denied');
-    }
-    if (Input.pressed('e')) this.tryAbility('e', world, () => this.abilityE(world));
-    if (Input.pressed('f')) this.tryAbility('f', world, () => this.abilityF(world));
+    if (this.busy > 0 || this.channeling) { this.aimHold = null; return; }
+    this.updateAbilityKeys(world);
     if (this.busy > 0 || this.channeling) return;
     this.handleMouse(world);
+  }
+
+  /**
+   * E, F and Q: holding the key shows where the ability will land (abilityPreview)
+   * and letting go casts it; a quick tap casts straight away. A key that can't be
+   * used right now is refused on the press, as before.
+   */
+  updateAbilityKeys(world) {
+    const h = this.aimHold;
+    if (h) {
+      if (Input.down(h.key)) return;   // still aiming
+      this.aimHold = null;
+      this.castSlot(h.slot, world);
+      return;
+    }
+    for (const [key, slot] of [['ult', 'q'], ['e', 'e'], ['f', 'f']]) {
+      if (!Input.pressed(key)) continue;
+      if (slot === 'q' ? !this.ultReady : this.cooldowns[slot] > 0) {
+        if (slot === 'q') Sound.play('denied');
+        else this.tryAbility(slot, world, () => {});   // the class's own refusal (sound, or nothing)
+        return;
+      }
+      if (Input.down(key) && this.abilityPreview(slot)) this.aimHold = { slot, key };
+      else this.castSlot(slot, world);
+      return;
+    }
+  }
+
+  castSlot(slot, world) {
+    if (slot === 'q') {
+      if (this.ultReady) { this.ult = 0; this.ultimate(world); }
+      else Sound.play('denied');
+    } else if (slot === 'e') this.tryAbility('e', world, () => this.abilityE(world));
+    else this.tryAbility('f', world, () => this.abilityF(world));
+  }
+
+  /**
+   * Where an ability will land, for the outline shown while its key is held:
+   * { circle: { x, y, r, sy } } | { lane: { x, y, angle, length, width } } |
+   * { cone: { x, y, angle, arc, range } } | { self: true }. null = no outline
+   * (the key then casts on press, as it always did).
+   */
+  abilityPreview() { return null; }
+
+  /** The held ability's outline on the floor (this screen's hero only). */
+  drawAbilityPreview(ctx) {
+    const shape = this.aimHold && this.abilityPreview(this.aimHold.slot);
+    if (!shape) return;
+    const rgb = '255, 236, 170';
+    const spin = this.animTime * 0.8;
+    const pulse = 0.7 + Math.sin(this.animTime * 8) * 0.15;
+    if (shape.circle) {
+      const c = shape.circle;
+      PFX.zone(ctx, c.x, c.y, c.r, 0, rgb, { sy: c.sy || 1, spin, alpha: pulse });
+    } else if (shape.lane) {
+      const l = shape.lane;
+      PFX.lane(ctx, l.x, l.y, l.x + Math.cos(l.angle) * l.length, l.y + Math.sin(l.angle) * l.length, l.width, 0, rgb);
+    } else if (shape.cone) {
+      const c = shape.cone;
+      const a0 = c.angle - c.arc / 2;
+      const a1 = c.angle + c.arc / 2;
+      for (const r of [c.range * 0.5, c.range]) PFX.ring(ctx, c.x, c.y, r, r, `rgba(${rgb}, ${r === c.range ? pulse : 0.35})`, 2, { from: a0, to: a1, dash: r === c.range ? null : [3, 3] });
+      for (const a of [a0, a1]) PFX.line(ctx, c.x, c.y, c.x + Math.cos(a) * c.range, c.y + Math.sin(a) * c.range, `rgba(${rgb}, ${pulse})`, 2, [3, 2], -this.animTime * 10);
+    } else if (shape.self) {
+      PFX.ring(ctx, this.x, this.y + 4, 26, 12, `rgba(${rgb}, ${pulse})`, 2, { dash: [3, 2], spin: spin * 3 });
+    }
   }
 
   /** Default: hold LMB for primary, press RMB for secondary. */
@@ -409,6 +485,7 @@ class Player extends Entity {
    */
   hurt(amount, world, fromX, fromY, opts = {}) {
     if (this.dead || this.isInvulnerable) return false;
+    amount *= world.weakenScale ?? 1;   // hits from a Bard-weakened enemy
     if (this.guard > 0) return true;
     amount = this.absorbAegis(amount, world);
     amount = this.absorb(amount, world, fromX, fromY, opts);
@@ -573,7 +650,10 @@ class Player extends Entity {
   }
 
   /** Damage multiplier from the POWER buff and Strength potions (applied on top of damageMultiplier). */
-  get buffDamage() { return (this.buffs.damage > 0 ? CONFIG.buffs.damage.multiplier : 1) * (1 + this.brew('strength')); }
+  get buffDamage() {
+    return (this.buffs.damage > 0 ? CONFIG.buffs.damage.multiplier : 1) * (1 + this.brew('strength'))
+      * (this.inspired > 0 ? 1 + CONFIG.classes.bard.morale.damage : 1);
+  }
 
   // ---------- potions (inventory slots 1-5) ----------
 
@@ -848,8 +928,79 @@ class Player extends Entity {
   }
 
   drawGround(ctx) {
-    drawShadow(ctx, this.x, this.y + 9, 13, 5);
+    if (!this.seat) drawShadow(ctx, this.x, this.y + 9, 13, 5);
     this.drawGroundExtras(ctx);
+    if (this.isLocal) this.drawAbilityPreview(ctx);
+  }
+
+  /**
+   * Sitting on a lobby seat: the hero's sitting pose (knees bent, body lowered),
+   * raised so the hips rest on the seat and the feet touch the floor, breathing
+   * slowly; weapon put away.
+   */
+  drawSeated(ctx) {
+    if (this.seat.bed) return this.drawInBed(ctx);
+    const frames = this.frames.sit || this.frames.idle;
+    const frame = frames[Math.floor(this.animTime * 1.2) % frames.length];
+    ctx.save();
+    ctx.translate(0, -this.seat.lift);
+    this.drawFrame(ctx, frame, HERO_ANCHOR, 1);
+    ctx.restore();
+    this.drawStatus(ctx);
+  }
+
+  /**
+   * Tucked up in a lobby bed: just the sleeping face (eyes shut, breathing)
+   * peeking out on the pillow, the bed's blanket drawn back over the body, z's
+   * drifting up. (The bed sprite is 34x48, anchored at its bottom centre.)
+   */
+  drawInBed(ctx) {
+    const bed = this.seat.prop;
+    const top = Math.round(bed.y) - 48;   // drawProp rounds the bed to whole pixels too
+    const breathe = Math.sin(this.animTime * 1.6) > 0 ? 1 : 0;
+    const frame = this.frames.idle[6];   // the blink pose: eyes closed
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(bed.x - 30, top - 30, 60, 52);
+    ctx.clip();
+    drawSprite(ctx, frame.img, bed.x, top + 50, HERO_ANCHOR.x, HERO_ANCHOR.y, false);
+    ctx.restore();
+    // the blanket over the body (the bed's own blanket rows, drawn again on top)
+    const pr = Sprites.props[bed.name];
+    ctx.drawImage(pr.img, 0, 23, pr.img.width, 22, Math.round(bed.x - pr.ax), top + 23 - breathe, pr.img.width, 22);
+    for (let i = 0; i < 3; i++) {
+      const k = (this.animTime * 0.4 + i / 3) % 1;
+      ctx.globalAlpha = k < 0.8 ? 1 : (1 - k) * 5;
+      HUD.text(ctx, i === 2 ? 'Z' : 'z', Math.round(bed.x + 10 + k * 14), Math.round(top + 4 - k * 22), { size: i === 2 ? 8 : 6, color: '#e8e0ff' });
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * Inspired by a Bard: a turning golden ring at the feet, a warm glow,
+   * sparkles spiralling up around the body and a golden note bobbing over the
+   * head, fading out over the last half second.
+   */
+  drawInspired(ctx) {
+    if (!(this.inspired > 0)) return;
+    const t = this.animTime;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = Math.min(1, this.inspired * 2);
+    PFX.ring(ctx, this.x, this.y + 6, 17, 7, 'rgba(255, 211, 74, 0.85)', 2, { dash: [2, 2], spin: t * 3 });
+    PFX.glow(ctx, this.x, this.hy, 22, '255, 211, 74', 0.3 + Math.sin(t * 6) * 0.08);
+    for (let i = 0; i < 4; i++) {
+      const a = t * 2.5 + (i * TAU) / 4;
+      const rise = (t * 26 + i * 12) % 48;
+      PFX.star(ctx, this.x + Math.cos(a) * 14, this.y + 4 - rise + Math.sin(a) * 4, rise < 24 ? 2 : 1, '#ffd34a', '#fff6c8', 2);
+    }
+    ctx.restore();
+    // the golden note over the head
+    const img = Sprites.projectiles.notes.energetic[0];
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, this.inspired * 2);
+    ctx.drawImage(img, Math.round(this.x + 9), Math.round(this.y - 62 + Math.sin(t * 4) * 2));
+    ctx.restore();
   }
 
   /** Overall sprite opacity (invisibility, vanish). */
@@ -860,6 +1011,7 @@ class Player extends Entity {
     const blink = this.invulnerable > 0 && this.flashTime <= 0 && Math.floor(this.invulnerable * 14) % 2 === 0;
     const alpha = (blink ? 0.45 : 1) * this.bodyAlpha;
     if (alpha <= 0) return this.drawExtras(ctx);
+    if (this.seat) return this.drawSeated(ctx);
     const weaponBehind = Math.sin(this.aim) < -0.35;
     ctx.globalAlpha = alpha;
     if (weaponBehind) this.drawWeapon(ctx);
@@ -869,6 +1021,7 @@ class Player extends Entity {
     if (!weaponBehind) this.drawWeapon(ctx);
     ctx.globalAlpha = 1;
     this.drawExtras(ctx);
+    this.drawInspired(ctx);
     this.drawBrews(ctx);
     this.drawPassive(ctx);
     this.drawAegis(ctx);
@@ -878,6 +1031,6 @@ class Player extends Entity {
 
 /** Factory used by the game to create the chosen hero. */
 function createHero(classId, x, y) {
-  const classes = { warrior: Warrior, ranger: Ranger, mage: Mage, rogue: Rogue, priestess: Priestess };
+  const classes = { warrior: Warrior, ranger: Ranger, mage: Mage, rogue: Rogue, priestess: Priestess, bard: Bard };
   return new classes[classId](x, y);
 }

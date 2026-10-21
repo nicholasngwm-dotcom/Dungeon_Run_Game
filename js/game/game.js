@@ -29,7 +29,7 @@ class Game {
     this.players = [];
     // a run builds its own floors (FloorMap) and sets this.dungeon
     this.run = opts.run ? new DungeonRun(this, opts.run) : null;
-    if (!this.run) this.dungeon = new Dungeon(opts.lobby ? LOBBY_LAYOUT : {});
+    if (!this.run) this.dungeon = opts.lobby ? new CastleKeep() : new Dungeon({});
     const s = this.dungeon.playerStart;
     this.roster.forEach((r, i) => {
       const off = Game.spawnOffset(i);
@@ -63,9 +63,9 @@ class Game {
     }
     this.lobby = opts.lobby ? new LobbyHub(this) : null;
     if (this.lobby) {
-      // a dummy by the practice targets to try abilities on
+      // a dummy in the sparring ring out in the yard to try abilities on
       const T = CONFIG.tileSize;
-      this.dummies.push(new TrainingDummy(31 * T, 16 * T));
+      this.dummies.push(new TrainingDummy(36.5 * T, 24.8 * T));
       if (opts.welcome) this.banner('THE LOBBY', 'Pick a hero, then head through the gate', 2.6);
     }
     if (this.run) this.run.start();
@@ -156,8 +156,16 @@ class Game {
   damageTarget(target, amount, { angle = 0, knockback = 0, sound = 'hit', noCrit = false, color = '#ffffff', fromUlt = false, source = null } = {}) {
     const src = source || this.actor || this.players[0];
     const crit = !noCrit && Math.random() < (src.critChance ?? CONFIG.player.critChance);
-    const dmg = Math.max(1, Math.round(amount * (crit ? CONFIG.player.critMultiplier : 1) * src.damageMultiplier * src.buffDamage * src.upgradeDamage));
+    // a Bard-weakened target takes extra damage
+    const weak = target.weakenUntil > this.time ? 1 + CONFIG.classes.bard.ult.weakenTaken : 1;
+    const dmg = Math.max(1, Math.round(amount * weak * (crit ? CONFIG.player.critMultiplier : 1) * src.damageMultiplier * src.buffDamage * src.upgradeDamage));
     if (!target.takeDamage(dmg, this)) return 0;
+    // a sleeping boss is jolted awake: it takes a moment to come round
+    if (this.boss && this.boss.sleepUntil > this.time + CONFIG.classes.bard.lullaby.wake && this.boss.getTargets().includes(target)) {
+      this.boss.sleepUntil = this.time + CONFIG.classes.bard.lullaby.wake;
+      this.boss.wakeAt = this.time;
+      this.effects.text(target.hx, target.hy - 40, 'WOKE UP', { color: '#c8b8ff', size: 9 });
+    }
     target.lastHitBy = src;
     if (knockback) target.knockback(angle, knockback * (src.knockbackMultiplier || 1));
     if (crit) {
@@ -182,8 +190,9 @@ class Game {
   }
 
   /** Damage over time (bleed etc.), ticking twice a second; it belongs to the hero who applied it. */
-  addDot(target, dps, duration, color = '#ff6060') {
-    this.dots.push({ target, dps, t: duration, tick: 0.5, color, source: this.actor });
+  /** kind: 'burn' (flames lick up the target), 'bleed' (drips) or null. */
+  addDot(target, dps, duration, color = '#ff6060', kind = null) {
+    this.dots.push({ target, dps, t: duration, tick: 0.5, color, kind, source: this.actor });
   }
 
   updateDots(dt) {
@@ -191,14 +200,33 @@ class Game {
       d.t -= dt;
       d.tick -= dt;
       if (d.target.dead) { d.dead = true; continue; }
+      this.dotFx(d, dt);
       if (d.tick <= 0) {
         d.tick += 0.5;
         this.damageTarget(d.target, d.dps * 0.5, { sound: null, noCrit: true, color: d.color, source: d.source });
-        this.effects.burst(d.target.hx, d.target.hy, { count: 2, colors: [d.color, '#7a1010'], speed: [10, 40], life: [0.2, 0.4] });
+        const colors = d.kind === 'burn' ? ['#ffd34a', '#ff8a1e', '#e0461e'] : [d.color, '#7a1010'];
+        this.effects.burst(d.target.hx, d.target.hy, { count: d.kind === 'burn' ? 5 : 2, colors, speed: [10, 40], life: [0.2, 0.4], up: d.kind === 'burn' ? 40 : 0 });
       }
       if (d.t <= 0) d.dead = true;
     }
     removeDead(this.dots);
+  }
+
+  /** Ongoing look of a damage-over-time effect (visual randomness only). */
+  dotFx(d, dt) {
+    const t = d.target;
+    const r = t.radius || 12;
+    if (d.kind === 'burn') {
+      // flame tongues licking up the body, embers floating off
+      if (vrand(0, 1) < dt * 22) {
+        this.effects.flames(t.hx + vrand(-r * 0.7, r * 0.7), t.hy + r * vrand(0.2, 0.9), { count: 1, height: vrand(18, 30), width: vrand(8, 12), life: vrand(0.3, 0.5) });
+      }
+      if (vrand(0, 1) < dt * 10) {
+        this.effects.burst(t.hx + vrand(-r, r), t.hy - vrand(0, r), { count: 1, colors: ['#ffd34a', '#ff8a1e', '#fff6c8'], speed: [5, 20], life: [0.4, 0.7], up: 50, size: [1, 2] });
+      }
+    } else if (d.kind === 'bleed' && vrand(0, 1) < dt * 6) {
+      this.effects.burst(t.hx + vrand(-r * 0.5, r * 0.5), t.hy, { count: 1, colors: ['#c43a44', '#6a1622'], speed: [0, 10], life: [0.3, 0.5], gravity: 300, drag: 0, size: [2, 2] });
+    }
   }
 
   /** The heroes plus anything enemies may attack instead (clones, a defend room's lantern). */
@@ -292,15 +320,24 @@ class Game {
   /**
    * Summoners (gravestones, necromancers, skeleton sorcerers) share one cap: at
    * most CONFIG.summonCap summoned enemies alive or rising at once (more with a
-   * bigger party). Returns how many more can be raised right now.
+   * bigger party). Each summoner can also only ever raise cfg.summonTotal in its
+   * life. Returns how many more `owner` (or anyone, without one) can raise right now.
    */
-  summonRoom() {
+  summonRoom(owner = null) {
     const alive = this.enemies.filter((e) => e.owner && !e.dead).length;
-    return Math.max(0, Math.round(CONFIG.summonCap * this.playerScale.count) - alive - this.pendingSummons);
+    const shared = Math.max(0, Math.round(CONFIG.summonCap * this.playerScale.count) - alive - this.pendingSummons);
+    const total = owner?.cfg?.summonTotal;
+    return total ? Math.max(0, Math.min(shared, total - (owner.summoned || 0))) : shared;
+  }
+
+  /** Counts a raised minion against its summoner's lifetime summonTotal. */
+  countSummon(owner) {
+    if (owner) owner.summoned = (owner.summoned || 0) + 1;
   }
 
   /** Raises an enemy for a summoner, counted against the summon cap until it dies. then(enemy) runs once it appears. */
   summon(owner, type, x, y, then = null) {
+    this.countSummon(owner);
     this.pendingSummons++;
     this.spawnEnemy(type, x, y, (e) => {
       this.pendingSummons = Math.max(0, this.pendingSummons - 1);
@@ -336,16 +373,24 @@ class Game {
       if (e.dead || e.age < 0.3 || e.state === 'leap') continue;
       const damage = e.cfg.contactDamage ?? CONFIG.enemyContactDamage;
       if (damage <= 0) continue;
+      this.weakenScale = Game.weakenOf(e, this);
       for (const a of this.allies) {
         if (a.contactImmune) continue;
         if (dist(e.x, e.y, a.x, a.y) < e.radius + a.radius) a.hurt(damage, this, e.x, e.y);
       }
     }
+    this.weakenScale = 1;
+  }
+
+  /** Damage scale for whatever `e` dishes out: lower while a Bard's Screeching Tuning has it weakened. */
+  static weakenOf(e, world) {
+    return e && e.weakenUntil > world.time ? 1 - CONFIG.classes.bard.ult.weakenDamage : 1;
   }
 
   /** Expanding ground ring that damages heroes/clones once as it passes. */
   addShockwave(x, y, { radius, speed, width, damage, color = '255, 150, 60' }) {
-    this.hazards.push({ x, y, r: 6, radius, speed, width, damage, color, hit: new Set() });
+    // a weakened enemy's shockwave hits softer (weakenScale is set while it acts)
+    this.hazards.push({ x, y, r: 6, radius, speed, width, damage: damage * (this.weakenScale ?? 1), color, hit: new Set() });
   }
 
   updateHazards(dt) {
@@ -622,13 +667,24 @@ class Game {
     for (const c of this.clones) { this.setActor(c.owner); c.update(dt, this); }
     this.setActor(null);
     for (const b of this.barriers) b.update(dt, this);
-    for (const e of this.enemies) e.update(dt, this);
+    // while each enemy acts, weakenScale tones down the hits it lands and the shots it fires
+    for (const e of this.enemies) {
+      this.weakenScale = Projectile.enemyScale = Game.weakenOf(e, this);
+      e.update(dt, this);
+    }
+    this.weakenScale = Projectile.enemyScale = 1;
     this.separateEnemies();
     this.contactDamage();
     if (this.boss) {
       this.updateBossFocus(dt);
       this.bossFocus = this.boss.focus;
-      this.boss.update(dt, this);
+      // the Bard's sleeping song can put a boss to sleep for a moment
+      this.weakenScale = Projectile.enemyScale = Game.weakenOf(this.boss, this);
+      if (this.boss.sleepMeter > 0 && this.boss.lullabyTick !== this.time) {
+        this.boss.sleepMeter = Math.max(0, this.boss.sleepMeter - CONFIG.classes.bard.lullaby.meterDecay * dt);
+      }
+      if (!(this.boss.sleepUntil > this.time)) this.boss.update(dt, this);
+      this.weakenScale = Projectile.enemyScale = 1;
       this.bossFocus = null;
       if (this.boss.dead) this.boss = null;
     }
@@ -773,6 +829,8 @@ class Game {
     for (const cl of this.clones) cl.drawGround(ctx);
     for (const d of this.dummies) d.drawGround(ctx);
     for (const p of this.players) if (p.dead && this.multiplayer) p.drawDowned(ctx, this.time);
+    // aim previews (targeting rings, placement ghosts) are only drawn for this screen's hero
+    for (const p of this.players) p.isLocal = !this.multiplayer || p === this.localPlayer;
     for (const p of this.heroes) p.drawGround(ctx);
 
     // y-sorted characters
@@ -793,13 +851,48 @@ class Game {
     this.effects.draw(ctx);
     if (this.boss) HUD.drawBossBars(ctx, this.boss);
     this.dungeon.drawTorches(ctx, this.time, this.camera);
+    if (this.lobby) this.lobby.drawLighting(ctx, this.camera);   // night falls over the keep (under the prompts and names)
     if (this.lobby) this.lobby.drawPrompts(ctx);
     if (this.multiplayer) this.drawNameTags(ctx);
+    if (this.boss) this.drawBossSleep(ctx);
     this.effects.drawTexts(ctx);
     ctx.restore();
 
     ctx.drawImage(this.vignette, 0, 0);
     HUD.draw(ctx, this);
+  }
+
+  /**
+   * The Bard's lullaby on a boss: its sleep meter filling while it hears the
+   * song, z's while it sleeps, a startled "!" when a hit wakes it.
+   */
+  drawBossSleep(ctx) {
+    const b = this.boss;
+    const x = Math.round(b.x);
+    const y = Math.round(b.y - 120);
+    const c = CONFIG.classes.bard.lullaby;
+    if (b.sleepUntil > this.time) {
+      if (b.wakeAt > this.time - c.wake) {
+        HUD.text(ctx, '!', x, y - 4 - Math.max(0, Math.sin((this.time - b.wakeAt) * 12)) * 6, { size: 14, align: 'center', color: '#ffe680' });
+        return;
+      }
+      for (let i = 0; i < 3; i++) {
+        const k = (this.time * 0.5 + i / 3) % 1;
+        ctx.globalAlpha = k < 0.8 ? 1 : (1 - k) * 5;
+        HUD.text(ctx, i === 2 ? 'Z' : 'z', Math.round(x + 8 + k * 20), Math.round(y - k * 26), { size: i === 2 ? 12 : 8, color: '#c8b8ff' });
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
+    if (!(b.sleepMeter > 0)) return;
+    const k = clamp(b.sleepMeter / c.exposure, 0, 1);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 31, y - 1, 62, 6);
+    ctx.fillStyle = '#2a2448';
+    ctx.fillRect(x - 30, y, 60, 4);
+    ctx.fillStyle = '#a898f0';
+    ctx.fillRect(x - 30, y, Math.round(60 * k), 4);
+    HUD.text(ctx, 'DROWSY', x, y - 12, { size: 7, align: 'center', color: '#c8b8ff' });
   }
 
   /** Multiplayer: every other hero's name and health over their head. */

@@ -8,7 +8,18 @@ const ARCHER_FX = {
   rapidGlow: '168, 204, 106',
   zone: '168, 204, 106',
   frost: ['#4a8aff', '#9ad0ff', '#e6f6ff'],
+  leafSmoke: ['#24361a', '#4a6e32', '#6a8e44'],
 };
+
+/** Faint streak behind a flying arrow. colors = edge first. */
+function arrowStreak(ctx, p, len, width, colors, alpha) {
+  const back = Math.atan2(p.vy, p.vx) + Math.PI;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = alpha;
+  PFX.beam(ctx, p.x, p.y, back, len, width, colors, 2);
+  ctx.restore();
+}
 
 class Ranger extends Player {
   constructor(x, y) {
@@ -54,6 +65,7 @@ class Ranger extends Player {
     if (!(this.camo > 0)) return;
     this.camo = 0;
     world.effects.burst(this.hx, this.hy, { count: 12, colors: ARCHER_FX.leaves, speed: [40, 120], life: [0.2, 0.4] });
+    world.effects.smoke(this.hx, this.hy + 4, { count: 5, radius: 12, life: 0.5, colors: ARCHER_FX.leafSmoke });
     world.effects.text(this.hx, this.hy - 30, 'REVEALED', { color: '#d8c8a0', size: 7 });
   }
 
@@ -81,6 +93,10 @@ class Ranger extends Player {
       sprite: Sprites.projectiles.arrow,
       glow: rapid ? ARCHER_FX.rapidGlow : null,
       trail: rapid ? ['#a8cc6a', '#e0d2aa'] : ['#e0d2aa'],
+      // a wind streak behind the arrow (green and longer while rapid firing)
+      aura: rapid
+        ? (ctx, p) => arrowStreak(ctx, p, 30, 6, ['#4a6e32', '#a8cc6a', '#f0ffd8'], 0.7)
+        : (ctx, p) => arrowStreak(ctx, p, 18, 3, ['#8a7a6a', '#e0d2aa'], 0.45),
     }));
     Sound.play('arrow');
   }
@@ -94,6 +110,7 @@ class Ranger extends Player {
     this.slowTime = 0; // cleanse
     this.chillTime = 0;
     world.effects.burst(this.hx, this.hy, { count: 24, colors: ARCHER_FX.leaves, speed: [60, 160], life: [0.3, 0.6] });
+    world.effects.smoke(this.hx, this.hy + 4, { count: 9, radius: 18, life: 0.7, colors: ARCHER_FX.leafSmoke });
     world.effects.text(this.hx, this.hy - 30, 'CAMO', { color: '#a8cc6a', size: 8 });
     Sound.play('dash');
   }
@@ -142,10 +159,42 @@ class Ranger extends Player {
     this.shootElemental(world, c, {
       sprite: Sprites.projectiles.fireArrow,
       pierce: c.pierce, glow: '255, 130, 40', trail: ['#ff8a1e', '#ffd34a', '#e0461e'],
+      // a flickering comet tail of fire
+      aura: (ctx, p) => {
+        const flicker = Math.sin(p.age * 40) * 4 + Math.sin(p.age * 27) * 3;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        PFX.glow(ctx, p.x, p.y, 22, '255, 110, 30', 0.9);
+        ctx.restore();
+        arrowStreak(ctx, p, 46 + flicker, 15 + flicker * 0.4, FIRE_COLORS, 0.95);
+        // flame tongues licking up off the shaft
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const back = Math.atan2(p.vy, p.vx) + Math.PI;
+        for (let i = 1; i <= 3; i++) {
+          PFX.flame(ctx, p.x + Math.cos(back) * i * 9, p.y + Math.sin(back) * i * 9 + 3, 10 - i * 2, 20 - i * 4, p.age + i, FIRE_COLORS);
+        }
+        ctx.restore();
+      },
+      // embers and little flames shed along the way
+      fx: (p, dt, w) => {
+        if (vrand(0, 1) < dt * 30) {
+          w.effects.burst(p.x + vrand(-4, 4), p.y + vrand(-4, 4), { count: 1, colors: ['#ffd34a', '#ff8a1e', '#fff6c8'], speed: [10, 40], life: [0.3, 0.6], up: 50, size: [1, 3] });
+        }
+        if (vrand(0, 1) < dt * 18) w.effects.flames(p.x, p.y + 6, { count: 1, height: vrand(14, 22), width: 9, life: 0.4 });
+      },
       onStrike: (p, w, t) => {
+        // the target goes up in flames
+        w.effects.flames(t.hx, t.hy + (t.radius || 12) * 0.6, { count: 4, spread: 10, height: 28, width: 11, life: 0.55 });
+        w.effects.burst(t.hx, t.hy, { count: 14, colors: FIRE_COLORS, speed: [60, 180], life: [0.2, 0.5], up: 40, angle: Math.atan2(p.vy, p.vx), spread: 1.6 });
         if (t.dead) return;
-        w.addDot(t, c.burnDps, c.burnDuration, '#ff8a1e');
+        w.addDot(t, c.burnDps, c.burnDuration, '#ff8a1e', 'burn');
         w.effects.text(t.hx, t.hy - 34, 'BURN', { color: '#ff8a1e', size: 7 });
+      },
+      onHit: (p, w) => {
+        w.effects.flames(p.x, p.y + 6, { count: 3, spread: 8, height: 20, width: 9, life: 0.5 });
+        w.effects.burst(p.x, p.y, { count: 10, colors: FIRE_COLORS, speed: [40, 140], life: [0.2, 0.45], up: 30 });
+        w.effects.smoke(p.x, p.y - 4, { count: 4, radius: 8, life: 0.6, colors: ['#2a2129', '#4a3a3a', '#6a5a52'] });
       },
     });
     Sound.play('fireballCast');
@@ -157,6 +206,27 @@ class Ranger extends Player {
     this.shootElemental(world, c, {
       sprite: Sprites.projectiles.iceArrow,
       glow: '140, 220, 255', trail: ['#9ad0ff', '#e6f6ff'],
+      // a cold aura: frosty tail with snowflakes circling the arrowhead
+      aura: (ctx, p) => {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        PFX.glow(ctx, p.x, p.y, 20, '140, 210, 255', 0.8);
+        for (let i = 0; i < 3; i++) {
+          const a = p.age * 9 + (i * TAU) / 3;
+          PFX.star(ctx, p.x + Math.cos(a) * 11, p.y + Math.sin(a) * 7, 2, '#9ad0ff', '#ffffff', 2);
+        }
+        ctx.restore();
+        arrowStreak(ctx, p, 26, 8, ICE_COLORS, 0.8);
+      },
+      // snow drifting off, and the odd shard flaking away
+      fx: (p, dt, w) => {
+        if (vrand(0, 1) < dt * 24) {
+          w.effects.burst(p.x + vrand(-5, 5), p.y + vrand(-5, 5), { count: 1, colors: ['#ffffff', '#e6f6ff', '#9ad0ff'], speed: [5, 20], life: [0.4, 0.7], gravity: 40, size: [1, 2] });
+        }
+        if (vrand(0, 1) < dt * 6) {
+          w.effects.shards(p.x, p.y, { count: 1, speed: [20, 50], life: 0.4, len: [5, 7], width: 3, angle: Math.atan2(p.vy, p.vx) + Math.PI, spread: 1.4 });
+        }
+      },
       onHit: (p, w) => this.iceNova(w, p.x, p.y),
     });
   }
@@ -169,29 +239,61 @@ class Ranger extends Player {
       else t.stun?.(c.freeze);
     }
     world.effects.burst(x, y, { count: 28, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [80, 240], life: [0.3, 0.6], size: [2, 4] });
-    const spin = rand(0, TAU);
-    world.effects.add(0.4, (ctx, t) => {
-      // an expanding frost ring with ice shards bursting out
+    world.effects.shards(x, y, { count: 18, speed: [160, 320], life: 0.55, len: [9, 16], width: 6 });
+    world.effects.smoke(x, y + 4, { count: 8, radius: c.radius * 0.45, life: 0.8, rise: 10, colors: ['#5a8ab8', '#9ac8ea', '#e6f6ff'] });
+    const spin = vrand(0, TAU);
+    world.effects.add(0.45, (ctx, t) => {
+      // a flash, then an expanding frost ring
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 1 - t;
-      const r = c.radius * (0.3 + t * 0.7);
-      PFX.disc(ctx, x, y, r, r, 'rgba(140, 220, 255, 0.3)', 3);
+      const r = c.radius * (0.3 + t * 0.75);
+      PFX.glow(ctx, x, y, c.radius * 0.6 * (1 - t) + 6, '200, 240, 255', 1.4);
+      PFX.disc(ctx, x, y, r, r, 'rgba(140, 220, 255, 0.25)', 3);
       PFX.ring(ctx, x, y, r, r, '#e6f6ff', 3, { thick: 2 });
-      for (let i = 0; i < 8; i++) {
-        const a = spin + (i / 8) * TAU;
-        PFX.beam(ctx, x + Math.cos(a) * r * 0.35, y + Math.sin(a) * r * 0.35, a, r * (i % 2 ? 0.45 : 0.6), 8, ARCHER_FX.frost);
-      }
+      PFX.ring(ctx, x, y, r * 0.75, r * 0.75, '#9ad0ff', 2, { dash: [2, 2], spin: spin + t * 2 });
+      PFX.star(ctx, x, y, Math.round(10 * (1 - t)) + 1, '#9ad0ff', '#ffffff', 2);
       ctx.restore();
     });
-    // frost left on the floor, glinting with crystals
-    const glints = Array.from({ length: 7 }, () => [rand(-0.6, 0.6) * c.radius, rand(-0.6, 0.6) * c.radius]);
-    world.effects.add(c.freeze, (ctx, t) => {
-      PFX.disc(ctx, x, y, c.radius * 0.8, c.radius * 0.8, `rgba(160, 220, 255, ${0.22 * (1 - t)})`, 4);
-      PFX.ring(ctx, x, y, c.radius * 0.8, c.radius * 0.8, `rgba(230, 246, 255, ${0.35 * (1 - t)})`, 2, { dash: [2, 3] });
-      ctx.globalAlpha = 1 - t;
-      for (const [gx, gy] of glints) PFX.star(ctx, x + gx, y + gy, 2, '#9ad0ff', '#ffffff');
-      ctx.globalAlpha = 1;
+    // a ring of ice spikes bursting up out of the floor, standing while enemies are frozen, then crumbling
+    const spikes = Array.from({ length: 11 }, (_, i) => {
+      const a = spin + (i / 11) * TAU + vrand(-0.15, 0.15);
+      const d = c.radius * vrand(0.35, 0.85);
+      return { x: x + Math.cos(a) * d, y: y + Math.sin(a) * d * 0.7, len: vrand(22, 38), lean: vrand(-0.35, 0.35), delay: vrand(0, 0.12) };
+    });
+    spikes.sort((a, b) => a.y - b.y);
+    const fx = world.effects;
+    let shattered = false;
+    fx.add(c.freeze, (ctx, t) => {
+      const secs = t * c.freeze;
+      if (!shattered && t > 0.82) {
+        // the spikes shatter as the freeze wears off
+        shattered = true;
+        for (const s of spikes) fx.shards(s.x, s.y - s.len * 0.5, { count: 3, speed: [40, 110], life: 0.35, len: [5, 8], width: 4 });
+      }
+      // a pale sheet of frost on the floor
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.disc(ctx, x, y, c.radius * 0.85, c.radius * 0.6, `rgba(90, 150, 210, ${0.3 * (1 - t)})`, 4);
+      PFX.ring(ctx, x, y, c.radius * 0.85, c.radius * 0.6, `rgba(230, 246, 255, ${0.6 * (1 - t)})`, 2, { dash: [2, 3] });
+      ctx.restore();
+      const fade = t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2;
+      ctx.save();
+      for (const s of spikes) {
+        const grow = clamp((secs - s.delay) / 0.12, 0, 1);
+        if (grow <= 0) continue;
+        const len = s.len * (1 - (1 - grow) ** 2) * (t > 0.8 ? fade : 1);
+        const a = -Math.PI / 2 + s.lean;
+        ctx.globalAlpha = fade;
+        PFX.disc(ctx, s.x, s.y, 6, 3, 'rgba(154, 208, 255, 0.6)', 2);           // icy mound at the base
+        PFX.shard(ctx, s.x + Math.cos(a) * len * 0.45, s.y + Math.sin(a) * len * 0.45, a, len + 2, 14, ['#2a4a8a', '#2a4a8a', '#2a4a8a']);
+        PFX.shard(ctx, s.x + Math.cos(a) * len * 0.45, s.y + Math.sin(a) * len * 0.45, a, len, 11, ICE_COLORS);
+      }
+      // glints running over the spikes
+      ctx.globalAlpha = fade;
+      const g = spikes[Math.floor(secs * 6) % spikes.length];
+      PFX.star(ctx, g.x, g.y - g.len * 0.6, 2, '#9ad0ff', '#ffffff', 2);
+      ctx.restore();
     }, true);
     world.shake(4, 0.2);
     Sound.play('explosion');
@@ -249,6 +351,14 @@ class Ranger extends Player {
         imp.done = true;
         this.hitCircle(world, imp.x, imp.y, c.impactRadius, c.damage, { knockback: 40, sound: 'arrowRain', fromUlt: true });
         world.effects.burst(imp.x, imp.y, { count: 4, colors: ['#8a7a6a', '#efe6d2'], speed: [20, 70], life: [0.15, 0.3] });
+        const { x: ix, y: iy } = imp;
+        world.effects.add(0.25, (ctx, t) => {
+          // a puff of dust ringing out where the arrow thuds in
+          ctx.save();
+          ctx.globalAlpha = 1 - t;
+          PFX.ring(ctx, ix, iy, 6 + t * 14, (6 + t * 14) * 0.5, '#c8b898', 2);
+          ctx.restore();
+        }, true);
         Sound.play('arrowRain', 0.04);
       }
       if (v.impacts.every((i) => i.done)) v.dead = true;
@@ -258,8 +368,8 @@ class Ranger extends Player {
 
   drawGroundExtras(ctx) {
     const c = this.cfg.ult;
-    if (this.camo > 0) this.drawDetectRing(ctx);
-    if (this.choosingArrow) {
+    if (this.camo > 0 && this.isLocal) this.drawDetectRing(ctx);
+    if (this.choosingArrow && this.isLocal) {
       // aim line, half fire / half ice
       const len = 90;
       const cos = Math.cos(this.aim);
@@ -270,7 +380,7 @@ class Ranger extends Player {
         PFX.line(ctx, x0, y0, x0 + cos * len, y0 + sin * len, col, 2, [3, 2], -this.animTime * 12);
       }
     }
-    if (this.targeting) {
+    if (this.targeting && this.isLocal) {
       const pulse = 1 + Math.sin(this.animTime * 8) * 0.04;
       PFX.zone(ctx, this.targetPos.x, this.targetPos.y, c.radius * pulse, 0, ARCHER_FX.zone, { spin: this.animTime * 0.6 });
       // crosshair in the middle
@@ -304,7 +414,7 @@ class Ranger extends Player {
 
   drawExtras(ctx) {
     // "!" over enemies that can see through the camo
-    if (this.camo > 0) {
+    if (this.camo > 0 && this.isLocal) {
       for (const e of this.spotters()) {
         const x = Math.round(e.x);
         const y = Math.round(e.y - e.barOffset - 16);
@@ -322,9 +432,26 @@ class Ranger extends Player {
         const until = imp.time - v.t;
         if (imp.done || until > 0.2) continue;
         const h = (until / 0.2) * 220;
+        // a pale streak above each falling arrow
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.5;
+        PFX.beam(ctx, imp.x, imp.y - h, -Math.PI / 2, 28, 3, ['#8a7a6a', '#efe6d2'], 2);
+        ctx.restore();
         drawRotated(ctx, img, imp.x, imp.y - h, img.width / 2, img.height / 2, Math.PI / 2);
       }
     }
+  }
+
+  /** Ability outlines while a key is held: rapid fire on herself, the elemental arrow's line, the volley's circle. */
+  abilityPreview(slot) {
+    if (slot === 'e') return { self: true };
+    if (slot === 'f') {
+      const c = this.cfg.elemental.fire;
+      return { lane: { x: this.pivotX, y: this.pivotY, angle: this.aim, length: c.speed * 1.4, width: 14 } };
+    }
+    if (slot === 'q') return { circle: { x: this.targetPos.x, y: this.targetPos.y, r: this.cfg.ult.radius } };
+    return null;
   }
 
   get weaponReach() { return this.recoil > 0 ? 6 : 10; }

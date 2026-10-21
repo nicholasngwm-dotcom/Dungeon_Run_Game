@@ -38,7 +38,13 @@ class Enemy extends Entity {
     this.attackCooldown -= dt;
     this.moving = false;
     this.updateKnockback(dt, world);
+    if (this.frozenTime > 0) this.frozenFx(dt, world);
     this.frozenTime -= dt;
+    this.weakened = this.weakenUntil > world.time;   // (for drawing)
+    if (this.asleep && !(this.stunTime > dt)) this.asleep = false;
+    this.waking = (this.waking || 0) - dt;
+    // the Bard's lullaby meter drains whenever no lullaby reached this enemy this tick
+    if (this.sleepMeter > 0 && this.lullabyTick !== world.time) this.sleepMeter = Math.max(0, this.sleepMeter - CONFIG.classes.bard.lullaby.meterDecay * dt);
     if (this.stunTime > 0) {
       this.stunTime -= dt;
       return;
@@ -93,9 +99,23 @@ class Enemy extends Entity {
     super.knockback(angle, force * (1 - this.knockbackResist));
   }
 
+  /** Lulled by the Bard's lullaby: a long stun that a hit breaks (it then takes a moment to come round). */
+  sleep(duration) {
+    this.stun(duration);
+    if (this.stunTime > 0) this.asleep = true;
+  }
+
   /** Returns true if the damage was applied. */
   takeDamage(amount, world) {
     if (this.dead) return false;
+    if (this.asleep) {
+      this.asleep = false;
+      // jolted awake: a second of blinking and shaking it off before it can act
+      this.waking = CONFIG.classes.bard.lullaby.wake;
+      this.stunTime = this.waking;
+      this.sleepMeter = 0;
+      world.effects.text(this.hx, this.hy - 30, 'WOKE UP', { color: '#c8b8ff', size: 7 });
+    }
     this.hp -= amount * (1 - (this.cfg.armor || 0));   // armoured enemies shrug off part of every hit
     this.flashTime = 0.1;
     if (this.hp <= 0) this.die(world);
@@ -205,24 +225,139 @@ class Enemy extends Entity {
     if (this.stunTime > 0) this.frozenTime = this.stunTime;
   }
 
-  /** Circling stars over stunned enemies (an ice block if frozen). */
-  drawStun(ctx) {
-    if (!(this.stunTime > 0)) return;
-    if (this.frozenTime > 0) {
-      const w = this.radius * 2 + 8;
-      const h = this.barOffset - 6;
-      const x = Math.round(this.x - w / 2);
-      const y = Math.round(this.y + 6 - h);
-      ctx.fillStyle = 'rgba(150, 220, 255, 0.35)';
-      ctx.fillRect(x, y, w, h);
-      ctx.fillStyle = 'rgba(230, 248, 255, 0.55)';
-      ctx.fillRect(x + 3, y + 3, 3, h - 10);
-      ctx.fillRect(x + 3, y + 3, w / 2, 2);
-      ctx.strokeStyle = 'rgba(200, 240, 255, 0.85)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-      return;
+  /** While frozen: snow motes drifting off the ice; when it thaws, the block shatters (visual only). */
+  frozenFx(dt, world) {
+    if (vrand(0, 1) < dt * 6) {
+      world.effects.burst(this.x + vrand(-this.radius, this.radius), this.y - vrand(0, this.barOffset - 10), {
+        count: 1, colors: ['#e6f6ff', '#9ad0ff'], speed: [5, 15], life: [0.4, 0.7], up: 20, size: [1, 2],
+      });
     }
+    if (this.frozenTime - dt > 0 || this.dead) return;
+    const cy = this.y - (this.barOffset - 6) / 2 + 6;
+    world.effects.shards(this.x, cy, { count: 12, speed: [80, 200], life: 0.45, len: [6, 11], width: 4 });
+    world.effects.burst(this.x, cy, { count: 10, colors: ['#ffffff', '#e6f6ff', '#9ad0ff'], speed: [40, 140], life: [0.2, 0.45], size: [2, 3] });
+    Sound.play('bounce', 0.1);
+  }
+
+  /** Pixel ice crystal around a frozen enemy: jagged top, lit facets, a glint sweeping across, frost at its feet. */
+  drawIceBlock(ctx) {
+    const w = this.radius * 2 + 10;
+    const h = this.barOffset - 4;
+    const x0 = Math.round(this.x - w / 2);
+    const yb = Math.round(this.y + 6);
+    const cols = Math.ceil(w / 2);
+    const spikes = [6, 1, 4, 0, 3, 7, 2, 5];
+    const glint = ((this.animTime * 0.6) % 1.6) * cols;
+    PFX.ring(ctx, this.x, this.y + 6, w * 0.7, w * 0.25, 'rgba(200, 240, 255, 0.55)', 2, { dash: [2, 2], spin: this.animTime * 0.5 });
+    for (let i = 0; i < cols; i++) {
+      const top = yb - h + spikes[i % spikes.length];
+      const x = x0 + i * 2;
+      const right = i > cols * 0.62;
+      ctx.fillStyle = right ? 'rgba(90, 160, 235, 0.42)' : 'rgba(150, 220, 255, 0.36)';
+      ctx.fillRect(x, top, 2, yb - top);
+      // diagonal facet line catching the light
+      ctx.fillStyle = 'rgba(230, 248, 255, 0.4)';
+      ctx.fillRect(x, top + 4 + Math.round(i * 1.2), 2, 2);
+      // bright rim along the jagged top, and the sweeping glint
+      ctx.fillStyle = i === 0 || right ? 'rgba(200, 235, 255, 0.85)' : '#ffffff';
+      ctx.fillRect(x, top, 2, 2);
+      if (Math.abs(i - glint) < 1) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.fillRect(x, top, 2, yb - top);
+      }
+    }
+    // outline: sides and base
+    ctx.fillStyle = 'rgba(220, 245, 255, 0.85)';
+    ctx.fillRect(x0 - 1, yb - h + spikes[0], 1, h - spikes[0]);
+    ctx.fillRect(x0 + cols * 2, yb - h + spikes[(cols - 1) % spikes.length], 1, h - spikes[(cols - 1) % spikes.length]);
+    ctx.fillRect(x0, yb - 1, cols * 2, 1);
+    if (Math.floor(this.animTime * 3) % 2) PFX.star(ctx, x0 + 4, yb - h + 10, 2, '#9ad0ff', '#ffffff');
+  }
+
+  /** Weakened by Screeching Tuning: a sickly violet haze and a down arrow over the head. */
+  drawWeaken(ctx) {
+    if (!this.weakened) return;
+    const pulse = 0.5 + Math.sin(this.animTime * 6) * 0.2;
+    drawGlow(ctx, this.x, this.hy, this.radius + 10, '150, 80, 200', pulse * 0.5);
+    const x = Math.round(this.x + this.radius + 4);
+    const y = Math.round(this.y - this.barOffset - 2 + Math.sin(this.animTime * 4) * 2);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 2, y - 5, 5, 7);
+    ctx.fillRect(x - 4, y + 1, 9, 3);
+    ctx.fillRect(x - 2, y + 3, 5, 3);
+    ctx.fillStyle = '#b070e0';
+    ctx.fillRect(x - 1, y - 4, 3, 6);
+    ctx.fillRect(x - 3, y + 2, 7, 1);
+    ctx.fillRect(x - 1, y + 3, 3, 2);
+  }
+
+  /** Lazy "z z Z" drifting up from a sleeping enemy. */
+  drawSleep(ctx) {
+    const y0 = this.y - this.barOffset - 4;
+    for (let i = 0; i < 3; i++) {
+      const k = (this.animTime * 0.6 + i / 3) % 1;
+      const x = Math.round(this.x + 4 + k * 12 + Math.sin(k * 6 + i) * 3);
+      const y = Math.round(y0 - k * 18);
+      const big = i === 2;
+      ctx.globalAlpha = k < 0.8 ? 1 : (1 - k) * 5;
+      HUD.text(ctx, big ? 'Z' : 'z', x, y, { size: big ? 8 : 6, color: '#c8b8ff' });
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** The lullaby's sleep meter filling over a drowsy enemy: a little lavender bar with a "z". */
+  drawSleepMeter(ctx) {
+    const k = clamp(this.sleepMeter / CONFIG.classes.bard.lullaby.exposure, 0, 1);
+    const w = 22;
+    const x = Math.round(this.x - w / 2);
+    const y = Math.round(this.y - this.barOffset - 8);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 1, y - 1, w + 2, 5);
+    ctx.fillStyle = '#2a2448';
+    ctx.fillRect(x, y, w, 3);
+    ctx.fillStyle = k > 0.8 && Math.floor(this.animTime * 10) % 2 ? '#e8e0ff' : '#a898f0';
+    ctx.fillRect(x, y, Math.round(w * k), 3);
+    HUD.text(ctx, 'z', x + w + 3, y - 3, { size: 6, color: '#c8b8ff' });
+  }
+
+  /**
+   * Jolted awake: a second of coming round - a startled "!" popping up, the
+   * last z's scattering, and dizzy little lines shaking off its head.
+   */
+  drawWaking(ctx) {
+    const k = 1 - this.waking / CONFIG.classes.bard.lullaby.wake;   // 0 just woken .. 1 fully awake
+    const y0 = this.y - this.barOffset - 6;
+    // "!" pops up with a bounce, then settles
+    const pop = k < 0.25 ? Math.sin((k / 0.25) * Math.PI) * 6 : 0;
+    HUD.text(ctx, '!', Math.round(this.x), Math.round(y0 - 6 - pop), { size: 10, align: 'center', color: '#ffe680' });
+    // the z's flying apart as it wakes
+    ctx.globalAlpha = Math.max(0, 1 - k * 2);
+    for (let i = 0; i < 3; i++) {
+      const a = -Math.PI / 2 + (i - 1) * 0.8;
+      const d = 6 + k * 40;
+      HUD.text(ctx, 'z', Math.round(this.x + Math.cos(a) * d), Math.round(y0 + Math.sin(a) * d), { size: 6, color: '#c8b8ff' });
+    }
+    ctx.globalAlpha = 1;
+    // shaking off the sleep: little lines either side of the head, flicking
+    if (Math.floor(this.animTime * 12) % 2) {
+      ctx.fillStyle = '#e8e0ff';
+      const hy = Math.round(this.hy - this.radius);
+      for (const s of [-1, 1]) {
+        const x = Math.round(this.x + s * (this.radius + 4));
+        ctx.fillRect(x, hy, 1, 4);
+        ctx.fillRect(x + s * 3, hy + 2, 1, 4);
+      }
+    }
+  }
+
+  /** Circling stars over stunned enemies (an ice block if frozen, z's if asleep, a startled "!" while waking). */
+  drawStun(ctx) {
+    this.drawWeaken(ctx);
+    if (this.sleepMeter > 0 && !this.asleep) this.drawSleepMeter(ctx);
+    if (!(this.stunTime > 0)) return;
+    if (this.frozenTime > 0) return this.drawIceBlock(ctx);
+    if (this.asleep) return this.drawSleep(ctx);
+    if (this.waking > 0) return this.drawWaking(ctx);
     const y = this.y - this.barOffset - 8;
     for (let i = 0; i < 3; i++) {
       const a = this.animTime * 6 + (i * TAU) / 3;

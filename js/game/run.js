@@ -194,6 +194,7 @@ class DungeonRun {
       if (inside && inside.state === 'idle' && !this.active) this.enter(inside, p);
     }
     if (this.active) this.updateRoom(dt);
+    if (this.active) this.containRoom(dt);
     this.updateSpikes(dt);
     this.updateProps(dt);
     this.decor.update(dt, w);
@@ -239,6 +240,7 @@ class DungeonRun {
     r.state = 'active';
     f.activeRoom = r;
     for (const d of r.doors) if (!d.secret) f.lock(d.tiles);
+    for (const e of [...w.players, ...w.clones, ...w.enemies]) e.strayTime = 0;
     if (by) {
       let i = 0;
       for (const p of w.heroes) {
@@ -272,6 +274,34 @@ class DungeonRun {
       case 'boss':
         this.startBoss(r);
         break;
+    }
+  }
+
+  /**
+   * While a room is locked, anyone who ends up outside it (heroes, downed
+   * bodies, clones or enemies: knocked through a doorway, dashed out, spawned
+   * on the wrong side) is warped back in after CONFIG.run.strayReturn seconds.
+   */
+  containRoom(dt) {
+    const w = this.world;
+    const f = this.floor;
+    const r = this.active;
+    const delay = CONFIG.run.strayReturn;
+    for (const e of [...w.players, ...w.clones, ...w.enemies]) {
+      if (e.dead && !w.players.includes(e)) continue;
+      if (f.roomAt(e.x, e.y) === r) { e.strayTime = 0; continue; }
+      e.strayTime = (e.strayTime || 0) + dt;
+      if (e.strayTime < delay) continue;
+      e.strayTime = 0;
+      const p = f.randomPointIn(r, 2);
+      const pt = f.freePoint(p.x, p.y, e.hw || 9, e.hh || 6);
+      w.effects.burst(e.x, e.y - 14, { count: 14, colors: ['#b45aff', '#e0c0ff'], speed: [30, 100], life: [0.2, 0.5] });
+      e.x = pt.x;
+      e.y = pt.y;
+      e.kbx = 0;   // drop any knockback that would carry them straight back out
+      e.kby = 0;
+      w.effects.burst(e.x, e.y - 14, { count: 14, colors: ['#b45aff', '#e0c0ff'], speed: [30, 100], life: [0.2, 0.5], up: 30 });
+      if (e === w.localPlayer) w.camera.follow(e.x, e.y - 16, 0, w.dungeon.width, w.dungeon.height, true);
     }
   }
 

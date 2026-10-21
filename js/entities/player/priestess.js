@@ -6,7 +6,21 @@
 const PRIESTESS_FX = {
   beam: ['#a07a24', '#dcb44c', '#fbe796', '#ffffff'],
   gold: '255, 230, 128',
+  motes: ['#ffffff', '#fff6c8', '#ffe680'],
 };
+
+/** A cross of light flaring at (x, y): arms `size` long, fading over t (0..1). */
+function holyCross(ctx, x, y, size, t, k = 2) {
+  const s = size * (t < 0.2 ? t / 0.2 : 1 - (t - 0.2) * 0.6);
+  const w = Math.max(k, 8 * (1 - t));
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 1 - t;
+  PFX.glow(ctx, x, y, s * 0.8, PRIESTESS_FX.gold, 1.2);
+  PFX.beam(ctx, x, y - s, Math.PI / 2, s * 2.3, w, PRIESTESS_FX.beam, k, false);   // the upright runs long below
+  PFX.beam(ctx, x - s * 0.75, y, 0, s * 1.5, w, PRIESTESS_FX.beam, k, false);
+  ctx.restore();
+}
 
 class Priestess extends Player {
   constructor(x, y) {
@@ -85,6 +99,17 @@ class Priestess extends Player {
         ctx.restore();
       });
       world.effects.burst(x, y, { count: 12, colors: ['#ffffff', '#fff6c8', '#ffe680'], speed: [40, 140], life: [0.2, 0.4], up: 60 });
+      // a cross flaring where it lands, a shock ring on the floor, and motes drifting up the pillar
+      world.effects.add(0.4, (ctx, t) => holyCross(ctx, x, y - 10, 16, t));
+      world.effects.add(0.35, (ctx, t) => {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 1 - t;
+        const rr = c.radius * (0.6 + t * 0.8);
+        PFX.ring(ctx, x, y, rr, rr * 0.55, '#fbe796', 2, { thick: t < 0.4 ? 2 : 1 });
+        ctx.restore();
+      }, true);
+      world.effects.burst(x, y - 20, { count: 10, colors: PRIESTESS_FX.motes, speed: [5, 25], life: [0.5, 0.9], up: 70, size: [1, 2] });
       Sound.play('laser', 0.05);
     }
     removeDead(this.rays);
@@ -110,6 +135,25 @@ class Priestess extends Player {
         vy: Math.sin(angle) * c.speed,
         radius: 6, damage: c.damage, life: c.life, knockback: 50,
         sprite: Sprites.projectiles.lightMissile, glow: '255, 230, 128', trail: ['#ffe680', '#fff6c8'],
+        // a twinkling star riding the missile, and sparkles hanging in its wake
+        aura: (ctx, p) => {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          PFX.star(ctx, p.x, p.y, Math.floor(p.age * 12) % 2 ? 5 : 3, '#fbe796', '#ffffff', 2);
+          ctx.restore();
+        },
+        fx: (p, dt, w) => {
+          if (vrand(0, 1) > dt * 16) return;
+          const sx = p.x + vrand(-3, 3);
+          const sy = p.y + vrand(-3, 3);
+          w.effects.add(vrand(0.25, 0.45), (ctx, t) => {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 1 - t;
+            PFX.star(ctx, sx, sy, t < 0.5 ? 2 : 1, '#ffe680', '#ffffff', 2);
+            ctx.restore();
+          });
+        },
         target: targets.length ? targets[i % targets.length] : null,
         homing: (p, dt, w) => {
           if (!p.target || p.target.dead || !w.getTargets().includes(p.target)) p.target = nearestTarget(w, p.x, p.y, 420);
@@ -128,6 +172,8 @@ class Priestess extends Player {
   }
 
   mark(target, world) {
+    const { hx: x, hy: y } = target;
+    world.effects.add(0.3, (ctx, t) => holyCross(ctx, x, y, 10, t));
     if (target.dead) return;
     if (!this.marks.has(target)) world.effects.text(target.hx, target.hy - 34, 'MARKED', { color: '#ffe680', size: 7 });
     this.marks.set(target, world.time + this.cfg.missiles.markDuration);
@@ -169,6 +215,16 @@ class Priestess extends Player {
     const pt = this.aimPoint(world, c.maxRange);
     this.runes.push({ x: pt.x, y: pt.y, t: 0 });
     world.effects.burst(pt.x, pt.y, { count: 18, colors: ['#9cf0a0', '#ffe680', '#ffffff'], speed: [30, 110], life: [0.3, 0.6], up: 40 });
+    // a ring of light settling down onto the rune
+    const rad = c.radius;
+    world.effects.add(0.4, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1 - t * 0.5;
+      const e = 1 - (1 - t) ** 2;
+      PFX.ring(ctx, pt.x, pt.y - 50 * (1 - e), rad * (1.4 - 0.4 * e), rad * (1.4 - 0.4 * e) * MAGIC_CIRCLE_SY, '#c8ffd0', 2, { thick: 2 });
+      ctx.restore();
+    });
     Sound.play('burstCharge');
   }
 
@@ -267,7 +323,16 @@ class Priestess extends Player {
     const c = this.cfg.ult;
     for (const b of this.bombs) {
       b.t += dt;
-      if (b.t < c.flightTime) continue;
+      if (b.t < c.flightTime) {
+        // sparkles streaming off the bomb in flight
+        const k = b.t / c.flightTime;
+        if (vrand(0, 1) < dt * 40) {
+          world.effects.burst(lerp(b.x0, b.x1, k) + vrand(-5, 5), lerp(b.y0, b.y1, k) - Math.sin(k * Math.PI) * 60 + vrand(-5, 5), {
+            count: 1, colors: PRIESTESS_FX.motes, speed: [5, 25], life: [0.3, 0.5], size: [1, 3],
+          });
+        }
+        continue;
+      }
       b.dead = true;
       const radius = lerp(c.minRadius, c.radius, b.power);
       const damage = c.damage * lerp(c.minPower, 1, b.power);
@@ -289,6 +354,26 @@ class Priestess extends Player {
           const a = (i / 12) * TAU + t;
           const r0 = radius * 0.3;
           PFX.beam(ctx, x + Math.cos(a) * r0, y + Math.sin(a) * r0, a, radius * (0.3 + t) * (i % 2 ? 0.7 : 1), 8, PRIESTESS_FX.beam, 3);
+        }
+        ctx.restore();
+      });
+      // a towering cross of light, a second shock ring along the floor, glitter settling for a while
+      world.effects.add(0.7, (ctx, t) => holyCross(ctx, x, y - radius * 0.3, radius * 0.7, t, 3));
+      world.effects.add(0.6, (ctx, t) => {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 1 - t;
+        const rr = radius * (0.5 + t * 0.9);
+        PFX.ring(ctx, x, y, rr, rr * 0.55, '#fff6c8', 3, { thick: t < 0.3 ? 3 : 1 });
+        ctx.restore();
+      }, true);
+      const glitter = Array.from({ length: 14 }, () => [vrand(-0.8, 0.8) * radius, vrand(-0.5, 0.5) * radius, vrand(0, 10)]);
+      world.effects.add(1.6, (ctx, t) => {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 1 - t;
+        for (const [gx, gy, ph] of glitter) {
+          if (Math.sin(ph + t * 30) > 0.3) PFX.star(ctx, x + gx, y + gy - t * 20, 2, '#ffe680', '#ffffff', 2);
         }
         ctx.restore();
       });
@@ -326,7 +411,7 @@ class Priestess extends Player {
 
   drawGroundExtras(ctx) {
     for (const r of this.runes) this.drawRune(ctx, r);
-    if (this.placingRune && this.world) {
+    if (this.placingRune && this.world && this.isLocal) {
       // preview: the rune, pulsing where it would land
       const pt = this.aimPoint(this.world, this.cfg.rune.maxRange);
       this.drawRune(ctx, { x: pt.x, y: pt.y, t: 1 + (this.animTime % 1) }, 0.55 + Math.sin(this.animTime * 8) * 0.15);
@@ -340,7 +425,7 @@ class Priestess extends Player {
       const power = this.bombPower;
       PFX.zone(ctx, pt.x, pt.y, lerp(c.minRadius, c.radius, power), power, power >= 1 ? '255, 250, 200' : PRIESTESS_FX.gold, { spin: this.animTime * 0.5 });
     }
-    if (this.choosingAegis && this.world) {
+    if (this.choosingAegis && this.world && this.isLocal) {
       const a = this.allyAtCursor(this.world);
       PFX.ring(ctx, a.x, a.y + 4, 20, 9, 'rgba(255, 230, 128, 0.85)', 2, { dash: [2, 2], spin: this.animTime * 3 });
     }
@@ -414,6 +499,23 @@ class Priestess extends Player {
     PFX.disc(ctx, x, y, r * 0.45, r * 0.45, '#ffffff', 2);
     if (Math.floor(this.animTime * 10) % 2) PFX.star(ctx, x, y, Math.max(2, Math.round(r * 0.6)), '#fbe796', '#ffffff', 2);
     ctx.restore();
+  }
+
+  /** Ability outlines while a key is held: where the rune goes, who gets the aegis, the light bomb's blast. */
+  abilityPreview(slot) {
+    if (slot === 'e') {
+      const pt = this.aimPoint(this.world, this.cfg.rune.maxRange);
+      return { circle: { x: pt.x, y: pt.y, r: this.cfg.rune.radius, sy: MAGIC_CIRCLE_SY } };
+    }
+    if (slot === 'f') {
+      const a = this.world ? this.allyAtCursor(this.world) : this;
+      return { circle: { x: a.x, y: a.y + 4, r: 24, sy: 0.5 } };
+    }
+    if (slot === 'q') {
+      const pt = this.aimPoint(this.world, this.cfg.ult.maxRange);
+      return { circle: { x: pt.x, y: pt.y, r: this.cfg.ult.radius } };
+    }
+    return null;
   }
 
   get weaponReach() { return this.recoil > 0 ? 5 : 8; }

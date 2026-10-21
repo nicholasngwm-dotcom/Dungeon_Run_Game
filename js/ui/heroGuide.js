@@ -111,6 +111,26 @@ const HERO_GUIDE = {
   }),
 };
 
+HERO_GUIDE.bard = (c) => ({
+  role: 'Support - Buffer',
+  difficulty: 2,
+  blurb: 'Plays tunes that speed up or heal the team, inspires everyone around her, lulls enemies to sleep and weakens them with a screech.',
+  abilities: [
+    { key: 'PASSIVE', name: c.passive.name, tags: [],
+      desc: `Your tune plays for every hero within ${c.passive.radius} px of you, yourself included. Stay close to your team.` },
+    { key: 'LMB', icon: 'primary', name: 'Magical Strumming', tags: [`${c.strum.count} x ${c.strum.damage} dmg`, `every ${sec(c.strum.cooldown)}`],
+      desc: `Strum ${c.strum.count} magic notes in a small fan. They bob side to side as they fly, in the colour of your current tune.` },
+    { key: 'RMB', icon: 'secondary', name: 'Switch Tunes', tags: [`${sec(c.tunes.cooldown)} cd`],
+      desc: `Swap between two tunes. Energetic: everyone in your ensemble moves ${pct(c.tunes.energetic.speed)} faster. Calming: everyone in it heals ${c.tunes.calming.heal} hp per second.` },
+    { key: 'E', icon: 'e', name: 'Inspire', tags: [`${sec(c.morale.duration)}`, `${sec(c.morale.cooldown)} cd`],
+      desc: `Inspire every hero in your ensemble: ${pct(c.morale.attackSpeed)} faster attacks and ${pct(c.morale.damage)} more damage for ${sec(c.morale.duration)}. Your tune swells too: Energetic gives ${pct(c.morale.boostSpeed)} speed, Calming heals ${c.morale.boostHeal} hp per second.` },
+    { key: 'F', icon: 'f', name: 'Lullaby', tags: [`${sec(c.lullaby.duration)} song`, `${sec(c.lullaby.cooldown)} cd`],
+      desc: `Play a lullaby for ${sec(c.lullaby.duration)} - you can walk around while you play. Enemies within ${c.lullaby.radius} px fill a sleep meter while they hear it; after ${sec(c.lullaby.exposure)} they fall asleep for ${sec(c.lullaby.sleep)} (bosses ${sec(c.lullaby.bossSleep)}). A hit wakes a sleeper, but it takes ${sec(c.lullaby.wake)} to come round.` },
+    { key: 'Q', icon: 'q', name: 'Screeching Tuning', tags: [`charge: deal ${c.ult.charge} dmg`, `${c.ult.damage} dmg`],
+      desc: `Launch a wave of ${c.ult.notes} piercing notes that hit each enemy once, knock it back and weaken it for ${sec(c.ult.weaken)}: it deals ${pct(c.ult.weakenDamage)} less damage and takes ${pct(c.ult.weakenTaken)} more.` },
+  ],
+});
+
 /** The guide for a hero class. */
 function heroGuide(id) {
   return HERO_GUIDE[id](CONFIG.classes[id]);

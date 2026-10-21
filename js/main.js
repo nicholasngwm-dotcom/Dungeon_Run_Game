@@ -43,7 +43,7 @@ const App = {
 
     Input.init(this.canvas);
     Menus.init(this);
-    this.menuDungeon = new Dungeon();
+    this.menuDungeon = new CastleKeep();   // the main menu drifts over the keep the party calls home
 
     Display.init(this.stage);
 
@@ -488,7 +488,8 @@ const App = {
     const ctx = this.ctx;
     const x = (Math.sin(this.menuTime * 0.08) * 0.5 + 0.5) * (d.width - CONFIG.screen.width);
     ctx.save();
-    ctx.translate(-Math.round(x), -40);
+    const y = 60 + (Math.sin(this.menuTime * 0.05) * 0.5 + 0.5) * 260;
+    ctx.translate(-Math.round(x), -Math.round(y));
     d.draw(ctx);
     d.drawTorches(ctx, this.menuTime);
     ctx.restore();

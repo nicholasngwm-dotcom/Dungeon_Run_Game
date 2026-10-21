@@ -115,7 +115,22 @@ function buildItemSprites() {
       p.px(36, 7, '#8aa8ff');
       p.px(36, 6, '#ffffff');
     }),
-    // the rogue's dagger (also thrown): red-wrapped grip, brass guard, keen steel
+    // the bard's lute: a round pear-shaped body with a rose sound-hole, a long neck, a bent-back pegbox
+    lute: weapon(39, 18, 9, 9, (p) => {
+      const W = ['#3a1e10', '#6a3a1c', '#9a5a2a', '#c8823e', '#e8a85a'];
+      p.ellipse(9, 9, 8, 7, W[2]);                          // body
+      p.ellipse(8, 8, 6, 5, W[3]);
+      p.rect(4, 5, 3, 1, W[4]);
+      p.circle(10, 9, 2, W[0]);                             // carved rose
+      p.px(10, 9, B[2]);
+      p.rect(16, 7, 16, 3, W[1]);                           // neck and fretboard
+      p.rect(16, 7, 16, 1, W[3]);
+      for (let x = 19; x < 31; x += 3) p.px(x, 8, B[2]);    // frets
+      p.poly([[32, 6], [37, 3], [38, 6], [33, 10]], W[1]);  // pegbox bent back
+      for (const [x, y] of [[34, 4], [36, 3], [35, 9]]) p.px(x, y, B[2]);
+      p.line(3, 9, 32, 8, '#efe6d2');                       // strings
+      p.rect(0, 7, 2, 4, B[1]);                             // tail piece
+    }),
     dagger: weapon(20, 8, 4, 4, (p) => {
       p.rect(1, 3, 5, 2, '#9a2230');
       p.px(2, 3, '#3a0c14');
@@ -204,6 +219,17 @@ function buildItemSprites() {
       p.circle(10, 10, 4, TEAL[3]);
       p.circle(9, 9, 2, TEAL[4]);
       p.rect(8, 8, 2, 2, '#ffffff');
+    }),
+    // the bard's magic notes, one pair per tune (a single note and a beamed pair)
+    notes: {
+      energetic: [sprite(12, 16, (p) => musicNote(p, 1, ['#a8401e', '#ff8a3a', '#ffd38a'])), sprite(16, 16, (p) => musicNote(p, 2, ['#a8401e', '#ff8a3a', '#ffd38a']))],
+      calming: [sprite(12, 16, (p) => musicNote(p, 1, ['#1e5a7a', '#5ac8e6', '#c8f4ff'])), sprite(16, 16, (p) => musicNote(p, 2, ['#1e5a7a', '#5ac8e6', '#c8f4ff']))],
+    },
+    // Screeching Tuning: a jagged, cracked violet note
+    screech: sprite(16, 18, (p) => {
+      musicNote(p, 1, ['#5a1a6a', '#b04ae0', '#f0c8ff']);
+      p.line(1, 2, 4, 6, '#ffffff'); p.line(4, 6, 2, 9, '#ffffff');
+      p.line(14, 3, 11, 7, '#f0c8ff'); p.line(11, 7, 13, 10, '#f0c8ff');
     }),
     golemFireball: sprite(22, 22, (p) => {
       p.circle(11, 11, 9, '#a8241a');
@@ -311,4 +337,26 @@ function buildItemSprites() {
     p.rect(17, 12, 6, 1, sack[0]);
   }, OUTLINE, 0.5);
   Sprites.items.dummy = { img: dummy, flash: PixelArt.silhouette(dummy) };
+}
+
+/**
+ * A pixel music note: kind 1 = an eighth note (head, stem, flag), 2 = two
+ * beamed notes. colors = [dark, body, light]; drawn near the top-left of the surface.
+ */
+function musicNote(p, kind, [dark, body, light]) {
+  if (kind === 2) {
+    p.ellipse(4, 13, 3, 2, body);
+    p.ellipse(12, 11, 3, 2, body);
+    p.px(3, 12, light); p.px(11, 10, light);
+    p.rect(6, 2, 2, 11, dark);
+    p.rect(14, 0, 2, 11, dark);
+    p.poly([[6, 2], [16, 0], [16, 3], [6, 5]], body);
+    p.poly([[6, 2], [16, 0], [16, 1], [6, 3]], light);
+    return;
+  }
+  p.ellipse(4, 12, 4, 3, body);
+  p.px(2, 11, light); p.px(3, 10, light);
+  p.rect(7, 1, 2, 11, dark);
+  p.poly([[8, 1], [11, 4], [11, 8], [9, 6]], body);
+  p.px(9, 2, light);
 }

@@ -9,7 +9,40 @@ const ROGUE_FX = {
   blood: ['#ffffff', '#c43a44', '#6a1622'],
   amber: '240, 176, 48',
   red: '#c43a44',
+  cloud: ['#14141c', '#2c2c3a', '#4a4a60'],     // smoke-bomb puffs: rim, body, light
 };
+
+/** Steel streak behind a thrown dagger. colors = edge first. */
+function daggerStreak(colors, len = 16) {
+  return (ctx, p) => {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.6;
+    PFX.beam(ctx, p.x, p.y, Math.atan2(p.vy, p.vx) + Math.PI, len, 4, colors, 2);
+    ctx.restore();
+  };
+}
+
+/** Smoke bomb: a billowing cloud with red sparks flicking out of it. */
+function smokeBomb(world, x, y, size = 1) {
+  world.effects.smoke(x, y, { count: Math.round(9 * size), radius: 18 * size, life: 0.75, rise: 18, colors: ROGUE_FX.cloud });
+  world.effects.burst(x, y - 4, { count: Math.round(10 * size), colors: ['#9a2230', '#c43a44', '#56566e'], speed: [60, 160], life: [0.2, 0.45], size: [2, 3] });
+}
+
+/** Red X cut flashing across a struck enemy. */
+function crossCut(world, x, y, angle) {
+  world.effects.add(0.22, (ctx, t) => {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 1 - t;
+    const len = 26 * Math.min(1, t * 6 + 0.3);
+    for (const off of [0.7, -0.7]) {
+      const a = angle + off;
+      PFX.beam(ctx, x - Math.cos(a) * len / 2, y - Math.sin(a) * len / 2, a, len, 5 * (1 - t), ROGUE_FX.slash, 1);
+    }
+    ctx.restore();
+  });
+}
 
 class Rogue extends Player {
   constructor(x, y) {
@@ -128,6 +161,7 @@ class Rogue extends Player {
       vy: Math.sin(angle) * this.cfg.dagger.speed,
       radius: 5, damage, life: 0.9, knockback: 70,
       sprite: Sprites.weapons.dagger.img,
+      aura: daggerStreak(['#56566e', '#adb2c0', '#ffffff']),
       ...opts,
     }));
   }
@@ -161,7 +195,9 @@ class Rogue extends Player {
       s.next += c.interval;
       this.throwAnim = 0.06;
       for (let i = 0; i < 2; i++) {
-        this.throwDagger(world, this.aim + rand(-0.5, 0.5) * c.spreadDegrees * DEG, c.damage, { trail: ['#f0c040'] });
+        this.throwDagger(world, this.aim + rand(-0.5, 0.5) * c.spreadDegrees * DEG, c.damage, {
+          trail: ['#f0c040'], glow: ROGUE_FX.amber, aura: daggerStreak(['#a07a24', '#f0c040', '#fff2a0'], 22),
+        });
       }
       Sound.play('dagger', 0.1);
     }
@@ -181,6 +217,7 @@ class Rogue extends Player {
     this.facing = Math.cos(angle) >= 0 ? 1 : -1;
     Sound.play('dash');
     world.effects.burst(this.x, this.y, { count: 10, colors: ROGUE_FX.smoke, speed: [40, 100], life: [0.2, 0.4] });
+    world.effects.smoke(this.x, this.y - 6, { count: 5, radius: 11, life: 0.5, rise: 10, colors: ROGUE_FX.cloud });
     // a red slash streak along the dash path
     const x0 = this.pivotX;
     const y0 = this.pivotY;
@@ -208,10 +245,11 @@ class Rogue extends Player {
       world.damageTarget(t, c.damage, { angle: d.angle, knockback: 200 });
       if (!t.dead) this.marks.set(t, world.time + c.markDuration);
       if (wounded && !t.dead) {
-        world.addDot(t, c.bleedDps, c.bleedDuration);
+        world.addDot(t, c.bleedDps, c.bleedDuration, undefined, 'bleed');
         world.effects.text(t.hx, t.hy - 34, 'BLEED', { color: '#ff6060', size: 7 });
       }
       world.effects.burst(t.hx, t.hy, { count: 8, colors: ROGUE_FX.blood, speed: [80, 180] });
+      crossCut(world, t.hx, t.hy, d.angle);
     }
 
     d.ghostTimer -= dt;
@@ -219,7 +257,10 @@ class Rogue extends Player {
       d.ghostTimer = 0.03;
       this.afterimage(world, 0.25, 0.45);
     }
-    if (d.t >= c.duration) this.dash = null;
+    if (d.t >= c.duration) {
+      this.dash = null;
+      world.effects.smoke(this.x, this.y - 6, { count: 4, radius: 9, life: 0.4, rise: 8, colors: ROGUE_FX.cloud });
+    }
   }
 
   // ---------- E: parry ----------
@@ -273,19 +314,21 @@ class Rogue extends Player {
     const c = this.cfg.ult;
     this.vanish = c.vanish;
     this.iframes = Math.max(this.iframes, c.vanish);
-    world.effects.burst(this.hx, this.hy, { count: 24, colors: ['#3e3e52', '#56566e', '#9a2230'], speed: [40, 140], life: [0.3, 0.6] });
+    // vanishes into a smoke bomb...
+    smokeBomb(world, this.x, this.hy + 6, 1.4);
     Sound.play('dash');
     world.after(c.vanish, () => {
       if (this.dead) return;
       const start = rand(0, TAU);
+      // ...and every clone (and the rogue) steps out of a puff of its own
       for (let i = 0; i < c.clones; i++) {
         const slot = start + (i / c.clones) * TAU;
         const pt = world.dungeon.freePoint(this.x + Math.cos(slot) * 34, this.y + Math.sin(slot) * 24, 9, 6);
         const clone = new RogueClone(this, pt.x, pt.y, slot);
         world.clones.push(clone);
-        world.effects.burst(clone.hx, clone.hy, { count: 16, colors: ['#3e3e52', '#9a2230'], speed: [40, 120] });
+        smokeBomb(world, clone.x, clone.hy + 6);
       }
-      world.effects.burst(this.hx, this.hy, { count: 16, colors: ['#3e3e52', '#9a2230'], speed: [40, 120] });
+      smokeBomb(world, this.x, this.hy + 6);
     });
   }
 
@@ -337,6 +380,17 @@ class Rogue extends Player {
       PFX.ring(ctx, this.x, this.hy, 20, 20, `rgba(${ROGUE_FX.amber}, 0.8)`, 2, { thick: 2, from: this.aim - 1.1, to: this.aim + 1.1 });
       ctx.restore();
     }
+  }
+
+  /** Ability outlines while a key is held: the parry's guard arc, the dagger storm's cone, where the clones appear. */
+  abilityPreview(slot) {
+    if (slot === 'e') return { cone: { x: this.x, y: this.hy, angle: this.aim, arc: 2.2, range: 34 } };
+    if (slot === 'f') {
+      const d = this.cfg.dagger;
+      return { cone: { x: this.pivotX, y: this.pivotY, angle: this.aim, arc: this.cfg.storm.spreadDegrees * DEG, range: d.speed * 0.9 } };
+    }
+    if (slot === 'q') return { circle: { x: this.x, y: this.y, r: 40 } };
+    return null;
   }
 
   get weaponReach() { return this.throwAnim > 0 ? 16 : 10; }
@@ -409,7 +463,7 @@ class RogueClone extends Entity {
           x: this.x + Math.cos(a) * 12, y: this.hy + 2 + Math.sin(a) * 12,
           vx: Math.cos(a) * d.speed, vy: Math.sin(a) * d.speed,
           radius: 5, damage: d.damage * this.cfg.cloneDamageDealt, life: 0.9, knockback: 50,
-          sprite: Sprites.weapons.dagger.img, fromUlt: true,
+          sprite: Sprites.weapons.dagger.img, fromUlt: true, aura: daggerStreak(['#4a1a24', '#9a2230', '#ff9a8a']),
         }));
       }
       Sound.play('dagger', 0.1);
@@ -442,6 +496,7 @@ class RogueClone extends Entity {
         vx: Math.cos(a) * 520, vy: Math.sin(a) * 520,
         radius: 6, damage: c.burstDamage, pierce: c.burstPierce, life: 0.8, knockback: 90,
         sprite: Sprites.weapons.dagger.img, trail: ['#c43a44', '#ffffff'], fromUlt: true,
+        glow: '196, 58, 68', aura: daggerStreak(ROGUE_FX.slash, 24),
         onStrike: (p, w, t) => {
           if (p.stunned) return;
           p.stunned = true;
@@ -450,6 +505,16 @@ class RogueClone extends Entity {
       }));
     }
     world.effects.burst(this.hx, this.hy, { count: 30, colors: ['#3e3e52', '#9a2230', '#c43a44', '#ffffff'], speed: [80, 220], life: [0.3, 0.6] });
+    // gone in a cloud of smoke, with a red flash ringing out
+    smokeBomb(world, this.x, this.hy + 6, 1.2);
+    const { x, hy: y } = this;
+    world.effects.add(0.3, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1 - t;
+      PFX.ring(ctx, x, y, 8 + t * 40, 8 + t * 40, '#c43a44', 2, { thick: t < 0.5 ? 2 : 1 });
+      ctx.restore();
+    });
     world.shake(6, 0.25);
     Sound.play('explosion');
   }

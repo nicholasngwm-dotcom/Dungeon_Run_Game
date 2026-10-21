@@ -43,17 +43,19 @@ const PFX = {
 
   /**
    * Crescent slash around (x, y) at radius r, sweeping from angle a0 to a1:
-   * thin tail, thick middle, sharp leading tip.
+   * thin tail, thick middle, sharp leading tip. outer = true pins the outer
+   * edge to r (thickening inward), so it can trace a hit range exactly.
    */
-  slash(ctx, x, y, r, a0, a1, width, colors, k = 2) {
-    const steps = Math.max(6, Math.ceil((Math.abs(a1 - a0) * r) / k));
+  slash(ctx, x, y, r, a0, a1, width, colors, k = 2, outer = false) {
+    // pinned to the outer edge, the radius is the widest part: step finer so the chunks leave no gaps
+    const steps = Math.max(6, Math.ceil((Math.abs(a1 - a0) * r) / (outer ? k * 0.5 : k)));
     for (let i = 0; i <= steps; i++) {
       const u = i / steps;
       const a = a0 + (a1 - a0) * u;
       const w = width * Math.sin(Math.PI * Math.min(1, u * 0.85 + 0.08));
       const layers = Math.max(1, Math.round(w / k));
       for (let j = 0; j < layers; j++) {
-        const rr = r + w / 2 - j * k;
+        const rr = (outer ? r : r + w / 2) - j * k;
         ctx.fillStyle = colors[Math.min(colors.length - 1, Math.floor((j / layers) * colors.length))];
         ctx.fillRect(PFX.snap(x + Math.cos(a) * rr, k), PFX.snap(y + Math.sin(a) * rr, k), k, k);
       }
@@ -95,6 +97,83 @@ const PFX = {
     }
     ctx.fillStyle = core;
     ctx.fillRect(cx, cy, k, k);
+  },
+
+  /**
+   * Flickering flame tongue standing on (x, y): w wide at the base, h tall,
+   * swaying with `phase` (seconds). colors = outer flame first, core last.
+   */
+  flame(ctx, x, y, w, h, phase, colors, k = 2) {
+    const rows = Math.max(2, Math.round(h / k));
+    const n = colors.length;
+    for (let i = 0; i < rows; i++) {
+      const u = i / rows;                                   // 0 at the base, 1 at the tip
+      // teardrop: a round belly low down, tapering to a point that sways
+      const sway = Math.sin(phase * 14 + u * 4) * u * u * w * 0.5;
+      const half = (w / 2) * Math.sin(Math.PI * Math.min(1, 0.3 + u * 0.72)) * (0.9 + 0.1 * Math.sin(phase * 23 + i));
+      const cx = x + sway;
+      const yy = PFX.snap(y - i * k, k);
+      for (let b = 0; b < n; b++) {
+        // hotter bands are narrower and stay lower in the flame
+        if (b > 0 && u > 1 - (b / n) * 0.85) break;
+        const hw = PFX.snap(half * (1 - (b / n) * 0.8), k);
+        if (hw <= 0) break;
+        ctx.fillStyle = colors[b];
+        ctx.fillRect(PFX.snap(cx - hw, k), yy, hw * 2, k);
+      }
+    }
+  },
+
+  /** Pointed crystal (an ice shard) centred on (x, y), lying along `angle`. colors = edge first, core last. */
+  shard(ctx, x, y, angle, len, w, colors, k = 2) {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const halfLen = len / 2;
+    for (let s = -halfLen; s <= halfLen; s += k * 0.75) {
+      // the point runs long in front, short behind
+      const taper = s >= 0 ? 1 - s / halfLen : 1 + s / (halfLen * 0.6);
+      const hw = (w / 2) * clamp(taper, 0, 1);
+      for (let o = -hw; o <= hw + 0.01; o += k) {
+        const band = hw > 0 ? Math.abs(o) / hw : 0;
+        ctx.fillStyle = colors[Math.min(colors.length - 1, Math.floor((1 - band) * colors.length))];
+        ctx.fillRect(PFX.snap(x + cos * s - sin * o, k), PFX.snap(y + sin * s + cos * o, k), k, k);
+      }
+    }
+  },
+
+  /**
+   * Billow of smoke built from horizontal pixel strands whose ends wobble
+   * with `phase` (seconds), lit top-left and shaded bottom-right.
+   * density < 1 drops strands (always the same ones for a given seed), so
+   * the billow frays apart as it thins. colors = [shadow, body, light].
+   */
+  smokeBlob(ctx, x, y, r, colors, phase = 0, seed = 0, density = 1, k = 2) {
+    if (r < k) return;
+    const ry = r * 0.8;
+    const rows = Math.ceil(ry / k);
+    const cx = PFX.snap(x, k);
+    const cy = PFX.snap(y, k);
+    for (let j = -rows; j <= rows; j++) {
+      const v = (j * k) / ry;                         // -1 at the top, 1 at the bottom
+      if (Math.abs(v) >= 1) continue;
+      if (density < 1) {
+        const h = Math.abs(Math.sin(j * 12.9898 + seed * 78.233) * 43758.5453) % 1;
+        if (h > density) continue;
+      }
+      const half = r * Math.sqrt(1 - v * v);
+      // edges ripple in long smooth waves rather than jittering row to row
+      const L = PFX.snap(cx - half + Math.sin(phase * 6 + j * 0.45 + seed) * r * 0.15, k);
+      const R = PFX.snap(cx + half + Math.sin(phase * 5 + j * 0.38 + seed * 2) * r * 0.15, k);
+      const w = R - L;
+      if (w < k) continue;
+      const y0 = cy + j * k;
+      ctx.fillStyle = colors[1];
+      ctx.fillRect(L, y0, w, k);
+      const lightW = PFX.snap(w * clamp(0.55 - v * 0.8, 0, 0.7), k);
+      if (lightW > 0) { ctx.fillStyle = colors[2]; ctx.fillRect(L, y0, lightW, k); }
+      const shadowW = PFX.snap(w * clamp(0.05 + v * 0.6, 0, 0.55), k);
+      if (shadowW > 0) { ctx.fillStyle = colors[0]; ctx.fillRect(R - shadowW, y0, shadowW, k); }
+    }
   },
 
   /** Chunky line; dash = [on, off] in chunks, offset scrolls the dashes. */

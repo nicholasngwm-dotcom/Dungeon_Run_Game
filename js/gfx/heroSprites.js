@@ -101,5 +101,6 @@ function buildHeroSprites() {
     mage: buildCuteHero(drawMage),
     rogue: buildCuteHero(drawRogue, rogueEyeGlint),
     priestess: buildCuteHero(drawPriestess, priestessHaloGlow),
+    bard: buildCuteHero(drawBard),
   };
 }

@@ -35,15 +35,20 @@ const HUD = {
 
   draw(ctx, game) {
     this.drawPickupHover(ctx, game);
-    this.drawPlayer(ctx, game.player);
-    if (game.run) this.drawCoins(ctx, game.player);
+    // always this screen's hero (game.player is the boss's target while a boss updates)
+    this.drawPlayer(ctx, game.localPlayer);
+    if (game.run) this.drawCoins(ctx, game.localPlayer);
     if (game.multiplayer) this.drawParty(ctx, game);
     this.drawWave(ctx, game);
     if (game.boss && !game.boss.dead && game.boss.intro <= 0 && !game.practice) {
       this.text(ctx, game.boss.name, 480, 12, { size: 10, align: 'center', color: '#f2a541' });
     }
     this.drawBanner(ctx, game);
-    const p = game.player;
+    const p = game.localPlayer;
+    if (game.run?.active && p.strayTime > 0) {
+      const left = Math.max(0, CONFIG.run.strayReturn - p.strayTime).toFixed(1);
+      this.text(ctx, `OUTSIDE THE ROOM - RETURNING IN ${left}s`, 480, 400, { size: 8, align: 'center', color: '#e0c0ff' });
+    }
     if (p.targeting) {
       const msg = p.classId === 'mage' ? 'LEFT CLICK: PICK LIGHTNING TARGET   RIGHT CLICK: CANCEL' : 'LEFT CLICK: FIRE VOLLEY   RIGHT CLICK: CANCEL';
       this.text(ctx, msg, 480, 440, { size: 8, align: 'center', color: p.classId === 'mage' ? '#9cf0d8' : '#a8cc6a' });

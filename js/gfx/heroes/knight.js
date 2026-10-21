@@ -1,6 +1,6 @@
 // Knight: a stout young knight in a closed great helm (eyes glinting through
 // the slit), red plume and cape, steel plate, red tabard with a gold cross
-// and the red kite shield on his off arm. The greatblade is drawn separately.
+// and a red heater shield strapped high on his off arm. The greatblade is drawn separately.
 
 function drawKnight(p, P) {
   const { b, hb, s } = P;
@@ -17,13 +17,14 @@ function drawKnight(p, P) {
   p.line(28, 30 + b, 25 + f, 50, R[1]);
   p.line(30, 33 + b, 29, 48, R[1]);
 
-  // plate greaves with knee cops
-  const xb = cuteLeg(p, 29, 29 - s, P.lb, [S[0], S[1], S[2]], [S[0], S[1], S[2]], 55);
-  const xf = cuteLeg(p, 34, 34 + s, P.lf, [S[1], S[3], S[4]], [S[1], S[2], S[4]], 55);
+  // sturdy plate greaves (wider than the other heroes' legs) with knee cops and sabatons
+  const xb = cuteLeg(p, 28, 28 - s, P.lb, [S[0], S[1], S[2]], [S[0], S[1], S[2]], 55, null, 4);
+  const xf = cuteLeg(p, 34, 34 + s, P.lf, [S[1], S[3], S[4]], [S[1], S[2], S[4]], 55, null, 4);
   for (const [xAt, c, hi] of [[xb, S[2], S[3]], [xf, S[3], S[5]]]) {
     const kx = xAt(49);
-    p.round(kx - 1, 48, 5, 3, c, 1);
+    p.round(kx - 1, 48, 6, 3, c, 1);
     p.px(kx, 48, hi);
+    p.px(kx + 1, 48, hi);
   }
 
   // faulds (hip plates) and the red tabard panel
@@ -87,20 +88,23 @@ function drawKnight(p, P) {
   p.rect(33, 6 + b, 3, 2, G[2]);                    // plume holder
   p.px(33, 6 + b, G[3]);
 
-  // kite shield on the off arm
+  // heater shield strapped high on the off arm, tucked against his side:
+  // steel rim, red field, gold cross with a ruby boss
   const o = P.ba;
   const sh = (pts) => shiftXY(pts, o, b);
-  p.poly(sh([[15, 25], [28, 25], [28, 33], [25, 41], [21, 47], [18, 41], [15, 33]]), S[3]);
-  p.poly(sh([[16, 26], [27, 26], [27, 33], [24, 40], [21, 45], [18, 40], [16, 33]]), R[2]);
-  p.poly(sh([[22, 26], [27, 26], [27, 33], [24, 40], [21, 45]]), R[1]);
-  p.rect(17 + o, 27 + b, 1, 8, R[3]);
-  p.rect(16 + o, 25 + b, 8, 1, S[5]);
-  p.rect(20 + o, 28 + b, 2, 15, S[4]);
-  p.rect(20 + o, 28 + b, 1, 15, S[5]);
-  p.rect(17 + o, 31 + b, 8, 2, S[4]);
-  p.rect(17 + o, 31 + b, 8, 1, S[5]);
-  p.rect(20 + o, 31 + b, 2, 2, '#d0303a');
-  p.px(20 + o, 31 + b, '#ff9a8a');
+  p.poly(sh([[17, 24], [29, 24], [29, 31], [27, 36], [23, 40], [19, 36], [17, 31]]), S[3]);
+  p.poly(sh([[18, 25], [28, 25], [28, 31], [26, 35], [23, 38], [20, 35], [18, 31]]), R[2]);
+  p.poly(sh([[23, 25], [28, 25], [28, 31], [26, 35], [23, 38]]), R[1]);
+  p.rect(18 + o, 26 + b, 1, 6, R[3]);                // lit left edge of the field
+  p.rect(17 + o, 24 + b, 9, 1, S[5]);                // rim catching the light
+  p.rect(17 + o, 25 + b, 1, 6, S[4]);
+  p.rect(29 + o, 25 + b, 1, 6, S[1]);                // rim in shadow
+  p.rect(22 + o, 26 + b, 2, 11, G[2]);               // gold cross
+  p.rect(22 + o, 26 + b, 1, 11, G[3]);
+  p.rect(19 + o, 29 + b, 8, 2, G[2]);
+  p.rect(19 + o, 29 + b, 8, 1, G[3]);
+  p.rect(22 + o, 29 + b, 2, 2, '#d0303a');
+  p.px(22 + o, 29 + b, '#ff9a8a');
 
   // sword arm: big rounded pauldron, vambrace, gauntlet
   p.round(35, 22 + b, 9, 7, S[3], 2);

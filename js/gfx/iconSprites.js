@@ -273,6 +273,56 @@ function buildIconSprites() {
         p.circle(13, 13, 2, '#ffffff');
       }),
     },
+    bard: {
+      // three notes fanning out of a lute string
+      primary: icon((p) => {
+        p.line(2, 25, 12, 15, '#c8823e', 2);
+        p.ellipse(5, 23, 4, 3, '#9a5a2a');
+        for (const [x, y] of [[13, 3], [18, 9], [12, 12]]) {
+          p.ellipse(x, y + 6, 3, 2, '#ff8a3a');
+          p.rect(x + 2, y, 1, 6, '#a8401e');
+          p.px(x + 3, y + 1, '#ff8a3a');
+        }
+      }),
+      // the two tunes: a fiery note and a cool one, with swap arrows
+      secondary: icon((p) => {
+        p.ellipse(7, 18, 4, 3, '#ff8a3a'); p.rect(10, 6, 2, 12, '#a8401e'); p.poly([[11, 6], [15, 9], [15, 12], [12, 10]], '#ff8a3a');
+        p.ellipse(19, 21, 4, 3, '#5ac8e6'); p.rect(22, 9, 2, 12, '#1e5a7a'); p.poly([[23, 9], [27, 12], [27, 15], [24, 13]], '#5ac8e6');
+        p.line(4, 4, 12, 2, '#efe6d2'); p.px(11, 1, '#efe6d2'); p.px(11, 3, '#efe6d2');
+        p.line(16, 26, 24, 25, '#efe6d2'); p.px(17, 24, '#efe6d2'); p.px(17, 26, '#efe6d2');
+      }),
+      // moral support: a raised fist in a gold star burst with a note
+      e: icon((p) => {
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * TAU;
+          p.line(14, 14, 14 + Math.cos(a) * 12, 14 + Math.sin(a) * 12, i % 2 ? G[1] : G[2], 1);
+        }
+        p.round(9, 9, 10, 9, RAMP.skin[2], 3);
+        p.rect(10, 10, 8, 2, RAMP.skin[3]);
+        p.rect(11, 17, 6, 7, '#e8dcc0');
+        p.rect(19, 3, 2, 6, '#a8401e'); p.ellipse(18, 9, 2, 2, '#ff8a3a');
+      }),
+      // sleeping song: a crescent moon with z's
+      f: icon((p) => {
+        p.circle(11, 15, 9, '#c8b8ff');
+        p.circle(15, 12, 8, '#1a1430');
+        p.rect(16, 3, 6, 1, '#efe6d2'); p.line(21, 3, 16, 8, '#efe6d2'); p.rect(16, 8, 6, 1, '#efe6d2');
+        p.rect(21, 13, 4, 1, '#c8b8ff'); p.line(24, 13, 21, 16, '#c8b8ff'); p.rect(21, 16, 4, 1, '#c8b8ff');
+      }),
+      // screeching tuning: a cracked note blasting out jagged sound waves
+      q: icon((p) => {
+        p.ellipse(6, 20, 4, 3, '#b04ae0'); p.rect(9, 6, 2, 14, '#5a1a6a'); p.poly([[10, 6], [14, 10], [14, 14], [11, 11]], '#b04ae0');
+        for (const r of [6, 10, 14]) {
+          const pts = [];
+          for (let i = 0; i <= 6; i++) {
+            const a = -0.9 + (i / 6) * 1.8;
+            const rr = r + (i % 2 ? 1.5 : 0);
+            pts.push([12 + Math.cos(a) * rr, 14 + Math.sin(a) * rr]);
+          }
+          for (let i = 1; i < pts.length; i++) p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], r === 14 ? '#f0c8ff' : '#b04ae0');
+        }
+      }),
+    },
     dodge: icon((p) => {
       p.poly([[6, 5], [14, 14], [6, 23], [9, 14]], '#c8c0b0');
       p.poly([[14, 5], [22, 14], [14, 23], [17, 14]], '#efe6d2');

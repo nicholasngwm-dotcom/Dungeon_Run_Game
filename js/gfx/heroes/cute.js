@@ -60,6 +60,18 @@ function buildCuteHero(draw, post) {
       return { img: p.canvas, flash: PixelArt.silhouette(p.canvas) };
     });
   }
+  // sitting: the whole body 6px lower with the legs bent, breathing gently (two frames)
+  CUTE_SITTING = true;
+  out.sit = [CUTE_POSES.idle[0], CUTE_POSES.idle[3]].map((P) => {
+    const p = new PixelArt(64, 64);
+    p.ctx.translate(0, 6);
+    draw(p, { ...P, s: 0, lb: 0, lf: 0, ba: 0 });
+    p.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    p.outline(OUTLINE, 0.5);
+    if (post) post(p, { ...P, b: P.b + 6, hb: P.hb + 6 });   // glows follow the lowered body
+    return { img: p.canvas, flash: PixelArt.silhouette(p.canvas) };
+  });
+  CUTE_SITTING = false;
   return out;
 }
 
@@ -75,9 +87,10 @@ const shiftXY = (pts, dx, dy) => pts.map(([x, y]) => [x + dx, y + dy]);
 /**
  * One slim leg from the hip (row 42) to the floor (58). legR / bootR are
  * [dark, mid, light]; legR may be a function of the row (for stripes).
- * Returns the leg's x at a given row.
+ * w is the leg's width (3 = slim, 4 = armoured). Returns the leg's x at a given row.
  */
-function cuteLeg(p, hipX, footX, lift, legR, bootR, bootTop, cuff) {
+function cuteLeg(p, hipX, footX, lift, legR, bootR, bootTop, cuff, w = 3) {
+  if (CUTE_SITTING) return cuteSeatedLeg(p, hipX, legR, bootR, w);
   const top = 42;
   const bottom = 58 - lift;
   const bt = bootTop - lift;
@@ -85,16 +98,44 @@ function cuteLeg(p, hipX, footX, lift, legR, bootR, bootTop, cuff) {
   for (let y = top; y <= bottom; y++) {
     const r = y >= bt ? bootR : typeof legR === 'function' ? legR(y - top) : legR;
     const x = xAt(y);
-    p.rect(x, y, 3, 1, r[1]);
+    p.rect(x, y, w, 1, r[1]);
     p.px(x, y, r[2]);
-    p.px(x + 2, y, r[0]);
+    p.px(x + w - 1, y, r[0]);
   }
-  if (cuff) p.rect(xAt(bt) - 1, bt, 5, 1, cuff);
+  if (cuff) p.rect(xAt(bt) - 1, bt, w + 2, 1, cuff);
   const fx = xAt(bottom);
-  p.rect(fx + 1, bottom - 1, 3, 2, bootR[1]);
-  p.rect(fx + 1, bottom - 1, 2, 1, bootR[2]);
-  p.rect(fx, bottom, 4, 1, bootR[0]);
+  p.rect(fx + 1, bottom - 1, w, 2, bootR[1]);
+  p.rect(fx + 1, bottom - 1, w - 1, 1, bootR[2]);
+  p.rect(fx, bottom, w + 1, 1, bootR[0]);
   return xAt;
+}
+
+/** True while sitting frames are being built: cuteLeg bends the legs at the knee instead. */
+let CUTE_SITTING = false;
+
+/**
+ * A leg bent sitting down (the body is drawn 6px lower): the thigh runs
+ * forward from the hip, the shin drops to the floor, the foot points ahead.
+ */
+function cuteSeatedLeg(p, hipX, legR, bootR, w) {
+  const ramp = (row) => (typeof legR === 'function' ? legR(row) : legR);
+  const knee = hipX + 7;
+  for (let x = hipX; x <= knee; x++) {
+    const r = ramp(x - hipX);
+    p.rect(x, 42, 1, w, r[1]);
+    p.px(x, 42, r[2]);
+    p.px(x, 42 + w - 1, r[0]);
+  }
+  for (let y = 42; y <= 51; y++) {
+    const r = y >= 47 ? bootR : ramp(y - 42);
+    p.rect(knee - 1, y, w, 1, r[1]);
+    p.px(knee - 1, y, r[2]);
+    p.px(knee + w - 2, y, r[0]);
+  }
+  p.rect(knee, 50, w + 1, 2, bootR[1]);
+  p.rect(knee, 50, w, 1, bootR[2]);
+  p.rect(knee - 1, 52, w + 2, 1, bootR[0]);
+  return () => knee;
 }
 
 /**

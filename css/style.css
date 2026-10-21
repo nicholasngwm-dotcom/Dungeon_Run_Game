@@ -89,9 +89,11 @@ h2 {
   font-family: inherit;
   font-size: 16px;
   color: var(--text);
-  background: var(--panel-light);
-  border: 3px solid var(--border);
-  box-shadow: inset -3px -3px 0 var(--panel), inset 3px 3px 0 #574379;
+  /* warm wood with a gold edge, like the keep's furniture */
+  background: #6a4428;
+  border: 3px solid #2a1a10;
+  box-shadow: inset -3px -3px 0 #4a2e1c, inset 3px 3px 0 #8c5e36, 0 0 0 1px #a07a24;
+  text-shadow: 2px 2px 0 #2a1a10;
   padding: 12px 22px;
   min-width: 220px;
   cursor: pointer;

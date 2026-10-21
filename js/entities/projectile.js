@@ -4,6 +4,8 @@
 class Projectile {
   /** The hero whose attack this is (set by the game while each hero acts) - damage is credited to them. */
   static actor = null;
+  /** Damage scale for enemy shots fired right now (the game lowers it while a weakened enemy acts). */
+  static enemyScale = 1;
 
   constructor(opts) {
     Object.assign(this, {
@@ -22,12 +24,17 @@ class Projectile {
       homing: null,        // fn(projectile, dt, world)
       onHit: null,         // fn(projectile, world, target?) when it stops
       onStrike: null,      // fn(projectile, world, target) each time it damages a target
+      fx: null,            // fn(projectile, dt, world) each step, for extra trail effects (visual only)
+      aura: null,          // fn(ctx, projectile) drawn under the sprite (flames, frost...)
+      upright: false,      // keep the sprite upright (music notes) instead of turning it to the flight
+      hitSet: null,        // share one with sibling shots so each target is only hit once by the whole volley
       hitSound: 'hit',
       fromUlt: false,      // damage from an ultimate doesn't charge the ultimate
       owner: Projectile.actor, // hero who fired it (null for enemy shots)
     }, opts);
+    if (!this.friendly) this.damage *= Projectile.enemyScale;
     this.age = 0;
-    this.hitSet = new Set();
+    this.hitSet = this.hitSet || new Set();
     this.dead = false;
   }
 
@@ -53,6 +60,7 @@ class Projectile {
     if (this.trail && Math.random() < 0.6) {
       world.effects.burst(this.x, this.y, { count: 1, colors: this.trail, speed: [5, 20], life: [0.15, 0.35], size: [2, 3] });
     }
+    if (this.fx) this.fx(this, dt, world);
 
     if (this.friendly) this.hitEnemies(world);
     else this.hitPlayer(world);
@@ -123,8 +131,9 @@ class Projectile {
       }
       ctx.restore();
     }
+    if (this.aura) this.aura(ctx, this);
     if (this.sprite) {
-      const angle = this.spin ? this.age * this.spin : Math.atan2(this.vy, this.vx);
+      const angle = this.upright ? 0 : this.spin ? this.age * this.spin : Math.atan2(this.vy, this.vx);
       drawRotated(ctx, this.sprite, this.x, this.y, this.sprite.width / 2, this.sprite.height / 2, angle);
     }
   }
