@@ -68,6 +68,8 @@ const HUD = {
   },
 
   draw(ctx, game) {
+    // a boss's entrance: only the letterbox and its title card
+    if (game.cutscene && game.boss) return this.drawCutscene(ctx, game);
     this.drawPickupHover(ctx, game);
     // always this screen's hero (game.player is the boss's target while a boss updates)
     this.drawPlayer(ctx, game.localPlayer);
@@ -78,6 +80,7 @@ const HUD = {
       this.text(ctx, game.boss.name, 480, 12, { size: 10, align: 'center', color: '#f2a541' });
     }
     this.drawBanner(ctx, game);
+    this.drawBossSpeech(ctx, game);
     const p = game.localPlayer;
     if (game.run && Input.down('scoreboard')) this.drawScoreboard(ctx, game);
     if (game.run?.active && p.strayTime > 0) {
@@ -606,7 +609,7 @@ const HUD = {
     if (game.practice) {
       const pr = game.practice;
       const o = pr.options;
-      const flags = [o.god && 'GOD', o.infiniteMana && 'INF MANA', o.infiniteEnergy && 'INF ENERGY'].filter(Boolean).join('  ');
+      const flags = [o.god && 'GOD', o.infiniteMana && 'INF MANA', o.infiniteEnergy && 'INF ENERGY', o.noCooldowns && 'NO CD'].filter(Boolean).join('  ');
       this.text(ctx, 'PRACTICE RANGE', 480, 12, { size: 9, align: 'center', color: '#f2a541' });
       this.text(ctx, `DPS ${Math.round(game.dps)}   TOTAL ${pr.total}`, 480, 28, { size: 8, align: 'center' });
       if (flags) this.text(ctx, flags, 480, 42, { size: 6, align: 'center', color: '#8cff9a' });
@@ -704,6 +707,280 @@ const HUD = {
     this.text(ctx, `HOLD ${Settings.label('scoreboard')}`, x + w / 2, y + h - 12, { size: 5, align: 'center', color: '#8a7660' });
   },
 
+  // ---------- a boss's entrance ----------
+
+  /**
+   * Each boss's title card: the band's colours [shade, base, lit], its trim, the name's
+   * shadow, and how tall the boss stands (world px) for its portrait.
+   */
+  BOSS_CARDS: {
+    King: { band: ['#3e1220', '#62182c', '#8a2438'], trim: '#ecd690', glow: '255, 210, 120', h: 118 },
+    Queen: { band: ['#1e1236', '#2a1840', '#46286a'], trim: '#ff6a80', glow: '255, 110, 220', h: 104 },
+    Golem: { band: ['#2e1c10', '#4a2e18', '#6e4826'], trim: '#ffb02e', glow: '255, 150, 60', h: 150 },
+    PhantomKing: { band: ['#140a20', '#24123a', '#3a2260'], trim: '#b45aff', glow: '180, 90, 255', h: 112 },
+    RoyalPrince: { band: ['#2e1c10', '#5a3a1e', '#8a5a2e'], trim: '#ecd690', glow: '255, 210, 140', h: 100 },
+    RoyalPrincess: { band: ['#141030', '#221a4a', '#3a2c70'], trim: '#c49aff', glow: '170, 130, 255', h: 100 },
+  },
+
+  /** Letterbox bars slide in while the camera pans to the boss, and out as the fight begins. */
+  drawCutscene(ctx, game) {
+    const cs = game.cutscene;
+    const C = CONFIG.bossIntro;
+    const { width: W, height: H } = CONFIG.screen;
+    let k = 1;
+    if (cs.stage === 'pan') k = Math.min(1, cs.t / 0.4);
+    else if (cs.stage === 'card') k = Math.min(1, (C.card - cs.t) / 0.4);
+    const bh = Math.round(48 * (1 - Math.pow(1 - k, 3)));
+    ctx.fillStyle = '#05030a';
+    ctx.fillRect(0, 0, W, bh);
+    ctx.fillRect(0, H - bh, W, bh);
+    ctx.fillStyle = '#3a2a10';
+    if (bh > 2) { ctx.fillRect(0, bh - 1, W, 1); ctx.fillRect(0, H - bh, W, 1); }
+    if (cs.stage === 'card') this.drawBossCard(ctx, game.boss, cs.t, C.card, cs.subtitle);
+    else this.drawBossSpeech(ctx, game);
+  },
+
+  /**
+   * What a boss is shouting (boss.speech, see King.say): a parchment speech bubble over
+   * its head. While the boss is off screen the bubble is pinned to the nearest screen edge,
+   * with a little crown on it and its tail pointing at where the boss is.
+   */
+  drawBossSpeech(ctx, game) {
+    const b = game.boss;
+    const s = b && b.speech;
+    if (!s || !(s.until > b.time) || b.dying > 0) return;
+    const { width: W, height: H } = CONFIG.screen;
+    const cam = game.camera;
+    const ax = (b.x) - cam.x - cam.offsetX;
+    const ay = (b.headY ?? b.hy - 40) - 14 - cam.y - cam.offsetY;
+    const age = b.time - s.at;
+    const pop = Math.min(1, age / 0.12);
+    const alpha = Math.min(1, (s.until - b.time) / 0.25);
+    ctx.font = uiFont(10);
+    const tw = Math.ceil(ctx.measureText(s.text).width);
+    const bw = tw + 20;
+    const bh = 22;
+    const margin = 12;
+    const top = 78;           // clear of the hero panel and the boss's name
+    const bottom = H - 60;    // clear of the ability bar
+    const onScreen = ax > margin && ax < W - margin && ay - bh - 10 > top && ay < bottom;
+    // where the bubble sits: over the head, or pinned inside the screen's edge toward the boss
+    let bx;
+    let by;
+    if (onScreen) {
+      bx = ax - bw / 2;
+      by = ay - bh - 10;
+    } else {
+      bx = clamp(ax - bw / 2, margin, W - margin - bw);
+      by = clamp(ay - bh / 2, top, bottom - bh);
+    }
+    bx = Math.round(clamp(bx, margin, W - margin - bw));
+    by = Math.round(by);
+    const cx = bx + bw / 2;
+    const cy = by + bh / 2;
+    // the tail: straight down to the head, or from the bubble's edge toward the off-screen boss
+    const ang = onScreen ? Math.PI / 2 : Math.atan2(ay - cy, ax - cx);
+    const edge = Math.min(Math.abs((bw / 2) / (Math.cos(ang) || 1e-6)), Math.abs((bh / 2) / (Math.sin(ang) || 1e-6)));
+    const tx = cx + Math.cos(ang) * (edge + (onScreen ? 9 : 12));
+    const ty = cy + Math.sin(ang) * (edge + (onScreen ? 9 : 12));
+    const side = ang + Math.PI / 2;
+    const base = (k) => [cx + Math.cos(ang) * (edge - 2) + Math.cos(side) * 6 * k, cy + Math.sin(ang) * (edge - 2) + Math.sin(side) * 6 * k];
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(cx, cy);
+    ctx.scale(0.6 + 0.4 * pop, 0.6 + 0.4 * pop);
+    ctx.translate(-cx, -cy);
+    const tail = (grow, color) => {
+      const [x1, y1] = base(1 + grow * 0.4);
+      const [x2, y2] = base(-1 - grow * 0.4);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(tx + Math.cos(ang) * grow, ty + Math.sin(ang) * grow);
+      ctx.lineTo(x2, y2);
+      ctx.fill();
+    };
+    // outline, then the parchment, lit along the top and shaded along the bottom
+    tail(2, OUTLINE);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(bx - 2, by - 1, bw + 4, bh + 2);
+    ctx.fillRect(bx - 1, by - 2, bw + 2, bh + 4);
+    ctx.fillStyle = '#f4ead7';
+    ctx.fillRect(bx, by, bw, bh);
+    tail(0, '#f4ead7');
+    ctx.fillStyle = '#fffaf0';
+    ctx.fillRect(bx + 1, by + 1, bw - 2, 2);
+    ctx.fillStyle = '#d8c4a0';
+    ctx.fillRect(bx + 1, by + bh - 3, bw - 2, 2);
+    // a shout shakes for a moment as it lands
+    const jolt = age < 0.25 ? Math.round(Math.sin(age * 80) * 1.5) : 0;
+    this.text(ctx, s.text, Math.round(cx) + jolt, by + 6, { size: 10, align: 'center', color: '#8a2438', shadow: false });
+    // off screen: a little gold crown on the bubble says who's talking
+    if (!onScreen) {
+      const kx = bx + bw - 6;
+      const ky = by - 6;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(kx - 7, ky - 4, 14, 9);
+      ctx.fillStyle = '#c8a456';
+      ctx.fillRect(kx - 6, ky - 1, 12, 5);
+      for (const sx of [-6, -1, 4]) ctx.fillRect(kx + sx, ky - 3, 2, 3);
+      ctx.fillStyle = '#ecd690';
+      ctx.fillRect(kx - 6, ky - 1, 12, 1);
+      ctx.fillStyle = '#8a2438';
+      ctx.fillRect(kx - 1, ky + 1, 2, 2);
+    }
+    ctx.restore();
+  },
+
+  /** The boss drawn into an offscreen canvas (its own art, nothing round it), and its black silhouette. */
+  bossPortrait(boss, h) {
+    const w = Math.round(h * 1.9);
+    const ph = Math.round(h + 14);
+    if (!this.portrait || this.portrait.width !== w || this.portrait.height !== ph) {
+      this.portrait = document.createElement('canvas');
+      this.portrait.width = w;
+      this.portrait.height = ph;
+      this.portraitShade = document.createElement('canvas');
+      this.portraitShade.width = w;
+      this.portraitShade.height = ph;
+    }
+    const feet = boss.drawY ?? boss.y;
+    const p = this.portrait.getContext('2d');
+    p.setTransform(1, 0, 0, 1, 0, 0);
+    p.clearRect(0, 0, w, ph);
+    p.imageSmoothingEnabled = false;
+    p.translate(Math.round(w / 2 - boss.x), Math.round(ph - 8 - feet));
+    if (boss.drawPortrait) boss.drawPortrait(p);
+    else boss.getDrawables().sort((a, b) => a.y - b.y).forEach((it) => it.draw(p));
+    const s = this.portraitShade.getContext('2d');
+    s.globalCompositeOperation = 'source-over';
+    s.clearRect(0, 0, w, ph);
+    s.drawImage(this.portrait, 0, 0);
+    s.globalCompositeOperation = 'source-in';
+    s.fillStyle = OUTLINE;
+    s.fillRect(0, 0, w, ph);
+    return { img: this.portrait, shade: this.portraitShade, feet: ph - 8 };
+  },
+
+  /**
+   * The title card: a white slash strikes across the screen and bursts open into a band
+   * in the boss's colours, its name slams in from the left, and the boss itself rises
+   * into the band from the right (most of it showing, its feet cut off by the band's
+   * lower edge, its head breaking out above the band).
+   */
+  drawBossCard(ctx, boss, t, total, subtitle) {
+    const W = CONFIG.screen.width;
+    const card = this.BOSS_CARDS[boss.constructor.name] || this.BOSS_CARDS.King;
+    const ease = (x) => 1 - Math.pow(1 - clamp(x, 0, 1), 3);
+    const out = clamp((t - (total - 0.35)) / 0.35, 0, 1);   // the card leaving
+    const cy = 318;
+    const fullH = 118;
+    const bandH = Math.round(fullH * ease((t - 0.1) / 0.2) * (1 - ease(out)));
+    const top = cy - Math.floor(bandH / 2);
+    const bottom = top + bandH;
+    ctx.save();
+    // the world dims behind it
+    ctx.fillStyle = `rgba(5, 3, 10, ${0.45 * ease(t / 0.2) * (1 - out)})`;
+    ctx.fillRect(0, 48, W, CONFIG.screen.height - 96);
+    // the strike: a white-hot slash cutting across the screen
+    if (t < 0.32) {
+      const k = ease(t / 0.14);
+      const fade = 1 - clamp((t - 0.14) / 0.18, 0, 1);
+      ctx.fillStyle = `rgba(255, 255, 255, ${fade})`;
+      ctx.beginPath();
+      ctx.moveTo(-40, cy + 3);
+      ctx.lineTo(-40 + (W + 80) * k, cy - 4);
+      ctx.lineTo(-40 + (W + 80) * k, cy + 2);
+      ctx.lineTo(-40, cy + 7);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, -40 + (W + 80) * k, cy, 40, card.glow, fade, 2, 16);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    if (bandH > 2) {
+      // the band: dark outline, a trim line, lit along the top, shaded along the bottom
+      const [shade, base, lit] = card.band;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(0, top - 4, W, bandH + 8);
+      ctx.fillStyle = card.trim;
+      ctx.fillRect(0, top - 2, W, 2);
+      ctx.fillRect(0, bottom, W, 2);
+      ctx.fillStyle = base;
+      ctx.fillRect(0, top, W, bandH);
+      ctx.fillStyle = lit;
+      ctx.fillRect(0, top, W, Math.min(4, bandH));
+      ctx.fillStyle = shade;
+      ctx.fillRect(0, bottom - Math.min(6, bandH), W, Math.min(6, bandH));
+      // speed stripes racing left across it
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, top + 4, W, Math.max(0, bandH - 10));
+      ctx.clip();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+      const off = (t * 520) % 64;
+      for (let x = -64; x < W + 64; x += 64) {
+        ctx.beginPath();
+        ctx.moveTo(x - off, bottom);
+        ctx.lineTo(x - off + 22, bottom);
+        ctx.lineTo(x - off + 22 + bandH * 0.6, top);
+        ctx.lineTo(x - off + bandH * 0.6, top);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    // the boss rises into the band from the right
+    const P = this.bossPortrait(boss, card.h);
+    const scale = clamp(Math.round(300 / card.h), 2, 3);
+    const slide = 1 - ease((t - 0.18) / 0.32);
+    const px = Math.round(700 + slide * 340 + ease(out) * 340);
+    const feetY = bottom + Math.round(card.h * scale * 0.2);   // the lowest fifth is hidden under the band's edge
+    const dw = P.img.width * scale;
+    const dh = P.img.height * scale;
+    const dx = px - dw / 2;
+    const dy = feetY - P.feet * scale;
+    if (bandH > 2) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, bottom);
+      ctx.clip();
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, px, bottom - card.h * scale * 0.4, card.h * scale * 0.55, card.glow, 0.35 * (1 - out), 3);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.8 * (1 - out);
+      ctx.drawImage(P.shade, dx + 2 * scale, dy + 2 * scale, dw, dh);          // a hard drop shadow
+      ctx.globalAlpha = 1 - out;
+      ctx.drawImage(P.img, dx, dy, dw, dh);
+      // a bright flash as it lands in place
+      const flash = 1 - clamp((t - 0.5) / 0.2, 0, 1);
+      if (t > 0.45 && flash > 0) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = flash * 0.8;
+        ctx.drawImage(P.img, dx, dy, dw, dh);
+        ctx.drawImage(P.img, dx, dy, dw, dh);
+      }
+      ctx.restore();
+    }
+    // the name slams in from the left, the title under it
+    if (bandH > 20) {
+      const nx = Math.round(56 - (1 - ease((t - 0.16) / 0.26)) * 520 - ease(out) * 520);
+      const big = 30;
+      const ny = cy - 30;
+      ctx.globalAlpha = 1 - out;
+      for (const [ox, oy] of [[-2, 0], [2, 0], [0, -2], [0, 2], [-2, -2], [2, 2], [-2, 2], [2, -2], [0, 4], [2, 4], [-2, 4]]) {
+        this.text(ctx, boss.name, nx + ox, ny + oy, { size: big, color: OUTLINE, shadow: false });
+      }
+      this.text(ctx, boss.name, nx, ny + 2, { size: big, color: card.trim, shadow: false });
+      this.text(ctx, boss.name, nx, ny, { size: big, color: '#ffffff', shadow: false });
+      if (subtitle) {
+        const sx = Math.round(nx + 6 + (1 - ease((t - 0.3) / 0.25)) * -200);
+        this.text(ctx, subtitle.toUpperCase(), sx, cy + 20, { size: 9, color: card.trim });
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  },
+
   drawBanner(ctx, game) {
     const b = game.bannerData;
     if (!b) return;
@@ -717,43 +994,66 @@ const HUD = {
   },
 
   /**
-   * The aiming crosshair: a gold ring broken into four arcs, four bold white ticks
-   * crossing it and a glowing centre, all outlined dark so it reads on any floor.
+   * The aiming crosshair, in the style and size picked in the settings (Settings.data
+   * .crosshair / .crosshairSize): 'cross' four white ticks round a gap, 'dot' a single
+   * gold dot, 'circle' a gold ring, 'both' the ring broken into four arcs with the ticks
+   * crossing it. Every style has a glowing centre and dark outlines, so it reads on any floor.
    */
   drawCrosshair(ctx, x, y) {
     x = Math.round(x);
     y = Math.round(y);
-    const R = 12;
+    const type = Settings.data.crosshair || 'both';
+    const k = Settings.data.crosshairSize || 1;
+    const R = Math.round(12 * k);                // ring radius
+    const tick = Math.max(4, Math.round(10 * k)); // tick length
+    const gap = type === 'cross' ? Math.max(3, Math.round(4 * k)) : R - Math.round(tick / 2) - 1;
     ctx.save();
     // soft glow behind, so it never gets lost in a busy fight
-    const g = ctx.createRadialGradient(x, y, 0, x, y, R + 6);
+    const glowR = type === 'dot' ? 6 * k + 4 : R + 6;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, glowR);
     g.addColorStop(0, 'rgba(255, 220, 120, 0.22)');
     g.addColorStop(1, 'rgba(255, 220, 120, 0)');
     ctx.fillStyle = g;
-    ctx.fillRect(x - R - 6, y - R - 6, (R + 6) * 2, (R + 6) * 2);
-    // the ring: four arcs between the ticks
-    for (const [w, col] of [[5, OUTLINE], [2, '#ffd36a']]) {
-      ctx.strokeStyle = col;
-      ctx.lineWidth = w;
-      for (let i = 0; i < 4; i++) {
-        const a = (i * Math.PI) / 2 + Math.PI / 4;
-        ctx.beginPath();
-        ctx.arc(x, y, R, a - 0.5, a + 0.5);
-        ctx.stroke();
+    ctx.fillRect(x - glowR, y - glowR, glowR * 2, glowR * 2);
+    // the ring: whole for 'circle', four arcs between the ticks for 'both'
+    if (type === 'circle' || type === 'both') {
+      for (const [w, col] of [[5, OUTLINE], [2, '#ffd36a']]) {
+        ctx.strokeStyle = col;
+        ctx.lineWidth = w;
+        if (type === 'circle') {
+          ctx.beginPath();
+          ctx.arc(x, y, R, 0, TAU);
+          ctx.stroke();
+        } else {
+          for (let i = 0; i < 4; i++) {
+            const a = (i * Math.PI) / 2 + Math.PI / 4;
+            ctx.beginPath();
+            ctx.arc(x, y, R, a - 0.5, a + 0.5);
+            ctx.stroke();
+          }
+        }
       }
     }
-    // ticks from just off the centre to past the ring
+    // the ticks: from `gap` out from the centre, tick px long
+    if (type === 'cross' || type === 'both') {
+      const bar = (dx, dy, w, h) => ctx.fillRect(x + dx, y + dy, w, h);
+      ctx.fillStyle = OUTLINE;
+      bar(-gap - tick - 1, -2, tick + 2, 4); bar(gap - 1, -2, tick + 2, 4);
+      bar(-2, -gap - tick - 1, 4, tick + 2); bar(-2, gap - 1, 4, tick + 2);
+      ctx.fillStyle = '#ffffff';
+      bar(-gap - tick, -1, tick, 2); bar(gap, -1, tick, 2);
+      bar(-1, -gap - tick, 2, tick); bar(-1, gap, 2, tick);
+    }
+    // the centre: a bigger dot when it's all there is
+    const d = type === 'dot' ? Math.max(2, Math.round(3 * k)) : 1;
     ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x - R - 5, y - 2, 12, 4); ctx.fillRect(x + R - 7, y - 2, 12, 4);
-    ctx.fillRect(x - 2, y - R - 5, 4, 12); ctx.fillRect(x - 2, y + R - 7, 4, 12);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x - R - 4, y - 1, 10, 2); ctx.fillRect(x + R - 6, y - 1, 10, 2);
-    ctx.fillRect(x - 1, y - R - 4, 2, 10); ctx.fillRect(x - 1, y + R - 6, 2, 10);
-    // the centre
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x - 2, y - 2, 4, 4);
+    ctx.fillRect(x - d - 1, y - d - 1, d * 2 + 2, d * 2 + 2);
     ctx.fillStyle = '#ffd36a';
-    ctx.fillRect(x - 1, y - 1, 2, 2);
+    ctx.fillRect(x - d, y - d, d * 2, d * 2);
+    if (type === 'dot') {
+      ctx.fillStyle = '#fff6d0';
+      ctx.fillRect(x - d, y - d, Math.max(1, d - 1), Math.max(1, d - 1));
+    }
     ctx.restore();
   },
 };

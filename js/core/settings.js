@@ -24,6 +24,14 @@ const KEY_ACTIONS = [
   ['scoreboard', 'Scoreboard (hold)'],
 ];
 
+// The aiming crosshair's styles, in the order the settings screen lists them.
+const CROSSHAIR_TYPES = [
+  ['cross', 'Crosshair'],
+  ['dot', 'Dot'],
+  ['circle', 'Circle'],
+  ['both', 'Circle + cross'],
+];
+
 const Settings = {
   defaults: {
     sensitivity: 1,      // mouse speed multiplier while the game has the pointer locked
@@ -31,6 +39,8 @@ const Settings = {
     musicVolume: 0.7,
     sfxVolume: 0.8,
     minimapSize: 1.4,    // dungeon minimap scale
+    crosshair: 'both',   // cross | dot | circle | both (a circle with a crosshair) - see CROSSHAIR_TYPES
+    crosshairSize: 1,    // crosshair scale
     display: 'default',   // default | fullscreen (see Display)
     keys: {
       up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',

@@ -19,7 +19,7 @@ const App = {
   lastRun: null,        // the dungeon run picked at the gate (null = test dungeon)
   mp: null,             // the multiplayer Session while in an online game
   // practice-range cheats, kept when switching hero
-  practiceOptions: { god: false, infiniteMana: false, infiniteEnergy: false },
+  practiceOptions: { god: false, infiniteMana: false, infiniteEnergy: false, noCooldowns: false },
 
   async init() {
     this.canvas = document.getElementById('game');
@@ -126,6 +126,8 @@ const App = {
       onToast: (text) => Menus.toast(text, '#ffe680'),
       onNpc: (kind, run, hero) => this.talkTo(kind, run, hero),
       onPurchase: (hero, what, ok) => Shop.onPurchase(hero, what, ok),
+      onBossArena: (boss) => this.startBossPractice(boss),
+      onPracticeReturn: () => this.startPractice(),
     };
   },
 
@@ -359,6 +361,17 @@ const App = {
     else this.startRun();
   },
 
+  /**
+   * Boss practice (from the practice range's portal): a small entrance room leading to
+   * that boss's own room, at the stage it's normally met. Its portal (or "Try again")
+   * brings you back.
+   */
+  startBossPractice(boss) {
+    this.lastRun = { mode: 'set', theme: DungeonRun.bossTheme(boss), practiceBoss: boss };
+    this.practiceMode = false;
+    this.startGame(this.classId);
+  },
+
   startPractice(classId = this.classId) {
     this.classId = classId;
     this.practiceMode = true;
@@ -370,6 +383,8 @@ const App = {
     this.classId = classId;
     this.game = new Game(classId, this.events, {
       practice: this.practiceMode ? this.practiceOptions : null,
+      // the practice cheats also work in a boss arena opened from the range
+      cheats: this.practiceMode || this.lastRun?.practiceBoss ? this.practiceOptions : null,
       run: this.practiceMode ? null : this.lastRun,
     });
     Menus.refreshPractice(this.practiceOptions);
@@ -468,7 +483,9 @@ const App = {
       MenuShowcase.render(this.ctx);
     }
     Menus.drawPreviews(now / 1000);
-    this.practicePanel.classList.toggle('hidden', !(this.state === 'playing' && this.game && this.game.practice));
+    const g = this.state === 'playing' && this.game;
+    this.practicePanel.classList.toggle('hidden', !(g && g.cheats));
+    this.practicePanel.classList.toggle('arena', !!(g && g.cheats && !g.practice));
 
     Input.endFrame();
     requestAnimationFrame((t) => this.loop(t));

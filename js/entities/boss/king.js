@@ -1,11 +1,12 @@
 // =============================================================
 //  THE KING (the castle's throne room)
 //
-//  Phase 1: he sits on his throne and shouts. Every shout sends a fan-shaped
-//    shockwave out at his target and calls a royal guard through one of the two
-//    side doors (up to guards.max at once). Every few shouts he throws his
-//    scepter instead: it flies to where you stood, spins there for a while,
-//    drops, then flies back to his hand.
+//  Phase 1: he sits on his throne and smites the floor with his scepter: each blow
+//    sends a fan-shaped shockwave out at his target, and he bellows for a royal
+//    guard through one of the two side doors (guards.max at a time). Every few
+//    attacks he throws his scepter instead, into the path you'd take running from
+//    the guard: it spins there for a while, drops, then flies back to his hand.
+//    With his scepter gone he can't make shockwaves; he only shouts for guards.
 //  At half health he rises and slams his scepter (a shockwave round the whole
 //    room), calls four bishops who heal him, and a guard brings him his
 //    greatsword. He can't be hurt until he has it.
@@ -43,7 +44,8 @@ class King {
     this.attackTimer = 1.2;
     this.attacks = 0;
     this.aim = Math.PI / 2;
-    this.waves = [];          // fan shockwaves from his shouts
+    this.waves = [];          // fan shockwaves from his scepter blows
+    this.track = null;        // his target's smoothed position and velocity (to throw into their path)
     this.scepter = null;      // the thrown scepter: { state: 'fly' | 'spin' | 'rest' | 'back', x, y, ... }
     this.hasSword = false;
     this.weapon = 'scepter';
@@ -117,6 +119,7 @@ class King {
     if (this.dying > 0) return this.updateDeath(dt, world);
     this.t += dt;
     this.moving = false;
+    this.trackTarget(dt, world);
     const p = world.player;
     if (this.state !== 'swordWindup' || this.t < this.cfg.sword.windup * 0.55) this.facing = p.x >= this.x ? 1 : -1;
     if (this.transitioning) this.updateTransition(dt, world);
@@ -135,15 +138,27 @@ class King {
         this.attackTimer -= dt;
         if (this.attackTimer > 0 || p.dead) return;
         this.attacks++;
-        if (this.attacks % c.throwEvery === 0 && !this.scepter) { this.setState('throwWindup'); Sound.play('fistCharge'); }
-        else { this.setState('shoutWindup'); this.aim = angleTo(this.x, this.y - 20, p.x, p.y); Sound.play('windup'); }
+        if (this.scepter) { this.setState('command'); this.command(world); }   // no scepter, no shockwave
+        else if (this.attacks % c.throwEvery === 0) {
+          this.setState('throwWindup');
+          this.say(world, choose(['CATCH!', 'FETCH THIS!', 'NOWHERE TO RUN!']));
+          Sound.play('scepterRaise');
+        } else {
+          this.setState('smiteWindup');
+          this.aim = this.fanAim(p);
+          this.say(world, choose(['KNEEL!', 'BOW BEFORE ME!', 'GROVEL!']));
+          Sound.play('scepterRaise');
+        }
         break;
-      case 'shoutWindup':
-        if (this.t < c.shout.windup * 0.6 && !p.dead) this.aim = angleTo(this.x, this.y - 20, p.x, p.y);
-        if (this.t >= c.shout.windup) this.shout(world);
+      case 'smiteWindup':
+        if (this.t < c.shout.windup * 0.6 && !p.dead) this.aim = this.fanAim(p);
+        if (this.t >= c.shout.windup) this.smite(world);
         break;
-      case 'shout':
+      case 'smite':
         if (this.t >= 0.6) { this.setState('idle'); this.attackTimer = c.shout.every - c.shout.windup - 0.6; }
+        break;
+      case 'command':
+        if (this.t >= 0.8) { this.setState('idle'); this.attackTimer = 0.9; }
         break;
       case 'throwWindup':
         if (this.t >= c.scepter.windup) this.throwScepter(world, p);
@@ -154,23 +169,111 @@ class King {
     }
   }
 
-  /** A shout: a fan-shaped shockwave at his target, and a royal guard through one of the doors. */
-  shout(world) {
+  /** Where his scepter strikes the floor from the throne (the fan shockwaves start there). */
+  get smiteX() { return this.x + this.facing * 34; }
+  get smiteY() { return this.y + 6; }
+  /** The fan's aim at p, measured on the flattened floor the fan is drawn on. */
+  fanAim(p) { return Math.atan2((p.y - this.smiteY) / 0.75, p.x - this.smiteX); }
+
+  /** He smites the floor with his scepter: a fan-shaped shockwave at his target, and a shout for a guard. */
+  smite(world) {
     const c = this.cfg.shout;
-    this.waves.push({ x: this.x, y: this.y - 20, angle: this.aim, arc: c.arcDegrees * DEG, r: 30, max: c.range, speed: c.speed, width: c.width, hit: new Set() });
-    world.shake(6, 0.3);
-    Sound.play('kingShout');
-    world.effects.burst(this.x + this.facing * 10, this.headY + 20, { count: 12, colors: ['#ffe680', '#ffffff'], speed: [80, 200], life: [0.2, 0.4], angle: this.aim, spread: 1.2 });
+    const x = this.smiteX;
+    const y = this.smiteY;
+    this.waves.push({ x, y, angle: this.aim, arc: c.arcDegrees * DEG, r: 20, max: this.reach(world, x, y, 0.75), speed: c.speed, width: c.width, hit: new Set(), clip: { ...world.dungeon.floorBounds } });
+    world.shake(7, 0.3);
+    Sound.play('scepterSmite');
+    // the marble cracks and spits chips and gold sparks where the scepter lands
+    world.effects.burst(x, y - 4, { count: 22, colors: ['#ffe680', '#ffffff', '#6e687e', '#ecd690'], speed: [80, 220], life: [0.2, 0.5], angle: this.aim, spread: 1.4, up: 60 });
+    world.effects.smoke(x, y - 4, { count: 6, radius: 18, life: 0.7, rise: 16, colors: ['#3e3a48', '#5e5a6c', '#8e8a9e'] });
+    world.effects.add(0.35, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, x, y, 20 + t * 50, '230, 220, 190', 0.9 * (1 - t), 2, (20 + t * 50) * 0.6);
+      ctx.restore();
+    });
     this.callGuard(world);
-    this.setState('shout');
+    this.setState('smite');
   }
 
-  /** A royal guard marches in through the next door (while he has fewer than guards.max). */
+  /** With his scepter away he can only bellow for his guard. */
+  command(world) {
+    if (!this.callGuard(world)) this.say(world, choose(['SEIZE THEM!', 'AFTER THEM!', 'DON\'T JUST STAND THERE!']));
+    Sound.play('kingShout');
+    world.shake(3, 0.2);
+  }
+
+  /**
+   * He shouts: the line shows in a speech bubble over his head, or pinned to the edge
+   * of the screen (pointing at him) while he's out of view (HUD.drawBossSpeech).
+   */
+  say(world, text, life = 1.6) {
+    this.speech = { text, until: this.time + life, at: this.time };
+  }
+
+  /**
+   * How far a shockwave from (x, y) has to roll to cross the whole room: to its farthest
+   * corner, measured on the floor it's drawn on (flat: how much flatter it is than wide).
+   */
+  reach(world, x, y, flat) {
+    const b = world.dungeon.floorBounds;
+    const far = Math.max(...[[b.left, b.top], [b.right, b.top], [b.left, b.bottom], [b.right, b.bottom]].map(([cx, cy]) => Math.hypot(cx - x, (cy - y) / flat)));
+    return far + 40;
+  }
+
+  /** His target's position and velocity, smoothed (to throw the scepter into their path). */
+  trackTarget(dt, world) {
+    const p = world.player;
+    if (!this.track || this.track.who !== p) { this.track = { who: p, x: p.x, y: p.y, vx: 0, vy: 0 }; return; }
+    const T = this.track;
+    const k = Math.min(1, dt * 6);
+    T.vx += (clamp((p.x - T.x) / Math.max(dt, 1e-3), -600, 600) - T.vx) * k;
+    T.vy += (clamp((p.y - T.y) / Math.max(dt, 1e-3), -600, 600) - T.vy) * k;
+    T.x = p.x;
+    T.y = p.y;
+  }
+
+  /**
+   * Where to throw the scepter: lead px ahead of the hero, in the direction they'd run
+   * from the guard (away from it, bent toward the way they're already moving).
+   */
+  throwTarget(world, p) {
+    const c = this.cfg.scepter;
+    let dx = 0;
+    let dy = 0;
+    const guard = world.enemies.filter((e) => e.owner === this && !e.dead).sort((a, b) => dist(a.x, a.y, p.x, p.y) - dist(b.x, b.y, p.x, p.y))[0];
+    if (guard) {
+      const a = angleTo(guard.x, guard.y, p.x, p.y);
+      dx += Math.cos(a);
+      dy += Math.sin(a);
+    }
+    const T = this.track;
+    const sp = T ? Math.hypot(T.vx, T.vy) : 0;
+    if (sp > 30) { dx += T.vx / sp; dy += T.vy / sp; }
+    if (Math.hypot(dx, dy) < 0.2) {
+      const a = angleTo(this.x, this.y, p.x, p.y);   // nothing to go on: just beyond them
+      dx = Math.cos(a);
+      dy = Math.sin(a);
+    }
+    const n = Math.hypot(dx, dy);
+    const b = world.dungeon.floorBounds;
+    return {
+      x: clamp(p.x + (dx / n) * c.lead, b.left + 40, b.right - 40),
+      y: clamp(p.y + (dy / n) * c.lead, b.top + 60, b.bottom - 30),
+    };
+  }
+
+  /**
+   * One royal guard marches in through the next door (while he has fewer than
+   * guards.max). False if none could come.
+   */
   callGuard(world) {
     const alive = world.enemies.filter((e) => e.owner === this && e.type === 'royalGuard' && !e.dead).length;
     const doors = this.doors(world);
-    if (alive >= this.cfg.guards.max || !doors.length) return;
+    if (alive >= this.cfg.guards.max || !doors.length) return false;
     const door = doors[this.doorTurn++ % doors.length];
+    this.say(world, choose(['GUARD! TO ME!', 'GUARDS! SEIZE THEM!', 'ANOTHER GUARD!']));
+    Sound.play('guardHorn');
     this.openDoor(door, 1.6);
     world.after(0.5, () => {
       if (this.dead || this.dying > 0) return;
@@ -180,6 +283,7 @@ class King {
       world.addEnemy(g);
       world.effects.burst(pt.x, pt.y - 20, { count: 10, colors: ['#3e3a48', '#c8a456'], speed: [30, 90], life: [0.2, 0.5] });
     });
+    return true;
   }
 
   openDoor(door, time) {
@@ -195,9 +299,11 @@ class King {
       if (w.r >= w.max) { w.dead = true; continue; }
       for (const a of world.allies) {
         if (w.hit.has(a)) continue;
-        const d = dist(w.x, w.y, a.x, a.y);
-        if (Math.abs(d - w.r) > w.width / 2 + (a.radius || 10) * 0.5) continue;
-        if (Math.abs(angleDiff(w.angle, angleTo(w.x, w.y, a.x, a.y))) > w.arc / 2) continue;
+        // measured on the same flattened fan that's drawn (0.75 as tall as it is wide)
+        const dx = a.x - w.x;
+        const dy = (a.y - w.y) / 0.75;
+        if (Math.abs(Math.hypot(dx, dy) - w.r) > w.width / 2 + (a.radius || 10) * 0.5) continue;
+        if (Math.abs(angleDiff(w.angle, Math.atan2(dy, dx))) > w.arc / 2) continue;
         w.hit.add(a);
         if (a.hurt(c.damage, world, w.x, w.y)) a.knockback?.(angleTo(w.x, w.y, a.x, a.y), c.knockback);
       }
@@ -218,10 +324,9 @@ class King {
   throwScepter(world, p) {
     const c = this.cfg.scepter;
     const h = this.handPos();
-    const tx = p.dead ? this.x : p.x;
-    const ty = p.dead ? this.y + 150 : p.y;
-    this.scepter = { state: 'fly', x: h.x, y: h.y, tx, ty, t: 0, tick: 0, spin: 0 };
-    Sound.play('fistLaunch');
+    const to = p.dead ? { x: this.x, y: this.y + 150 } : this.throwTarget(world, p);
+    this.scepter = { state: 'fly', x: h.x, y: h.y, tx: to.x, ty: to.y, t: 0, tick: 0, spin: 0 };
+    Sound.play('scepterThrow');
     this.setState('throw');
   }
 
@@ -248,7 +353,7 @@ class King {
           for (const a of world.allies) {
             if (dist(a.x, a.y, S.x, S.y) < c.radius + a.radius) a.hurt(c.damage, world, S.x, S.y);
           }
-          Sound.play('slash', 0.12);
+          Sound.play('scepterWhirl', 0.12);
         }
         if (vrand(0, 1) < 0.5) world.effects.burst(S.x + vrand(-c.radius, c.radius) * 0.7, S.y - 6, { count: 1, colors: ['#ffe680', '#ecd690', '#ffffff'], speed: [20, 70], life: [0.2, 0.4] });
         if (S.t >= c.spin) { S.state = 'rest'; S.t = 0; Sound.play('gateClang'); world.effects.burst(S.x, S.y, { count: 10, colors: ['#ecd690', '#ffffff'], speed: [30, 100], life: [0.2, 0.4] }); }
@@ -281,13 +386,13 @@ class King {
         // he heaves himself up off the throne and waddles forward a little
         if (this.t > 0.4) { this.seated = false; this.y += 40 * dt; }
         if (this.scepter) this.scepter.state = 'back';
-        if (this.t >= 1.2 && !this.scepter) { this.setState('raise'); Sound.play('fistCharge'); }
+        if (this.t >= 1.2 && !this.scepter) { this.setState('raise'); Sound.play('scepterRaise'); this.say(world, 'KNEEL BEFORE YOUR KING!', 1.4); }
         break;
       case 'raise':
         if (this.t >= 0.7) {
           // the scepter cracks the floor: a shockwave round the whole room
           const s = c.slamWave;
-          world.addShockwave(this.x, this.y, { radius: s.radius, speed: s.speed, width: s.width, damage: s.damage, color: '255, 220, 120' });
+          world.addShockwave(this.x, this.y, { radius: this.reach(world, this.x, this.y, 0.7), speed: s.speed, width: s.width, damage: s.damage, color: '228, 214, 178' });
           this.slamFx(world, 1.4);
           this.setState('slamDown');
         }
@@ -308,7 +413,7 @@ class King {
               world.effects.burst(pt.x, pt.y - 20, { count: 10, colors: ['#46286a', '#c8a456', '#fff6d0'], speed: [30, 90], life: [0.2, 0.5] });
             });
           }
-          world.effects.text(this.hx, this.headY - 20, 'BISHOPS! MY SWORD!', { color: '#ecd690', size: 10, life: 1.8 });
+          this.say(world, 'BISHOPS! BRING MY SWORD!', 2);
           this.setState('bishops');
         }
         break;
@@ -366,8 +471,7 @@ class King {
 
   slamFx(world, size = 1) {
     world.shake(9 * size, 0.5);
-    Sound.play('stomp');
-    Sound.play('impact');
+    Sound.play('royalSlam');
     const x = this.x + this.facing * 26;
     const y = this.y + 4;
     world.effects.add(1.8, (ctx, t) => {
@@ -407,15 +511,15 @@ class King {
         if (this.attackTimer <= 0 && !p.dead) {
           const kind = ['slam', 'sword', 'crown'][this.step++ % 3];
           this.aim = angleTo(this.x, this.y - 20, p.x, p.y);
-          if (kind === 'slam') { this.weapon = 'scepter'; this.setState('slamWindup'); Sound.play('fistCharge'); }
-          else if (kind === 'sword') { this.weapon = 'sword'; this.setState('swordWindup'); Sound.play('windup'); }
-          else { this.setState('crownWindup'); Sound.play('laserCharge', 0.2); }
+          if (kind === 'slam') { this.weapon = 'scepter'; this.setState('slamWindup'); Sound.play('scepterRaise'); this.say(world, choose(['KNEEL!', 'DOWN, PEASANT!'])); }
+          else if (kind === 'sword') { this.weapon = 'sword'; this.setState('swordWindup'); Sound.play('windup'); this.say(world, choose(['OFF WITH YOUR HEAD!', 'FEEL MY BLADE!'])); }
+          else { this.setState('crownWindup'); Sound.play('crownCharge'); this.say(world, choose(['BEHOLD MY CROWN!', 'BASK IN MY GLORY!'])); }
         }
         break;
       }
       case 'slamWindup':
         if (this.t >= c.slam.windup) {
-          world.addShockwave(this.x, this.y, { radius: c.slam.radius, speed: c.slam.speed, width: c.slam.width, damage: c.slam.damage, color: '255, 220, 120' });
+          world.addShockwave(this.x, this.y, { radius: this.reach(world, this.x, this.y, 0.7), speed: c.slam.speed, width: c.slam.width, damage: c.slam.damage, color: '228, 214, 178' });
           this.slamFx(world, 1);
           this.setState('slam');
         }
@@ -459,7 +563,7 @@ class King {
     }
     Enemy.prototype.swipeFx.call({ x: this.x, y: this.y - 10, attackAngle: this.aim, cfg: { attackArcDegrees: c.arcDegrees, attackReach: c.reach } }, world, '255, 90, 80');
     world.shake(7, 0.3);
-    Sound.play('heavySwing');
+    Sound.play('greatswordSweep');
     this.setState('swing');
   }
 
@@ -486,7 +590,7 @@ class King {
       PFX.glow(ctx, x, y, 30 + t * 80, '255, 230, 140', 1.2 * (1 - t));
       ctx.restore();
     });
-    Sound.play('laser');
+    Sound.play('crownBlast');
     world.shake(3, 0.15);
   }
 
@@ -503,6 +607,7 @@ class King {
     this.dying = 2.6;
     this.state = 'dying';
     this.waves = [];
+    this.speech = null;
     this.scepter = null;
     this.courier = null;
     Sound.play('bossRoar');
@@ -556,7 +661,7 @@ class King {
     this.intro -= dt;
     const e = KING_INTRO - this.intro;
     if (before < 1.1 && e >= 1.1) {
-      world.effects.text(this.hx, this.headY - 24, 'WHO DARES?!', { color: '#ff6a5a', size: 12, life: 1.4 });
+      this.say(world, 'WHO DARES?!', 1.4);
       world.shake(6, 0.4);
     }
     if (this.intro <= 0) {
@@ -574,8 +679,8 @@ class King {
     if (this.dying > 0) return this.seated ? 'sit' : 'stand';
     if (this.intro > 0) return KING_INTRO - this.intro > 1.1 ? 'shout' : 'sit';
     switch (this.state) {
-      case 'shoutWindup': return 'sit';
-      case 'shout': return 'shout';
+      case 'smiteWindup': return 'throw';
+      case 'smite': case 'command': return 'shout';
       case 'throwWindup': return 'throw';
       case 'throw': return 'sit';
       case 'rise': return this.seated ? 'shout' : 'stand';
@@ -600,24 +705,11 @@ class King {
     if (this.dead) return;
     drawShadow(ctx, this.x, this.y + 2, 36, 10, 0.4);
     const c = this.cfg;
-    if (this.state === 'shoutWindup') Telegraph.cone(ctx, this.x, this.y - 20, this.aim, c.shout.arcDegrees * DEG, 260, this.t / c.shout.windup);
+    if (this.state === 'smiteWindup') this.drawFanTelegraph(ctx, this.t / c.shout.windup);
     if (this.state === 'swordWindup') Telegraph.cone(ctx, this.x, this.y - 20, this.aim, c.sword.arcDegrees * DEG, c.sword.reach, this.t / c.sword.windup);
     if (this.state === 'slamWindup' || this.state === 'raise') {
-      const r = this.state === 'raise' ? 180 : c.slam.radius * 0.5;
+      const r = this.state === 'raise' ? 180 : 190;
       Telegraph.circle(ctx, this.x, this.y, r, this.t / (this.state === 'raise' ? 0.7 : c.slam.windup), '255, 200, 90');
-    }
-    // the shout's fan shockwaves: bands of sound rolling out across the marble
-    for (const w of this.waves) {
-      const fade = 1 - w.r / w.max;
-      ctx.save();
-      for (const [dr, width, alpha] of [[0, w.width, 0.35], [-6, 4, 0.9], [8, 2, 0.6]]) {
-        ctx.strokeStyle = `rgba(255, 236, 170, ${alpha * fade})`;
-        ctx.lineWidth = width;
-        ctx.beginPath();
-        ctx.ellipse(w.x, w.y, Math.max(1, w.r + dr), Math.max(1, (w.r + dr) * 0.75), 0, w.angle - w.arc / 2, w.angle + w.arc / 2);
-        ctx.stroke();
-      }
-      ctx.restore();
     }
     // the scepter spinning where it landed: a whirl of gold on the floor
     const S = this.scepter;
@@ -654,7 +746,7 @@ class King {
     const flip = this.facing < 0;
     const alpha = this.dying > 0 ? clamp(this.dying / 2.6, 0, 1) : 1;
     const pose = this.poseName();
-    const shake = this.state === 'shoutWindup' || this.state === 'raise' || this.state === 'crownWindup' ? vrand(-1, 1) : 0;
+    const shake = this.state === 'smiteWindup' || this.state === 'raise' || this.state === 'crownWindup' ? vrand(-1, 1) : 0;
     const x = this.x + shake;
     // a heavy golden-violet aura
     ctx.save();
@@ -667,6 +759,7 @@ class King {
     const hy = h.y;
     const f = this.facing;
     const weaponAngle = () => {
+      if (this.state === 'smite') return angleTo(hx, hy, this.smiteX, this.smiteY);   // the scepter's head on the floor
       switch (pose) {
         case 'throw': case 'raise': return -Math.PI / 2 - f * 0.35;
         case 'slam': return f > 0 ? 0.9 : Math.PI - 0.9;
@@ -714,6 +807,11 @@ class King {
     }
   }
 
+  /** The title card's portrait: just him, not the scepter in flight or his courier. */
+  drawPortrait(ctx) {
+    this.drawKing(ctx);
+  }
+
   drawThrownScepter(ctx) {
     const S = this.scepter;
     const w = Sprites.weapons.scepter;
@@ -753,5 +851,68 @@ class King {
     }
   }
 
-  drawOverlay() {}
+  /** The wedge of floor his next blow will sweep, filling in as he raises the scepter. */
+  drawFanTelegraph(ctx, k) {
+    const c = this.cfg.shout;
+    const x = this.smiteX;
+    const y = this.smiteY;
+    const a0 = this.aim - (c.arcDegrees * DEG) / 2;
+    const a1 = this.aim + (c.arcDegrees * DEG) / 2;
+    const R = 300;
+    const wedge = (r) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.ellipse(x, y, r, r * 0.75, 0, a0, a1);
+      ctx.closePath();
+    };
+    ctx.save();
+    wedge(R);
+    ctx.fillStyle = `rgba(255, 60, 60, ${0.1 + 0.08 * Telegraph.pulse(k)})`;
+    ctx.fill();
+    wedge(R * Math.min(1, k));
+    ctx.fillStyle = 'rgba(255, 90, 70, 0.22)';
+    ctx.fill();
+    wedge(R);
+    ctx.strokeStyle = `rgba(255, 120, 100, ${0.5 + 0.4 * Telegraph.pulse(k)})`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * The fan shockwaves, drawn over the room's gloom so they read clearly: a dark trough of
+   * churned dust, a gold band, a white-hot crest outlined in black, and a glow.
+   */
+  drawOverlay(ctx) {
+    for (const w of this.waves) {
+      const fade = 1 - w.r / w.max;
+      const band = (dr, width, style) => {
+        ctx.strokeStyle = style;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.ellipse(w.x, w.y, Math.max(1, w.r + dr), Math.max(1, (w.r + dr) * 0.75), 0, w.angle - w.arc / 2, w.angle + w.arc / 2);
+        ctx.stroke();
+      };
+      ctx.save();
+      const b = w.clip;   // only over the throne room's floor
+      ctx.beginPath();
+      ctx.rect(b.left, b.top - 40, b.right - b.left, b.bottom - b.top + 40);
+      ctx.clip();
+      ctx.lineCap = 'round';
+      band(-w.width * 0.4, w.width * 1.2, `rgba(20, 14, 24, ${0.3 + 0.25 * fade})`);
+      band(0, w.width, `rgba(226, 212, 178, ${0.4 + 0.3 * fade})`);
+      band(w.width * 0.45, 5, OUTLINE);
+      band(w.width * 0.4, 3, `rgba(246, 242, 230, ${0.55 + 0.25 * fade})`);
+      ctx.globalCompositeOperation = 'lighter';
+      band(0, w.width * 1.8, `rgba(220, 212, 190, ${0.06 + 0.1 * fade})`);
+      ctx.restore();
+      // chips of marble kicked up along the crest (visual randomness only)
+      if (vrand(0, 1) < 0.8) {
+        const a = w.angle + vrand(-w.arc / 2, w.arc / 2);
+        ctx.fillStyle = vrand(0, 1) < 0.5 ? '#ecd690' : '#fffbe8';
+        ctx.fillRect(Math.round(w.x + Math.cos(a) * w.r), Math.round(w.y + Math.sin(a) * w.r * 0.75 - vrand(0, 10)), 2, 2);
+      }
+    }
+  }
 }

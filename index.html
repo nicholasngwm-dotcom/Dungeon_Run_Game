@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dungeon Run</title>
-  <link rel="stylesheet" href="css/alagard.css?v=20261022b">
-  <link rel="stylesheet" href="css/style.css?v=20261022b">
+  <link rel="stylesheet" href="css/alagard.css?v=20261023n">
+  <link rel="stylesheet" href="css/style.css?v=20261023n">
 </head>
 <body>
   <!-- Startup: a campfire burns while the sprites are drawn (App.init fills the bar, then fades this out) -->
@@ -288,8 +288,8 @@
           <div class="card dungeon-card" data-action="theme:castle">
             <h3>Castle</h3>
             <div class="stats">STAGES 1 - 3</div>
-            <div class="ability"><span>A corrupted empire's fallen keep. Executioners, jesters and flaming catapults join in stage 2; the Prince and Princess in stage 3.</span></div>
-            <div class="ability"><b>BOSS</b><br><span>The Queen or the King</span></div>
+            <div class="ability"><span>A corrupted empire's fallen keep. Executioners, jesters and flaming catapults join in stage 2; the army general and cluster catapults in stage 3.</span></div>
+            <div class="ability"><b>BOSSES</b><br><span>Stage 1: the Prince or the Princess<br>Stage 2: the Queen<br>Stage 3: the King</span></div>
             <div class="enter">ENTER</div>
           </div>
           <div class="card dungeon-card locked"><h3>???</h3><div class="stats">COMING SOON</div></div>
@@ -298,10 +298,12 @@
       </div>
     </section>
 
-    <!-- Practice range panel (shown while playing in practice mode) -->
+    <!-- Practice range panel (shown while playing in practice mode, and in a boss arena opened from it,
+         where only the cheats show: .arena hides the .pp-range parts) -->
     <aside id="practice-panel" class="practice-panel hidden">
       <div class="pp-head">PRACTICE <button data-pp="collapse" class="pp-min">-</button></div>
       <div class="pp-body">
+        <div class="pp-range">
         <div class="pp-label">Hero</div>
         <div class="pp-grid">
           <button data-pp="class:warrior">Knight</button>
@@ -336,19 +338,28 @@
           <button data-pp="spawn:zombieSoldier">Z. Soldier</button>
           <button data-pp="spawn:skeletonSorcerer">Sorcerer</button>
         </div>
-        <div class="pp-label">Bosses</div>
         <div class="pp-grid">
-          <button data-pp="spawn:golem" class="pp-wide">Clay Golem</button>
-          <button data-pp="spawn:phantom" class="pp-wide">Phantom King</button>
           <button data-pp="clear" class="pp-wide">Clear enemies</button>
+        </div>
+        <div class="pp-label">Boss Arenas <span class="pp-note">opens a portal to the boss's room</span></div>
+        <div class="pp-grid">
+          <button data-pp="arena:golem">Clay Golem</button>
+          <button data-pp="arena:phantom">Phantom King</button>
+          <button data-pp="arena:prince">Prince</button>
+          <button data-pp="arena:princess">Princess</button>
+          <button data-pp="arena:queen">Queen</button>
+          <button data-pp="arena:king">King</button>
+        </div>
         </div>
         <div class="pp-label">Cheats</div>
         <button data-pp="toggle:god" class="pp-toggle">God mode</button>
         <button data-pp="toggle:infiniteMana" class="pp-toggle">Infinite mana/light</button>
         <button data-pp="toggle:infiniteEnergy" class="pp-toggle">Infinite energy</button>
+        <button data-pp="toggle:noCooldowns" class="pp-toggle">No cooldowns</button>
         <div class="pp-grid">
           <button data-pp="ult">Fill ult</button>
-          <button data-pp="resetDps">Reset DPS</button>
+          <button data-pp="resetDps" class="pp-range">Reset DPS</button>
+          <button data-pp="range" class="pp-arena">Back to range</button>
           <button data-pp="lobby" class="pp-wide">Back to lobby</button>
         </div>
       </div>
@@ -377,9 +388,15 @@
           <input type="range" id="set-map" min="0.8" max="2.2" step="0.1">
         </div>
         <div class="settings-col wide">
-          <div class="set-head">KEYBINDS <span class="set-sub">click, then press a key</span></div>
+          <div class="set-head">KEYBINDS <span class="set-sub">click, then press a key (LMB / RMB stay on the mouse buttons)</span></div>
           <div id="set-keys" class="set-keys"></div>
-          <div class="set-sub">LMB / RMB stay on the mouse buttons</div>
+          <div class="set-head">CROSSHAIR</div>
+          <div class="xhair-row">
+            <div id="set-xhair" class="set-choices"></div>
+            <canvas id="set-xhair-preview" width="64" height="64"></canvas>
+          </div>
+          <label class="set-row">Size <span id="set-xsize-val">100%</span></label>
+          <input type="range" id="set-xsize" min="0.5" max="2" step="0.1">
         </div>
       </div>
       <div class="menu-buttons row">
@@ -429,97 +446,99 @@
   <!-- Every local script / stylesheet link carries ?v=<build>: bump it with each release so
        browsers fetch the new files instead of mixing cached old scripts with the new page. -->
   <!-- Core -->
-  <script src="js/config.js?v=20261022b"></script>
-  <script src="js/core/settings.js?v=20261022b"></script>
-  <script src="js/core/display.js?v=20261022b"></script>
+  <script src="js/config.js?v=20261023n"></script>
+  <script src="js/core/settings.js?v=20261023n"></script>
+  <script src="js/core/display.js?v=20261023n"></script>
   <!-- multiplayer: PeerJS for peer-to-peer connections (single player works without it) -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="js/core/utils.js?v=20261022b"></script>
-  <script src="js/core/input.js?v=20261022b"></script>
-  <script src="js/core/audio.js?v=20261022b"></script>
-  <script src="js/core/camera.js?v=20261022b"></script>
+  <script src="js/core/utils.js?v=20261023n"></script>
+  <script src="js/core/input.js?v=20261023n"></script>
+  <script src="js/core/audio.js?v=20261023n"></script>
+  <script src="js/core/camera.js?v=20261023n"></script>
 
   <!-- Graphics (procedural pixel art) -->
-  <script src="js/gfx/pixelArt.js?v=20261022b"></script>
-  <script src="js/gfx/heroSprites.js?v=20261022b"></script>
-  <script src="js/gfx/heroes/cute.js?v=20261022b"></script>
-  <script src="js/gfx/heroes/knight.js?v=20261022b"></script>
-  <script src="js/gfx/heroes/archer.js?v=20261022b"></script>
-  <script src="js/gfx/heroes/mage.js?v=20261022b"></script>
-  <script src="js/gfx/heroes/rogue.js?v=20261022b"></script>
-  <script src="js/gfx/heroes/priestess.js?v=20261022b"></script>
-  <script src="js/gfx/heroes/bard.js?v=20261022b"></script>
-  <script src="js/gfx/pixelFx.js?v=20261022b"></script>
-  <script src="js/gfx/enemies/undead.js?v=20261022b"></script>
-  <script src="js/gfx/enemies/spirits.js?v=20261022b"></script>
-  <script src="js/gfx/enemySprites.js?v=20261022b"></script>
-  <script src="js/gfx/graveyardSprites.js?v=20261022b"></script>
-  <script src="js/gfx/enemies/castle.js?v=20261022b"></script>
-  <script src="js/gfx/castleTiles.js?v=20261022b"></script>
-  <script src="js/gfx/castleSprites.js?v=20261022b"></script>
-  <script src="js/gfx/royalSprites.js?v=20261022b"></script>
-  <script src="js/gfx/npcSprites.js?v=20261022b"></script>
-  <script src="js/gfx/propSprites.js?v=20261022b"></script>
-  <script src="js/gfx/bossSprites.js?v=20261022b"></script>
-  <script src="js/gfx/phantomSprites.js?v=20261022b"></script>
-  <script src="js/gfx/itemSprites.js?v=20261022b"></script>
-  <script src="js/gfx/iconSprites.js?v=20261022b"></script>
-  <script src="js/gfx/tiles.js?v=20261022b"></script>
+  <script src="js/gfx/pixelArt.js?v=20261023n"></script>
+  <script src="js/gfx/heroSprites.js?v=20261023n"></script>
+  <script src="js/gfx/heroes/cute.js?v=20261023n"></script>
+  <script src="js/gfx/heroes/knight.js?v=20261023n"></script>
+  <script src="js/gfx/heroes/archer.js?v=20261023n"></script>
+  <script src="js/gfx/heroes/mage.js?v=20261023n"></script>
+  <script src="js/gfx/heroes/rogue.js?v=20261023n"></script>
+  <script src="js/gfx/heroes/priestess.js?v=20261023n"></script>
+  <script src="js/gfx/heroes/bard.js?v=20261023n"></script>
+  <script src="js/gfx/pixelFx.js?v=20261023n"></script>
+  <script src="js/gfx/enemies/undead.js?v=20261023n"></script>
+  <script src="js/gfx/enemies/spirits.js?v=20261023n"></script>
+  <script src="js/gfx/enemySprites.js?v=20261023n"></script>
+  <script src="js/gfx/graveyardSprites.js?v=20261023n"></script>
+  <script src="js/gfx/enemies/castle.js?v=20261023n"></script>
+  <script src="js/gfx/castleTiles.js?v=20261023n"></script>
+  <script src="js/gfx/castleSprites.js?v=20261023n"></script>
+  <script src="js/gfx/royalSprites.js?v=20261023n"></script>
+  <script src="js/gfx/npcSprites.js?v=20261023n"></script>
+  <script src="js/gfx/propSprites.js?v=20261023n"></script>
+  <script src="js/gfx/bossSprites.js?v=20261023n"></script>
+  <script src="js/gfx/phantomSprites.js?v=20261023n"></script>
+  <script src="js/gfx/itemSprites.js?v=20261023n"></script>
+  <script src="js/gfx/iconSprites.js?v=20261023n"></script>
+  <script src="js/gfx/tiles.js?v=20261023n"></script>
 
   <!-- World & entities -->
-  <script src="js/world/dungeon.js?v=20261022b"></script>
-  <script src="js/world/castle.js?v=20261022b"></script>
-  <script src="js/world/doors.js?v=20261022b"></script>
-  <script src="js/world/lighting.js?v=20261022b"></script>
-  <script src="js/world/floor.js?v=20261022b"></script>
-  <script src="js/entities/effects.js?v=20261022b"></script>
-  <script src="js/entities/entity.js?v=20261022b"></script>
-  <script src="js/entities/projectile.js?v=20261022b"></script>
-  <script src="js/entities/pickup.js?v=20261022b"></script>
-  <script src="js/entities/dummy.js?v=20261022b"></script>
-  <script src="js/entities/player/player.js?v=20261022b"></script>
-  <script src="js/entities/player/warrior.js?v=20261022b"></script>
-  <script src="js/entities/player/ranger.js?v=20261022b"></script>
-  <script src="js/entities/player/mage.js?v=20261022b"></script>
-  <script src="js/entities/player/rogue.js?v=20261022b"></script>
-  <script src="js/entities/player/priestess.js?v=20261022b"></script>
-  <script src="js/entities/player/bard.js?v=20261022b"></script>
-  <script src="js/entities/enemies/enemy.js?v=20261022b"></script>
-  <script src="js/entities/enemies/zombie.js?v=20261022b"></script>
-  <script src="js/entities/enemies/slime.js?v=20261022b"></script>
-  <script src="js/entities/enemies/wraith.js?v=20261022b"></script>
-  <script src="js/entities/enemies/skeleton.js?v=20261022b"></script>
-  <script src="js/entities/enemies/undeadKnight.js?v=20261022b"></script>
-  <script src="js/entities/enemies/clayMinion.js?v=20261022b"></script>
-  <script src="js/entities/enemies/gravestone.js?v=20261022b"></script>
-  <script src="js/entities/enemies/ghost.js?v=20261022b"></script>
-  <script src="js/entities/enemies/mimic.js?v=20261022b"></script>
-  <script src="js/entities/enemies/graveyard.js?v=20261022b"></script>
-  <script src="js/entities/enemies/castle.js?v=20261022b"></script>
-  <script src="js/entities/boss/golem.js?v=20261022b"></script>
-  <script src="js/entities/boss/phantom.js?v=20261022b"></script>
-  <script src="js/entities/boss/queen.js?v=20261022b"></script>
-  <script src="js/entities/boss/king.js?v=20261022b"></script>
+  <script src="js/world/dungeon.js?v=20261023n"></script>
+  <script src="js/world/castle.js?v=20261023n"></script>
+  <script src="js/world/doors.js?v=20261023n"></script>
+  <script src="js/world/lighting.js?v=20261023n"></script>
+  <script src="js/world/floor.js?v=20261023n"></script>
+  <script src="js/entities/effects.js?v=20261023n"></script>
+  <script src="js/entities/entity.js?v=20261023n"></script>
+  <script src="js/entities/projectile.js?v=20261023n"></script>
+  <script src="js/entities/pickup.js?v=20261023n"></script>
+  <script src="js/entities/dummy.js?v=20261023n"></script>
+  <script src="js/entities/player/player.js?v=20261023n"></script>
+  <script src="js/entities/player/warrior.js?v=20261023n"></script>
+  <script src="js/entities/player/ranger.js?v=20261023n"></script>
+  <script src="js/entities/player/mage.js?v=20261023n"></script>
+  <script src="js/entities/player/rogue.js?v=20261023n"></script>
+  <script src="js/entities/player/priestess.js?v=20261023n"></script>
+  <script src="js/entities/player/bard.js?v=20261023n"></script>
+  <script src="js/entities/enemies/enemy.js?v=20261023n"></script>
+  <script src="js/entities/enemies/zombie.js?v=20261023n"></script>
+  <script src="js/entities/enemies/slime.js?v=20261023n"></script>
+  <script src="js/entities/enemies/wraith.js?v=20261023n"></script>
+  <script src="js/entities/enemies/skeleton.js?v=20261023n"></script>
+  <script src="js/entities/enemies/undeadKnight.js?v=20261023n"></script>
+  <script src="js/entities/enemies/clayMinion.js?v=20261023n"></script>
+  <script src="js/entities/enemies/gravestone.js?v=20261023n"></script>
+  <script src="js/entities/enemies/ghost.js?v=20261023n"></script>
+  <script src="js/entities/enemies/mimic.js?v=20261023n"></script>
+  <script src="js/entities/enemies/graveyard.js?v=20261023n"></script>
+  <script src="js/entities/enemies/castle.js?v=20261023n"></script>
+  <script src="js/entities/boss/golem.js?v=20261023n"></script>
+  <script src="js/entities/boss/phantom.js?v=20261023n"></script>
+  <script src="js/entities/boss/queen.js?v=20261023n"></script>
+  <script src="js/entities/boss/king.js?v=20261023n"></script>
+  <script src="js/entities/boss/prince.js?v=20261023n"></script>
+  <script src="js/entities/boss/princess.js?v=20261023n"></script>
 
   <!-- Game -->
-  <script src="js/game/waves.js?v=20261022b"></script>
-  <script src="js/game/hud.js?v=20261022b"></script>
-  <script src="js/game/lobby.js?v=20261022b"></script>
-  <script src="js/game/decor.js?v=20261022b"></script>
-  <script src="js/game/castleDecor.js?v=20261022b"></script>
-  <script src="js/game/scenes.js?v=20261022b"></script>
-  <script src="js/game/potions.js?v=20261022b"></script>
-  <script src="js/game/upgrades.js?v=20261022b"></script>
-  <script src="js/game/run.js?v=20261022b"></script>
-  <script src="js/game/game.js?v=20261022b"></script>
-  <script src="js/ui/heroGuide.js?v=20261022b"></script>
-  <script src="js/ui/menus.js?v=20261022b"></script>
-  <script src="js/ui/bestiary.js?v=20261022b"></script>
-  <script src="js/ui/potionGuide.js?v=20261022b"></script>
-  <script src="js/ui/dialog.js?v=20261022b"></script>
-  <script src="js/net/net.js?v=20261022b"></script>
-  <script src="js/net/session.js?v=20261022b"></script>
-  <script src="js/ui/menuShowcase.js?v=20261022b"></script>
-  <script src="js/main.js?v=20261022b"></script>
+  <script src="js/game/waves.js?v=20261023n"></script>
+  <script src="js/game/hud.js?v=20261023n"></script>
+  <script src="js/game/lobby.js?v=20261023n"></script>
+  <script src="js/game/decor.js?v=20261023n"></script>
+  <script src="js/game/castleDecor.js?v=20261023n"></script>
+  <script src="js/game/scenes.js?v=20261023n"></script>
+  <script src="js/game/potions.js?v=20261023n"></script>
+  <script src="js/game/upgrades.js?v=20261023n"></script>
+  <script src="js/game/run.js?v=20261023n"></script>
+  <script src="js/game/game.js?v=20261023n"></script>
+  <script src="js/ui/heroGuide.js?v=20261023n"></script>
+  <script src="js/ui/menus.js?v=20261023n"></script>
+  <script src="js/ui/bestiary.js?v=20261023n"></script>
+  <script src="js/ui/potionGuide.js?v=20261023n"></script>
+  <script src="js/ui/dialog.js?v=20261023n"></script>
+  <script src="js/net/net.js?v=20261023n"></script>
+  <script src="js/net/session.js?v=20261023n"></script>
+  <script src="js/ui/menuShowcase.js?v=20261023n"></script>
+  <script src="js/main.js?v=20261023n"></script>
 </body>
 </html>

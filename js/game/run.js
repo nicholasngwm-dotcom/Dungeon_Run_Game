@@ -83,15 +83,30 @@ const CHEST_POP = 0.14;
 const LOCKING_ROOMS = ['combat', 'defend', 'survival', 'boss'];
 
 class DungeonRun {
-  /** opts: { mode: 'set' | 'random', theme } */
+  /**
+   * opts: { mode: 'set' | 'random', theme }. opts.practiceBoss: boss practice from the
+   * practice range: a floor of just an entrance room and that boss's room, at the stage
+   * the boss is normally met (its strength), whose portal leads back to the range.
+   */
   constructor(world, opts) {
     this.world = world;
     this.mode = opts.mode;
-    this.stage = 1;
+    this.practiceBoss = opts.practiceBoss || null;
+    this.stage = this.practiceBoss ? DungeonRun.bossStage(this.practiceBoss) : 1;
     this.themes = [];
     for (let s = 0; s < 3; s++) this.themes.push(opts.mode === 'set' ? opts.theme : this.rollTheme());
     this.time = 0;
     this.buildStage();
+  }
+
+  /** The stage a boss is normally met at (the castle's Queen and King come later). */
+  static bossStage(type) {
+    return { queen: 2, king: 3 }[type] || 1;
+  }
+
+  /** The dungeon theme whose boss room a boss fights in (the castle's royals, or the graveyard). */
+  static bossTheme(type) {
+    return ['queen', 'king', 'prince', 'princess'].includes(type) ? 'castle' : 'graveyard';
   }
 
   /** Random mode: a theme for the next stage, strongly avoiding ones already used. */
@@ -115,11 +130,11 @@ class DungeonRun {
 
   buildStage() {
     const w = this.world;
-    // the stage boss: the theme's own, or (the castle) one of its two, never the same twice in a row
-    const options = this.theme.bosses || [this.theme.boss];
+    // the stage boss: the theme's own, or (the castle) its stage's: the Prince or the Princess, the Queen, the King
+    const options = this.theme.stageBosses?.[this.stage] || this.theme.bosses || [this.theme.boss];
     const fresh = options.filter((b) => b !== this.bossType);
-    this.bossType = choose(fresh.length ? fresh : options);
-    w.dungeon = new FloorMap(this.stage, this.themeId, undefined, { boss: this.bossType });
+    this.bossType = this.practiceBoss || choose(fresh.length ? fresh : options);
+    w.dungeon = new FloorMap(this.stage, this.themeId, undefined, { boss: this.bossType, practice: !!this.practiceBoss });
     this.active = null;
     this.portal = null;
     this.totem = null;
@@ -138,6 +153,7 @@ class DungeonRun {
     for (const r of f.rooms) {
       if (CONFIG.run.cover.rooms.includes(r.type)) this.addCover(r);
       if (r.type === 'boss' && this.bossType === 'king') this.solidThrone(r);
+      if (r.type === 'boss' && this.bossType === 'princess') this.studyCover(r);
       if (r.type === 'combat') this.addSpikes(r);
       this.addProps(r);
     }
@@ -168,6 +184,10 @@ class DungeonRun {
     });
     w.camera.follow(s.x, s.y, 0, this.floor.width, this.floor.height, true);
     this.populate();
+    if (this.practiceBoss) {
+      w.banner('BOSS PRACTICE', 'Its room lies through the door', 3);
+      return;
+    }
     const lines = this.theme.stageLines || ['Clear the rooms and find the boss', 'The enemies grow stronger', 'The enemies grow stronger'];
     w.banner(`${this.theme.name.toUpperCase()} - STAGE ${this.stage}`, this.byStage(lines), 3);
   }
@@ -300,6 +320,8 @@ class DungeonRun {
    * While a room is locked, anyone who ends up outside it (heroes, downed
    * bodies, clones or enemies: knocked through a doorway, dashed out, spawned
    * on the wrong side) is warped back in after CONFIG.run.strayReturn seconds.
+   * An enemy wedged inside a wall (a door shut on it, a hedge grown under it) is
+   * freed almost at once: nudged to the nearest open floor in the room.
    */
   containRoom(dt) {
     const w = this.world;
@@ -308,7 +330,22 @@ class DungeonRun {
     const delay = CONFIG.run.strayReturn;
     for (const e of [...w.players, ...w.clones, ...w.enemies]) {
       if (e.dead && !w.players.includes(e)) continue;
-      if (f.roomAt(e.x, e.y) === r) { e.strayTime = 0; continue; }
+      const inside = f.roomAt(e.x, e.y) === r;
+      const stuck = w.enemies.includes(e) && f.boxHitsWall(e.x, e.y, e.hw || 9, e.hh || 6);
+      if (inside && !stuck) { e.strayTime = 0; e.stuckTime = 0; continue; }
+      if (inside && stuck) {
+        e.stuckTime = (e.stuckTime || 0) + dt;
+        if (e.stuckTime < 0.3) continue;
+        e.stuckTime = 0;
+        const pt = f.freePoint(e.x, e.y, e.hw || 9, e.hh || 6);
+        const q = f.randomPointIn(r, 2);
+        const near = f.roomAt(pt.x, pt.y) === r ? pt : f.freePoint(q.x, q.y, e.hw || 9, e.hh || 6);
+        e.x = near.x;
+        e.y = near.y;
+        e.kbx = 0;
+        e.kby = 0;
+        continue;
+      }
       e.strayTime = (e.strayTime || 0) + dt;
       if (e.strayTime < delay) continue;
       e.strayTime = 0;
@@ -547,8 +584,9 @@ class DungeonRun {
         if (r.bossDown && !w.boss) {
           this.finish(r);
           const spot = this.portalSpot(r);
-          this.portal = { kind: 'portal', x: spot.x, y: spot.y, label: this.stage < 3 ? 'ENTER PORTAL' : 'ESCAPE' };
-          w.banner(`${r.bossName} DEFEATED`, this.stage < 3 ? 'Enter the portal to go deeper' : 'Enter the portal to escape', 3);
+          const label = this.practiceBoss ? 'RETURN TO RANGE' : this.stage < 3 ? 'ENTER PORTAL' : 'ESCAPE';
+          this.portal = { kind: 'portal', x: spot.x, y: spot.y, label };
+          w.banner(`${r.bossName} DEFEATED`, this.practiceBoss ? 'Enter the portal to go back to the practice range' : this.stage < 3 ? 'Enter the portal to go deeper' : 'Enter the portal to escape', 3);
         }
         break;
     }
@@ -715,8 +753,14 @@ class DungeonRun {
     const w = this.world;
     const type = this.bossType;
     const T = this.floor.T;
-    // the Queen stands before her bell; the King sits on his throne at the top of the room
-    const at = type === 'queen' ? { x: r.cx, y: r.cy + 3.5 * T } : type === 'king' ? { x: r.cx, y: (r.y0 + 5) * T - 30 } : { x: r.cx, y: r.cy - 20 };
+    // the Queen stands before her bell; the King sits on his throne at the top of the room; the Princess
+    // sits at her desk by the top wall; the Prince's horse pulls up in the middle of the yard
+    const at = {
+      queen: { x: r.cx, y: r.cy + 3.5 * T },
+      king: { x: r.cx, y: (r.y0 + 5) * T - 30 },
+      princess: { x: r.cx, y: (r.y0 + 4) * T - 6 },
+      prince: { x: r.cx, y: r.cy },
+    }[type] || { x: r.cx, y: r.cy - 20 };
     w.boss = Game.createBoss(type, at);
     const s = this.scale;
     const b = w.boss;
@@ -726,13 +770,8 @@ class DungeonRun {
     r.bossName = b.name;
     r.bossDown = false;
     Music.play('boss');
-    const announce = () => {
-      w.banner(b.name, `${b.title} - Stage ${this.stage}`, 3);
-      Sound.play('bossRoar');
-    };
-    // a boss with an entrance (the Phantom King's smoke) is announced when it appears
-    if ('onReveal' in b) b.onReveal = announce;
-    else announce();
+    // its entrance plays as a cutscene that ends on its title card, then the fight starts
+    w.beginBossIntro(`${b.title} - Stage ${this.stage}`);
   }
 
   onBossDefeated() {
@@ -762,7 +801,8 @@ class DungeonRun {
   /** Someone used the portal: the whole party goes on to the next stage (or out, after the last). */
   enterPortal() {
     this.portal = null;
-    if (this.stage < 3) this.nextStage();
+    if (this.practiceBoss) this.world.events.onPracticeReturn?.();   // boss practice: back to the range
+    else if (this.stage < 3) this.nextStage();
     else this.victory();
   }
 
@@ -810,6 +850,31 @@ class DungeonRun {
     for (let ty = r.y0; ty <= r.y0 + 1; ty++) for (let tx = mid - 2; tx < mid + 2; tx++) f.grid[ty][tx] = TILE.COVER;
   }
 
+  /**
+   * The Princess's study: solid bookshelves and tables standing about the floor (cover from
+   * her bolts and arrows), in pairs either side of the middle, clear of her desk and the doors.
+   */
+  studyCover(r) {
+    const f = this.floor;
+    const T = f.T;
+    const mid = Math.round((r.x0 + r.x1 + 1) / 2);
+    // [prop, first column from the middle, row from the top wall, width, height] in tiles
+    const pieces = [
+      ['bookshelf', -9, 7, 2, 1], ['bookshelf', 7, 7, 2, 1],
+      ['readingTable', -5, 11, 2, 1], ['readingTable', 3, 11, 2, 1],
+      ['bookshelf', -9, 15, 2, 1], ['bookshelf', 7, 15, 2, 1],
+      ['table', -1, 15, 2, 1],
+    ];
+    const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ tx: t % f.cols, ty: Math.floor(t / f.cols) }));
+    for (const [prop, dx, dy, w, h] of pieces) {
+      const tx = mid + dx;
+      const ty = r.y0 + dy;
+      if (ty + h > r.y1 || doors.some((d) => d.tx >= tx - 3 && d.tx <= tx + w + 2 && d.ty >= ty - 3 && d.ty <= ty + h + 2)) continue;
+      this.cover.push({ kind: 'study', prop, tx, ty, w, h, x: tx * T, y: ty * T, seed: 0, room: r });
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) f.grid[ty + j][tx + i] = TILE.COVER;
+    }
+  }
+
   /** True if (x, y) is within `pad` px of any piece of cover. */
   nearCover(x, y, pad) {
     return this.cover.some((o) => x > o.x - pad && x < o.x + o.w * this.floor.T + pad && y > o.y - pad && y < o.y + o.h * this.floor.T + pad);
@@ -818,11 +883,18 @@ class DungeonRun {
   /** A piece of cover in the dungeon's style (bottom of its tiles at y). */
   drawCover(ctx, o) {
     const T = this.floor.T;
+    const bx = Math.round(o.x + (o.w * T) / 2);
+    const by = Math.round(o.y + o.h * T);
+    if (o.prop) {
+      // the study's furniture (see studyCover)
+      const pr = Sprites.props[o.prop];
+      drawShadow(ctx, bx, by - 3, (o.w * T) / 2 + 2, 6, 0.4);
+      if (pr) ctx.drawImage(pr.img, bx - pr.ax, by - pr.ay - 1);
+      return;
+    }
     const set = Sprites.cover && Sprites.cover[o.kind];
     if (!set) return;
     const img = set[o.seed % set.length];
-    const bx = Math.round(o.x + (o.w * T) / 2);
-    const by = Math.round(o.y + o.h * T);
     drawShadow(ctx, bx, by - 3, (o.w * T) / 2 + 2, 6, 0.4);
     ctx.drawImage(img, bx - Math.round(img.width / 2), by - img.height);
   }
@@ -1275,7 +1347,7 @@ class DungeonRun {
     ctx.restore();
     const near = this.world.localPlayer.nearProp === this.portal;
     if (near) HUD.text(ctx, `[${Settings.label('interact')}] ${this.portal.label}`, x, y - 50, { size: 8, align: 'center', color: '#ffe680' });
-    else HUD.text(ctx, this.stage < 3 ? 'NEXT STAGE' : 'EXIT', x, y - 46, { size: 7, align: 'center', color: '#e0c0ff' });
+    else HUD.text(ctx, this.practiceBoss ? 'PRACTICE RANGE' : this.stage < 3 ? 'NEXT STAGE' : 'EXIT', x, y - 46, { size: 7, align: 'center', color: '#e0c0ff' });
   }
 
   /** Placeholder props: a simple stand per kind, with a label. */
@@ -1697,7 +1769,7 @@ class DungeonRun {
     if (this.totem) out.push({ x: this.totem.x, y: this.totem.y - 24, r: 180, s: 1, rgb: '106, 216, 255' });
     for (const s of this.spikes) if (this.spikeState(s) === 1) out.push({ x: s.x + 16, y: s.y + 16, r: 30, s: 0.3 });
     const w = this.world;
-    if (w.boss) out.push({ x: w.boss.x, y: w.boss.y - 40, r: 150, s: 0.6, rgb: { queen: '255, 130, 210', king: '255, 200, 120' }[this.bossType] || '200, 120, 255' });
+    if (w.boss) out.push({ x: w.boss.x, y: w.boss.y - 40, r: 150, s: 0.6, rgb: { queen: '255, 130, 210', king: '255, 200, 120', prince: '255, 210, 150', princess: '170, 150, 255' }[this.bossType] || '200, 120, 255' });
     // each hero carries a little light; spells and souls in flight glow as they go
     for (const p of w.players) if (!p.dead) out.push({ x: p.x, y: p.y - 16, r: 130, s: 0.7 });
     for (const p of w.playerProjectiles) out.push({ x: p.x, y: p.y, r: 44, s: 0.55 });
@@ -1713,7 +1785,8 @@ class DungeonRun {
   drawLighting(ctx, cam) {
     const night = this.theme.night;
     if (!night) return;
-    Lighting.draw(ctx, cam, this.lights(), { dark: night.dark, color: night.color, bloom: 0.32 });
+    // the gloom is light, so the lamps' bloom is turned up to keep their warm pools
+    Lighting.draw(ctx, cam, this.lights(), { dark: night.dark, color: night.color, bloom: 0.5 });
   }
 
   /**

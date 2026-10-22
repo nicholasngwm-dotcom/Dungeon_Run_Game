@@ -46,6 +46,10 @@ const Menus = {
     slider('set-mvol', 'musicVolume', (v) => `${Math.round(v * 100)}%`, () => Sound.applyVolumes());
     slider('set-svol', 'sfxVolume', (v) => `${Math.round(v * 100)}%`, () => { Sound.applyVolumes(); Sound.play('uiClick', 0.15); });
     slider('set-map', 'minimapSize', (v) => `${Math.round(v * 100)}%`);
+    slider('set-xsize', 'crosshairSize', (v) => `${Math.round(v * 100)}%`, () => this.drawCrosshairPreview());
+    document.getElementById('set-xhair').innerHTML = CROSSHAIR_TYPES
+      .map(([type, label]) => `<button class="toggle" data-action="crosshair:${type}">${label.toUpperCase()}</button>`)
+      .join('');
     document.getElementById('set-keys').addEventListener('click', (e) => {
       const btn = e.target.closest('.keybind');
       if (btn) this.captureKey(btn);
@@ -58,6 +62,22 @@ const Menus = {
       if (this.savedSettings) this.savedSettings.display = mode;
       if (this.settingsOpen) this.refreshSettings();
     };
+  },
+
+  /** Highlights the chosen crosshair style and redraws the preview. */
+  crosshairChanged() {
+    for (const btn of document.querySelectorAll('#set-xhair .toggle')) {
+      btn.classList.toggle('off', btn.dataset.action !== `crosshair:${Settings.data.crosshair}`);
+    }
+    this.drawCrosshairPreview();
+  },
+
+  /** The crosshair as it'll look in game, in the little box by the style buttons. */
+  drawCrosshairPreview() {
+    const c = document.getElementById('set-xhair-preview');
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    HUD.drawCrosshair(ctx, c.width / 2, c.height / 2);
   },
 
   /** Highlights the current window mode. */
@@ -144,8 +164,10 @@ const Menus = {
     set('set-mvol', s.musicVolume, `${Math.round(s.musicVolume * 100)}%`);
     set('set-svol', s.sfxVolume, `${Math.round(s.sfxVolume * 100)}%`);
     set('set-map', s.minimapSize, `${Math.round(s.minimapSize * 100)}%`);
+    set('set-xsize', s.crosshairSize, `${Math.round(s.crosshairSize * 100)}%`);
     this.musicChanged(s.music, false);
     this.displayChanged();
+    this.crosshairChanged();
     const keys = document.getElementById('set-keys');
     keys.innerHTML = KEY_ACTIONS
       .map(([action, label]) => `<span>${label}</span><button class="keybind" data-bind="${action}">${Settings.label(action)}</button>`)
@@ -242,6 +264,11 @@ const Menus = {
         this.displayChanged();
         this.updateSaveState();
         break;
+      case 'crosshair':
+        Settings.data.crosshair = arg;
+        this.crosshairChanged();
+        this.updateSaveState();
+        break;
       case 'resetSettings':
         Settings.reset(false);
         Sound.applyVolumes();
@@ -259,6 +286,7 @@ const Menus = {
       case 'collapse': document.getElementById('practice-panel').classList.toggle('collapsed'); break;
       case 'class': app.startPractice(arg); break;
       case 'spawn': game.practiceSpawn(arg); break;
+      case 'arena': game.openBossPortal(arg); break;
       case 'clear': game.clearEnemies(); break;
       case 'toggle':
         app.practiceOptions[arg] = !app.practiceOptions[arg];
@@ -266,6 +294,7 @@ const Menus = {
         break;
       case 'ult': game.player.ult = game.player.ultMax; break;
       case 'resetDps': game.resetDps(); break;
+      case 'range': app.startPractice(); break;
       case 'lobby': app.enterLobby(); break;
     }
   },

@@ -4,7 +4,10 @@
 const TILE = { FLOOR: 0, WALL: 1, FACE: 2, PILLAR: 3, PILLAR_FACE: 4, COVER: 5 };   // COVER: solid themed cover standing on the floor (see DungeonRun.addCover)
 
 // Top-left tiles of the optional 2x2 cover pillars (off by default: the arena is open).
-const PILLARS = [[6, 7], [30, 7], [11, 13], [25, 13], [6, 19], [30, 19]];
+// Tiles a flier (the mage's bird) passes over: cover and pillars, not walls.
+const FLY_OVER = new Set([TILE.COVER, TILE.PILLAR, TILE.PILLAR_FACE]);
+
+const PILLARS =[[6, 7], [30, 7], [11, 13], [25, 13], [6, 19], [30, 19]];
 
 class Dungeon {
   /** lobby: the hub room (no ritual circle or bones, a carpet up to the gate). */
@@ -200,7 +203,13 @@ class Dungeon {
     return this.tileAt(Math.floor(x / this.T), Math.floor(y / this.T)) !== TILE.FLOOR;
   }
 
-  boxHitsWall(x, y, hw, hh) {
+  /** True if a flier (the mage's bird) can pass over tile (tx, ty): low obstacles like cover and pillars, never walls or doors. */
+  flyOver(tx, ty) {
+    return FLY_OVER.has(this.tileAt(tx, ty));
+  }
+
+  /** flying: obstacles a flier passes over (flyOver) don't count. */
+  boxHitsWall(x, y, hw, hh, flying = false) {
     const T = this.T;
     const x0 = Math.floor((x - hw) / T);
     const x1 = Math.floor((x + hw) / T);
@@ -208,20 +217,21 @@ class Dungeon {
     const y1 = Math.floor((y + hh) / T);
     for (let ty = y0; ty <= y1; ty++) {
       for (let tx = x0; tx <= x1; tx++) {
-        if (this.tileAt(tx, ty) !== TILE.FLOOR) return true;
+        if (this.tileAt(tx, ty) !== TILE.FLOOR && !(flying && this.flyOver(tx, ty))) return true;
       }
     }
     return false;
   }
 
-  /** Moves an entity (with hw/hh box) and slides it along walls. */
+  /** Moves an entity (with hw/hh box) and slides it along walls (a flier, e.flying, passes over obstacles). */
   move(e, dx, dy) {
     const T = this.T;
+    const fly = !!e.flying;
     let hitX = false;
     let hitY = false;
     if (dx !== 0) {
       e.x += dx;
-      if (this.boxHitsWall(e.x, e.y, e.hw, e.hh)) {
+      if (this.boxHitsWall(e.x, e.y, e.hw, e.hh, fly)) {
         hitX = true;
         if (dx > 0) e.x = Math.floor((e.x + e.hw) / T) * T - e.hw - 0.01;
         else e.x = (Math.floor((e.x - e.hw) / T) + 1) * T + e.hw + 0.01;
@@ -229,7 +239,7 @@ class Dungeon {
     }
     if (dy !== 0) {
       e.y += dy;
-      if (this.boxHitsWall(e.x, e.y, e.hw, e.hh)) {
+      if (this.boxHitsWall(e.x, e.y, e.hw, e.hh, fly)) {
         hitY = true;
         if (dy > 0) e.y = Math.floor((e.y + e.hh) / T) * T - e.hh - 0.01;
         else e.y = (Math.floor((e.y - e.hh) / T) + 1) * T + e.hh + 0.01;

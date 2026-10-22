@@ -60,6 +60,15 @@ function groundZone(world, { x, y, r, life, every = 0.25, tick, draw, top = null
   if (light) world.run?.addLight({ x, y, r: light.r, s: light.s ?? 0.8, rgb: light.rgb, until: world.time + life });
 }
 
+/** A faint pulsing red glow round an enemy in the middle of a charge (the cavalry riding you down, the general). */
+function chargeGlow(ctx, e, r) {
+  const pulse = 0.3 + Math.sin(e.animTime * 14) * 0.08;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  PFX.glow(ctx, e.x, e.y - r * 0.7, r, '255, 50, 40', pulse * e.spawnAlpha, 2, r * 0.9);
+  ctx.restore();
+}
+
 /** Hurts every ally within r of (x, y) (a landing boulder, an axe falling); returns those hit. */
 function hitAround(world, x, y, r, damage, knock = 0) {
   const hit = [];
@@ -325,6 +334,8 @@ class Catapult extends Enemy {
   }
 
   get flaming() { return false; }
+  /** The cluster catapult's bucket holds a whole volley. */
+  get cluster() { return false; }
 
   think(dt, world) {
     const c = this.cfg;
@@ -440,7 +451,8 @@ class Catapult extends Enemy {
       const b = this.bucketAt(a);
       const img = this.flaming ? Sprites.projectiles.flameBoulder : Sprites.projectiles.boulder;
       ctx.globalAlpha = alpha;
-      ctx.drawImage(img, Math.round(b.x - img.width / 2), Math.round(b.y - img.height / 2 - 4));
+      const load = this.cluster ? [[-7, 2], [7, 2], [0, -5]] : [[0, 0]];   // a heap of burning shot, or one boulder
+      for (const [dx, dy] of load) ctx.drawImage(img, Math.round(b.x + dx - img.width / 2), Math.round(b.y + dy - img.height / 2 - 4));
       ctx.globalAlpha = 1;
       if (this.flaming && vrand(0, 1) < 0.5) PFX.flame(ctx, b.x, b.y - 8, 8, 12, this.animTime * 8, FIRE_COLORS);
     }
@@ -455,8 +467,8 @@ class Catapult extends Enemy {
 
 /** Flaming catapult (stage 2+): tougher, its burning boulders hit harder and leave fire that burns. */
 class FlamingCatapult extends Catapult {
-  constructor(x, y) {
-    super(x, y, 'flamingCatapult');
+  constructor(x, y, type = 'flamingCatapult') {
+    super(x, y, type);
     this.gibColors = ['#46301e', '#ff8a1e', '#3e3a48'];
   }
 
@@ -606,11 +618,29 @@ class MaceSpinner extends Enemy {
 class Bishop extends Enemy {
   constructor(x, y) {
     super('bishop', x, y);
-    this.orbTimer = 1.5;
-    this.healTimer = this.cfg.healEvery * rand(0.4, 0.8);
+    this.healTimer = this.cfg.healEvery * rand(0.3, 0.6);
     this.gibColors = ['#46286a', '#c8a456', '#b4acb8'];
   }
 
+  /** The most wounded ally it could reach (another enemy, or the boss), or null if nobody's hurt. */
+  woundedAlly(world) {
+    let best = null;
+    let worst = 1;
+    for (const e of world.enemies) {
+      if (e === this || e.dead || e.hp >= e.maxHp) continue;
+      const k = e.hp / e.maxHp;
+      if (k < worst) { worst = k; best = e; }
+    }
+    const b = world.boss;
+    if (b && !b.dead && b.heal && b.hp < b.maxHp && b.hp / b.maxHp < worst) best = b;
+    return best;
+  }
+
+  /**
+   * A healer only: it never attacks. It hurries to the most wounded ally (staying out of
+   * your reach when it can) and blesses the ground every healEvery seconds while anyone
+   * near it is hurt.
+   */
   think(dt, world) {
     const c = this.cfg;
     const p = this.target(world);
@@ -621,24 +651,22 @@ class Bishop extends Enemy {
       }
       return;
     }
-    if (p.dead) return;
-    kite(this, world, p, dt);
-    this.orbTimer -= dt;
-    if (this.orbTimer <= 0) {
-      this.orbTimer = c.orbEvery + rand(0, 0.6);
-      const a = angleTo(this.hx, this.hy, p.hx, p.hy);
-      enemyShot(world, this.hx + Math.cos(a) * 12, this.hy + Math.sin(a) * 12, a, c.orbSpeed, {
-        radius: 6, damage: c.damage, sprite: Sprites.projectiles.holyOrb, spin: 4, glow: '255, 220, 120', trail: ['#fff6d0', '#e0c060'],
-      });
-      Sound.play('magic', 0.1);
-    }
+    const ally = this.woundedAlly(world);
+    const near = ally && dist(ally.x, ally.y, this.x, this.y) < c.healRadius * (ally === world.boss ? 1.4 : 0.7);
+    if (ally && !near) this.moveToward(world, ally.x, ally.y, this.speed, dt);
+    else if (!p.dead) kite(this, world, p, dt);
     this.healTimer -= dt;
     if (this.healTimer <= 0) {
-      this.healTimer = c.healEvery;
-      // only when someone nearby is hurt
+      // only when someone nearby is hurt (or it would bless the air)
       const hurt = world.enemies.some((e) => !e.dead && e.hp < e.maxHp && dist(e.x, e.y, this.x, this.y) < c.healRadius)
         || (world.boss && world.boss.hp < world.boss.maxHp && dist(world.boss.x, world.boss.y, this.x, this.y) < c.healRadius * 1.6);
-      if (hurt) { this.setState('bless'); Sound.play('laserCharge', 0.2); }
+      if (hurt) {
+        this.healTimer = c.healEvery;
+        this.setState('bless');
+        Sound.play('healRune', 0.2);
+      } else {
+        this.healTimer = 0.3;   // check again shortly, so it blesses as soon as someone is hurt
+      }
     }
   }
 
@@ -1020,6 +1048,7 @@ class Cavalry extends Enemy {
     const frame = list[Math.floor(this.animTime * fps) % list.length];
     // rearing back a little while it winds up a lunge
     const rear = this.state === 'lungeWindup' ? Math.min(1, this.stateTime / this.cfg.lungeWindup) : 0;
+    if (riding) chargeGlow(ctx, this, 38);
     ctx.save();
     if (rear) {
       ctx.translate(this.x, this.y);
@@ -1344,10 +1373,13 @@ class Jester extends Enemy {
     if (this.flip > 0) return false;
     const c = this.cfg;
     if (this.state === 'chase' && Math.random() < c.dodgeChance) {
-      // a backflip away from whoever swung
+      // a short backflip away from whoever swung, or a quick sidestep out of the way
       const src = world.actor || world.nearestHero(this.x, this.y);
-      this.flipAngle = src ? angleTo(src.x, src.y, this.x, this.y) : rand(0, TAU);
-      this.flip = c.dodgeTime;
+      const away = src ? angleTo(src.x, src.y, this.x, this.y) : rand(0, TAU);
+      this.side = Math.random() < c.sideChance;
+      this.flipAngle = this.side ? away + (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2 : away;
+      this.flipTime = this.side ? c.sideTime : c.dodgeTime;
+      this.flip = this.flipTime;
       world.effects.text(this.hx, this.hy - 30, choose(['DODGE', 'MISSED!', 'HA!']), { color: '#ff9aa8', size: 7 });
       world.effects.burst(this.hx, this.hy, { count: 8, colors: ['#ff9aa8', '#ffffff', '#ecd690'], speed: [40, 120], life: [0.2, 0.4] });
       Sound.play('jesterFlip');
@@ -1360,7 +1392,8 @@ class Jester extends Enemy {
     if (this.flip > 0) {
       this.flip -= dt;
       const c = this.cfg;
-      world.dungeon.move(this, Math.cos(this.flipAngle) * (c.dodgeDistance / c.dodgeTime) * dt, Math.sin(this.flipAngle) * (c.dodgeDistance / c.dodgeTime) * dt);
+      const speed = (this.side ? c.sideDistance : c.dodgeDistance) / this.flipTime;
+      world.dungeon.move(this, Math.cos(this.flipAngle) * speed * dt, Math.sin(this.flipAngle) * speed * dt);
       this.age += dt;
       this.animTime += dt;
       return;
@@ -1410,10 +1443,22 @@ class Jester extends Enemy {
   draw(ctx) {
     const f = this.facing;
     ctx.save();
-    if (this.flip > 0) {
-      // the backflip: a full turn round its middle, up off the floor
-      const k = 1 - this.flip / this.cfg.dodgeTime;
-      const cy = this.y - 18 - Math.sin(k * Math.PI) * 18;
+    if (this.flip > 0 && this.side) {
+      // the sidestep: a low hop, leaning hard into it, a smear of motley left behind
+      const k = 1 - this.flip / this.flipTime;
+      const lean = Math.cos(this.flipAngle) >= 0 ? 1 : -1;
+      const back = this.cfg.sideDistance * k * 0.7;
+      ctx.save();
+      ctx.translate(-Math.cos(this.flipAngle) * back, -Math.sin(this.flipAngle) * back);
+      this.drawFrame(ctx, this.currentFrame(), this.anchor, 0.3 * (1 - k));
+      ctx.restore();
+      ctx.translate(this.x, this.y - Math.sin(k * Math.PI) * 6);
+      ctx.rotate(lean * 0.35 * Math.sin(k * Math.PI));
+      ctx.translate(-this.x, -this.y);
+    } else if (this.flip > 0) {
+      // the backflip: a quick full turn round its middle, a little hop off the floor
+      const k = 1 - this.flip / this.flipTime;
+      const cy = this.y - 18 - Math.sin(k * Math.PI) * 12;
       ctx.translate(this.x, cy);
       ctx.rotate(-f * k * TAU);
       ctx.translate(-this.x, -(this.y - 18));
@@ -1765,7 +1810,7 @@ class Gardener extends Enemy {
           for (let i = 0; i < c.drops; i++) {
             const a = this.aim + (i - (c.drops - 1) / 2) * c.spreadDegrees * DEG;
             enemyShot(world, this.hx + Math.cos(this.aim) * 16, this.hy + Math.sin(this.aim) * 16, a, c.dropSpeed, {
-              radius: 5, damage: c.damage, sprite: Sprites.projectiles.waterDrop, glow: '110, 180, 255', trail: ['#5aa8f0', '#e6f6ff'],
+              radius: 5, damage: c.damage, bounces: c.bounces, sprite: Sprites.projectiles.waterDrop, glow: '110, 180, 255', trail: ['#5aa8f0', '#e6f6ff'],
               onHit: (pr, w) => w.effects.burst(pr.x, pr.y, { count: 8, colors: ['#5aa8f0', '#e6f6ff', '#3a7ad0'], speed: [30, 100], life: [0.2, 0.4], gravity: 200 }),
             });
           }
@@ -1787,5 +1832,459 @@ class Gardener extends Enemy {
     holdWeapon(ctx, this, Sprites.weapons.wateringCan, tip ? this.aim + (f > 0 ? 0.3 : -0.3) : (f > 0 ? 0.2 : Math.PI - 0.2), 8, 6);
     ctx.globalAlpha = 1;
     this.drawHealthBar(ctx);
+  }
+}
+
+/**
+ * Cluster catapult (stage 3): winds back a basket of burning shot and flings the whole
+ * volley, boulders[0]-boulders[1] flaming boulders raining down round you a moment apart,
+ * each one landing like the flaming catapult's (a blast, then fire on the ground).
+ */
+class ClusterCatapult extends FlamingCatapult {
+  constructor(x, y) {
+    super(x, y, 'clusterCatapult');
+    this.gibColors = ['#46301e', '#ff8a1e', '#3e3a48'];
+  }
+
+  get cluster() { return true; }
+
+  hurl(world, at) {
+    const c = this.cfg;
+    const n = randInt(c.boulders[0], c.boulders[1]);
+    for (let i = 0; i < n; i++) {
+      // the first lands on you; the rest scatter round you, so there are gaps to run through
+      const a = rand(0, TAU);
+      const d = i === 0 ? 0 : rand(c.spread * 0.35, c.spread);
+      const pt = world.dungeon.freePoint(at.x + Math.cos(a) * d, at.y + Math.sin(a) * d * 0.75, 6, 6);
+      world.after(i * c.stagger, () => { if (!this.dead) super.hurl(world, pt); });
+    }
+  }
+
+  drawTelegraph(ctx) {
+    if (this.state === 'windup') Telegraph.circle(ctx, this.x, this.y + 4, 40, this.stateTime / this.cfg.windup, '255, 110, 30');
+  }
+}
+
+/**
+ * The Army General (stage 3): once, when he first sees you, he raises the empire's banner
+ * and calls the charge: every enemy near him runs faster for a while and gets a shield.
+ * Then he hunts you like the cavalry on foot, spear couched and glowing red, stabbing as
+ * he passes; after each charge he stops, doubled over and sweating, to catch his breath.
+ */
+class General extends Enemy {
+  constructor(x, y) {
+    super('general', x, y);
+    this.heading = 0;
+    this.stab = 0;
+    this.stabTimer = 0;
+    this.called = false;
+    this.gibColors = ['#8a2438', '#c8a456', '#5e5a6c'];
+  }
+
+  think(dt, world) {
+    const c = this.cfg;
+    const p = this.target(world);
+    this.stab = Math.max(0, this.stab - dt * 4);
+    switch (this.state) {
+      case 'chase':
+        if (p.dead) return;
+        if (!this.called && this.distanceTo(p) < 520) {
+          this.setState('rally');
+          this.faceToward(p.x);
+          world.effects.text(this.hx, this.hy - 40, 'FOR THE EMPIRE! CHARGE!', { color: '#ffb0a0', size: 8, life: 1.6 });
+          Sound.play('guardHorn');
+          return;
+        }
+        this.moveToward(world, p.x, p.y, this.speed, dt);
+        if (this.attackCooldown <= 0 && this.distanceTo(p) < 380) {
+          this.heading = angleTo(this.x, this.y, p.x, p.y);
+          this.faceToward(p.x);
+          this.setState('chargeWindup');
+          Sound.play('windup');
+        }
+        break;
+      case 'rally':
+        if (this.stateTime >= c.rallyWindup) {
+          this.called = true;
+          this.rally(world);
+          this.setState('chase');
+          this.attackCooldown = 0.4;
+        }
+        break;
+      case 'chargeWindup':
+        if (!p.dead && this.stateTime < c.chargeWindup * 0.7) { this.heading = angleTo(this.x, this.y, p.x, p.y); this.faceToward(p.x); }
+        if (this.stateTime >= c.chargeWindup) { this.setState('charge'); Sound.play('chargeRush'); }
+        break;
+      case 'charge': {
+        // runs you down, turning only so fast, the spear couched
+        if (!p.dead) {
+          const want = angleTo(this.x, this.y, p.x, p.y);
+          this.heading += clamp(angleDiff(this.heading, want), -c.turnRate * dt, c.turnRate * dt);
+        }
+        const x0 = this.x;
+        const y0 = this.y;
+        this.moveAngle(world, this.heading, c.chargeSpeed, dt);
+        if (dist(x0, y0, this.x, this.y) < c.chargeSpeed * dt * 0.3) this.heading += Math.PI * 0.6;   // hit a wall: wheel round
+        this.stabTimer -= dt;
+        for (const a of world.allies) {
+          if (this.stabTimer > 0) break;
+          const d = dist(this.x, this.y, a.x, a.y);
+          const ahead = Math.abs(angleDiff(this.heading, angleTo(this.x, this.y, a.x, a.y))) < 0.8;
+          if (d < c.stabRange + a.radius && ahead) {
+            if (a.hurt(c.damage, world, this.x, this.y)) a.knockback?.(this.heading, 220);
+            this.stab = 1;
+            this.stabTimer = c.stabEvery;
+            Sound.play('swordStab', 0.1);
+          }
+        }
+        if (vrand(0, 1) < 0.3) world.effects.burst(this.x - Math.cos(this.heading) * 10, this.y, { count: 1, colors: ['#6a6676', '#4a4652'], speed: [10, 30], life: [0.3, 0.5] });
+        if (this.stateTime >= c.chargeTime) {
+          this.setState('tired');
+          world.effects.text(this.hx, this.hy - 34, '*huff*', { color: '#cfe6ff', size: 7, life: 0.9 });
+        }
+        break;
+      }
+      case 'tired':
+        // doubled over, panting: sweat flicks off him (visual only)
+        if (vrand(0, 1) < dt * 8) {
+          world.effects.burst(this.x + vrand(-8, 8), this.y - 46, { count: 1, colors: ['#9ad0ff', '#e6f6ff'], speed: [30, 70], life: [0.3, 0.5], gravity: 300, up: 60, size: [1, 2] });
+        }
+        if (this.stateTime >= c.tiredTime) { this.setState('chase'); this.attackCooldown = rand(0.5, 1); }
+        break;
+    }
+  }
+
+  /** The call to charge: every enemy near him (himself too) runs faster and gets a shield. */
+  rally(world) {
+    const c = this.cfg;
+    for (const e of world.enemies) {
+      if (e.dead || dist(e.x, e.y, this.x, this.y) > c.rallyRadius) continue;
+      e.rallied = c.rallyTime;
+      e.rallySpeed = c.rallySpeed;
+      e.shieldHp = c.rallyShield;
+      e.shieldMax = c.rallyShield;
+      world.effects.burst(e.hx, e.hy, { count: 10, colors: ['#ffe680', '#ff9a8a', '#ffffff'], speed: [30, 100], life: [0.3, 0.6], up: 40 });
+    }
+    const x = this.x;
+    const y = this.y;
+    world.effects.add(0.7, (ctx, t) => {
+      ctx.save();
+      ctx.globalAlpha = 1 - t;
+      PFX.ring(ctx, x, y, c.rallyRadius * t, c.rallyRadius * t * 0.6, '#ffb070', 2, { thick: t < 0.4 ? 2 : 1 });
+      ctx.restore();
+    }, true);
+    world.shake(4, 0.3);
+    Sound.play('kingShout');
+  }
+
+  /** Stuns barely slow him mid-charge. */
+  stun(duration) {
+    if (this.state === 'charge') return;
+    super.stun(duration);
+  }
+
+  drawTelegraph(ctx) {
+    if (this.state !== 'chargeWindup') return;
+    const end = { x: this.x + Math.cos(this.heading) * 160, y: this.y + Math.sin(this.heading) * 160 };
+    Telegraph.line(ctx, this.x, this.y, end.x, end.y, 34, this.stateTime / this.cfg.chargeWindup);
+  }
+
+  draw(ctx) {
+    const f = this.facing;
+    const tired = this.state === 'tired';
+    if (this.state === 'charge' || this.state === 'chargeWindup') chargeGlow(ctx, this, 30);
+    ctx.save();
+    if (tired) {
+      // doubled over: squashed down a little, heaving with each breath
+      const heave = 0.9 + Math.abs(Math.sin(this.animTime * 7)) * 0.05;
+      ctx.translate(this.x, this.y);
+      ctx.scale(1, heave);
+      ctx.translate(-this.x, -this.y);
+    }
+    this.drawFrame(ctx, this.currentFrame(), this.anchor, this.spawnAlpha);
+    ctx.restore();
+    // the flag spear: raised high and waving for the rally, couched forward to charge, dragging when tired
+    const S = Sprites.weapons.flagSpear;
+    let a;
+    if (this.state === 'rally') a = -Math.PI / 2 + f * (0.15 + Math.sin(this.animTime * 10) * 0.12);
+    else if (this.state === 'charge' || this.state === 'chargeWindup') a = this.heading;
+    else if (tired) a = f > 0 ? 0.55 : Math.PI - 0.55;
+    else a = f > 0 ? -0.95 : Math.PI + 0.95;
+    const thrust = this.stab * 10;
+    ctx.globalAlpha = this.spawnAlpha;
+    drawRotated(ctx, S.img, this.x + f * 8 + Math.cos(a) * thrust, this.hy + 4 + Math.sin(a) * thrust * 0.6, S.pivotX, S.pivotY, a, Math.cos(a) < 0);
+    ctx.globalAlpha = 1;
+    if (tired) {
+      // sweat beading on his brow and his breath puffing out
+      const k = (this.animTime * 2.5) % 1;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(Math.round(this.x + f * 12) - 1, Math.round(this.y - 52 + k * 10) - 1, 4, 5);
+      ctx.fillStyle = '#9ad0ff';
+      ctx.fillRect(Math.round(this.x + f * 12), Math.round(this.y - 52 + k * 10), 2, 3);
+      ctx.fillStyle = '#e6f6ff';
+      ctx.fillRect(Math.round(this.x + f * 12), Math.round(this.y - 52 + k * 10), 1, 1);
+      const puff = (this.animTime * 1.6) % 1;
+      ctx.globalAlpha = 0.6 * (1 - puff);
+      ctx.fillStyle = '#e8e8f0';
+      ctx.beginPath();
+      ctx.ellipse(this.x + f * (16 + puff * 12), this.y - 36 - puff * 4, 3 + puff * 4, 2 + puff * 3, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    this.drawHealthBar(ctx);
+  }
+}
+
+/**
+ * The Prince's bodyguard (from his trumpet): a hulking knight behind a massive shield,
+ * whirling a flail round himself all the time (it hurts whoever it sweeps through). A
+ * hero hanging back gets the flail cast at them down a straight line. When shots fly at
+ * him he plants the shield and blocks everything for a moment.
+ */
+// the Prince's bodyguard is drawn this much bigger than the castle's other soldiers: a towering figure whose
+// great helm stands clear above the top of his shield (which keeps SHIELD_SCALE)
+const GUARD_SCALE = 1.9;
+const SHIELD_SCALE = 1.4;
+
+class PrinceGuard extends Enemy {
+  constructor(x, y) {
+    super('princeGuard', x, y);
+    this.orbit = rand(0, TAU);
+    this.swept = new Map();      // ally -> time the flail can next hurt them
+    this.blockCd = 0;
+    this.cast = null;            // the flail cast out: { d, out, hit, max }
+    this.aim = 0;
+    this.hw = 17;
+    this.hh = 10;
+    this.hitOffY = 14 * GUARD_SCALE;   // a hulking great figure (drawn GUARD_SCALE bigger)
+    this.barOffset = 112;
+    this.gibColors = ['#26232e', '#c8a456', '#8a2438'];
+  }
+
+  think(dt, world) {
+    const c = this.cfg;
+    const p = this.target(world);
+    this.blockCd -= dt;
+    // the flail whirls round him (except while it's cast out)
+    if (this.state !== 'cast') {
+      this.orbit += c.orbitSpeed * dt;
+      const b = this.ballPos();
+      for (const a of world.allies) {
+        if ((this.swept.get(a) || 0) > world.time || dist(a.x, a.y, b.x, b.y + 20) > c.ballRadius + a.radius) continue;
+        this.swept.set(a, world.time + c.orbitTick);
+        if (a.hurt(c.damage, world, b.x, b.y)) a.knockback?.(angleTo(this.x, this.y, a.x, a.y), 160);
+      }
+      if (Math.floor(this.orbit / TAU) !== Math.floor((this.orbit - c.orbitSpeed * dt) / TAU)) Sound.play('whirlwindSpin', 0.2);
+    }
+    // shots flying at him: up goes the shield
+    if (this.state === 'chase' && this.blockCd <= 0 && this.threatened(world)) {
+      this.setState('block');
+      this.blockCd = c.blockCooldown;
+      Sound.play('shieldRaise');
+      return;
+    }
+    switch (this.state) {
+      case 'chase': {
+        if (p.dead) return;
+        const d = this.distanceTo(p);
+        this.moveToward(world, p.x, p.y, this.speed, dt);
+        if (this.attackCooldown <= 0 && d > c.castRange[0] && d < c.castRange[1]) {
+          this.aimAt(world, p);
+          this.setState('castWindup');
+          Sound.play('windup');
+        }
+        break;
+      }
+      case 'castWindup':
+        this.orbit += c.orbitSpeed * dt;   // whirling faster to build up the throw
+        if (!p.dead && this.stateTime < c.castWindup * 0.6) this.aimAt(world, p);
+        if (this.stateTime >= c.castWindup) {
+          this.cast = { d: 0, out: true, hit: new Set(), max: dist(this.x, this.y, this.castEnd.x, this.castEnd.y) };
+          this.setState('cast');
+          Sound.play('heavySwing');
+        }
+        break;
+      case 'cast': {
+        const C = this.cast;
+        C.d += (C.out ? 1 : -1) * c.castSpeed * dt;
+        if (C.out && C.d >= C.max) { C.d = C.max; C.out = false; world.shake(3, 0.15); Sound.play('impact', 0.1); }
+        const b = this.ballPos();
+        for (const a of world.allies) {
+          if (C.hit.has(a) || dist(a.x, a.y, b.x, b.y + 20) > c.castWidth / 2 + a.radius) continue;
+          C.hit.add(a);
+          if (a.hurt(stageDamage(world, c.castDamage), world, b.x, b.y)) a.knockback?.(this.aim, 240);
+        }
+        if (!C.out && C.d <= 0) { this.cast = null; this.setState('chase'); this.attackCooldown = c.castCooldown; }
+        break;
+      }
+      case 'block':
+        if (this.stateTime >= c.blockTime) this.setState('chase');
+        break;
+    }
+  }
+
+  aimAt(world, p) {
+    this.aim = angleTo(this.x, this.y, p.x, p.y);
+    this.faceToward(p.x);
+    this.castEnd = world.dungeon.raycast(this.x, this.y, this.aim, this.cfg.castReach);
+  }
+
+  /** True if one of the heroes' shots is flying at him, close. */
+  threatened(world) {
+    const c = this.cfg;
+    for (const pr of world.playerProjectiles) {
+      const d = dist(pr.x, pr.y, this.hx, this.hy);
+      if (d > c.blockSense) continue;
+      const sp = Math.hypot(pr.vx, pr.vy) || 1;
+      const toward = ((this.hx - pr.x) * pr.vx + (this.hy - pr.y) * pr.vy) / sp;
+      if (toward <= 0) continue;
+      const miss = Math.abs((this.hx - pr.x) * pr.vy - (this.hy - pr.y) * pr.vx) / sp;   // how wide of him it would pass
+      if (miss < this.radius + 24) return true;
+    }
+    return false;
+  }
+
+  /** Where the flail's ball is: whirling round him, or flying down the line of the cast. */
+  ballPos() {
+    if (this.cast) return { x: this.x + Math.cos(this.aim) * this.cast.d, y: this.y - 20 + Math.sin(this.aim) * this.cast.d };
+    return this.orbitPos(this.orbit);
+  }
+
+  /** The whirling ball's spot at orbit angle a. */
+  orbitPos(a) {
+    const r = this.cfg.orbitRadius;
+    return { x: this.x + Math.cos(a) * r, y: this.y - 20 + Math.sin(a) * r * 0.6 };
+  }
+
+  takeDamage(amount, world) {
+    if (this.state === 'block' && !this.dead) {
+      world.effects.text(this.hx, this.hy - 30, 'BLOCKED', { color: '#ecd690', size: 7 });
+      world.effects.burst(this.x + this.facing * 16, this.hy, { count: 6, colors: ['#ffffff', '#ecd690'], speed: [40, 120], life: [0.1, 0.25] });
+      Sound.play('blockClang', 0.08);
+      return false;
+    }
+    return super.takeDamage(amount, world);
+  }
+
+  drawTelegraph(ctx) {
+    if (this.state === 'castWindup' && this.castEnd) Telegraph.line(ctx, this.x, this.y, this.castEnd.x, this.castEnd.y, this.cfg.castWidth, this.stateTime / this.cfg.castWindup);
+  }
+
+  /** The flail's chain (links from his hand to the ball) and the spiked ball itself. */
+  drawFlail(ctx) {
+    const b = this.ballPos();
+    const hx = this.x + this.facing * 14;
+    const hy = this.hy + 2;
+    const links = Math.max(4, Math.round(dist(hx, hy, b.x, b.y) / 7));
+    for (let i = 1; i < links; i++) {
+      const k = i / links;
+      const x = Math.round(lerp(hx, b.x, k));
+      const y = Math.round(lerp(hy, b.y, k));
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x - 2, y - 2, 4, 4);
+      ctx.fillStyle = i % 2 ? '#8e8a9e' : '#5e5a6c';
+      ctx.fillRect(x - 1, y - 1, 2, 2);
+    }
+    const ball = Sprites.weapons.flailBall;
+    if (!this.cast) {
+      // whirling so fast it smears: a blur of the ball's path trailing behind it
+      const dir = Math.sign(this.cfg.orbitSpeed);
+      ctx.save();
+      for (let i = 4; i >= 1; i--) {
+        const t = this.orbitPos(this.orbit - dir * i * 0.22);
+        ctx.globalAlpha = 0.11 * (5 - i) * this.spawnAlpha;
+        ctx.fillStyle = '#c8c4d6';
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 9 - i, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    if (this.state === 'cast' || this.state === 'castWindup') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, b.x, b.y, 16, '255, 90, 60', 0.4);
+      ctx.restore();
+    }
+    drawRotated(ctx, ball.img, b.x, b.y, ball.pivotX, ball.pivotY, this.animTime * 24);
+  }
+
+  draw(ctx) {
+    const f = this.facing;
+    const b = this.ballPos();
+    const behind = b.y < this.hy - 2;
+    ctx.globalAlpha = this.spawnAlpha;
+    if (behind) this.drawFlail(ctx);
+    ctx.globalAlpha = 1;
+    // his body and shield, GUARD_SCALE bigger than the other castle soldiers, round his feet
+    const G = GUARD_SCALE;
+    ctx.save();
+    ctx.translate(Math.round(this.x), Math.round(this.y));
+    ctx.scale(G, G);
+    ctx.translate(-Math.round(this.x), -Math.round(this.y));
+    this.drawFrame(ctx, this.currentFrame(), this.anchor, this.spawnAlpha);
+    ctx.restore();
+    // the massive shield (chest height, his helm clear above it): lowered at his side as he walks,
+    // swung up square in front of him to block
+    const S = Sprites.weapons.greatShield;
+    const SS = SHIELD_SCALE;
+    const blocking = this.state === 'block';
+    const lift = blocking ? Math.min(1, this.stateTime / 0.12) : 0;   // snapped up fast
+    ctx.globalAlpha = this.spawnAlpha;
+    ctx.save();
+    const sx = this.x + f * lerp(10, 26, lift);
+    const sy = this.y - lerp(26, 40, lift);
+    ctx.translate(Math.round(sx), Math.round(sy));
+    ctx.rotate(f * lerp(0.28, 0, lift));   // tilted down at rest, square when raised
+    ctx.scale(f < 0 ? -SS : SS, SS);
+    ctx.drawImage(S.img, -S.pivotX, -S.pivotY);
+    ctx.restore();
+    if (blocking) this.drawBlock(ctx, sx, sy, lift);
+    if (!behind) this.drawFlail(ctx);
+    ctx.globalAlpha = 1;
+    this.drawHealthBar(ctx);
+  }
+
+  /**
+   * Blocking, unmistakably: the shield blazes gold, a wall of light stands in a curve
+   * out in front of it, and a shield sign pulses over his head until he lowers it.
+   */
+  drawBlock(ctx, sx, sy, lift) {
+    const f = this.facing;
+    const t = this.animTime;
+    const left = 1 - this.stateTime / this.cfg.blockTime;   // fades out over the last moments
+    const a = Math.min(1, left * 4) * lift;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, sx, sy, 44, '255, 220, 140', (0.5 + Math.sin(t * 14) * 0.12) * a, 2, 50);
+    // the wall of light: an arc bowing out in front, rippling
+    const cx = this.x + f * 6;
+    const cy = this.y - 34;
+    for (const [r, w, col] of [[52, 6, 'rgba(255, 210, 110, 0.35)'], [52, 2, 'rgba(255, 245, 210, 0.95)'], [60, 1, 'rgba(255, 230, 160, 0.5)']]) {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = w;
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      const from = f > 0 ? -1.05 : Math.PI - 1.05;
+      ctx.ellipse(cx, cy, r + Math.sin(t * 10) * 2, r * 1.15, 0, from, from + 2.1);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // the sign over his head: a little golden shield, pulsing
+    const s = 1 + Math.sin(t * 10) * 0.12;
+    const ix = Math.round(this.x);
+    const iy = Math.round(this.y - this.barOffset - 14);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(ix, iy);
+    ctx.scale(s, s);
+    const shield = [[-6, -7], [6, -7], [6, 0], [0, 7], [-6, 0]];
+    ctx.fillStyle = OUTLINE;
+    ctx.beginPath(); shield.forEach(([x, y], i) => (i ? ctx.lineTo(x * 1.3, y * 1.3) : ctx.moveTo(x * 1.3, y * 1.3))); ctx.fill();
+    ctx.fillStyle = '#ecd690';
+    ctx.beginPath(); shield.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.fill();
+    ctx.fillStyle = '#fffbe8';
+    ctx.fillRect(-4, -5, 2, 6);
+    ctx.restore();
   }
 }

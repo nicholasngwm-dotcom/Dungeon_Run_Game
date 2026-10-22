@@ -101,7 +101,7 @@ class Priestess extends Player {
     this.recoil = 0.12;
     const pt = this.aimPoint(world, c.maxRange);
     this.rays.push({ x: pt.x, y: pt.y, t: 0 });
-    Sound.play('magic');
+    Sound.play('holyChime');
   }
 
   updateRays(dt, world) {
@@ -135,7 +135,7 @@ class Priestess extends Player {
         ctx.restore();
       }, true);
       world.effects.burst(x, y - 20, { count: 10, colors: PRIESTESS_FX.motes, speed: [5, 25], life: [0.5, 0.9], up: 70, size: [1, 2] });
-      Sound.play('laser', 0.05);
+      Sound.play('holyRay', 0.05);
     }
     removeDead(this.rays);
   }
@@ -192,8 +192,7 @@ class Priestess extends Player {
         onStrike: (p, w, t) => this.mark(t, w),
       }));
     }
-    Sound.play('magic');
-    Sound.play('volley');
+    Sound.play('lightMissiles');
   }
 
   mark(target, world) {
@@ -250,7 +249,7 @@ class Priestess extends Player {
       PFX.ring(ctx, pt.x, pt.y - 50 * (1 - e), rad * (1.4 - 0.4 * e), rad * (1.4 - 0.4 * e) * MAGIC_CIRCLE_SY, '#c8ffd0', 2, { thick: 2 });
       ctx.restore();
     });
-    Sound.play('burstCharge');
+    Sound.play('healRune');
   }
 
   updateRunes(dt, world) {
@@ -321,7 +320,7 @@ class Priestess extends Player {
     if (!this.spend(c.cost, world)) return;
     this.cooldowns.f = c.cooldown;
     target.applyAegis(c.hp, c.duration, world);
-    Sound.play('pickup');
+    Sound.play('aegis');
   }
 
   // ---------- Q: light bomb ----------
@@ -331,7 +330,7 @@ class Priestess extends Player {
     this.choosingAegis = false;
     this.placingRune = false;
     world.effects.text(this.hx, this.hy - 34, 'CHARGING', { color: '#ffe680', size: 8 });
-    Sound.play('laserCharge');
+    Sound.play('lightCharge');
   }
 
   /** 0..1 charge of the light bomb. */
@@ -355,7 +354,7 @@ class Priestess extends Player {
     const to = this.aimPoint(world, c.maxRange);
     this.bombs.push({ x0: this.tipX, y0: this.tipY, x1: to.x, y1: to.y, t: 0, power });
     if (power >= 1) world.effects.text(this.hx, this.hy - 40, 'FULL POWER!', { color: '#ffe680', size: 9 });
-    Sound.play('fireballCast');
+    Sound.play('lightBombThrow');
   }
 
   updateBombs(dt, world) {
@@ -417,8 +416,7 @@ class Priestess extends Player {
         ctx.restore();
       });
       world.shake(6 + 8 * b.power, 0.5);
-      Sound.play('explosion');
-      Sound.play('laser');
+      Sound.play('lightBomb');
     }
     removeDead(this.bombs);
   }

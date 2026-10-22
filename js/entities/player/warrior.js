@@ -95,7 +95,7 @@ class Warrior extends Player {
     }
     world.effects.add(SLASH_FX_LIFE, (ctx, t) => Warrior.drawSlashFx(ctx, px, py, aim, arc, c.range, dir, t));
     if (hits && this === world.localPlayer) world.shake(1.5 + hits * 0.5, 0.08);
-    Sound.play('slash');
+    Sound.play('swordSwing');
   }
 
   /**
@@ -156,7 +156,7 @@ class Warrior extends Player {
     this.hitLine(world, x1, y1, this.aim, c.stabRange, c.stabWidth, c.stabDamage, { knockback: c.stabKnockback });
     this.lineFx(world, x1, y1, this.aim, c.stabRange, c.stabWidth, KNIGHT_FX.thrust, 0.2);
     world.shake(3, 0.1);
-    Sound.play('thrust');
+    Sound.play('swordStab');
   }
 
   // ---------- RMB (hold): carried barrier shield ----------
@@ -179,7 +179,7 @@ class Warrior extends Player {
   updateShield(world) {
     if (!world.barriers.includes(this.barrier)) world.barriers.push(this.barrier);
     const up = Input.mouse.right && (this.busy <= 0 || this.bash) && !this.channeling && this.cooldowns.secondary <= 0 && this.barrier.hp > 0;
-    if (up && !this.barrier.raised) Sound.play('aim');
+    if (up && !this.barrier.raised) Sound.play('shieldRaise');
     this.barrier.raised = up;
     this.barrier.follow();
   }
@@ -204,7 +204,7 @@ class Warrior extends Player {
     this.busy = c.time;
     this.cooldowns.primary = 0.3; // so the combo doesn't swing the moment the shield drops
     world.effects.burst(this.barrier.x, this.barrier.hy, { count: 10, colors: KNIGHT_FX.sparks, speed: [40, 120], life: [0.15, 0.3] });
-    Sound.play('dash');
+    Sound.play('shieldBash');
   }
 
   updateBash(dt, world) {
@@ -236,7 +236,7 @@ class Warrior extends Player {
     const c = this.cfg.spin;
     this.cooldowns.e = c.cooldown;
     this.spin = { t: 0, tick: 0 };
-    Sound.play('thrustCharge');
+    Sound.play('whirlwindStart');
   }
 
   /** While spinning, E cancels the spin (in updateSpin) rather than being refused as on cooldown. */
@@ -260,7 +260,7 @@ class Warrior extends Player {
     if (s.tick <= 0) {
       s.tick = c.tick;
       this.hitCircle(world, this.x, this.hy, c.radius, c.damage, { knockback: c.knockback, sound: 'hit' });
-      Sound.play('slash', 0.1);
+      Sound.play('whirlwindSpin', 0.15);
     }
     if (s.t >= c.duration) this.spin = null;
   }
@@ -274,7 +274,7 @@ class Warrior extends Player {
     this.cooldowns.f = this.chargeCharges > 0 ? 0 : this.chargeRecharge;
     this.charge = { t: 0, angle: this.aim, dashing: false, hit: new Set() };
     this.busy = c.windup + c.time;
-    Sound.play('thrustCharge');
+    Sound.play('chargeWindup');
   }
 
   updateCharge(dt, world) {
@@ -288,7 +288,7 @@ class Warrior extends Player {
       if (ch.t >= c.windup) {
         ch.dashing = true;
         world.effects.smoke(this.x, this.y + 4, { count: 7, radius: 14, life: 0.55, rise: 8, colors: ['#3a3028', '#6a5a48', '#9a8a72'] });
-        Sound.play('dash');
+        Sound.play('chargeRush');
         world.shake(4, 0.2);
       }
       return;
@@ -313,7 +313,7 @@ class Warrior extends Player {
   ultimate(world) {
     this.cleave = { t: 0 };
     world.effects.text(this.hx, this.hy - 34, 'POWERING UP', { color: '#ffd34a', size: 8 });
-    Sound.play('laserCharge');
+    Sound.play('worldCutterCharge');
   }
 
   /** 0..1 charge of the cleave; damage scales from minPower to full. */
@@ -356,8 +356,7 @@ class Warrior extends Player {
       world.effects.burst(px, py, { count: 5, colors: ['#fbe796', '#dcb44c', '#8a7a6a'], speed: [60, 160], life: [0.2, 0.45], up: 60, gravity: 200 });
     }
     world.shake(6 + 8 * power, 0.6);
-    Sound.play('explosion');
-    Sound.play('heavySwing');
+    Sound.play('worldCutter');
   }
 
   // ---------- shared ----------
@@ -479,8 +478,7 @@ class Warrior extends Player {
       ctx.restore();
     });
     world.shake(3, 0.12);
-    Sound.play('impact');
-    Sound.play('pickup');
+    Sound.play('blockClang');
     return true;
   }
 
@@ -641,7 +639,7 @@ class KnightBarrier {
     this.hp -= amount;
     this.flash = 0.12;
     world.effects.burst(x, y, { count: 10, colors: ['#ffffff', '#e4e7ee', '#adb2c0'], speed: [60, 180], life: [0.15, 0.35] });
-    Sound.play('bounce');
+    Sound.play('barrierHit');
     if (this.hp > 0) return;
     this.hp = 0;
     this.raised = false;
@@ -654,7 +652,7 @@ class KnightBarrier {
       });
     }
     world.shake(4, 0.15);
-    Sound.play('explosion');
+    Sound.play('barrierBreak');
   }
 
   /** The knight drives raising/lowering; the wall tracks him and regens while lowered. */

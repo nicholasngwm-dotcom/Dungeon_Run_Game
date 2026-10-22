@@ -104,6 +104,11 @@ function drawQueen(p, pose) {
   if (pose.arm === 'up') {
     p.poly([[42, 36 + b], [46, 36 + b], [52, 22 + b], [48, 20 + b]], V[2]);
     p.round(48, 16 + b, 5, 5, Sk[2], 2);
+  } else if (pose.arm === 'hold') {
+    // bent up at the elbow, her hand at her shoulder holding the umbrella's shaft
+    p.poly([[41, 37 + b], [46, 37 + b], [52, 32 + b], [48, 29 + b]], V[2]);
+    p.poly([[45, 36 + b], [51, 33 + b], [53, 38 + b], [48, 41 + b]], V[3]);
+    p.round(48, 26 + b, 5, 5, Sk[2], 2);
   } else if (pose.arm === 'bow') {
     p.poly([[41, 37 + b], [46, 37 + b], [54, 44 + b], [50, 48 + b]], V[2]);
     p.poly([[48, 44 + b], [56, 42 + b], [55, 49 + b], [50, 50 + b]], V[3]);
@@ -115,32 +120,78 @@ function drawQueen(p, pose) {
 }
 
 function buildQueenSprites() {
-  const pose = (o) => ({ b: 0, sway: 0, hem: 0, arm: 'bow', eyes: 'open', ...o });
+  const pose = (o) => ({ b: 0, sway: 0, hem: 0, arm: 'hold', eyes: 'open', ...o });
   const frame = (o) => {
     const img = PixelArt.make(QUEEN_SPRITE.w, QUEEN_SPRITE.h, (p) => drawQueen(p, pose(o)), OUTLINE, 0.5);
     return { img, flash: PixelArt.silhouette(img) };
   };
   Sprites.queen = {
+    // her umbrella over her shoulder as she stands and walks (it's drawn by the Queen herself)
     idle: [frame({}), frame({ b: 1, sway: -1 }), frame({ b: 1, sway: -2 }), frame({ b: 0, sway: -1, eyes: 'blink' })],
     walk: [frame({ hem: 2, sway: -2 }), frame({ b: 1, hem: 0, sway: -3 }), frame({ hem: -2, sway: -2 }), frame({ b: 1, hem: 0, sway: -1 })],
+    // running after you in phase 2: a bigger swing of the gown, the train streaming
+    run: [frame({ hem: 4, sway: -4 }), frame({ b: 2, hem: 0, sway: -6 }), frame({ hem: -4, sway: -4 }), frame({ b: 2, hem: 0, sway: -2 })],
     reach: [frame({ arm: 'up' }), frame({ arm: 'up', b: 1 })],
+    guard: [frame({ arm: 'bow' }), frame({ arm: 'bow', b: 1 })],   // the umbrella held out in front
     rest: [frame({ arm: 'down' })],
   };
-  // her bow: a tall black-wood longbow wound with roses, its string of violet light
-  Sprites.weapons.queenBow = {
-    img: PixelArt.make(18, 56, (p) => {
-      for (let y = 1; y < 55; y++) {
-        const t = (y - 1) / 53;
-        const x = 2 + Math.round(9 * Math.sin(Math.PI * t));
-        p.rect(x, y, 3, 1, '#1e1626');
-        p.px(x, y, '#463a56');
-      }
-      for (const y of [8, 20, 34, 46]) { p.circle(2 + Math.round(9 * Math.sin(Math.PI * (y - 1) / 53)) + 1, y, 2, CASTLE_COLORS.rose[1]); }
-      p.rect(9, 24, 4, 8, CK.gold[2]);
-      p.line(3, 2, 3, 54, '#d8a8ff');
-    }, OUTLINE, 0.5),
-    pivotX: 10, pivotY: 28,
-  };
+  buildQueenUmbrella();
+}
+
+/**
+ * Her magic umbrella, always open: a violet and crimson dome with gold ribs and a lace
+ * hem, seen from the side. Eight frames turn it round its shaft, so it twirls (the panels
+ * sweep across the front, the lit ones on the left). Pivot: the middle of its rim.
+ */
+function buildQueenUmbrella() {
+  const V = CK.violet;
+  const C = CK.crimson;
+  const G = CK.gold;
+  const R = CASTLE_COLORS.rose;
+  const canopy = (ph) => PixelArt.make(60, 30, (p) => {
+    const cx = 30;
+    const apex = 4;
+    const rim = 21;
+    const rad = 27;
+    p.rect(29, 0, 2, 4, G[3]);                        // the finial
+    p.px(29, 0, G[4]);
+    p.poly([[3, 22], [10, 10], [20, 5], [30, 3], [40, 5], [50, 10], [57, 22]], V[2]);
+    // the panels facing us, alternately violet and crimson, the left ones catching the light
+    for (let k = 0; k < 8; k++) {
+      const a0 = (k / 8) * TAU + ph;
+      const a1 = ((k + 1) / 8) * TAU + ph;
+      const mid = (a0 + a1) / 2;
+      if (Math.cos(mid) < 0) continue;
+      const lit = Math.sin(mid) < 0.15;
+      const col = k % 2 ? (lit ? C[4] : C[3]) : (lit ? V[4] : V[3]);
+      p.poly([[cx, apex], [cx + Math.sin(a0) * rad, rim], [cx + Math.sin(a1) * rad, rim]], col);
+    }
+    // gold ribs down to a rose at the rim
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * TAU + ph;
+      if (Math.cos(a) < 0.05) continue;
+      const rx = Math.round(cx + Math.sin(a) * rad);
+      p.line(cx, apex + 1, rx, rim, G[2]);
+      p.rect(rx - 1, rim - 1, 3, 3, R[2]);
+      p.px(rx - 1, rim - 1, R[3]);
+    }
+    p.poly([[48, 9], [51, 11], [57, 22], [53, 22]], V[1]);   // the shaded far side
+    p.poly([[9, 12], [17, 6], [22, 5], [13, 10]], '#c8a8f0');  // a sheen on the lit shoulder
+    p.px(16, 7, '#f0e0ff');
+    p.rect(3, 21, 54, 2, V[1]);                            // the shaded rim
+    for (let x = 3; x < 57; x += 6) p.round(x, 22, 6, 4, '#cfc6d8', 2);   // lace scallops
+    for (let x = 4; x < 57; x += 6) p.px(x + 2, 24, '#8a809a');
+    p.rect(29, 23, 2, 7, '#2a1e30');                       // the shaft below the rim
+  }, OUTLINE, 0.5);
+  Sprites.queenParasol = [];
+  for (let f = 0; f < 8; f++) Sprites.queenParasol.push(canopy((f / 8) * (TAU / 8)));
+  // the magic it sprays: rose-violet sparks of light
+  Sprites.projectiles.queenMagic = PixelArt.make(14, 14, (p) => {
+    p.circle(7, 7, 5.5, '#8a2a9a');
+    p.circle(7, 7, 4.5, '#ff6ad8');
+    p.circle(6, 6, 2.5, '#f0c8ff');
+    p.rect(5, 5, 2, 2, '#ffffff');
+  }, OUTLINE);
 }
 
 // ---------- the King ----------

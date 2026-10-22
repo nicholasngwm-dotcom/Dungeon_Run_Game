@@ -728,7 +728,7 @@ function buildPropSprites() {
   // every coat of cat in each pose: catSit_black, catWalk1_grey, catHappy_cream...
   for (const [coat, c] of Object.entries(CAT_COATS)) {
     for (const [pose, mode, step] of [['Sit', 'sit', 0], ['Walk1', 'walk', 0], ['Walk2', 'walk', 1], ['Happy', 'happy', 0]]) {
-      PROP_DEFS[`cat_`] = [16, 14, (p) => cat(p, mode, step, c.coat, c.eye)];
+      PROP_DEFS[`cat${pose}_${coat}`] = [16, 14, (p) => cat(p, mode, step, c.coat, c.eye)];
     }
   }
   for (const [name, [w, h, fn]] of Object.entries(PROP_DEFS)) {

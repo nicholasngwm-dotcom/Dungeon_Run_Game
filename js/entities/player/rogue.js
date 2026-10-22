@@ -75,7 +75,7 @@ class Rogue extends Player {
     this.cooldowns.secondary = 0;
     world.effects.text(this.hx, this.hy - 30, 'STRIKE RESET', { color: '#ff6060', size: 7 });
     world.effects.burst(target.hx, target.hy, { count: 14, colors: ['#ff6060', '#ffffff', '#9a2230'], speed: [60, 180], life: [0.2, 0.45] });
-    Sound.play('crit');
+    Sound.play('markKill');
   }
 
   updateMarks(world) {
@@ -173,7 +173,7 @@ class Rogue extends Player {
     if (this.stormReady) {
       this.stormReady = false;
       this.storm = { t: 0, next: 0 };
-      Sound.play('volley');
+      Sound.play('daggerFan');
       return;
     }
     this.cooldowns.primary = c.cooldown;
@@ -183,7 +183,6 @@ class Rogue extends Player {
     for (let i = 0; i < c.count; i++) {
       this.throwDagger(world, this.aim + (i / (c.count - 1) - 0.5) * spread, c.damage);
     }
-    Sound.play('dagger');
   }
 
   updateStorm(dt, world) {
@@ -199,7 +198,7 @@ class Rogue extends Player {
           trail: ['#f0c040'], glow: ROGUE_FX.amber, aura: daggerStreak(['#a07a24', '#f0c040', '#fff2a0'], 22),
         });
       }
-      Sound.play('dagger', 0.1);
+      Sound.play('daggerStorm', 0.08);
     }
     if (s.t >= c.duration) this.storm = null;
   }
@@ -215,7 +214,7 @@ class Rogue extends Player {
     this.busy = c.duration;
     this.iframes = Math.max(this.iframes, c.invulnerability);
     this.facing = Math.cos(angle) >= 0 ? 1 : -1;
-    Sound.play('dash');
+    Sound.play('swiftStrike');
     world.effects.burst(this.x, this.y, { count: 10, colors: ROGUE_FX.smoke, speed: [40, 100], life: [0.2, 0.4] });
     world.effects.smoke(this.x, this.y - 6, { count: 5, radius: 11, life: 0.5, rise: 10, colors: ROGUE_FX.cloud });
     // a red slash streak along the dash path
@@ -269,7 +268,7 @@ class Rogue extends Player {
     const c = this.cfg.parry;
     this.cooldowns.e = c.cooldown;
     this.parryTime = c.window;
-    Sound.play('aim');
+    Sound.play('parryReady');
   }
 
   absorb(amount, world) {
@@ -292,7 +291,7 @@ class Rogue extends Player {
       ctx.restore();
     });
     world.shake(3, 0.1);
-    Sound.play('crit');
+    Sound.play('parry');
     return 0;
   }
 
@@ -305,7 +304,7 @@ class Rogue extends Player {
     this.cooldowns.f = c.cooldown;
     this.stormReady = true;
     world.effects.text(this.hx, this.hy - 30, 'STORM READY', { color: '#f0c040', size: 7 });
-    Sound.play('aim');
+    Sound.play('bladesDrawn');
   }
 
   // ---------- Q: clone surprise ----------
@@ -316,7 +315,7 @@ class Rogue extends Player {
     this.iframes = Math.max(this.iframes, c.vanish);
     // vanishes into a smoke bomb...
     smokeBomb(world, this.x, this.hy + 6, 1.4);
-    Sound.play('dash');
+    Sound.play('cloneSummon');
     world.after(c.vanish, () => {
       if (this.dead) return;
       const start = rand(0, TAU);
@@ -466,7 +465,7 @@ class RogueClone extends Entity {
           sprite: Sprites.weapons.dagger.img, fromUlt: true, aura: daggerStreak(['#4a1a24', '#9a2230', '#ff9a8a']),
         }));
       }
-      Sound.play('dagger', 0.1);
+      Sound.play('daggerFan', 0.1);
     }
   }
 
@@ -516,7 +515,7 @@ class RogueClone extends Entity {
       ctx.restore();
     });
     world.shake(6, 0.25);
-    Sound.play('explosion');
+    Sound.play('cloneBurst');
   }
 
   drawGround(ctx) {

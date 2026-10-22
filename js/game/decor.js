@@ -197,7 +197,28 @@ class FloorDecor {
   getDrawables(cam) {
     return this.items
       .filter((d) => d.kind !== 'rug' && d.kind !== 'runeCircle' && this.visible(d, cam))
-      .map((d) => ({ y: d.kind === 'crow' && d.flying ? d.y + 400 : CastleDecor.sortY(d), draw: (ctx) => this.drawItem(ctx, d) }));
+      .map((d) => ({ y: d.kind === 'crow' && d.flying ? d.y + 400 : CastleDecor.sortY(d), draw: (ctx) => (d.levitate ? this.drawFloating(ctx, d) : this.drawItem(ctx, d)) }));
+  }
+
+  /**
+   * An item lifted off the floor by magic (the Princess's study in her second phase):
+   * it rises over a second, then bobs and tilts gently in a violet glow above its shadow.
+   */
+  drawFloating(ctx, d) {
+    const k = Math.min(1, (this.time - (d.levitateAt || 0)) / 1);
+    const lift = k * (14 + Math.sin(this.time * 1.6 + d.seed) * 5);
+    const tilt = k * Math.sin(this.time * 1.1 + d.seed * 2) * 0.06;
+    drawShadow(ctx, d.x, d.y, 14, 4, 0.25 * k);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, d.x, d.y - lift - 14, 26, '170, 120, 255', 0.3 * k, 2, 20);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(d.x, d.y - lift);
+    ctx.rotate(tilt);
+    ctx.translate(-d.x, -d.y);
+    this.drawItem(ctx, d);
+    ctx.restore();
   }
 
   drawItem(ctx, d) {

@@ -31,19 +31,22 @@ const BESTIARY = {
     { type: 'gunner', name: 'Squire with a Gun', role: 'ranged', desc: 'Why not. Aims down a long red line, fires one heavy ball, then takes ages to reload: that is your moment.' },
     { type: 'catapult', name: 'Catapult', role: 'ranged', desc: 'Never moves. Winds back its arm and hurls a boulder that lands on the red circle. Close in and it cannot stop you.' },
     { type: 'maceSpinner', name: 'Mace Spinner', role: 'melee', desc: 'Up close it whirls both maces round, hurting everything near it again and again as it lurches after you. Then it reels, dizzy.' },
-    { type: 'bishop', name: 'Bishop', role: 'special', desc: 'Fires slow holy orbs, and blesses the ground every few seconds, healing every enemy near it (bosses too). A gold ring shows a blessing gathering.' },
+    { type: 'bishop', name: 'Bishop', role: 'special', desc: 'Never attacks. It hurries to the wounded and blesses the ground every few seconds, healing every enemy near it (bosses too). A gold ring shows a blessing gathering.' },
     { type: 'castleKnight', name: 'Knight', role: 'melee', desc: 'Blackened plate, sword and kite shield. When struck it may raise the shield: hits from the front glance off. Get round it.' },
     { type: 'cavalry', name: 'Cavalry', role: 'melee', desc: 'Two spear lunges along red lanes, then it rides you down, stabbing as it passes. Hard to stop once it gets going.' },
     { type: 'castleSorcerer', name: 'Castle Sorcerer', role: 'ranged', desc: 'Conjures bolts in patterns: a ring, a turning spiral, or a circle that closes in on you. Teleports away the first time it gets low.' },
     { type: 'executioner', name: 'Executioner', role: 'melee', desc: 'A huge axe chop down a red lane. Below a quarter health, a red skull marks you: if the axe lands, you are executed outright.' },
-    { type: 'jester', name: 'Jester', role: 'melee', desc: 'Backflips out of half your hits. Two daggers in a flurry of slashes and a stab, and every cut makes you bleed.' },
+    { type: 'jester', name: 'Jester', role: 'melee', desc: 'Flips back or sidesteps out of half your hits. Two daggers in a flurry of slashes and a stab, and every cut makes you bleed.' },
     { type: 'flamingCatapult', name: 'Flaming Catapult', role: 'ranged', desc: 'Tougher than the plain one. Its burning boulders hit harder and leave fire on the ground that sets you alight.' },
     { type: 'royalGuard', name: 'Royal Guard', role: 'melee', desc: 'A stronger knight with a tower shield that blocks from the front. Also charges at you along a red lane.' },
-    { type: 'prince', name: 'The Prince', role: 'melee', desc: 'Dashes in with his rapier, cuts twice and stabs. At half health he sounds his trumpet and two royal guards join him.' },
-    { type: 'princess', name: 'The Princess', role: 'ranged', desc: 'A crossbow volley of six bolts, the last one magic and chasing you. Throws ice potions that leave slowing ice. Slowly heals herself.' },
-    { type: 'gardener', name: 'Gardener', role: 'ranged', from: 1, note: 'FROM THE QUEEN', desc: 'Comes through the rose gates once the Queen rings her bell. Sprays droplets of magic water from its watering can.' },
-    { boss: 'queen', name: 'The Queen', role: 'boss', from: 1, desc: 'Waves of homing arrows and piercing shots aimed where you are going. At half health she rings the garden bell: hedges rise as walls and gardeners come.' },
-    { boss: 'king', name: 'The King', role: 'boss', from: 1, desc: 'Shouts shockwaves from his throne, calling royal guards, and throws his scepter. At half health he rises with four bishops and his greatsword.' },
+    { type: 'general', name: 'Army General', role: 'special', desc: 'Once, he raises the empire\'s banner and calls the charge: everyone near him runs faster and gets a 20 hp shield. Then he runs you down glowing red, stabbing as he passes, and stops, out of breath, after each charge.' },
+    { type: 'clusterCatapult', name: 'Cluster Catapult', role: 'ranged', desc: 'A plain catapult\'s health, but it flings a whole volley: five or six burning boulders rain down round you, each leaving fire behind. Find the gaps.' },
+    { type: 'princeGuard', name: 'Prince\'s Guard', role: 'melee', from: 1, note: 'FROM THE PRINCE', desc: 'Whirls a flail round himself all the time, so keep clear. Stand back and he casts it at you down a line. Shoot at him and he plants his massive shield and blocks everything for a moment.' },
+    { type: 'gardener', name: 'Gardener', role: 'ranged', from: 1, note: 'FROM THE QUEEN', desc: 'Comes through the rose gates each time the Queen\'s bell tolls. Sprays droplets of magic water from its watering can that bounce off walls once.' },
+    { boss: 'princeBoss', name: 'The Prince', role: 'boss', from: 1, stage: 'STAGE 1 (OR THE PRINCESS)', desc: 'Rides into his training yard and leaps down to fight. Runs you down with a single medium-range dash, then lays into you with strings of cuts and stabs whenever you are in reach. At 35% health his trumpet calls two royal guards and his flail-wielding bodyguard; a beam of light joins them and he cannot be hurt until the bodyguard falls. His blade catches fire.' },
+    { boss: 'princessBoss', name: 'The Princess', role: 'boss', from: 1, stage: 'STAGE 1 (OR THE PRINCE)', desc: 'Disturbed at her books, she opens with a potion. Long bursts of crossbow bolts, ice potions that freeze and fire potions that fling bouncing fireballs; she blinks away when you close in. At half health she conjures a magic bow: weaving golden arrows that spit bolts, a giant arrow from the sky that bursts in golden magic, and potions three at a time. Hide behind her shelves and tables.' },
+    { boss: 'queen', name: 'The Queen', role: 'boss', from: 1, stage: 'STAGE 2', desc: 'Floats down under a magic umbrella and throws it to spin and spray magic, clockwise then anticlockwise. At half health she rings the bell: she runs you down, blinks to her umbrella in bursts of magic, guards behind it to heal, and the hedges shift.' },
+    { boss: 'king', name: 'The King', role: 'boss', from: 1, stage: 'STAGE 3', desc: 'Smites shockwaves from his throne with his scepter, calls a royal guard, and throws the scepter where you would run. At half health he rises with four bishops and his greatsword.' },
   ],
 };
 
@@ -300,11 +303,11 @@ const Bestiary = {
 
   entryHtml(e, i) {
     const first = this.firstStage(e);
-    const stageText = e.role === 'boss' ? 'ALL STAGES' : e.note ? `${e.note} - STAGE ${first}+` : first === 1 ? 'STAGES 1-3' : first === 3 ? 'STAGE 3 ONLY' : `STAGE ${first}+`;
+    const stageText = e.role === 'boss' ? e.stage || 'ALL STAGES' : e.note ? `${e.note} - STAGE ${first}+` : first === 1 ? 'STAGES 1-3' : first === 3 ? 'STAGE 3 ONLY' : `STAGE ${first}+`;
     let stats;
     if (e.boss) {
       const c = CONFIG[e.boss];
-      const dmg = { phantom: c.dashDamage, queen: c.homing?.damage, king: c.sword?.damage }[e.boss];
+      const dmg = { phantom: c.dashDamage, queen: c.homing?.damage, king: c.sword?.damage, princeBoss: c.dash?.damage, princessBoss: c.sky?.damage }[e.boss];
       stats = `HP ${c.hp} &nbsp; DMG ${dmg}`;
     } else {
       const c = CONFIG.enemies[e.type];
@@ -595,7 +598,7 @@ const Bestiary = {
         continue;
       }
       // each boss's idle loop (the King on his throne)
-      const list = { phantom: Sprites.phantom.walk || Sprites.phantom.idle, queen: Sprites.queen.idle, king: Sprites.king.sit }[entry.boss];
+      const list = { phantom: Sprites.phantom.walk || Sprites.phantom.idle, queen: Sprites.queen.idle, king: Sprites.king.sit, princeBoss: Sprites.enemies.prince.idle, princessBoss: Sprites.enemies.princess.idle }[entry.boss];
       const frame = list[Math.floor(time * (entry.boss === 'phantom' ? 8 : 4)) % list.length].img;
       const s = Math.min(3, Math.floor(Math.min(canvas.width / frame.width, canvas.height / frame.height) * 4) / 4);
       const w = frame.width * s;

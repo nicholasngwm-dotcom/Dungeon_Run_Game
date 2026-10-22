@@ -21,13 +21,17 @@ const ROOM_SIZES = {
 const MAX_CHUNKS = 48;            // painted chunks kept around (the least recently drawn go first)
 
 class FloorMap extends Dungeon {
-  /** opts.boss: the stage boss (the castle paints its boss room as her garden or his throne room). */
+  /**
+   * opts.boss: the stage boss (the castle paints its boss room as her garden or his throne room).
+   * opts.practice: a boss practice floor (from the practice range): only the start room and the boss room.
+   */
   constructor(stage, themeId, seed = Math.floor(Math.random() * 1e9), opts = {}) {
     super({ custom: true });
     const g = CONFIG.run.grid;
     this.stage = stage;
     this.themeId = themeId;
     this.bossType = opts.boss || null;
+    this.practice = !!opts.practice;   // boss practice: just a small entrance room and the boss's room
     this.seed = seed;
     this.T = CONFIG.tileSize;
     this.cols = g.cols * g.cellW + 2;
@@ -83,6 +87,16 @@ class FloorMap extends Dungeon {
       this.links.push({ a: a.id, b: b.id });
     };
 
+    // boss practice: the entrance room, and the boss room beside it (entered from the side)
+    if (this.practice) {
+      const start = addRoom(Math.floor(g.cols / 2) - 1, Math.floor(g.rows / 2));
+      const boss = addRoom(Math.floor(g.cols / 2), Math.floor(g.rows / 2));
+      link(start, boss);
+      start.type = 'start';
+      boss.type = 'boss';
+      return true;
+    }
+
     // grow a tree out from the middle cell, preferring rooms with few neighbours (long branches)
     const start = addRoom(Math.floor(g.cols / 2), Math.floor(g.rows / 2));
     let guard = 0;
@@ -104,8 +118,8 @@ class FloorMap extends Dungeon {
     start.type = 'start';
     const depth = this.bfs(start);
     const leaves = this.rooms.filter((r) => r !== start && r.links.length === 1).sort((a, b) => depth[b.id] - depth[a.id]);
-    // the throne room is entered from the side or from below, never through the wall behind the throne
-    const fits = (r) => this.bossType !== 'king' || !r.links.some((id) => this.rooms[id].gy < r.gy);
+    // the throne room and the study are entered from the side or from below, never through the wall behind the throne (or her desk)
+    const fits = (r) => !['king', 'princess', 'prince'].includes(this.bossType) || !r.links.some((id) => this.rooms[id].gy < r.gy);
     const boss = leaves.find(fits) || this.rooms.filter((r) => r !== start && fits(r)).sort((a, b) => depth[b.id] - depth[a.id])[0];
     if (!boss) return false;
     if (leaves.includes(boss)) leaves.splice(leaves.indexOf(boss), 1);
@@ -297,6 +311,15 @@ class FloorMap extends Dungeon {
     return this.grid[ty][tx];
   }
 
+  /** A flier passes over cover, the throne and the Queen's hedges, but not walls, shut doors or locked doorways. */
+  flyOver(tx, ty) {
+    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return false;
+    const i = this.idx(tx, ty);
+    if (this.locked.has(i) || this.doorBlocks?.has(i)) return false;
+    if (this.blocks?.has(i)) return true;
+    return FLY_OVER.has(this.grid[ty][tx]);
+  }
+
   /** The active room while one is locked, otherwise the whole floor. */
   get floorBounds() {
     if (this.activeRoom) return this.roomBounds(this.activeRoom);
@@ -430,6 +453,22 @@ class FloorMap extends Dungeon {
       if (path && d > 1.4) CastleTiles.gravel(p, x, y, rng);
       else if (d <= 1.4) CastleTiles.gravel(p, x, y, rng);
       else CastleTiles.gardenGrass(p, x, y, rng);
+      return;
+    }
+    if (this.nearRoom(boss, tx, ty) && this.bossType === 'prince') {
+      // the training grounds: packed earth with a chalk sparring ring in the middle
+      CastleTiles.yardDirt(p, x, y, rng);
+      const cx = (boss.x0 + boss.x1 + 1) / 2 * T;
+      const cy = (boss.y0 + boss.y1 + 1) / 2 * T + T;
+      CastleTiles.yardChalk(p, x, y, cx, cy, 7 * T);
+      return;
+    }
+    if (this.nearRoom(boss, tx, ty) && this.bossType === 'princess') {
+      // the magic study: midnight floorboards and a great rune circle inlaid in the middle
+      CastleTiles.studyFloor(p, x, y, rng, tx, ty);
+      const cx = (boss.x0 + boss.x1 + 1) / 2 * T;
+      const cy = (boss.y0 + boss.y1 + 1) / 2 * T + T;
+      CastleTiles.studyCircle(p, x, y, cx, cy, 6 * T);
       return;
     }
     if (this.nearRoom(boss, tx, ty) && this.bossType === 'king') {

@@ -44,6 +44,7 @@ class Enemy extends Entity {
     if (this.asleep && !(this.stunTime > dt)) this.asleep = false;
     this.waking = (this.waking || 0) - dt;
     this.hasted = (this.hasted || 0) - dt;   // a minstrel's war song (see Minstrel)
+    this.rallied = (this.rallied || 0) - dt; // a general's call to charge (see General)
     // the Bard's lullaby meter drains whenever no lullaby reached this enemy this tick
     if (this.sleepMeter > 0 && this.lullabyTick !== world.time) this.sleepMeter = Math.max(0, this.sleepMeter - CONFIG.classes.bard.lullaby.meterDecay * dt);
     if (this.stunTime > 0) {
@@ -88,7 +89,11 @@ class Enemy extends Entity {
     if (dist(x1, y1, this.x, this.y) < speed * dt * 0.2) this.detour *= -1; // hit a wall that way, try the other side
   }
 
+  /** Movement speed multiplier: rallied by a general, it runs faster. */
+  get speedBoost() { return this.rallied > 0 ? this.rallySpeed || 1 : 1; }
+
   moveAngle(world, a, speed, dt) {
+    speed *= this.speedBoost;
     world.dungeon.move(this, Math.cos(a) * speed * dt, Math.sin(a) * speed * dt);
     if (Math.abs(Math.cos(a)) > 0.1) this.facing = Math.cos(a) >= 0 ? 1 : -1;
     this.moving = true;
@@ -116,6 +121,14 @@ class Enemy extends Entity {
       this.stunTime = this.waking;
       this.sleepMeter = 0;
       world.effects.text(this.hx, this.hy - 30, 'WOKE UP', { color: '#c8b8ff', size: 7 });
+    }
+    // a general's rallying shield soaks up hits first
+    if (this.shieldHp > 0) {
+      const soak = Math.min(this.shieldHp, amount);
+      this.shieldHp -= soak;
+      amount -= soak;
+      if (this.shieldHp <= 0) world.effects.burst(this.hx, this.hy, { count: 12, colors: ['#ffe680', '#ff9a8a', '#ffffff'], speed: [40, 140], life: [0.2, 0.4] });
+      if (amount <= 0) { this.flashTime = 0.05; return true; }
     }
     this.hp -= amount * (1 - (this.cfg.armor || 0));   // armoured enemies shrug off part of every hit
     this.flashTime = 0.1;
@@ -328,6 +341,29 @@ class Enemy extends Entity {
     ctx.fillRect(x - 1, y + 3, 3, 2);
   }
 
+  /**
+   * Rallied by a general: dust kicked up at its heels while it's quicker, and while its
+   * shield holds, a gold shimmer round it (fading as the shield wears down).
+   */
+  drawRally(ctx) {
+    if (this.shieldHp > 0) {
+      const k = clamp(this.shieldHp / (this.shieldMax || 20), 0, 1);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, this.x, this.hy, this.radius + 12, '255, 210, 120', 0.25 + 0.25 * k, 2, this.radius + 16);
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = 0.4 + 0.5 * k;
+      PFX.ring(ctx, this.x, this.hy, this.radius + 8, this.radius + 13, '#ffe680', 2, { dash: [3, 3], spin: this.animTime * 2 });
+      ctx.restore();
+    }
+    if (this.rallied > 0 && this.moving && Math.floor(this.animTime * 10) % 2) {
+      ctx.fillStyle = 'rgba(200, 180, 150, 0.5)';
+      ctx.fillRect(Math.round(this.x - this.facing * 8), Math.round(this.y - 2), 3, 2);
+      ctx.fillRect(Math.round(this.x - this.facing * 13), Math.round(this.y - 4), 2, 2);
+    }
+  }
+
   /** Spurred on by a minstrel's song: a little red note bobbing over its head. */
   drawHasted(ctx) {
     const img = Sprites.projectiles.redNote;
@@ -399,6 +435,7 @@ class Enemy extends Entity {
   drawStun(ctx) {
     this.drawWeaken(ctx);
     if (this.hasted > 0) this.drawHasted(ctx);
+    if (this.rallied > 0 || this.shieldHp > 0) this.drawRally(ctx);
     if (this.sleepMeter > 0 && !this.asleep) this.drawSleepMeter(ctx);
     if (!(this.stunTime > 0)) return;
     if (this.frozenTime > 0) return this.drawIceBlock(ctx);
@@ -443,6 +480,7 @@ function createEnemy(type, x, y) {
     flamingCatapult: FlamingCatapult, maceSpinner: MaceSpinner, bishop: Bishop, castleKnight: CastleKnight,
     cavalry: Cavalry, castleSorcerer: CastleSorcerer, executioner: Executioner, jester: Jester,
     royalGuard: RoyalGuard, prince: Prince, princess: Princess, gardener: Gardener,
+    general: General, clusterCatapult: ClusterCatapult, princeGuard: PrinceGuard,
   };
   return new classes[type](x, y, type);
 }

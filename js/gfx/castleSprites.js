@@ -25,7 +25,12 @@ function buildCastleSprites() {
     cavalry: buildCavalryFrames(),
     catapult: buildCatapultFrames(false),
     flamingCatapult: buildCatapultFrames(true),
+    clusterCatapult: buildCatapultFrames(true, true),
+    general: buildCuteEnemy(drawGeneral),
+    princeGuard: buildCuteEnemy(drawPrinceGuard),
   });
+  // the Prince's white charger, which he rides in on (no rider: he's drawn in the saddle)
+  Sprites.royalHorse = buildCavalryFrames({ coat: 'white', rider: false });
   buildCastleWeapons();
   buildCastleProjectiles();
   buildCastleCover();
@@ -41,7 +46,8 @@ function drawCavalry(p, pose) {
   const S = CK.steel;
   const C = CK.crimson;
   const G = CK.gold;
-  const H = ['#0c0a10', '#1a1620', '#2a2432', '#3c3446', '#544a60'];   // black coat
+  // black coat (the cavalry), or the Prince's white charger (pose.coat 'white')
+  const H = pose.coat === 'white' ? ['#6a6478', '#a8a2b4', '#cfcadc', '#ece8f4', '#ffffff'] : ['#0c0a10', '#1a1620', '#2a2432', '#3c3446', '#544a60'];
   const b = pose.b;
   const hipY = 46 + b;
   // a leg: from the body down to the hoof, bent by `k` (-1 back .. 1 forward)
@@ -90,6 +96,7 @@ function drawCavalry(p, pose) {
   p.px(41, 41 + b, G[3]);
   leg(34, bn, true, false);
   leg(56, fn, true, true);
+  if (pose.rider === false) return;   // the Prince's horse: he's drawn in the saddle himself
   // the rider: plate legs down the side, a torso, a visored helm with a crimson plume
   p.rect(43, 34 + b, 5, 12, S[2]);
   p.rect(43, 34 + b, 1, 12, S[4]);
@@ -113,7 +120,8 @@ function drawCavalry(p, pose) {
   p.rect(50, 22 + b, 4, 5, S[2]);
 }
 
-function buildCavalryFrames() {
+/** opts.coat 'white' + opts.rider false: the Prince's riderless white charger. */
+function buildCavalryFrames(opts = {}) {
   // a four-beat gallop: [backFar, backNear, frontFar, frontNear]
   const gallop = [
     { legs: [-0.9, -0.5, 0.7, 1], b: 0, tail: 0, head: 0 },
@@ -125,13 +133,17 @@ function buildCavalryFrames() {
     { legs: [-0.15, 0.1, 0.15, -0.1], b: 0, tail: 0, head: 0 },
     { legs: [-0.15, 0.1, 0.15, -0.1], b: 1, tail: 2, head: 1 },
   ];
-  return buildPoseFrames(drawCavalry, 96, { idle, walk: gallop }, 0.5);
+  const dress = (list) => list.map((pose) => ({ ...pose, ...opts }));
+  return buildPoseFrames(drawCavalry, 96, { idle: dress(idle), walk: dress(gallop) }, 0.5);
 }
 
 // ---------- catapult ----------
 
-/** The engine (the throwing arm is drawn at runtime, see Catapult.draw). flame: the burning variant. */
-function drawCatapultBase(p, flame) {
+/**
+ * The engine (the throwing arm is drawn at runtime, see Catapult.draw). flame: the burning
+ * variant; cluster: the stage-3 volley engine (iron-plated, a second windlass, shot piled ready).
+ */
+function drawCatapultBase(p, flame, cluster = false) {
   const W = flame ? ['#1a100c', '#2e1c12', '#46301e', '#5e432a', '#7a5a38'] : ['#22150e', '#3b2416', '#5b3922', '#7d532f', '#9c6c3e'];
   const I = CK.steel;
   // the base frame: two long rails with cross beams
@@ -171,15 +183,31 @@ function drawCatapultBase(p, flame) {
     p.px(6, 27, '#ffd34a');
     for (let i = 0; i < 6; i++) p.px(14 + i * 9, 45 + (i % 2), '#0e0808');
   }
+  if (cluster) {
+    // iron plates over the rails, a second windlass for the heavier throw, and a pile of shot ready on the frame
+    for (const x of [16, 34, 52]) { p.rect(x, 44, 8, 6, I[2]); p.rect(x, 44, 8, 1, I[4]); p.px(x + 1, 46, I[5]); p.px(x + 6, 46, I[5]); }
+    p.round(62, 26, 10, 10, W[2], 3);
+    for (let i = 0; i < 3; i++) p.rect(63, 28 + i * 2, 8, 1, '#a89878');
+    for (const [bx, by] of [[44, 38], [49, 38], [46, 34]]) { p.circle(bx, by, 3, '#4a4652'); p.px(bx - 1, by - 1, '#8e8a9c'); }
+  }
 }
 
 /** The throwing arm (pointing right from its pivot at the axle): a long beam with the bucket at its end. */
-function drawCatapultArm(p, flame) {
+function drawCatapultArm(p, flame, cluster = false) {
   const W = flame ? ['#1a100c', '#2e1c12', '#46301e', '#5e432a', '#7a5a38'] : ['#22150e', '#3b2416', '#5b3922', '#7d532f', '#9c6c3e'];
   p.rect(2, 5, 40, 5, W[2]);
   p.rect(2, 5, 40, 1, W[4]);
   p.rect(2, 9, 40, 1, W[0]);
   for (const x of [12, 26]) { p.rect(x, 4, 2, 7, CK.steel[3]); p.px(x, 5, CK.steel[5]); }
+  if (cluster) {
+    // a wide iron-hooped basket that holds a whole volley of shot
+    p.round(36, 0, 22, 12, W[1], 4);
+    p.round(38, 2, 18, 6, '#120a08', 3);
+    p.rect(36, 9, 22, 2, CK.steel[2]);
+    p.rect(36, 9, 22, 1, CK.steel[4]);
+    for (const x of [41, 47, 53]) p.rect(x, 0, 1, 10, CK.steel[3]);
+    return;
+  }
   // the bucket: an iron-bound wooden cup
   p.round(38, 0, 14, 12, W[1], 4);
   p.round(40, 2, 10, 6, '#120a08', 3);
@@ -187,13 +215,13 @@ function drawCatapultArm(p, flame) {
   p.rect(38, 9, 14, 1, CK.steel[4]);
 }
 
-function buildCatapultFrames(flame) {
+function buildCatapultFrames(flame, cluster = false) {
   const make = (w, h, fn) => {
     const img = PixelArt.make(w, h, fn, OUTLINE, 0.5);
     return { img, flash: PixelArt.silhouette(img) };
   };
-  const base = make(80, 64, (p) => drawCatapultBase(p, flame));
-  const arm = make(54, 14, (p) => drawCatapultArm(p, flame));
+  const base = make(80, 64, (p) => drawCatapultBase(p, flame, cluster));
+  const arm = make(cluster ? 60 : 54, 14, (p) => drawCatapultArm(p, flame, cluster));
   return { idle: [base], base, arm, armPivot: { x: 5, y: 7 } };
 }
 
@@ -327,6 +355,67 @@ function buildCastleWeapons() {
       p.round(23, 2, 5, 6, '#6a9a8a', 2);
       p.px(26, 4, '#9ad0ff');
     }),
+    // the general's spear, flying the empire's banner (crimson with a gold sun) below the head
+    flagSpear: weapon(74, 26, 12, 20, (p) => {
+      p.rect(0, 19, 62, 3, L[3]);
+      p.rect(0, 19, 62, 1, L[4]);
+      p.rect(8, 18, 3, 5, G[2]);
+      p.poly([[62, 17], [74, 20.5], [62, 24]], CK.steel[4]);
+      p.line(62, 20, 73, 20, CK.steel[5]);
+      p.rect(58, 17, 4, 7, G[2]);
+      // the banner hanging from the shaft, swallow-tailed
+      p.poly([[34, 18], [56, 18], [56, 2], [50, 6], [44, 2], [40, 6], [34, 2]], CK.crimson[2]);
+      p.poly([[34, 18], [56, 18], [56, 15], [34, 15]], CK.crimson[1]);
+      p.rect(34, 2, 1, 16, CK.crimson[3]);
+      p.circle(45, 11, 3, G[3]);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU;
+        p.px(Math.round(45 + Math.cos(a) * 5), Math.round(11 + Math.sin(a) * 5), G[2]);
+      }
+      p.px(44, 10, '#ffffff');
+    }),
+    // the bodyguard's massive shield: a towering slab of black steel, gold-edged, with a crowned lion
+    greatShield: weapon(30, 46, 15, 23, (p) => {
+      p.round(1, 1, 28, 44, CK.steel[1], 5);
+      p.round(3, 3, 24, 40, CK.steel[2], 4);
+      p.rect(3, 3, 4, 40, CK.steel[3]);
+      p.rect(24, 4, 3, 38, CK.steel[0]);
+      p.round(1, 1, 28, 3, G[2], 1);
+      p.rect(1, 42, 28, 3, G[1]);
+      for (const y of [6, 22, 38]) for (const x of [5, 25]) { p.px(x, y, G[3]); }
+      // the crowned lion: a gold head with a mane on a crimson boss
+      p.round(8, 13, 14, 16, CK.crimson[2], 4);
+      p.round(10, 17, 10, 9, G[2], 3);
+      p.round(12, 19, 6, 6, G[3], 2);
+      p.px(13, 21, OUTLINE); p.px(16, 21, OUTLINE);
+      p.rect(14, 23, 2, 1, CK.crimson[1]);
+      for (const x of [11, 15, 19]) p.poly([[x - 1, 16], [x, 12], [x + 1, 16]], G[3]);
+    }),
+    // the Princess's magic bow (phase 2): a slender golden bow wound with violet light, a string of pure gold,
+    // drawn upright (it's turned to her aim, crosswise to it)
+    magicBow: weapon(16, 54, 6, 27, (p) => {
+      for (let y = 1; y < 53; y++) {
+        const t = (y - 1) / 51;
+        const x = 2 + Math.round(8 * Math.sin(Math.PI * t));
+        p.rect(x, y, 3, 1, G[2]);
+        p.px(x, y, G[4]);
+      }
+      for (const y of [6, 18, 34, 46]) { const x = 2 + Math.round(8 * Math.sin(Math.PI * (y - 1) / 51)); p.rect(x, y, 3, 2, CK.violet[4]); }
+      p.round(8, 23, 5, 8, CK.violet[2], 2);      // the grip
+      p.px(10, 27, '#e4cfff');
+      p.line(3, 2, 3, 52, '#fff6c8');               // the golden string
+      p.rect(9, 0, 3, 3, '#ffe680'); p.rect(9, 51, 3, 3, '#ffe680');   // glowing tips
+    }),
+    // a spiked iron flail ball
+    flailBall: weapon(18, 18, 9, 9, (p) => {
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU;
+        p.poly([[9 + Math.cos(a - 0.3) * 5, 9 + Math.sin(a - 0.3) * 5], [9 + Math.cos(a) * 8.5, 9 + Math.sin(a) * 8.5], [9 + Math.cos(a + 0.3) * 5, 9 + Math.sin(a + 0.3) * 5]], CK.steel[4]);
+      }
+      p.circle(9, 9, 5.5, CK.steel[2]);
+      p.circle(8, 8, 3, CK.steel[3]);
+      p.rect(6, 6, 2, 2, CK.steel[5]);
+    }),
   });
 }
 
@@ -381,6 +470,24 @@ function buildCastleProjectiles() {
       p.rect(4, 4, 12, 2, '#9ad0ff');
       p.poly([[14, 1], [21, 5], [14, 9]], '#e6f6ff');
       p.px(17, 5, '#ffffff');
+    }),
+    // the Princess's great golden arrow, glowing with magic
+    goldenArrow: sprite(34, 12, (p) => {
+      p.poly([[1, 2], [8, 6], [1, 10]], '#ffe680');
+      p.poly([[3, 3], [9, 6], [3, 9]], '#c8a456');
+      p.rect(6, 5, 20, 2, '#ecd690');
+      p.rect(6, 5, 20, 1, '#fffbe8');
+      p.poly([[24, 1], [33, 6], [24, 11]], '#ffd34a');
+      p.poly([[24, 1], [33, 6], [27, 6]], '#fffbe8');
+      p.px(29, 6, '#ffffff');
+    }),
+    // her fire potion: a round flask of churning red-orange flame
+    firePotion: sprite(12, 16, (p) => {
+      p.rect(4, 1, 4, 4, '#c8b08a');
+      p.round(1, 5, 10, 10, '#e0461e', 4);
+      p.round(2, 7, 7, 6, '#ff8a1e', 3);
+      p.rect(4, 9, 3, 3, '#ffd34a');
+      p.px(3, 8, '#fff2a0');
     }),
     icePotion: sprite(12, 16, (p) => {
       p.rect(4, 1, 4, 4, '#c8b08a');

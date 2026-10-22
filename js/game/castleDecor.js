@@ -28,6 +28,8 @@ const CastleDecor = {
       case 'boss':
         if (fd.floor.bossType === 'queen') this.garden(fd, r);
         else if (fd.floor.bossType === 'king') this.throneRoom(fd, r);
+        else if (fd.floor.bossType === 'prince') this.trainingGrounds(fd, r);
+        else if (fd.floor.bossType === 'princess') this.magicStudy(fd, r);
         return true;
       default: {
         // the halls of the fallen keep
@@ -64,6 +66,53 @@ const CastleDecor = {
     fd.add('statue', { x: r.cx - 10 * T, y: r.cy - 0.5 * T });
     fd.add('statue', { x: r.cx + 10 * T, y: r.cy - 0.5 * T });
     for (let i = 0; i < 4; i++) fd.add('prop', fd.spot(r, { minGap: 50 }), { name: 'flowers' });
+  },
+
+  /**
+   * The Prince's training grounds: the stable gate his horse rides out of (top left),
+   * weapon racks along the top wall, practice dummies and pells down the sides, archery
+   * butts, hay bales in the corners and braziers to light the yard. The chalk ring in
+   * the middle stays clear for the duel.
+   */
+  trainingGrounds(fd, r) {
+    const T = fd.floor.T;
+    const top = r.y0 * T;
+    fd.add('throneDoor', { x: (r.x0 + 4) * T, y: top }, { openUntil: 0, open: 0, stable: true });
+    for (const dx of [-9, -6, 6, 9]) fd.add('prop', { x: r.cx + dx * T, y: top + 1.6 * T }, { name: 'weaponRack', seed: 0 });
+    for (const s of [-1, 1]) {
+      fd.add('banner', { x: r.cx + s * 3 * T, y: top + 1.2 * T });
+      for (const [dy, name] of [[-3, 'dummy'], [0, 'pell'], [3, 'dummy']]) fd.add('prop', { x: r.cx + s * 11.5 * T, y: r.cy + dy * T }, { name, seed: s > 0 ? 6 : 0 });
+      fd.add('prop', { x: r.cx + s * 13 * T, y: r.y1 * T - 0.6 * T }, { name: 'hayBale', seed: 0 });
+      fd.add('prop', { x: r.cx + s * 12.2 * T, y: r.y1 * T - 0.4 * T }, { name: 'hayBale', seed: 6 });
+      fd.add('brazier', { x: r.cx + s * 8.5 * T, y: r.cy - 4.5 * T });
+      fd.add('brazier', { x: r.cx + s * 8.5 * T, y: r.cy + 6.5 * T });
+    }
+    for (const dx of [-3, 0, 3]) fd.add('prop', { x: r.cx + dx * T, y: r.y1 * T - 0.2 * T }, { name: 'target', seed: 0 });
+    fd.add('prop', { x: r.cx - 12 * T, y: top + 2 * T }, { name: 'fence', seed: 0 });
+  },
+
+  /**
+   * The Princess's magic study: her desk under the top wall (she sits behind it), shelves
+   * of books along the wall, a globe, scroll racks and reading tables round the rune
+   * circle, crystals and candelabras for light, and books floating on their own.
+   */
+  magicStudy(fd, r) {
+    const T = fd.floor.T;
+    const top = r.y0 * T;
+    fd.add('prop', { x: r.cx, y: (r.y0 + 4) * T - 9 }, { name: 'chair', seed: 0 });   // she sits on it, behind the desk
+    fd.add('studyDesk', { x: r.cx, y: (r.y0 + 4) * T + 18 });
+    for (const dx of [-12, -10, -8, -6, 6, 8, 10, 12]) fd.add('prop', { x: r.cx + dx * T, y: top + 1.5 * T }, { name: 'bookshelf', seed: 0 });
+    for (const s of [-1, 1]) {
+      fd.add('prop', { x: r.cx + s * 3.6 * T, y: top + 2.2 * T }, { name: 'candelabra', seed: 0 });
+      fd.add('crystal', { x: r.cx + s * 11 * T, y: r.cy - 1 * T });
+      fd.add('crystal', { x: r.cx + s * 11 * T, y: r.cy + 5 * T });
+      fd.add('prop', { x: r.cx + s * 12.5 * T, y: r.cy + 2 * T }, { name: 'readingTable', seed: s > 0 ? 6 : 0 });
+      fd.add('prop', { x: r.cx + s * 9 * T, y: r.y1 * T - 0.3 * T }, { name: 'bookStack', seed: 0 });
+      fd.add('prop', { x: r.cx + s * 12.6 * T, y: r.y1 * T - 0.4 * T }, { name: s < 0 ? 'globe' : 'scrollRack', seed: 0 });
+      fd.add('prop', { x: r.cx + s * 5 * T, y: r.y1 * T - 0.2 * T }, { name: 'candelabra', seed: 0 });
+    }
+    // books drifting through the air round the shelves
+    for (let i = 0; i < 6; i++) fd.add('floatingBook', { x: r.cx + (i < 3 ? -1 : 1) * (7 + (i % 3) * 2.2) * T, y: top + (3.4 + (i % 2)) * T }, { colour: i % 3 });
   },
 
   /** The King's throne room: the throne on its dais, a door either side, braziers down the carpet. */
@@ -113,6 +162,9 @@ const CastleDecor = {
       else if (d.kind === 'throne') out.push({ x: d.x, y: d.y - 90, r: 180, s: 0.6, rgb: '255, 120, 140' });
       else if (d.kind === 'gardenBell') out.push({ x: d.x, y: d.y - 60, r: 150, s: 0.5, rgb: '200, 210, 255' });
       else if (d.kind === 'roseGate') out.push({ x: d.x, y: d.y - 30, r: 80, s: 0.4, rgb: '255, 120, 160' });
+      else if (d.kind === 'studyDesk') out.push({ x: d.x, y: d.y - 30, r: 170, s: 0.8, rgb: '255, 200, 130' });
+      else if (d.kind === 'floatingBook') out.push({ x: d.x, y: d.y - 30, r: 60, s: 0.35, rgb: '190, 150, 255' });
+      else if (d.kind === 'prop' && d.name === 'candelabra') out.push({ x: d.x, y: d.y - 26, r: 120, s: 0.7, rgb: '255, 190, 110' });
     }
   },
 
@@ -140,7 +192,7 @@ const CastleDecor = {
 
   /** True if this module draws `kind`. */
   draws(kind) {
-    return ['brazier', 'armor', 'banner', 'crystal', 'rubble', 'cage', 'gardenBell', 'roseGate', 'throne', 'throneDoor', 'roseBush', 'topiary', 'statue'].includes(kind);
+    return ['brazier', 'armor', 'banner', 'crystal', 'rubble', 'cage', 'gardenBell', 'roseGate', 'throne', 'throneDoor', 'roseBush', 'topiary', 'statue', 'studyDesk', 'floatingBook'].includes(kind);
   },
 
   drawItem(fd, ctx, d) {
@@ -180,6 +232,47 @@ const CastleDecor = {
       case 'roseBush': sprite(S.roseBush, x, y, 0.25); break;
       case 'topiary': sprite(S.topiary, x, y, 0.3); break;
       case 'statue': sprite(S.statue, x, y, 0.3); break;
+      case 'studyDesk': {
+        // her writing desk: the desk itself, a great open spellbook, a crystal ball, a candle and a quill
+        drawShadow(ctx, x, y + 1, 34, 6, 0.35);
+        drawProp(ctx, 'desk', x, y);
+        const by = y - 26;
+        ctx.fillStyle = OUTLINE; ctx.fillRect(x - 13, by - 6, 26, 10);
+        ctx.fillStyle = '#5a1420'; ctx.fillRect(x - 12, by - 5, 24, 8);      // its crimson binding
+        ctx.fillStyle = '#efe6cf'; ctx.fillRect(x - 11, by - 6, 10, 7); ctx.fillRect(x + 1, by - 6, 10, 7);
+        ctx.fillStyle = '#d0c4a6'; ctx.fillRect(x - 1, by - 6, 2, 7);
+        ctx.fillStyle = '#7a6a8a';
+        for (let i = 0; i < 3; i++) { ctx.fillRect(x - 10, by - 4 + i * 2, 7, 1); ctx.fillRect(x + 2, by - 4 + i * 2, 7, 1); }
+        // the crystal ball, glowing
+        ctx.fillStyle = OUTLINE; ctx.fillRect(x + 15, by - 9, 10, 11);
+        ctx.fillStyle = '#6a4e1e'; ctx.fillRect(x + 16, by - 1, 8, 2);
+        ctx.fillStyle = '#8a72d8'; ctx.fillRect(x + 16, by - 8, 8, 7);
+        ctx.fillStyle = '#e4cfff'; ctx.fillRect(x + 17, by - 7, 2, 2);
+        drawGlow(ctx, x + 20, by - 5, 14, '170, 120, 255', 0.35 + Math.sin(t * 2 + d.seed) * 0.1);
+        // a candle with its flame, and a quill in its pot
+        ctx.fillStyle = OUTLINE; ctx.fillRect(x - 24, by - 8, 6, 11);
+        ctx.fillStyle = '#efe6cf'; ctx.fillRect(x - 23, by - 7, 4, 9);
+        drawFlame(ctx, x - 21, by - 10, t, d.seed);
+        ctx.fillStyle = '#2a1e30'; ctx.fillRect(x - 17, by - 2, 4, 4);
+        ctx.fillStyle = '#ece6f0'; ctx.fillRect(x - 15, by - 11, 1, 9);
+        ctx.fillRect(x - 16, by - 12, 2, 4);
+        break;
+      }
+      case 'floatingBook': {
+        // a book drifting by itself, its pages fluttering, wrapped in a faint violet glow
+        const bob = Math.sin(t * 1.4 + d.seed) * 6;
+        const flap = Math.sin(t * 9 + d.seed) > 0 ? 1 : 0;
+        const bx = x + Math.cos(t * 0.5 + d.seed) * 10;
+        const byy = y - 34 + bob;
+        drawShadow(ctx, bx, y, 7, 2, 0.15);
+        drawGlow(ctx, bx, byy, 16, '190, 150, 255', 0.25);
+        const cover = ['#5a1420', '#1e3a5a', '#3a2a5a'][d.colour || 0];
+        ctx.fillStyle = OUTLINE; ctx.fillRect(Math.round(bx - 9), Math.round(byy - 4 - flap), 18, 8 + flap);
+        ctx.fillStyle = cover; ctx.fillRect(Math.round(bx - 8), Math.round(byy - 3), 16, 6);
+        ctx.fillStyle = '#efe6cf'; ctx.fillRect(Math.round(bx - 7), Math.round(byy - 3 - flap), 6, 3 + flap); ctx.fillRect(Math.round(bx + 1), Math.round(byy - 3 - flap), 6, 3 + flap);
+        ctx.fillStyle = '#c8a456'; ctx.fillRect(Math.round(bx - 1), Math.round(byy - 3), 2, 6);
+        break;
+      }
       case 'throne': {
         const img = R.throne;
         drawShadow(ctx, x, y - 4, 66, 10, 0.4);

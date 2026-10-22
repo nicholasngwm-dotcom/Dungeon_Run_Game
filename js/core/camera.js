@@ -12,10 +12,11 @@ class Camera {
     this.offsetY = 0;
   }
 
-  follow(tx, ty, dt, mapWidth, mapHeight, snap = false) {
+  /** rate: the share of the way still left after a second (smaller = snappier). */
+  follow(tx, ty, dt, mapWidth, mapHeight, snap = false, rate = 0.0001) {
     const goalX = clamp(tx - this.width / 2, 0, Math.max(0, mapWidth - this.width));
     const goalY = clamp(ty - this.height / 2, 0, Math.max(0, mapHeight - this.height));
-    const t = snap ? 1 : 1 - Math.pow(0.0001, dt);
+    const t = snap ? 1 : 1 - Math.pow(rate, dt);
     this.x = lerp(this.x, goalX, t);
     this.y = lerp(this.y, goalY, t);
 

@@ -76,7 +76,7 @@ class Projectile {
     this.y = py;
     this.bounces--;
     Sound.play('bounce', 0.05);
-    world.effects.burst(this.x, this.y, { count: 4, colors: ['#ffb02e', '#ff5a1e'], speed: [30, 80], life: [0.15, 0.3] });
+    world.effects.burst(this.x, this.y, { count: 4, colors: this.trail || ['#ffb02e', '#ff5a1e'], speed: [30, 80], life: [0.15, 0.3] });
   }
 
   hitEnemies(world) {

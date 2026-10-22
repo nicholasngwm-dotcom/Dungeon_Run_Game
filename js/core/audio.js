@@ -32,6 +32,145 @@ const Sound = {
     this.noiseBuffer = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const data = this.noiseBuffer.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = nativeRandom() * 2 - 1;
+    this.initRich();
+  },
+
+  /**
+   * The richer effects' tools (the heroes' attacks): brown noise for roars and rumbles,
+   * a reverb the sounds can send into for a sense of space, and soft-clip curves for
+   * crunchy cracks. Built once, when the audio starts.
+   */
+  initRich() {
+    const c = this.ctx;
+    const len = c.sampleRate * 2;
+    this.brownBuffer = c.createBuffer(1, len, c.sampleRate);
+    const b = this.brownBuffer.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      last = (last + 0.02 * (nativeRandom() * 2 - 1)) / 1.02;
+      b[i] = last * 3.5;
+    }
+    // a hall-ish reverb: two channels of noise dying away over 1.8 seconds
+    const irLen = Math.floor(c.sampleRate * 1.8);
+    const ir = c.createBuffer(2, irLen, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < irLen; i++) d[i] = (nativeRandom() * 2 - 1) * Math.pow(1 - i / irLen, 3.5);
+    }
+    this.verb = c.createConvolver();
+    this.verb.buffer = ir;
+    this.verbSend = c.createGain();
+    this.verbSend.gain.value = 0.5;
+    this.verbSend.connect(this.verb);
+    this.verb.connect(this.sfxBus);
+    this.curves = {};
+  },
+
+  /** A soft-clipping curve (more drive = more crunch), cached by drive. */
+  driveCurve(drive) {
+    if (this.curves[drive]) return this.curves[drive];
+    const n = 1024;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(x * drive) / Math.tanh(drive);
+    }
+    return (this.curves[drive] = curve);
+  },
+
+  /** x nudged by up to +-amt of itself (each play comes out a little different). */
+  vary(x, amt = 0.08) { return x * (1 + (nativeRandom() * 2 - 1) * amt); },
+
+  /**
+   * One layer of a rich sound: a source (white 'noise', 'brown' noise or an oscillator
+   * type) gliding from freq to `to`, optionally through a filter sweeping ffreq -> fto and
+   * a drive, shaped by a swell (attack) and an exponential fade over dur. wet sends it
+   * into the reverb; vib wobbles an oscillator's pitch by vib Hz at vibRate.
+   */
+  layer({ src = 'noise', freq = 440, to = null, glide = null, dur = 0.2, attack = 0.005, vol = 0.2, delay = 0,
+    filter = null, ffreq = 1000, fto = null, fglide = null, q = 1, drive = 0, wet = 0, vib = 0, vibRate = 6, rate = 1 } = {}) {
+    const c = this.ctx;
+    const t = c.currentTime + delay;
+    const end = t + dur;
+    let node;
+    if (src === 'noise' || src === 'brown') {
+      const s = c.createBufferSource();
+      s.buffer = src === 'brown' ? this.brownBuffer : this.noiseBuffer;
+      s.loop = true;
+      s.playbackRate.value = rate;
+      s.start(t, nativeRandom() * 0.5);
+      s.stop(end + 0.05);
+      node = s;
+    } else {
+      const o = c.createOscillator();
+      o.type = src;
+      o.frequency.setValueAtTime(freq, t);
+      if (to) o.frequency.exponentialRampToValueAtTime(Math.max(to, 1), t + (glide ?? dur));
+      if (vib) {
+        const lfo = c.createOscillator();
+        const depth = c.createGain();
+        lfo.frequency.value = vibRate;
+        depth.gain.value = vib;
+        lfo.connect(depth).connect(o.frequency);
+        lfo.start(t);
+        lfo.stop(end + 0.05);
+      }
+      o.start(t);
+      o.stop(end + 0.05);
+      node = o;
+    }
+    if (filter) {
+      const f = c.createBiquadFilter();
+      f.type = filter;
+      f.Q.value = q;
+      f.frequency.setValueAtTime(ffreq, t);
+      if (fto) f.frequency.exponentialRampToValueAtTime(Math.max(fto, 20), t + (fglide ?? dur));
+      node.connect(f);
+      node = f;
+    }
+    if (drive) {
+      const w = c.createWaveShaper();
+      w.curve = this.driveCurve(drive);
+      node.connect(w);
+      node = w;
+    }
+    const g = c.createGain();
+    const peak = Math.min(attack, dur * 0.9);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + Math.max(0.002, peak));
+    g.gain.exponentialRampToValueAtTime(0.0001, end);
+    node.connect(g);
+    g.connect(this.sfxBus);
+    if (wet) {
+      const send = c.createGain();
+      send.gain.value = wet;
+      g.connect(send).connect(this.verbSend);
+    }
+  },
+
+  /**
+   * Crackle: a spray of tiny random clicks (fire, electricity, ice). rate clicks a second
+   * for dur, filtered round freq; grow > 0 makes them come thicker toward the end.
+   */
+  crackle({ dur = 0.5, rate = 60, vol = 0.2, delay = 0, freq = 3000, filter = 'highpass', wet = 0, grow = 0 } = {}) {
+    const n = Math.round(rate * dur);
+    for (let i = 0; i < n; i++) {
+      const k = nativeRandom();
+      const at = delay + dur * (grow ? Math.pow(k, 1 / (1 + grow)) : k);
+      this.layer({ src: 'noise', dur: 0.004 + nativeRandom() * 0.012, attack: 0.001, vol: vol * (0.3 + nativeRandom() * 0.7), delay: at,
+        filter, ffreq: freq * (0.6 + nativeRandom() * 0.9), q: 0.8, wet });
+    }
+  },
+
+  /** A struck blade or bell: inharmonic partials that ring and die away (metal: true) or harmonic ones (a chime). */
+  ring({ freq = 2000, dur = 0.5, vol = 0.05, delay = 0, wet = 0.2, metal = true } = {}) {
+    const ratios = metal ? [1, 2.32, 4.25, 6.63] : [1, 2, 3, 4.01];
+    ratios.forEach((r, i) => this.layer({ src: 'sine', freq: freq * r, dur: dur / (1 + i * 0.6), attack: 0.002, vol: vol / (1 + i * 0.9), delay, wet }));
+  },
+
+  /** A whoosh: noise through a resonant band sweeping from -> to, swelling up then away. */
+  whoosh({ from = 500, to = 3000, dur = 0.2, vol = 0.3, delay = 0, q = 1.2, swell = 0.45, wet = 0.05 } = {}) {
+    this.layer({ src: 'noise', dur, attack: dur * swell, vol, delay, filter: 'bandpass', ffreq: from, fto: to, q, wet });
   },
 
   /** Music / SFX loudness from Settings (music muted when toggled off). */
@@ -121,9 +260,12 @@ const SFX = {
   arrowRain: (s) => s.noise({ dur: 0.06, vol: 0.12, filter: 'bandpass', freq: 2200, q: 3 }),
 
   // --- Mage ---
+  // a spell going off: a shimmering rise with sparkles twinkling over it
   magic: (s) => {
-    s.tone({ type: 'sine', freq: 880, to: 1500, dur: 0.12, vol: 0.12 });
-    s.tone({ type: 'square', freq: 1320, to: 1800, dur: 0.06, vol: 0.03 });
+    const p = s.vary(1, 0.06);
+    s.layer({ src: 'sine', freq: 740 * p, to: 1480 * p, dur: 0.3, attack: 0.02, vol: 0.08, vib: 30, vibRate: 18, wet: 0.4 });
+    [1976, 2637, 3136].forEach((f, i) => s.layer({ src: 'sine', freq: f * p, dur: 0.25, vol: 0.025, delay: 0.03 + i * 0.035, wet: 0.5 }));
+    s.layer({ src: 'noise', dur: 0.25, attack: 0.05, vol: 0.05, filter: 'highpass', ffreq: 7500, wet: 0.4 });
   },
   fireballCast: (s) => {
     s.noise({ dur: 0.3, vol: 0.2, filter: 'lowpass', freq: 600, to: 2000 });
@@ -139,6 +281,321 @@ const SFX = {
   dash: (s) => {
     s.noise({ dur: 0.2, vol: 0.25, filter: 'bandpass', freq: 600, to: 3000, q: 1 });
     s.tone({ type: 'square', freq: 300, to: 900, dur: 0.12, vol: 0.06 });
+  },
+
+  // --- Hero attacks: each ability its own sound ---
+  // Built from layered noise, rings and crackle with a touch of reverb (see Sound.layer),
+  // and every play varies a little, so repeated attacks don't sound like the same clip.
+
+  // Knight
+  // a sword cut: the blade whistling through the air, then a steel "shing" ringing after it
+  swordSwing: (s) => {
+    const p = s.vary(1, 0.1);
+    s.whoosh({ from: 350 * p, to: 3200 * p, dur: 0.17, vol: 0.4, q: 1.4, swell: 0.55 });
+    s.layer({ src: 'noise', dur: 0.12, attack: 0.07, vol: 0.09, filter: 'highpass', ffreq: 6000 });
+    s.ring({ freq: s.vary(2600), dur: 0.45, vol: 0.035, delay: 0.07, wet: 0.25 });
+  },
+  // the finishing stab: a short hard thrust and the point biting home
+  swordStab: (s) => {
+    s.whoosh({ from: 900, to: s.vary(5200), dur: 0.11, vol: 0.38, q: 2, swell: 0.7 });
+    s.ring({ freq: s.vary(3300), dur: 0.3, vol: 0.04, delay: 0.06, wet: 0.2 });
+    s.layer({ src: 'sine', freq: 160, to: 55, dur: 0.14, vol: 0.22, delay: 0.08 });
+    s.layer({ src: 'brown', dur: 0.12, vol: 0.25, delay: 0.08, filter: 'lowpass', ffreq: 700 });
+  },
+  // raising the shield: steel lifted with a scrape, and the barrier humming up round it
+  shieldRaise: (s) => {
+    s.layer({ src: 'noise', dur: 0.14, attack: 0.05, vol: 0.12, filter: 'bandpass', ffreq: 2500, fto: 4500, q: 6 });
+    s.layer({ src: 'sine', freq: 220, to: 330, dur: 0.5, attack: 0.08, vol: 0.09, vib: 6, vibRate: 9, wet: 0.3 });
+    s.layer({ src: 'triangle', freq: 660, to: 990, dur: 0.4, attack: 0.1, vol: 0.03, wet: 0.4 });
+  },
+  // the shield bash: a heavy body-blow of steel, dull and booming
+  shieldBash: (s) => {
+    s.layer({ src: 'brown', dur: 0.35, vol: 0.6, filter: 'lowpass', ffreq: 900, fto: 150 });
+    s.layer({ src: 'sine', freq: s.vary(120), to: 45, dur: 0.3, vol: 0.4 });
+    s.ring({ freq: s.vary(780), dur: 0.5, vol: 0.06, wet: 0.25 });
+    s.layer({ src: 'noise', dur: 0.03, vol: 0.4, filter: 'highpass', ffreq: 2500 });
+  },
+  // the whirlwind winding up: a long rising whoosh with a blade's ring at its peak
+  whirlwindStart: (s) => {
+    s.whoosh({ from: 250, to: 2800, dur: 0.45, vol: 0.35, q: 1, swell: 0.8 });
+    s.ring({ freq: s.vary(2100), dur: 0.5, vol: 0.03, delay: 0.35, wet: 0.3 });
+  },
+  // each turn of the whirlwind: the blade sweeping past and away (rising, then falling)
+  whirlwindSpin: (s) => {
+    const p = s.vary(1, 0.12);
+    s.whoosh({ from: 500 * p, to: 2600 * p, dur: 0.14, vol: 0.32, q: 1.5, swell: 0.8 });
+    s.whoosh({ from: 2600 * p, to: 700 * p, dur: 0.16, vol: 0.22, q: 1.5, swell: 0.1, delay: 0.12 });
+  },
+  // bracing for the charge: armour jangling and a growl of effort
+  chargeWindup: (s) => {
+    for (let i = 0; i < 5; i++) s.ring({ freq: s.vary(3400, 0.25), dur: 0.09, vol: 0.02, delay: i * 0.035 + nativeRandom() * 0.02, wet: 0.1 });
+    s.layer({ src: 'sawtooth', freq: 90, to: 140, dur: 0.35, attack: 0.1, vol: 0.08, filter: 'lowpass', ffreq: 500 });
+  },
+  // the charge: a rush of wind, heavy armoured footfalls and jangling plate
+  chargeRush: (s) => {
+    s.layer({ src: 'brown', dur: 0.55, attack: 0.08, vol: 0.45, filter: 'lowpass', ffreq: 400, fto: 1600 });
+    s.whoosh({ from: 600, to: 2400, dur: 0.4, vol: 0.18, q: 0.8, swell: 0.3 });
+    for (let i = 0; i < 3; i++) {
+      s.layer({ src: 'sine', freq: 95, to: 40, dur: 0.12, vol: 0.35, delay: i * 0.12 });
+      s.ring({ freq: s.vary(3200, 0.2), dur: 0.08, vol: 0.02, delay: i * 0.12 + 0.02, wet: 0 });
+    }
+  },
+  // World Cutter gathering: a deep drone swelling, power humming in the steel
+  worldCutterCharge: (s) => {
+    s.layer({ src: 'sawtooth', freq: 55, to: 110, dur: 1.1, attack: 0.8, vol: 0.18, filter: 'lowpass', ffreq: 250, fto: 1800, vib: 3, vibRate: 7 });
+    s.layer({ src: 'sine', freq: 880, to: 1760, dur: 1.0, attack: 0.9, vol: 0.04, vib: 12, vibRate: 11, wet: 0.5 });
+    s.layer({ src: 'noise', dur: 1.0, attack: 0.9, vol: 0.08, filter: 'bandpass', ffreq: 400, fto: 4000, q: 2, wet: 0.3 });
+  },
+  // World Cutter: one colossal slice through the air, the steel ringing, the ground splitting
+  worldCutter: (s) => {
+    s.whoosh({ from: 180, to: 5000, dur: 0.32, vol: 0.55, q: 0.9, swell: 0.5, wet: 0.2 });
+    s.ring({ freq: s.vary(1500), dur: 1.2, vol: 0.06, delay: 0.18, wet: 0.5 });
+    s.layer({ src: 'brown', dur: 1.4, vol: 0.75, delay: 0.16, filter: 'lowpass', ffreq: 500, fto: 60, wet: 0.4 });
+    s.layer({ src: 'sine', freq: 60, to: 26, dur: 1.0, vol: 0.55, delay: 0.16 });
+    s.crackle({ dur: 0.7, rate: 70, vol: 0.18, delay: 0.2, freq: 1500, filter: 'bandpass' });
+  },
+  // a blow turned aside by the shield: a bright, ringing clang
+  blockClang: (s) => {
+    s.layer({ src: 'noise', dur: 0.03, vol: 0.45, filter: 'highpass', ffreq: 3000 });
+    s.ring({ freq: s.vary(1450), dur: 0.7, vol: 0.09, wet: 0.35 });
+    s.layer({ src: 'brown', dur: 0.12, vol: 0.3, filter: 'lowpass', ffreq: 800 });
+  },
+  // a shot hitting the magic barrier: a soft, humming "wub" of force
+  barrierHit: (s) => {
+    s.layer({ src: 'sine', freq: s.vary(460), to: 300, dur: 0.22, vol: 0.14, vib: 25, vibRate: 30, wet: 0.2 });
+    s.layer({ src: 'noise', dur: 0.08, vol: 0.12, filter: 'bandpass', ffreq: 1800, q: 3 });
+  },
+  // the barrier giving way: a sheet of magic glass shattering
+  barrierBreak: (s) => {
+    for (let i = 0; i < 12; i++) s.ring({ freq: 2200 + nativeRandom() * 4500, dur: 0.15 + nativeRandom() * 0.35, vol: 0.025, delay: nativeRandom() * 0.25, wet: 0.3 });
+    s.layer({ src: 'noise', dur: 0.5, vol: 0.35, filter: 'highpass', ffreq: 3000, fto: 1200 });
+    s.layer({ src: 'brown', dur: 0.3, vol: 0.4, filter: 'lowpass', ffreq: 600 });
+    s.layer({ src: 'sine', freq: 600, to: 150, dur: 0.4, vol: 0.08, wet: 0.3 });
+  },
+
+  // Ranger
+  // loosing an arrow: the bowstring's twang (a resonant pluck) and the arrow hissing away
+  bowShot: (s) => {
+    const p = s.vary(1, 0.06);
+    s.layer({ src: 'sawtooth', freq: 140 * p, to: 115 * p, dur: 0.2, vol: 0.18, filter: 'lowpass', ffreq: 2400, fto: 300, q: 9 });
+    s.layer({ src: 'triangle', freq: 280 * p, to: 230 * p, dur: 0.12, vol: 0.08 });
+    s.whoosh({ from: 2500, to: 6500, dur: 0.12, vol: 0.14, q: 2, swell: 0.3, delay: 0.015 });
+  },
+  // a heavy elemental arrow: a deeper, fuller twang
+  bowShotHeavy: (s) => {
+    s.layer({ src: 'sawtooth', freq: s.vary(105), to: 80, dur: 0.28, vol: 0.22, filter: 'lowpass', ffreq: 2000, fto: 220, q: 10 });
+    s.layer({ src: 'triangle', freq: 210, to: 160, dur: 0.18, vol: 0.1 });
+    s.whoosh({ from: 1800, to: 5000, dur: 0.18, vol: 0.18, q: 1.5, swell: 0.3, delay: 0.02 });
+  },
+  // swift camo: a shimmer of light bending away, fading into a hush
+  camo: (s) => {
+    [1760, 1320, 990, 740].forEach((f, i) => s.layer({ src: 'sine', freq: f, to: f * 0.7, dur: 0.4, vol: 0.035, delay: i * 0.05, vib: 8, wet: 0.5 }));
+    s.layer({ src: 'noise', dur: 0.5, attack: 0.05, vol: 0.12, filter: 'highpass', ffreq: 7000, fto: 2500, wet: 0.3 });
+  },
+  // rapid fire: the bow creaking under a quick double draw
+  rapidFire: (s) => {
+    for (const d of [0, 0.1]) s.layer({ src: 'noise', dur: 0.09, attack: 0.04, vol: 0.18, filter: 'bandpass', ffreq: s.vary(700), fto: 1100, q: 14, delay: d });
+    s.layer({ src: 'noise', dur: 0.02, vol: 0.2, filter: 'highpass', ffreq: 3000, delay: 0.2 });
+  },
+  // the fire arrow loosed: it bursts alight with a "fwoomp", roaring and crackling as it flies
+  fireArrow: (s) => {
+    s.layer({ src: 'brown', dur: 0.6, attack: 0.07, vol: 0.55, filter: 'lowpass', ffreq: 300, fto: 1800, wet: 0.15 });
+    s.layer({ src: 'noise', dur: 0.55, attack: 0.12, vol: 0.12, filter: 'bandpass', ffreq: 900, fto: 2200, q: 0.7 });
+    s.crackle({ dur: 0.7, rate: 70, vol: 0.22, freq: 2400, delay: 0.05 });
+  },
+  // embers flung off a burning blade: a quick fiery whoosh and a few crackles
+  emberFlick: (s) => {
+    s.layer({ src: 'noise', dur: 0.22, attack: 0.04, vol: 0.18, filter: 'bandpass', ffreq: 700, fto: 2200, q: 0.8 });
+    s.crackle({ dur: 0.3, rate: 40, vol: 0.12, freq: 2600 });
+  },
+  // the fire arrow landing: a whump of flame, crackling, and a sizzle
+  fireImpact: (s) => {
+    s.layer({ src: 'brown', dur: 0.5, vol: 0.55, filter: 'lowpass', ffreq: 1100, fto: 200 });
+    s.crackle({ dur: 0.9, rate: 55, vol: 0.2, freq: 2200 });
+    s.layer({ src: 'noise', dur: 0.6, attack: 0.1, vol: 0.06, filter: 'highpass', ffreq: 5000 });
+  },
+  // the ice arrow loosed: frost hissing off it and ice creaking and tinkling as it freezes
+  iceArrow: (s) => {
+    s.layer({ src: 'noise', dur: 0.5, attack: 0.1, vol: 0.14, filter: 'highpass', ffreq: 7000, fto: 4000, wet: 0.3 });
+    s.layer({ src: 'sawtooth', freq: 300, to: 900, dur: 0.3, attack: 0.05, vol: 0.05, filter: 'bandpass', ffreq: 1200, fto: 2400, q: 12 });
+    for (let i = 0; i < 6; i++) s.ring({ freq: 3000 + nativeRandom() * 3500, dur: 0.12, vol: 0.018, delay: 0.05 + nativeRandom() * 0.35, metal: false, wet: 0.4 });
+  },
+  // the ice arrow bursting: a sharp crack, ice spikes shattering up, a long freezing hiss
+  iceBurst: (s) => {
+    s.layer({ src: 'noise', dur: 0.06, vol: 0.5, filter: 'highpass', ffreq: 2000, drive: 4 });
+    s.crackle({ dur: 0.35, rate: 120, vol: 0.18, freq: 4500 });
+    for (let i = 0; i < 10; i++) s.ring({ freq: 2500 + nativeRandom() * 4000, dur: 0.2 + nativeRandom() * 0.3, vol: 0.022, delay: nativeRandom() * 0.2, metal: false, wet: 0.4 });
+    s.layer({ src: 'noise', dur: 1.1, attack: 0.05, vol: 0.18, filter: 'highpass', ffreq: 6000, fto: 2500, wet: 0.3 });
+    s.layer({ src: 'brown', dur: 0.3, vol: 0.35, filter: 'lowpass', ffreq: 500 });
+  },
+  // the volley loosed: a ripple of bowstrings and a great rush of arrows into the sky
+  volleyLoose: (s) => {
+    for (let i = 0; i < 7; i++) {
+      s.layer({ src: 'sawtooth', freq: s.vary(130, 0.15), to: 95, dur: 0.18, vol: 0.1, filter: 'lowpass', ffreq: 2200, fto: 300, q: 8, delay: i * 0.035 });
+    }
+    s.whoosh({ from: 800, to: 5000, dur: 0.6, vol: 0.25, q: 0.8, swell: 0.6, wet: 0.2 });
+  },
+  // each arrow of the volley coming down: a falling whistle and a thunk
+  arrowRain: (s) => {
+    s.layer({ src: 'noise', dur: 0.12, attack: 0.08, vol: 0.12, filter: 'bandpass', ffreq: s.vary(4200, 0.2), fto: 1800, q: 7 });
+    s.layer({ src: 'brown', dur: 0.05, vol: 0.18, delay: 0.11, filter: 'lowpass', ffreq: 900 });
+  },
+
+  // Mage
+  // a magic missile: a sparkling, shimmering bolt of arcane light
+  arcaneBolt: (s) => {
+    const p = s.vary(1, 0.08);
+    s.layer({ src: 'sine', freq: 660 * p, to: 1320 * p, dur: 0.25, vol: 0.09, vib: 40, vibRate: 22, wet: 0.35 });
+    [1568, 2093, 2637].forEach((f, i) => s.layer({ src: 'sine', freq: f * p, dur: 0.22, vol: 0.035, delay: 0.02 + i * 0.03, wet: 0.45 }));
+    s.layer({ src: 'noise', dur: 0.18, attack: 0.02, vol: 0.07, filter: 'highpass', ffreq: 8000, wet: 0.3 });
+  },
+  // the frostfire ball cast: a roar of flame laced with an icy shimmer
+  frostfireCast: (s) => {
+    s.layer({ src: 'brown', dur: 0.55, attack: 0.1, vol: 0.5, filter: 'lowpass', ffreq: 300, fto: 1600, wet: 0.2 });
+    s.crackle({ dur: 0.5, rate: 50, vol: 0.15, freq: 2200 });
+    [2349, 2794, 3136].forEach((f, i) => s.layer({ src: 'sine', freq: f, dur: 0.5, attack: 0.15, vol: 0.025, delay: i * 0.05, vib: 20, vibRate: 14, wet: 0.5 }));
+  },
+  // the frostfire ball bursting: a deep boom of flame, crackling embers and ice tinkling down
+  frostfireBurst: (s) => {
+    s.layer({ src: 'brown', dur: 0.9, vol: 0.7, filter: 'lowpass', ffreq: 1200, fto: 80, wet: 0.3 });
+    s.layer({ src: 'sine', freq: 90, to: 32, dur: 0.6, vol: 0.4 });
+    s.crackle({ dur: 0.9, rate: 60, vol: 0.18, freq: 2000 });
+    for (let i = 0; i < 6; i++) s.ring({ freq: 3000 + nativeRandom() * 3000, dur: 0.25, vol: 0.02, delay: 0.1 + nativeRandom() * 0.4, metal: false, wet: 0.4 });
+  },
+  // picking a spell's target: two soft chime notes
+  spellAim: (s) => {
+    s.ring({ freq: 1320, dur: 0.5, vol: 0.04, metal: false, wet: 0.5 });
+    s.ring({ freq: 1760, dur: 0.5, vol: 0.03, delay: 0.06, metal: false, wet: 0.5 });
+  },
+  // lightning gathering: static crackling ever thicker, an electric buzz and a rising whine
+  thunderCharge: (s) => {
+    s.crackle({ dur: 0.6, rate: 140, vol: 0.22, freq: 3500, grow: 2 });
+    s.layer({ src: 'sawtooth', freq: 60, dur: 0.6, attack: 0.4, vol: 0.12, filter: 'bandpass', ffreq: 400, fto: 2500, q: 4, drive: 3 });
+    s.layer({ src: 'sine', freq: 600, to: 2400, dur: 0.6, attack: 0.5, vol: 0.04, vib: 30, vibRate: 25 });
+  },
+  // a lightning strike: a deafening crack, a burst of crackling sparks, then rolling thunder
+  thunderStrike: (s) => {
+    s.layer({ src: 'noise', dur: 0.08, vol: 0.7, drive: 6 });
+    s.layer({ src: 'sawtooth', freq: 2400, to: 90, dur: 0.22, vol: 0.12, drive: 5 });
+    s.crackle({ dur: 0.45, rate: 260, vol: 0.28, freq: 3000 });
+    s.crackle({ dur: 0.3, rate: 120, vol: 0.2, freq: 900, filter: 'bandpass', delay: 0.02 });
+    s.layer({ src: 'brown', dur: 1.6, attack: 0.05, vol: 0.7, delay: 0.06, filter: 'lowpass', ffreq: 260, fto: 70, wet: 0.5 });
+    s.layer({ src: 'brown', dur: 1.2, attack: 0.15, vol: 0.4, delay: 0.4, filter: 'lowpass', ffreq: 180, wet: 0.5 });
+  },
+  // turning into a bird: a puff of magic, wings beating and a bright chirp
+  birdForm: (s) => {
+    s.layer({ src: 'noise', dur: 0.3, attack: 0.03, vol: 0.2, filter: 'bandpass', ffreq: 1200, fto: 4000, q: 1, wet: 0.3 });
+    [1568, 2093].forEach((f, i) => s.layer({ src: 'sine', freq: f, dur: 0.3, vol: 0.04, delay: i * 0.04, wet: 0.5 }));
+    for (let i = 0; i < 4; i++) s.layer({ src: 'noise', dur: 0.09, attack: 0.03, vol: 0.22, filter: 'lowpass', ffreq: 700, delay: 0.12 + i * 0.09 });
+    for (const d of [0.2, 0.3]) s.layer({ src: 'sine', freq: 2600, to: 3900, dur: 0.06, vol: 0.06, delay: d });
+  },
+  // landing back in her own shape: a soft puff and a falling shimmer
+  birdLand: (s) => {
+    s.layer({ src: 'noise', dur: 0.3, attack: 0.02, vol: 0.2, filter: 'bandpass', ffreq: 3000, fto: 600, q: 1, wet: 0.3 });
+    s.layer({ src: 'sine', freq: 1760, to: 880, dur: 0.35, vol: 0.05, vib: 15, vibRate: 12, wet: 0.5 });
+  },
+  // the mana drain circle: a deep throb and power being drawn inward (shimmers falling toward it)
+  manaDrain: (s) => {
+    s.layer({ src: 'sine', freq: 55, to: 82, dur: 1.2, attack: 0.3, vol: 0.3, vib: 6, vibRate: 4 });
+    s.layer({ src: 'noise', dur: 1.0, attack: 0.8, vol: 0.18, filter: 'bandpass', ffreq: 3000, fto: 300, q: 3, wet: 0.4 });
+    [2637, 2093, 1568, 1175].forEach((f, i) => s.layer({ src: 'sine', freq: f, to: f * 0.5, dur: 0.6, vol: 0.03, delay: i * 0.12, wet: 0.5 }));
+  },
+
+  // Rogue
+  // a fan of thrown daggers: quick blades whistling out, a glint of steel on each
+  daggerFan: (s) => {
+    for (let i = 0; i < 3; i++) {
+      s.whoosh({ from: s.vary(1800), to: 6500, dur: 0.08, vol: 0.2, q: 2.5, swell: 0.4, delay: i * 0.03 });
+      s.ring({ freq: s.vary(4200, 0.15), dur: 0.15, vol: 0.012, delay: i * 0.03 + 0.03, wet: 0.1 });
+    }
+  },
+  // the dagger storm: blades whirring round her
+  daggerStorm: (s) => {
+    s.whoosh({ from: s.vary(1600), to: 4800, dur: 0.1, vol: 0.18, q: 2, swell: 0.5 });
+    s.ring({ freq: s.vary(3800, 0.2), dur: 0.1, vol: 0.012, delay: 0.05, wet: 0 });
+  },
+  // the dagger storm starting: blades drawn with a scrape and a ring
+  bladesDrawn: (s) => {
+    s.layer({ src: 'noise', dur: 0.25, attack: 0.1, vol: 0.18, filter: 'bandpass', ffreq: 2500, fto: 7000, q: 9 });
+    s.ring({ freq: 3600, dur: 0.5, vol: 0.04, delay: 0.2, wet: 0.3 });
+  },
+  // swift strike: a blur forward and a clean slice
+  swiftStrike: (s) => {
+    s.whoosh({ from: 400, to: 4500, dur: 0.16, vol: 0.32, q: 1, swell: 0.7 });
+    s.whoosh({ from: 5000, to: 2500, dur: 0.07, vol: 0.25, q: 2, swell: 0.1, delay: 0.13 });
+    s.ring({ freq: s.vary(3900), dur: 0.25, vol: 0.025, delay: 0.14, wet: 0.2 });
+  },
+  // parry stance: a blade drawn slowly across a blade
+  parryReady: (s) => {
+    s.layer({ src: 'noise', dur: 0.3, attack: 0.15, vol: 0.14, filter: 'bandpass', ffreq: 4500, fto: 2800, q: 10 });
+    s.ring({ freq: 2900, dur: 0.35, vol: 0.02, delay: 0.25, wet: 0.3 });
+  },
+  // a parried blow: a bright, ringing clash of steel on steel
+  parry: (s) => {
+    s.layer({ src: 'noise', dur: 0.04, vol: 0.5, filter: 'highpass', ffreq: 3000 });
+    s.ring({ freq: s.vary(1900), dur: 0.9, vol: 0.09, wet: 0.4 });
+    s.ring({ freq: s.vary(2650), dur: 0.7, vol: 0.06, wet: 0.4 });
+  },
+  // a marked target finished off: a sharp, cold sting of steel
+  markKill: (s) => {
+    s.whoosh({ from: 2000, to: 7000, dur: 0.07, vol: 0.25, q: 2, swell: 0.5 });
+    s.ring({ freq: 4400, dur: 0.4, vol: 0.04, delay: 0.05, wet: 0.35 });
+  },
+  // the clones appearing: a puff of smoke and a ghostly whisper
+  cloneSummon: (s) => {
+    s.layer({ src: 'noise', dur: 0.5, attack: 0.03, vol: 0.3, filter: 'lowpass', ffreq: 1800, fto: 250, wet: 0.3 });
+    for (const f of [1100, 2300]) s.layer({ src: 'noise', dur: 0.6, attack: 0.2, vol: 0.06, filter: 'bandpass', ffreq: f, fto: f * 1.4, q: 9, delay: 0.1, wet: 0.5 });
+  },
+  // a clone bursting: a puff of smoke and blades scattering
+  cloneBurst: (s) => {
+    s.layer({ src: 'noise', dur: 0.4, attack: 0.02, vol: 0.32, filter: 'lowpass', ffreq: 1500, fto: 200 });
+    for (let i = 0; i < 3; i++) s.whoosh({ from: 2000, to: 6000, dur: 0.07, vol: 0.12, q: 2, delay: 0.04 + i * 0.04 });
+  },
+
+  // Priestess
+  // calling the rays: a clear temple bell
+  holyChime: (s) => {
+    s.ring({ freq: 1047, dur: 1.2, vol: 0.07, metal: false, wet: 0.6 });
+    s.ring({ freq: 1568, dur: 0.9, vol: 0.04, delay: 0.05, metal: false, wet: 0.6 });
+  },
+  // a ray of light coming down: a shimmering column of sound with a warm glow under it
+  holyRay: (s) => {
+    [1568, 2093, 2637].forEach((f) => s.layer({ src: 'sine', freq: s.vary(f, 0.01), dur: 0.6, attack: 0.08, vol: 0.025, vib: 10, vibRate: 7, wet: 0.6 }));
+    s.layer({ src: 'noise', dur: 0.5, attack: 0.1, vol: 0.08, filter: 'highpass', ffreq: 6500, fto: 3000, wet: 0.4 });
+    s.layer({ src: 'sine', freq: 262, dur: 0.5, attack: 0.05, vol: 0.06, wet: 0.3 });
+  },
+  // light missiles: a quick rising cascade of bells, sparkling
+  lightMissiles: (s) => {
+    [1175, 1397, 1760, 2093, 2637].forEach((f, i) => s.ring({ freq: f, dur: 0.5, vol: 0.035, delay: i * 0.04, metal: false, wet: 0.5 }));
+    s.layer({ src: 'noise', dur: 0.3, attack: 0.05, vol: 0.06, filter: 'highpass', ffreq: 8000, wet: 0.4 });
+  },
+  // the healing rune: a warm swelling chord, like a choir's held note
+  healRune: (s) => {
+    [523, 659, 784, 1047].forEach((f, i) => s.layer({ src: 'triangle', freq: f, dur: 1.4, attack: 0.25, vol: 0.04, delay: i * 0.04, vib: 3, vibRate: 5, wet: 0.6 }));
+    s.ring({ freq: 2093, dur: 1, vol: 0.03, delay: 0.2, metal: false, wet: 0.6 });
+  },
+  // guardian aegis: a shield of light ringing up like a bell, humming
+  aegis: (s) => {
+    s.ring({ freq: 880, dur: 1.2, vol: 0.07, metal: false, wet: 0.6 });
+    s.layer({ src: 'sine', freq: 440, dur: 0.9, attack: 0.2, vol: 0.06, vib: 5, vibRate: 6, wet: 0.5 });
+    s.layer({ src: 'noise', dur: 0.4, attack: 0.15, vol: 0.06, filter: 'highpass', ffreq: 7000, wet: 0.5 });
+  },
+  // light bomb gathering: a heavenly choir swelling up
+  lightCharge: (s) => {
+    [262, 330, 392, 523].forEach((f, i) => s.layer({ src: 'sawtooth', freq: f, dur: 1.1, attack: 0.8, vol: 0.035, delay: i * 0.03,
+      filter: 'bandpass', ffreq: 900, q: 2, vib: 4, vibRate: 5.5, wet: 0.6 }));
+    s.layer({ src: 'sine', freq: 1047, to: 2093, dur: 1.0, attack: 0.9, vol: 0.03, wet: 0.6 });
+  },
+  // the light bomb thrown: a glowing whoosh trailing sparkles
+  lightBombThrow: (s) => {
+    s.whoosh({ from: 600, to: 3500, dur: 0.3, vol: 0.2, q: 1, swell: 0.5, wet: 0.2 });
+    s.layer({ src: 'sine', freq: 1320, to: 1980, dur: 0.3, vol: 0.04, vib: 30, vibRate: 18, wet: 0.5 });
+  },
+  // the light bomb bursting: a radiant chord of bells over a soft, deep boom
+  lightBomb: (s) => {
+    s.layer({ src: 'brown', dur: 0.9, vol: 0.55, filter: 'lowpass', ffreq: 900, fto: 90, wet: 0.4 });
+    [784, 988, 1175, 1568, 2093].forEach((f, i) => s.ring({ freq: f, dur: 1.4, vol: 0.04, delay: i * 0.02, metal: false, wet: 0.7 }));
+    s.crackle({ dur: 0.6, rate: 60, vol: 0.06, freq: 7000, delay: 0.05, wet: 0.4 });
   },
 
   // --- Combat ---
@@ -310,6 +767,53 @@ const SFX = {
     s.tone({ type: 'sawtooth', freq: 150, to: 95, dur: 0.6, vol: 0.2 });
     s.tone({ type: 'square', freq: 110, to: 70, dur: 0.6, vol: 0.12 });
     s.noise({ dur: 0.7, vol: 0.3, filter: 'lowpass', freq: 600, to: 80 });
+  },
+  // the King lifting his scepter: a rising golden shimmer
+  scepterRaise: (s) => {
+    s.tone({ type: 'triangle', freq: 330, to: 990, dur: 0.5, vol: 0.06 });
+    s.tone({ type: 'sine', freq: 660, to: 1320, dur: 0.5, vol: 0.03, delay: 0.05 });
+  },
+  // the scepter striking marble: a metal clang ringing over a deep crack
+  scepterSmite: (s) => {
+    s.noise({ dur: 0.05, vol: 0.35, filter: 'highpass', freq: 2200 });
+    s.tone({ type: 'triangle', freq: 740, dur: 0.6, vol: 0.09 });
+    s.tone({ type: 'triangle', freq: 1110 * 1.01, dur: 0.4, vol: 0.05 });
+    s.noise({ dur: 0.45, vol: 0.4, filter: 'lowpass', freq: 500, to: 50 });
+    s.tone({ type: 'sine', freq: 65, to: 30, dur: 0.4, vol: 0.3 });
+  },
+  // calling his guard: a low war horn, two notes
+  guardHorn: (s) => {
+    s.tone({ type: 'sawtooth', freq: 147, dur: 0.28, vol: 0.09 });
+    s.tone({ type: 'sawtooth', freq: 196, dur: 0.55, vol: 0.09, delay: 0.26 });
+    s.tone({ type: 'square', freq: 98, dur: 0.8, vol: 0.04 });
+  },
+  // the scepter thrown: a whirring, wobbling whoosh
+  scepterThrow: (s) => {
+    for (let i = 0; i < 4; i++) s.noise({ dur: 0.12, vol: 0.18, filter: 'bandpass', freq: 700 + i * 250, to: 400, q: 3, delay: i * 0.08 });
+    s.tone({ type: 'triangle', freq: 520, to: 260, dur: 0.35, vol: 0.05 });
+  },
+  // the scepter whirling where it landed: a short metallic whirr each turn
+  scepterWhirl: (s) => s.noise({ dur: 0.1, vol: 0.1, filter: 'bandpass', freq: 1600, to: 900, q: 4 }),
+  // a two-handed slam with the whole royal weight: a booming thud and a bell-like ring
+  royalSlam: (s) => {
+    s.noise({ dur: 0.6, vol: 0.55, filter: 'lowpass', freq: 400, to: 40 });
+    s.tone({ type: 'sine', freq: 55, to: 25, dur: 0.6, vol: 0.45 });
+    s.tone({ type: 'sine', freq: 220, dur: 1.0, vol: 0.07 });
+  },
+  // the greatsword sweep: a long heavy whoosh with a steel ring
+  greatswordSweep: (s) => {
+    s.noise({ dur: 0.45, vol: 0.35, filter: 'bandpass', freq: 300, to: 1400, q: 1 });
+    s.tone({ type: 'triangle', freq: 1500, to: 1200, dur: 0.35, vol: 0.04, delay: 0.1 });
+    s.tone({ type: 'square', freq: 90, to: 45, dur: 0.3, vol: 0.12 });
+  },
+  // his crown gathering light: a soft rising choir
+  crownCharge: (s) => {
+    [523, 659, 784].forEach((f, i) => s.tone({ type: 'sine', freq: f, to: f * 1.5, dur: 0.9, vol: 0.04, delay: i * 0.06 }));
+  },
+  // a ring of light bursting from the crown: a bright chord
+  crownBlast: (s) => {
+    [784, 988, 1175].forEach((f) => s.tone({ type: 'triangle', freq: f, dur: 0.4, vol: 0.05 }));
+    s.noise({ dur: 0.2, vol: 0.12, filter: 'highpass', freq: 3000 });
   },
   glass: (s) => {
     for (let i = 0; i < 5; i++) s.tone({ type: 'triangle', freq: 1800 + nativeRandom() * 1400, dur: 0.08, vol: 0.05, delay: i * 0.025 });

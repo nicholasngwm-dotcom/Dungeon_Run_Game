@@ -196,6 +196,128 @@ const CastleTiles = {
     if (edges.up) { p.rect(x, y, 32, 2, C.topRim); }
   },
 
+  // ---------- the Prince's training grounds ----------
+
+  /** Packed, sandy earth of a training yard: scuffs, pebbles and loose straw. */
+  yardDirt(p, x, y, rng) {
+    const D = ['#5a4632', '#5e4a35', '#56432f', '#614c37'];
+    p.rect(x, y, 32, 32, D[Math.floor(rng() * D.length)]);
+    for (let i = 0; i < 3; i++) {
+      p.ellipse(x + Math.floor(rng() * 32), y + Math.floor(rng() * 32), 4 + Math.floor(rng() * 5), 2 + Math.floor(rng() * 2), rng() < 0.5 ? '#4e3c2a' : '#6a553e');
+    }
+    for (let i = 0; i < 9; i++) p.px(x + Math.floor(rng() * 32), y + Math.floor(rng() * 32), rng() < 0.5 ? '#7a6448' : '#3e2f22');
+    // loose straw
+    for (let i = 0; i < 2; i++) {
+      if (rng() < 0.5) continue;
+      const sx = x + 3 + Math.floor(rng() * 24);
+      const sy = y + 3 + Math.floor(rng() * 26);
+      p.line(sx, sy, sx + 3 + Math.floor(rng() * 3), sy + (rng() < 0.5 ? 1 : -1), '#c8a456');
+    }
+    // boot scuffs
+    if (rng() < 0.25) {
+      const bx = x + 6 + Math.floor(rng() * 18);
+      const by = y + 6 + Math.floor(rng() * 18);
+      p.rect(bx, by, 3, 5, '#4a3826');
+      p.rect(bx + 5, by + 3, 3, 5, '#4a3826');
+    }
+  },
+
+  /**
+   * The chalk sparring ring and the crossed lines through its middle, drawn over the dirt of
+   * one tile (clipped to it), so the whole circle comes out exact across the yard.
+   * (cx, cy): the yard's centre in px; R: the ring's radius in px.
+   */
+  yardChalk(p, x, y, cx, cy, R) {
+    const ctx = p.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, 32, 32);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(232, 222, 196, 0.5)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, R, R * 0.72, 0, 0, TAU);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(232, 222, 196, 0.3)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, R - 7, (R - 7) * 0.72, 0, 0, TAU);
+    ctx.moveTo(cx - R * 0.5, cy);
+    ctx.lineTo(cx + R * 0.5, cy);
+    ctx.moveTo(cx, cy - R * 0.36);
+    ctx.lineTo(cx, cy + R * 0.36);
+    ctx.stroke();
+    ctx.restore();
+  },
+
+  // ---------- the Princess's magic study ----------
+
+  /** Polished midnight-blue floorboards set with thin gold inlay. */
+  studyFloor(p, x, y, rng, tx, ty) {
+    const B = ['#1e1a34', '#221d3a', '#1b1730', '#241f3e'];
+    const plank = (tx + ty) % 2;
+    for (let i = 0; i < 4; i++) {
+      const col = B[(i + plank + Math.floor(rng() * 2)) % B.length];
+      p.rect(x, y + i * 8, 32, 8, col);
+      p.rect(x, y + i * 8, 32, 1, '#2e2850');
+      p.rect(x, y + i * 8 + 7, 32, 1, '#141024');
+      p.px(x + ((i * 11 + tx * 7) % 30), y + i * 8 + 3, '#141024');   // a nail
+    }
+    // a gold inlay line round each square
+    p.rect(x, y, 32, 1, '#6a5426');
+    p.rect(x, y, 1, 32, '#6a5426');
+    if (rng() < 0.08) p.px(x + 4 + Math.floor(rng() * 24), y + 4 + Math.floor(rng() * 24), '#c49aff');   // a fleck of spilled stardust
+  },
+
+  /**
+   * The great rune circle inlaid in the study's floor (clipped to one tile, like yardChalk):
+   * two glowing rings, a six-pointed star between them and runes round the rim.
+   */
+  studyCircle(p, x, y, cx, cy, R) {
+    const ctx = p.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, 32, 32);
+    ctx.clip();
+    const ry = 0.72;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(150, 110, 255, 0.55)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, R, R * ry, 0, 0, TAU);
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(200, 170, 255, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, R * 0.82, R * 0.82 * ry, 0, 0, TAU);
+    ctx.stroke();
+    // the star
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(200, 170, 255, 0.4)';
+    for (const off of [0, Math.PI / 3]) {
+      ctx.beginPath();
+      for (let i = 0; i <= 3; i++) {
+        const a = off - Math.PI / 2 + (i / 3) * TAU;
+        const px = cx + Math.cos(a) * R * 0.8;
+        const py = cy + Math.sin(a) * R * 0.8 * ry;
+        if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+    }
+    // runes between the rings
+    ctx.fillStyle = 'rgba(220, 200, 255, 0.55)';
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * TAU;
+      const px = Math.round(cx + Math.cos(a) * R * 0.91);
+      const py = Math.round(cy + Math.sin(a) * R * 0.91 * ry);
+      const k = i % 3;
+      ctx.fillRect(px - 1, py - 2, 2, 4);
+      if (k === 0) ctx.fillRect(px - 2, py - 2, 4, 1);
+      else if (k === 1) ctx.fillRect(px - 2, py + 1, 4, 1);
+      else ctx.fillRect(px, py - 1, 2, 1);
+    }
+    ctx.restore();
+  },
+
   // ---------- the Queen's garden ----------
 
   /** Night-dark lawn with clover, pale moon-flowers and the odd fallen rose petal. */

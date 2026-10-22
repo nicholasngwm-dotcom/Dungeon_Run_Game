@@ -392,7 +392,7 @@ class Player extends Entity {
     }
     if (this.poisonTick > 0) return;
     this.poisonTick = 0.5;
-    if (world.practice && world.practice.options.god) return;
+    if (world.cheats?.god) return;
     const dmg = this.poisonDps * 0.5;
     this.hp -= dmg;
     this.sinceHurt = 0;
@@ -432,7 +432,7 @@ class Player extends Entity {
       if (a.t <= 0) { delete this.ailments[kind]; continue; }
       if (a.tick > 0) continue;
       a.tick = 0.5;
-      if (world.practice && world.practice.options.god) continue;
+      if (world.cheats?.god) continue;
       const dmg = a.dps * 0.5;
       this.hp -= dmg;
       this.sinceHurt = 0;
@@ -543,7 +543,7 @@ class Player extends Entity {
     if (this.brews.thorns) this.reflectDamage(amount * this.brew('thorns'), world, fromX, fromY, opts.projectile);
     this.onHitTaken(world);
     // practice god mode (after absorb, so parries and blocks can still be practised)
-    if (world.practice && world.practice.options.god) {
+    if (world.cheats?.god) {
       this.invulnerable = CONFIG.player.hurtInvulnerability; // so hit-counting passives tick at a normal rate
       return true;
     }

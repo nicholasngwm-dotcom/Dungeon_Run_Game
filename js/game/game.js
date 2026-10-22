@@ -50,11 +50,14 @@ class Game {
     this.time = 0;
     this.kills = 0;
     this.bannerData = null;
+    this.cutscene = null;     // a boss entrance in progress (beginBossIntro)
     this.finished = false;
     this.mouseWorld = { x: 0, y: 0 };
     this.actor = null;             // the hero whose turn it is (their attacks, their input)
     this.director = new WaveDirector(this);
     this.practice = opts.practice ? { options: opts.practice, log: [], total: 0, respawn: 0 } : null;
+    // practice cheats ({ god, infiniteMana, infiniteEnergy, noCooldowns }): the range's, or a boss arena's opened from it
+    this.cheats = opts.cheats || opts.practice || null;
     this.dummies = [];
     this.readyCheck = null;        // multiplayer lobby: { ready: { id: bool } } while the host waits at the gate
     if (this.practice) {
@@ -198,15 +201,20 @@ class Game {
   }
 
   /**
-   * Debuffs reach bosses too, all but plain stuns: a freeze can't lock a boss in ice,
-   * so it chills it instead (slowed for longer than the freeze would have lasted).
+   * Debuffs reach bosses too, all but plain stuns: a freeze locks a boss in ice (it can't
+   * move or attack) for freezeTime x the freeze's length. Once it thaws it can't be frozen
+   * again for freezeImmune seconds, so it can't be kept frozen forever.
    */
-  chillBoss(duration) {
+  freezeBoss(duration) {
     const b = this.boss;
-    if (!b) return;
+    if (!b || b.intro > 0 || b.dying > 0 || b.thawImmuneUntil > this.time) return;
     const c = CONFIG.bossDebuffs;
-    if (!(b.chillUntil > this.time)) this.effects.text(b.hx, b.hy - 60, 'CHILLED', { color: '#9ad0ff', size: 8 });
-    b.chillUntil = Math.max(b.chillUntil || 0, this.time + duration * c.chillTime);
+    if (b.frozenUntil > this.time) return;
+    b.frozenUntil = this.time + duration * c.freezeTime;
+    b.thawImmuneUntil = b.frozenUntil + c.freezeImmune;
+    this.effects.text(b.hx, b.hy - 60, 'FROZEN', { color: '#9ad0ff', size: 9 });
+    this.effects.shards(b.x, b.y - 10, { count: 14, speed: [80, 200], life: 0.45, len: [8, 14], width: 5 });
+    Sound.play('glass', 0.05);
   }
 
   /** Damage over time (bleed etc.), ticking twice a second; it belongs to the hero who applied it. */
@@ -415,7 +423,7 @@ class Game {
   /** Expanding ground ring that damages heroes/clones once as it passes. */
   addShockwave(x, y, { radius, speed, width, damage, color = '255, 150, 60' }) {
     // a weakened enemy's shockwave hits softer (weakenScale is set while it acts)
-    this.hazards.push({ x, y, r: 6, radius, speed, width, damage: damage * (this.weakenScale ?? 1), color, hit: new Set() });
+    this.hazards.push({ x, y, r: 6, radius, speed, width, damage: damage * (this.weakenScale ?? 1), color, hit: new Set(), clip: { ...this.dungeon.floorBounds } });   // drawn only inside the room it's in
   }
 
   updateHazards(dt) {
@@ -423,23 +431,45 @@ class Game {
       h.r += h.speed * dt;
       if (h.r >= h.radius) h.dead = true;
       for (const a of this.allies) {
-        if (h.hit.has(a) || Math.abs(dist(a.x, a.y, h.x, h.y) - h.r) > h.width) continue;
+        // measured on the same flattened ring that's drawn (0.7 as tall as it is wide)
+        if (h.hit.has(a) || Math.abs(Math.hypot(a.x - h.x, (a.y - h.y) / 0.7) - h.r) > h.width) continue;
         if (a.hurt(h.damage, this, h.x, h.y)) h.hit.add(a);
       }
     }
     removeDead(this.hazards);
   }
 
+  /**
+   * Shockwaves: a dark rolling band of dust with a bright crest along its front edge
+   * and debris kicked up as it passes, so it reads on any floor.
+   */
   drawHazards(ctx) {
     for (const h of this.hazards) {
       const fade = 1 - h.r / h.radius;
+      const ring = (dr, width, style) => {
+        ctx.strokeStyle = style;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.ellipse(h.x, h.y, Math.max(1, h.r + dr), Math.max(1, (h.r + dr) * 0.7), 0, 0, TAU);
+        ctx.stroke();
+      };
       ctx.save();
-      ctx.strokeStyle = `rgba(${h.color}, ${0.4 + 0.5 * fade})`;
-      ctx.lineWidth = h.width * 0.8;
+      const b = h.clip;
       ctx.beginPath();
-      ctx.ellipse(h.x, h.y, h.r, h.r * 0.7, 0, 0, TAU);
-      ctx.stroke();
+      ctx.rect(b.left, b.top - 40, b.right - b.left, b.bottom - b.top + 40);
+      ctx.clip();
+      ring(-h.width * 0.2, h.width * 1.3, `rgba(20, 14, 24, ${0.35 * fade + 0.1})`);   // shadowed trough behind the crest
+      ring(0, h.width * 0.9, `rgba(${h.color}, ${0.45 + 0.4 * fade})`);
+      ring(h.width * 0.35, 3, `rgba(255, 255, 255, ${0.5 + 0.5 * fade})`);           // the bright leading edge
+      ring(h.width * 0.35 + 3, 2, OUTLINE);
+      ctx.globalCompositeOperation = 'lighter';
+      ring(0, h.width * 1.6, `rgba(${h.color}, ${0.18 * fade + 0.06})`);
       ctx.restore();
+      // debris and sparks thrown up along the front (visual randomness only)
+      if (vrand(0, 1) < 0.7) {
+        const a = vrand(0, TAU);
+        this.effects.burst(h.x + Math.cos(a) * h.r, h.y + Math.sin(a) * h.r * 0.7, { count: 1, colors: [`rgb(${h.color})`, '#ffffff', '#5e5a6c'], speed: [20, 60], life: [0.2, 0.4], up: 50 });
+      }
     }
   }
 
@@ -466,12 +496,48 @@ class Game {
     this.boss = Game.createBoss(type, this.dungeon.center);
     this.boss.maxHp = Math.round(this.boss.maxHp * this.playerScale.hp);
     this.boss.hp = this.boss.maxHp;
-    const announce = () => {
-      this.banner(this.boss.name, this.boss.title, 3);
-      Sound.play('bossRoar');
-    };
-    if ('onReveal' in this.boss) this.boss.onReveal = announce;   // announced when its entrance reveals it
-    else announce();
+    this.beginBossIntro();
+  }
+
+  /**
+   * A boss's entrance, played as a cutscene: the heroes stand still while the camera
+   * pans over to the boss, its entrance plays out, then its title card strikes across
+   * the screen (HUD.drawBossCard). Only then does the fight start. subtitle: the card's
+   * second line (the boss's title by default).
+   */
+  beginBossIntro(subtitle = null) {
+    const b = this.boss;
+    this.cutscene = { stage: 'pan', t: 0, subtitle: subtitle || b.title };
+    if ('onReveal' in b) b.onReveal = () => Sound.play('bossRoar');
+  }
+
+  /** Steps the cutscene: pan (boss waits), intro (only its entrance runs), card (everyone waits). */
+  updateCutscene(dt) {
+    const cs = this.cutscene;
+    const b = this.boss;
+    const c = CONFIG.bossIntro;
+    if (!b) { this.cutscene = null; return; }
+    cs.t += dt;
+    if (cs.stage === 'pan') {
+      if ('time' in b) b.time += dt;
+      if (cs.t >= c.pan) { cs.stage = 'intro'; cs.t = 0; }
+    } else if (cs.stage === 'intro') {
+      b.update(dt, this);
+      if (!(b.intro > 0)) {
+        cs.stage = 'card';
+        cs.t = 0;
+        Sound.play('swordDraw');
+        Sound.play('impact');
+        if (!('onReveal' in b)) Sound.play('bossRoar');
+        this.shake(5, 0.3);
+      }
+    } else {
+      if ('time' in b) b.time += dt;
+      if (cs.t >= c.card) {
+        this.cutscene = null;
+        this.cameraEase = 0.7;   // the camera glides back to the heroes
+      }
+    }
   }
 
   static rollBoss() {
@@ -492,6 +558,8 @@ class Game {
     if (type === 'phantom') return new PhantomKing(center.x, center.y);
     if (type === 'queen') return new Queen(center.x, center.y);
     if (type === 'king') return new King(center.x, center.y);
+    if (type === 'prince') return new RoyalPrince(center.x, center.y);
+    if (type === 'princess') return new RoyalPrincess(center.x, center.y);
     return new Golem(center.x, center.y + 40);
   }
 
@@ -606,11 +674,59 @@ class Game {
     Sound.play('pickup');
   }
 
+  /** Practice range: an enemy spawned on request (bosses are fought in their arenas, see openBossPortal). */
   practiceSpawn(type) {
-    if (type !== 'golem' && type !== 'phantom') return this.spawnEnemy(type);
-    if (this.boss) return;
-    this.boss = Game.createBoss(type, this.dungeon.center);
-    Sound.play('bossRoar');
+    return this.spawnEnemy(type);
+  }
+
+  /**
+   * Practice range: a portal to a boss's own room opens beside the hero. Walking into it
+   * takes them to a small entrance room leading to that boss (see App.startBossPractice).
+   */
+  openBossPortal(boss) {
+    const p = this.player;
+    const pt = this.dungeon.freePoint(p.x + 90, p.y, 20, 14);
+    this.practice.portal = { boss, x: pt.x, y: pt.y, t: 0, used: false };
+    this.effects.burst(pt.x, pt.y - 20, { count: 30, colors: ['#b45aff', '#e0c0ff', '#ffffff'], speed: [40, 160], life: [0.3, 0.7] });
+    Sound.play('phantomAppear');
+    const name = { golem: 'THE CLAY GOLEM', phantom: 'THE PHANTOM KING', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[boss] || boss.toUpperCase();
+    this.banner('A PORTAL OPENS', `Step in to face ${name}`, 2.4);
+  }
+
+  /** The boss portal waits for the hero to step into it. */
+  updateBossPortal(dt) {
+    const P = this.practice.portal;
+    if (!P || P.used) return;
+    P.t += dt;
+    const p = this.player;
+    if (P.t > 0.4 && !p.dead && dist(p.x, p.y, P.x, P.y) < 26) {
+      P.used = true;
+      Sound.play('phantomVanish');
+      this.events.onBossArena?.(P.boss);
+    }
+  }
+
+  /** The boss portal: rings of violet light rippling out of a bright core, with its boss's name over it. */
+  drawBossPortal(ctx) {
+    const P = this.practice && this.practice.portal;
+    if (!P) return;
+    const { x, y } = P;
+    const grow = Math.min(1, P.t / 0.4);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 4; i++) {
+      const r = ((P.t * 30 + i * 12) % 48) * grow;
+      ctx.strokeStyle = `rgba(180, 90, 255, ${0.8 * (1 - r / 48)})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(x, y, Math.max(1, r), Math.max(1, r * 0.55), 0, 0, TAU);
+      ctx.stroke();
+    }
+    PFX.glow(ctx, x, y, 40 * grow, '200, 140, 255', 0.8, 2, 24 * grow);
+    ctx.restore();
+    const name = { golem: 'CLAY GOLEM', phantom: 'PHANTOM KING', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[P.boss] || P.boss.toUpperCase();
+    HUD.text(ctx, `TO ${name}`, Math.round(x), Math.round(y - 50), { size: 7, align: 'center', color: '#e0c0ff' });
+    HUD.text(ctx, 'STEP IN', Math.round(x), Math.round(y - 40), { size: 5, align: 'center', color: '#ffe680' });
   }
 
   clearEnemies() {
@@ -637,16 +753,24 @@ class Game {
     return log.reduce((s, e) => s + e.dmg, 0) / span;
   }
 
-  updatePractice(dt) {
-    const pr = this.practice;
-    const o = pr.options;
+  /** The practice cheats on the local hero: full mana / light / energy, and abilities and dodge always ready. */
+  applyCheats() {
+    const o = this.cheats;
     const p = this.player;
     // infinite mana also covers the Priestess's light orbs
     if (p.resource && ((p.resource.name !== 'ENERGY' && o.infiniteMana) || (p.resource.name === 'ENERGY' && o.infiniteEnergy))) {
       p.resource.value = p.resource.max;
     }
+    // no cooldowns on RMB / E / F and the dodge (the basic attack keeps its own rate)
+    if (o.noCooldowns) for (const k of ['secondary', 'e', 'f', 'dodge']) p.cooldowns[k] = Math.min(p.cooldowns[k], 0);
+  }
+
+  updatePractice(dt) {
+    const pr = this.practice;
+    const p = this.player;
     while (pr.log.length && pr.log[0].t < this.time - 5) pr.log.shift();
     for (const d of this.dummies) d.update(dt);
+    this.updateBossPortal(dt);
 
     // no game over in practice: respawn instead
     if (p.dead && pr.respawn <= 0) {
@@ -698,7 +822,7 @@ class Game {
       if (this.lobby) this.lobby.interact(p);
       if (this.run && !this.finished) this.run.preUpdate(p);
       this.updateRevive(p, dt);
-      if (!p.dead) p.update(dt, this);
+      if (!p.dead && !this.cutscene) p.update(dt, this);   // the heroes wait out a boss's entrance
     }
     Input.override = null;
     this.decayRevives(dt);
@@ -721,12 +845,21 @@ class Game {
       if (this.boss.sleepMeter > 0 && this.boss.lullabyTick !== this.time) {
         this.boss.sleepMeter = Math.max(0, this.boss.sleepMeter - CONFIG.classes.bard.lullaby.meterDecay * dt);
       }
-      // a chilled boss (frozen by ice) moves and attacks at a fraction of its speed
-      const chill = this.boss.chillUntil > this.time ? CONFIG.bossDebuffs.chillSpeed : 1;
-      if (chill < 1 && vrand(0, 1) < dt * 10) {
-        this.effects.burst(this.boss.hx + vrand(-30, 30), this.boss.hy + vrand(-30, 20), { count: 1, colors: ['#e6f6ff', '#9ad0ff'], speed: [5, 20], life: [0.4, 0.8], up: 20, size: [1, 3] });
+      // a frozen boss (ice) can't move or attack at all until it thaws
+      const frozen = this.boss.frozenUntil > this.time;
+      if (frozen) {
+        this.boss.flashTime -= dt;
+        if (vrand(0, 1) < dt * 12) {
+          this.effects.burst(this.boss.hx + vrand(-30, 30), this.boss.hy + vrand(-30, 20), { count: 1, colors: ['#e6f6ff', '#9ad0ff'], speed: [5, 20], life: [0.4, 0.8], up: 20, size: [1, 3] });
+        }
+        if (this.boss.frozenUntil - this.time <= dt) {
+          // it thaws: the ice shatters off it
+          this.effects.shards(this.boss.x, this.boss.y - 20, { count: 20, speed: [100, 260], life: 0.5, len: [8, 16], width: 6 });
+          Sound.play('glass', 0.05);
+        }
       }
-      if (!(this.boss.sleepUntil > this.time)) this.boss.update(dt * chill, this);
+      if (this.cutscene) this.updateCutscene(dt);
+      else if (!(this.boss.sleepUntil > this.time) && !frozen) this.boss.update(dt, this);
       this.weakenScale = Projectile.enemyScale = 1;
       this.bossFocus = null;
       if (this.boss.dead) this.boss = null;
@@ -743,6 +876,7 @@ class Game {
 
     this.updateDots(dt);
     this.updateHazards(dt);
+    if (this.cheats) this.applyCheats();
     if (this.practice) this.updatePractice(dt);
     else if (this.lobby) this.dummies.forEach((d) => d.update(dt));
     else if (this.run) { if (!this.finished) this.run.update(dt); }
@@ -775,9 +909,16 @@ class Game {
       if (this.bannerData.t <= 0) this.bannerData = null;
     }
 
-    // the camera follows this screen's hero (or a living teammate while they're down)
-    const view = this.cameraTarget;
-    this.camera.follow(view.x, view.y - 16, dt, this.dungeon.width, this.dungeon.height);
+    // the camera follows this screen's hero (or a living teammate while they're down);
+    // during a boss's entrance it pans over to the boss, then glides back
+    if (this.cutscene && this.boss) {
+      this.camera.follow(this.boss.x, this.boss.y - 50, dt, this.dungeon.width, this.dungeon.height, false, 0.03);
+    } else {
+      const view = this.cameraTarget;
+      this.cameraEase = Math.max(0, (this.cameraEase || 0) - dt);
+      this.camera.follow(view.x, view.y - 16, dt, this.dungeon.width, this.dungeon.height, false, this.cameraEase > 0 ? 0.01 : 0.0001);
+    }
+    if (this.cutscene && !this.boss) this.cutscene = null;
 
     if (!this.finished && !this.practice && this.players.every((p) => p.dead)) {
       this.finished = true;
@@ -867,6 +1008,7 @@ class Game {
     this.camera.apply(ctx);
     this.dungeon.draw(ctx, this.camera);
     if (this.lobby) this.lobby.drawGround(ctx);
+    if (this.practice) this.drawBossPortal(ctx);
     if (this.run) this.run.drawGround(ctx);
     this.effects.drawGround(ctx);
     this.drawHazards(ctx);
@@ -902,9 +1044,9 @@ class Game {
     for (const p of this.playerProjectiles) p.draw(ctx);
     for (const p of this.enemyProjectiles) p.draw(ctx);
     if (this.boss) this.boss.drawOverlay(ctx);
-    if (this.boss && this.boss.chillUntil > this.time) this.drawBossChill(ctx);
+    if (this.boss && this.boss.frozenUntil > this.time) this.drawBossFrozen(ctx);
     this.effects.draw(ctx);
-    if (this.boss) HUD.drawBossBars(ctx, this.boss);
+    if (this.boss && !this.cutscene) HUD.drawBossBars(ctx, this.boss);
     this.dungeon.drawTorches(ctx, this.time, this.camera);
     if (this.lobby) this.lobby.drawLighting(ctx, this.camera);   // night falls over the keep (under the prompts and names)
     if (this.lobby) this.lobby.drawPrompts(ctx);
@@ -913,24 +1055,66 @@ class Game {
     this.effects.drawTexts(ctx);
     ctx.restore();
 
+    if (this.run) ctx.globalAlpha = 0.55;   // a softer vignette in the dungeons
     ctx.drawImage(this.vignette, 0, 0);
+    ctx.globalAlpha = 1;
     if (!this.showcase) HUD.draw(ctx, this);
   }
 
-  /** A chilled boss: frost glinting over it, a pale blue cast and an icy ring at its feet. */
-  drawBossChill(ctx) {
+  /**
+   * A frozen boss: locked in a block of ice sized to its body (lit facet on the left,
+   * shaded on the right, a jagged top), a glint sweeping across it and icicles at its feet.
+   */
+  drawBossFrozen(ctx) {
     const b = this.boss;
-    const left = b.chillUntil - this.time;
-    const a = Math.min(1, left * 2);
+    const left = b.frozenUntil - this.time;
+    const a = Math.min(1, left * 3);
+    const x = Math.round(b.x);
+    const y = Math.round(b.y + 4);
+    const h = Math.round(Math.max(60, (b.y - b.hy) * 2 + 16));
+    const w = Math.round(Math.max(44, (b.hw || 12) * 2 + 24));
+    const top = y - h;
+    // the outline of the block: straight sides, a jagged crystal top
+    const pts = [[x - w / 2, y], [x - w / 2, top + 14], [x - w / 4, top + 4], [x - 4, top + 12], [x + 6, top], [x + w / 4 + 2, top + 10], [x + w / 2, top + 6], [x + w / 2, y]];
+    const shape = () => {
+      ctx.beginPath();
+      pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+      ctx.closePath();
+    };
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    PFX.glow(ctx, b.hx, b.hy, 70, '140, 200, 255', 0.45 * a, 2, 60);
-    ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = a;
-    PFX.ring(ctx, b.x, b.y, 46, 18, '#9ad0ff', 2, { dash: [4, 3], spin: this.time * 0.6 });
-    for (let i = 0; i < 6; i++) {
-      const ang = this.time * 0.8 + (i / 6) * TAU;
-      PFX.shard(ctx, b.x + Math.cos(ang) * 40, b.y + Math.sin(ang) * 15 - 4, -Math.PI / 2, 10, 4, ICE_COLORS, 2);
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, x, y - h / 2, w, '140, 200, 255', 0.35, 2, h * 0.6);
+    ctx.globalCompositeOperation = 'source-over';
+    shape();
+    ctx.fillStyle = 'rgba(150, 210, 255, 0.32)';
+    ctx.fill();
+    ctx.save();
+    shape();
+    ctx.clip();
+    ctx.fillStyle = 'rgba(230, 246, 255, 0.22)';           // the lit facet
+    ctx.fillRect(x - w / 2, top, w * 0.3, h);
+    ctx.fillStyle = 'rgba(40, 90, 160, 0.25)';             // the shaded facet
+    ctx.fillRect(x + w * 0.22, top, w * 0.3, h);
+    const g = ((this.time * 0.7) % 1.6) - 0.3;             // a glint sweeping across
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2 + g * w, y);
+    ctx.lineTo(x - w / 2 + g * w + 8, y);
+    ctx.lineTo(x - w / 2 + g * w + 8 + h * 0.4, top);
+    ctx.lineTo(x - w / 2 + g * w + h * 0.4, top);
+    ctx.fill();
+    ctx.restore();
+    shape();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#e6f6ff';
+    ctx.stroke();
+    for (let i = 0; i < 5; i++) {
+      const sx = x - w / 2 - 6 + (i * (w + 12)) / 4;
+      PFX.shard(ctx, sx, y + 2, -Math.PI / 2 + (i - 2) * 0.3, 10 + (i % 2) * 5, 5, ICE_COLORS, 2);
     }
     ctx.restore();
   }

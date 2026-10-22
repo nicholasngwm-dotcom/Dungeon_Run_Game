@@ -105,8 +105,9 @@ class CastleKeep extends Dungeon {
     this.obstacles.push({ x, y, w, h });
   }
 
-  boxHitsWall(x, y, hw, hh) {
-    if (super.boxHitsWall(x, y, hw, hh)) return true;
+  boxHitsWall(x, y, hw, hh, flying = false) {
+    if (super.boxHitsWall(x, y, hw, hh, flying)) return true;
+    if (flying) return false;   // fliers pass over furniture
     for (const o of this.obstacles) {
       if (x + hw > o.x && x - hw < o.x + o.w && y + hh > o.y && y - hh < o.y + o.h) return true;
     }

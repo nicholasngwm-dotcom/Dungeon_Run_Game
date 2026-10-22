@@ -401,6 +401,98 @@ function drawCastleKnight(p, P, royal = false) {
 
 function drawRoyalGuard(p, P) { drawCastleKnight(p, P, true); }
 
+/**
+ * The Army General (stage 3): a grizzled veteran in gilded plate under a long crimson
+ * cloak, an open-faced helm with a tall crimson crest, and a thick grey moustache
+ * (his flag spear is drawn by the enemy).
+ */
+function drawGeneral(p, P) {
+  useSkin('ruddy');
+  const { b, hb } = P;
+  const S = CK.steel;
+  const C = CK.crimson;
+  const G = CK.gold;
+  const f = P.cf;
+  // a long cloak sweeping behind him
+  p.poly([[26, 23 + b], [35, 23 + b], [33, 36 + b], [32, 52], [26, 54], [18 + f, 54], [16 + f, 50], [19, 38 + b], [22, 28 + b]], C[2]);
+  p.line(23, 27 + b, 17 + f, 51, C[3]);
+  p.line(27, 31 + b, 22 + f, 53, C[1]);
+  p.rect(17 + f, 53, 16, 1, G[2]);
+  const legs = ckLegs(p, P, [S[0], S[1], S[2], S[3]], [S[0], S[1], S[2], S[4]], 54, 4);
+  ckKnees(p, P, legs, S);
+  ckSkirt(p, P, [C[0], C[1], C[2], C[3]], 1, true);
+  ckTorso(p, P, [S[1], S[2], S[3], S[4]]);
+  // gilded breastplate edges and a sunburst of the empire
+  p.rect(28, 24 + b, 12, 1, G[3]);
+  p.rect(28, 33 + b, 12, 1, G[2]);
+  p.round(31, 26 + b, 5, 5, G[2], 2);
+  p.px(33, 28 + b, G[4]);
+  for (const [x, y] of [[30, 28], [36, 28], [33, 25], [33, 31]]) p.px(x, y + b, G[3]);
+  ckBelt(p, P, RAMP.leather, G);
+  // a gorget, then the face: weathered, scowling, a great grey moustache
+  p.round(29, 21 + b, 10, 4, S[3], 1);
+  p.rect(30, 21 + b, 8, 1, G[3]);
+  castleFace(p, P, { eye: '#3a2a1a', brow: '#8a8090', scar: true });
+  p.poly(shift([[31, 21], [34, 20], [37, 21], [39, 23], [36, 22], [33, 22], [30, 23]], b), '#b4acb8');
+  p.px(34, 20 + b, '#d8d0dc');
+  // open-faced helm with cheek guards, a gold brow band and a tall crimson crest
+  p.poly(shift([[28, 15], [28, 9], [31, 6], [37, 6], [40, 9], [40, 15], [38, 12], [30, 12]], hb), S[3]);
+  p.rect(29, 8 + hb, 3, 6, S[4]);
+  p.rect(28, 12 + hb, 13, 2, G[2]);
+  p.rect(28, 12 + hb, 13, 1, G[3]);
+  p.rect(28, 14 + hb, 2, 7, S[2]);
+  p.rect(39, 14 + hb, 2, 6, S[1]);
+  const hs = P.hs;
+  p.poly([[31, 6 + hb], [33, 0 + hb], [37, -1 + hb], [40, 1 + hb], [38, 4 + hb], [36, 6 + hb]], C[2]);
+  p.poly([[33, 0 + hb], [28 + hs, 1 + hb], [24 + hs, 5 + hb], [29, 5 + hb]], C[2]);
+  p.line(33, 1 + hb, 26 + hs, 4 + hb, C[4]);
+  ckFrontArm(p, P, S, S[2], true);
+  p.rect(35, 22 + b, 9, 1, G[3]);   // a gold edge on the pauldron
+}
+
+/**
+ * The Prince's bodyguard: a hulking knight in heavy black-and-gold plate, a great
+ * horned helm with a slit for its eyes. (The huge shield and the flail are drawn by
+ * the enemy.)
+ */
+function drawPrinceGuard(p, P) {
+  useSkin('fair');
+  const { b } = P;
+  const S = CK.steel;
+  const G = CK.gold;
+  const C = CK.crimson;
+  const f = P.cf;
+  p.poly([[26, 23 + b], [34, 23 + b], [32, 36 + b], [30, 48], [24, 50], [19 + f, 50], [18 + f, 46], [21, 34 + b]], C[1]);
+  p.line(23, 28 + b, 19 + f, 47, C[2]);
+  const legs = ckLegs(p, P, [S[0], S[1], S[2], S[3]], [S[0], S[1], S[2], S[3]], 52, 5);
+  ckKnees(p, P, legs, S);
+  ckSkirt(p, P, [S[0], S[1], S[2], S[3]], 2, true);
+  // a broad, bulky breastplate
+  p.round(26, 23 + b, 16, 13, S[2], 3);
+  p.rect(28, 24 + b, 4, 9, S[3]);
+  p.rect(39, 25 + b, 2, 9, S[1]);
+  p.rect(26, 23 + b, 16, 1, G[2]);
+  p.rect(33, 25 + b, 2, 9, G[2]);
+  p.rect(26, 34 + b, 16, 2, G[1]);
+  ckBelt(p, P, RAMP.leather, G);
+  // the great helm: a heavy bucket with horns and a narrow, glowing slit
+  p.round(27, 7 + b, 15, 16, S[2], 3);
+  p.rect(28, 9 + b, 3, 12, S[3]);
+  p.rect(39, 9 + b, 2, 13, S[1]);
+  p.rect(28, 14 + b, 14, 2, '#0b0a10');
+  if (P.eyes !== 'blink') { p.px(34, 14 + b, '#ff6a5a'); p.px(38, 14 + b, '#ff6a5a'); }
+  for (const y of [18, 20]) for (const x of [32, 35, 38]) p.px(x, y + b, S[0]);
+  p.rect(27, 7 + b, 15, 2, G[2]);
+  // horns curling up off the sides
+  p.poly([[27, 10 + b], [22, 7 + b], [21, 2 + b], [24, 4 + b], [27, 7 + b]], '#d8cfb8');
+  p.poly([[42, 10 + b], [46, 6 + b], [46, 1 + b], [43, 4 + b], [41, 7 + b]], '#b4ab94');
+  // huge pauldrons and gauntlets
+  p.round(35, 21 + b, 11, 8, S[3], 3);
+  p.rect(36, 22 + b, 7, 1, G[3]);
+  p.rect(38, 28 + b, 5, 6, S[2]);
+  p.round(38, 33 + b, 5, 4, S[1], 1);
+}
+
 /** Castle sorcerer: a court mage in a high-collared violet robe with glowing runes, a deep hood. */
 function drawCastleSorcerer(p, P) {
   useSkin('pale');

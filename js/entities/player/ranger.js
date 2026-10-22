@@ -98,7 +98,7 @@ class Ranger extends Player {
         ? (ctx, p) => arrowStreak(ctx, p, 30, 6, ['#4a6e32', '#a8cc6a', '#f0ffd8'], 0.7)
         : (ctx, p) => arrowStreak(ctx, p, 18, 3, ['#8a7a6a', '#e0d2aa'], 0.45),
     }));
-    Sound.play('arrow');
+    Sound.play('bowShot');
   }
 
   // ---------- RMB: swift camo ----------
@@ -112,7 +112,7 @@ class Ranger extends Player {
     world.effects.burst(this.hx, this.hy, { count: 24, colors: ARCHER_FX.leaves, speed: [60, 160], life: [0.3, 0.6] });
     world.effects.smoke(this.hx, this.hy + 4, { count: 9, radius: 18, life: 0.7, colors: ARCHER_FX.leafSmoke });
     world.effects.text(this.hx, this.hy - 30, 'CAMO', { color: '#a8cc6a', size: 8 });
-    Sound.play('dash');
+    Sound.play('camo');
   }
 
   // ---------- E: rapid fire ----------
@@ -124,7 +124,7 @@ class Ranger extends Player {
     this.cooldowns.primary = 0;
     world.effects.text(this.hx, this.hy - 30, 'RAPID FIRE', { color: '#a8cc6a', size: 8 });
     world.effects.burst(this.hx, this.hy, { count: 12, colors: ['#a8cc6a', '#ffffff'], speed: [40, 100], up: 30 });
-    Sound.play('aim');
+    Sound.play('rapidFire');
   }
 
   // ---------- F: fire / ice arrow ----------
@@ -150,7 +150,7 @@ class Ranger extends Player {
       radius: 6, damage: c.damage, life: 1.4, knockback: 160,
       ...opts,
     }));
-    Sound.play('arrow');
+    Sound.play('bowShotHeavy');
   }
 
   /** Piercing, hard-hitting arrow that sets everything it passes through on fire. */
@@ -192,12 +192,13 @@ class Ranger extends Player {
         w.effects.text(t.hx, t.hy - 34, 'BURN', { color: '#ff8a1e', size: 7 });
       },
       onHit: (p, w) => {
+        Sound.play('fireImpact');
         w.effects.flames(p.x, p.y + 6, { count: 3, spread: 8, height: 20, width: 9, life: 0.5 });
         w.effects.burst(p.x, p.y, { count: 10, colors: FIRE_COLORS, speed: [40, 140], life: [0.2, 0.45], up: 30 });
         w.effects.smoke(p.x, p.y - 4, { count: 4, radius: 8, life: 0.6, colors: ['#2a2129', '#4a3a3a', '#6a5a52'] });
       },
     });
-    Sound.play('fireballCast');
+    Sound.play('fireArrow');
   }
 
   /** Weak arrow that bursts into a freezing nova where it lands. */
@@ -229,6 +230,7 @@ class Ranger extends Player {
       },
       onHit: (p, w) => this.iceNova(w, p.x, p.y),
     });
+    Sound.play('iceArrow');
   }
 
   iceNova(world, x, y) {
@@ -236,7 +238,7 @@ class Ranger extends Player {
     const hit = this.hitCircle(world, x, y, c.radius, c.damage, { knockback: 0, sound: 'hit' });
     for (const t of hit) {
       if (t.freeze) t.freeze(c.freeze);
-      else if (world.isBossTarget(t)) world.chillBoss(c.freeze);   // bosses can't be frozen solid: they're chilled
+      else if (world.isBossTarget(t)) world.freezeBoss(c.freeze);   // a boss is frozen as a whole (its fists too)
       else t.stun?.(c.freeze);
     }
     world.effects.burst(x, y, { count: 28, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [80, 240], life: [0.3, 0.6], size: [2, 4] });
@@ -297,7 +299,7 @@ class Ranger extends Player {
       ctx.restore();
     }, true);
     world.shake(4, 0.2);
-    Sound.play('explosion');
+    Sound.play('iceBurst');
   }
 
   // ---------- Q: arrow volley ----------
@@ -307,7 +309,7 @@ class Ranger extends Player {
     this.ult = this.ultMax;
     this.targeting = !this.targeting;
     this.choosingArrow = false;
-    Sound.play('aim');
+    Sound.play('bowDraw');
   }
 
   fireVolley(world) {
@@ -329,7 +331,7 @@ class Ranger extends Player {
     }
     this.volleys.push({ x: this.targetPos.x, y: this.targetPos.y, t: 0, impacts });
     world.effects.burst(this.pivotX, this.pivotY - 10, { count: 8, colors: ['#efe6d2', '#9a6232'], angle: -Math.PI / 2, spread: 0.6, speed: [200, 320], life: [0.2, 0.3], drag: 0 });
-    Sound.play('volley');
+    Sound.play('volleyLoose');
   }
 
   updateAbility(dt, world) {

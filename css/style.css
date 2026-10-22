@@ -266,7 +266,9 @@ h2 {
 }
 .pp-head { display: flex; justify-content: space-between; align-items: center; color: var(--accent); font-size: 12px; }
 .practice-panel.collapsed .pp-body { display: none; }
+.practice-panel.arena .pp-range, .practice-panel:not(.arena) .pp-arena { display: none; }
 .pp-label { color: var(--muted); margin: 7px 0 4px; }
+.pp-note { font-size: 0.75em; opacity: 0.75; }
 .pp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
 .pp-wide { grid-column: span 2; }
 .practice-panel button {
@@ -436,7 +438,12 @@ h2 {
 .toggle.off { background: #5a4a6a; color: var(--muted); box-shadow: inset -2px -2px 0 #4e3524; }
 .set-choices { display: flex; gap: 4px; }
 .set-choices .toggle { flex: 1; min-width: 0; font-size: 12px; padding: 6px 2px; }
-.set-keys { display: grid; grid-template-columns: 1fr 76px 1fr 76px; gap: 4px 8px; align-items: center; font-size: 8px; }
+#set-xhair { flex-wrap: wrap; }
+#set-xhair .toggle { flex: 1 1 22%; }
+.xhair-row { display: flex; gap: 6px; align-items: center; }
+.xhair-row .set-choices { flex: 1; }
+#set-xhair-preview { width: 36px; height: 36px; flex: none; background: #1a110c; border: 2px solid #8a6a26; image-rendering: pixelated; }
+.set-keys { display: grid; grid-template-columns: 1fr 76px 1fr 76px; gap: 2px 8px; align-items: center; font-size: 8px; }
 .keybind {
   line-height: 1;
   font-family: inherit;

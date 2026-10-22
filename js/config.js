@@ -19,7 +19,7 @@ const CONFIG = {
     critChance: 0.1,
     critMultiplier: 1.6,
     // Shift: dodge in the moving direction (aim direction if standing still)
-    dodge: { distance: 125, duration: 0.22, invulnerability: 0.3, cooldown: 2.0 },
+    dodge: { distance: 125, duration: 0.22, invulnerability: 0.3, cooldown: 1.7 },
     // Enemies further than this can't see an invisible hero
     invisibleDetectRange: 200,
     // passive regen: after `delay` seconds without losing hp, heal `hpPerSecond` (1 hp every 5s)
@@ -59,7 +59,7 @@ const CONFIG = {
     },
     ranger: {
       // passive: fastest hero, and a shorter dodge cooldown
-      passive: { name: 'Agility', dodgeCooldown: 1.3 },
+      passive: { name: 'Agility', dodgeCooldown: 1.1 },
       name: 'Archer',
       hp: 225,
       speed: 230,   // fastest hero (Agility)
@@ -91,7 +91,7 @@ const CONFIG = {
       lightning: { damage: 240, cost: 120, cooldown: 3, delay: 1, selectRadius: 70,
                    arcRange: 240, arcDamage: 140, arcCount: 4 },
       // F: turn into a small, fast bird (tiny hitbox, can't cast). F again lands early.
-      // F: bird form: flies over furniture and spike traps (walls still stop it)
+      // F: bird form: flies over obstacles (cover, pillars, furniture, hedges) and spike traps; walls and doors still stop it
       bird:      { cost: 50, cooldown: 6, duration: 4, speedMultiplier: 1.8, radius: 5 },
       // Q: place a magic circle (LMB, RMB cancels) that drains enemies in it into mana.
       // While a circle is active, RMB / E / F cooldowns are capped at activeCooldown seconds.
@@ -359,6 +359,35 @@ const CONFIG = {
       fireRadius: 64, fireTime: 4, burnDps: 9, burnTime: 3,
       knockbackResist: 1, stunResist: 0.5, heartChance: 0.35,
     },
+    // stage 3: Cluster catapult: a plain catapult's hp, but it hurls a whole volley: boulders[0]-boulders[1]
+    // burning boulders raining down within `spread` px of you, `stagger` s apart, each like the flaming catapult's
+    clusterCatapult: {
+      hp: 300, speed: 0, radius: 20, damage: 52, contactDamage: 0,
+      range: 600, windup: 1.3, flight: 1.1, cooldown: 4.5, blastRadius: 66,
+      boulders: [5, 6], spread: 130, stagger: 0.12,
+      fireRadius: 64, fireTime: 4, burnDps: 9, burnTime: 3,
+      knockbackResist: 1, stunResist: 0.5, heartChance: 0.35,
+    },
+    // stage 3: Army general: once, he raises the empire's banner and calls the charge: every enemy within
+    // rallyRadius moves rallySpeed faster for rallyTime s and gets a rallyShield hp shield. Then he runs you
+    // down like the cavalry, spear couched (chargeTime s, stabbing as he passes), and stops tiredTime s to
+    // catch his breath before the next charge
+    general: {
+      hp: 560, speed: 72, radius: 16, damage: 34,
+      rallyRadius: 280, rallyTime: 8, rallySpeed: 1.35, rallyShield: 20, rallyWindup: 1.0,
+      chargeWindup: 0.45, chargeTime: 3, chargeSpeed: 170, turnRate: 2.4, stabRange: 56, stabEvery: 0.6, tiredTime: 1,
+      knockbackResist: 0.6, stunResist: 0.4,
+    },
+    // the Prince's bodyguard (from his trumpet): a massive shield and a flail he whirls round himself (orbit
+    // damage every orbitTick s to whoever it touches); a hero far off gets the flail cast at them down a line;
+    // shots coming at him make him raise the shield (blocking everything for blockTime s)
+    princeGuard: {
+      hp: 640, speed: 50, radius: 24, damage: 16, coins: 0,
+      orbitRadius: 74, orbitSpeed: 11, orbitTick: 0.45, ballRadius: 15,
+      castRange: [200, 400], castWindup: 0.6, castReach: 340, castSpeed: 760, castWidth: 34, castDamage: 30, castCooldown: 3.5,
+      blockTime: 1.4, blockCooldown: 4, blockSense: 170,
+      knockbackResist: 0.85, stunResist: 0.5,
+    },
     // Mace spinner: up close it whirls both maces round, hurting anyone inside spinRadius every tickEvery
     // seconds while it lurches after you, then staggers dizzily
     maceSpinner: {
@@ -366,12 +395,12 @@ const CONFIG = {
       spinRange: 95, spinWindup: 0.5, spinRadius: 58, spinTime: 2.6, tickEvery: 0.22, spinSpeed: 62, dizzy: 1.1, cooldown: 1.6,
       knockbackResist: 0.4,
     },
-    // Bishop: keeps back, fires slow holy orbs, and every healEvery seconds blesses the ground around it,
-    // healing every enemy (and boss) inside healRadius by healAmount of their max hp
+    // Bishop: never attacks (not even by touch). Keeps back from you, hurries toward the wounded, and every
+    // healEvery seconds blesses the ground around it, healing every enemy (and boss) inside healRadius by healAmount of their max hp
     bishop: {
-      hp: 150, speed: 52, radius: 13, damage: 14,
-      preferredMin: 200, preferredMax: 320, orbEvery: 2.6, orbSpeed: 180,
-      healEvery: 6, healWindup: 1.2, healRadius: 150, healAmount: 0.3, bossHeal: 0.02,
+      hp: 150, speed: 58, radius: 13, damage: 0, contactDamage: 0,
+      preferredMin: 200, preferredMax: 320,
+      healEvery: 3.2, healWindup: 0.9, healRadius: 160, healAmount: 0.3, bossHeal: 0.012,
     },
     // Knight: sword and kite shield; when hit it may raise the shield (blockChance), blocking hits from the front
     castleKnight: {
@@ -401,11 +430,12 @@ const CONFIG = {
       attackRange: 76, attackReach: 104, attackWidth: 56, windup: 1.0, recovery: 0.8, cooldown: 1.2,
       executeBelow: 0.25, knockbackResist: 0.7, stunResist: 0.5,
     },
-    // stage 2+: Jester: dodges dodgeChance of your hits with a backflip; slashes and stabs with two daggers that make you bleed
+    // stage 2+: Jester: dodges dodgeChance of your hits with a short backflip, or (sideChance of them) a quick
+    // sidestep; slashes and stabs with two daggers that make you bleed
     jester: {
       hp: 170, speed: 112, radius: 13, damage: 14,
       attackRange: 46, attackReach: 62, attackArcDegrees: 110, windup: 0.3, recovery: 0.3, cooldown: 0.75, combo: 3,
-      dodgeChance: 0.5, dodgeDistance: 76, dodgeTime: 0.32, bleedDps: 6, bleedTime: 3,
+      dodgeChance: 0.5, dodgeDistance: 34, dodgeTime: 0.3, sideChance: 0.5, sideDistance: 30, sideTime: 0.2, bleedDps: 6, bleedTime: 3,
     },
     // stage 2+: Royal guard: a stronger knight that also charges at you (chargeDamage) along a red lane
     royalGuard: {
@@ -434,7 +464,7 @@ const CONFIG = {
     // the Queen's gardeners (her second phase): water droplets from a magic watering can
     gardener: {
       hp: 90, speed: 64, radius: 13, damage: 14,
-      preferredMin: 150, preferredMax: 280, windup: 0.6, cooldown: 1.8, dropSpeed: 250, drops: 3, spreadDegrees: 22, coins: 0,
+      preferredMin: 150, preferredMax: 280, windup: 0.6, cooldown: 3.4, dropSpeed: 250, drops: 3, spreadDegrees: 22, bounces: 1, coins: 0,
     },
   },
 
@@ -448,7 +478,7 @@ const CONFIG = {
       name: 'Graveyard',
       blurb: 'Restless dead, poison and bone. Ruled by the Phantom King.',
       // the floor is gloomy: night darkness (rgb tint, 0-1) that torches, lamps and candles cut through, and drifting fog
-      night: { dark: 0.55, color: '6, 12, 22' },
+      night: { dark: 0.34, color: '6, 12, 22' },
       // solid cover in its fight rooms: [kind, width, height (tiles), weight]
       cover: [['headstone', 1, 1, 5], ['tomb', 2, 1, 2]],
       boss: 'phantom',
@@ -471,13 +501,13 @@ const CONFIG = {
     },
     castle: {
       name: 'Castle',
-      blurb: 'A corrupted empire\'s fallen keep. Ruled by the Queen and the King.',
+      blurb: 'A corrupted empire\'s fallen keep. Ruled by its royal family.',
       // a darker, colder gloom with a violet cast, and no fog or mist
-      night: { dark: 0.6, color: '12, 6, 22' },
+      night: { dark: 0.24, color: '12, 6, 22' },
       fog: false,
       cover: [['crates', 1, 1, 4], ['pillar', 1, 1, 3], ['statue', 2, 1, 2]],
-      // each stage rolls one of these (never the same one twice in a row)
-      bosses: ['queen', 'king'],
+      // the boss of each stage: the Prince or the Princess, then the Queen, then the King
+      stageBosses: { 1: ['prince', 'princess'], 2: ['queen'], 3: ['king'] },
       enemies: {
         1: [['squire', 5], ['castleArcher', 3], ['minstrel', 1], ['gunner', 2], ['catapult', 1], ['maceSpinner', 2],
             ['bishop', 1], ['castleKnight', 2], ['cavalry', 1], ['castleSorcerer', 1]],
@@ -486,10 +516,10 @@ const CONFIG = {
             ['executioner', 1], ['jester', 2], ['flamingCatapult', 1], ['royalGuard', 1]],
         3: [['squire', 3], ['castleArcher', 3], ['minstrel', 1], ['gunner', 2], ['catapult', 1], ['maceSpinner', 2],
             ['bishop', 1], ['castleKnight', 2], ['cavalry', 1], ['castleSorcerer', 2],
-            ['executioner', 1], ['jester', 2], ['flamingCatapult', 1], ['royalGuard', 2], ['prince', 1], ['princess', 1]],
+            ['executioner', 1], ['jester', 2], ['flamingCatapult', 1], ['royalGuard', 2], ['general', 1], ['clusterCatapult', 1]],
       },
       summons: ['squire', 'castleArcher', 'castleKnight'],
-      heavy: { catapult: 1, flamingCatapult: 1, cavalry: 1, executioner: 1, bishop: 1, minstrel: 1, castleSorcerer: 1, prince: 1, princess: 1, royalGuard: 2 },
+      heavy: { catapult: 1, flamingCatapult: 1, clusterCatapult: 1, cavalry: 1, executioner: 1, bishop: 1, minstrel: 1, castleSorcerer: 1, general: 1, royalGuard: 2 },
       stageLines: ['Clear the rooms and find the throne', 'The fallen court stirs', 'The crown awaits'],
     },
   },
@@ -607,9 +637,11 @@ const CONFIG = {
   ],
   // each wave after the first adds this much enemy hp / damage (wave 5: +60% hp, +32% damage)
   waveScaling: { hp: 0.15, damage: 0.08 },
-  // debuffs on bosses (they ignore plain stuns): a freeze chills a boss instead, for chillTime x the freeze's
-  // length, during which it moves and attacks at chillSpeed of its usual speed
-  bossDebuffs: { chillTime: 1.5, chillSpeed: 0.5 },
+  // debuffs on bosses (they ignore plain stuns): a freeze locks a boss in ice for freezeTime x the freeze's
+  // length (it can't move or attack), after which it can't be frozen again for freezeImmune seconds
+  bossDebuffs: { freezeTime: 1, freezeImmune: 4 },
+  // a boss's entrance cutscene: the camera pans over (pan s), its entrance plays, then its title card (card s)
+  bossIntro: { pan: 0.9, card: 2.8 },
   // chance of each boss appearing after the last wave
   bosses: { golem: 0.5, phantom: 0.5 },
   waveBreak: 3,           // pause between waves
@@ -750,34 +782,128 @@ const CONFIG = {
   },
 
   // ---------------------------------------------------------
+  //  BOSS: THE PRINCE (castle stage 1, the training grounds)
+  //  He rides in on his horse and leaps down to fight. He runs you down and dashes in
+  //  (a medium-range dash down a red lane, chaining dash after dash while you're out of
+  //  reach), cutting twice and stabbing only once you're within his sword's reach. At
+  //  phase2At he sounds his trumpet: two royal guards and his own bodyguard
+  //  march in, and he sets his blade alight: every cut and stab flings embers (flame) that
+  //  set you burning. He keeps the same pace in both phases. While his bodyguard stands, a
+  //  ribbon of light joins them and the Prince can't be hurt: kill the guard first.
+  // ---------------------------------------------------------
+  princeBoss: {
+    hp: 4600,
+    phase2At: 0.35,
+    contactDamage: 14,
+    speed: 195,
+    dashRange: 270,              // he dashes when you're within this
+    dash: { windup: 0.36, distance: 205, time: 0.18, width: 52, damage: 24, chain: 1 },
+    // the sword, whenever you're within reach (off a dash, or walking up to you): wide cuts and long stabs in
+    // `pattern` order, `gap` s apart, after a `windup` s tell when he starts it on foot
+    combo: { reach: 90, arcDegrees: 145, gap: 0.22, windup: 0.32, damage: 24, stabReach: 1.5,
+      pattern: ['cut', 'cut', 'stab', 'cut', 'stab'] },
+    recovery: 0.7,               // after the cuts
+    cooldown: 1.3,               // before he can dash again (after his cuts or a dash)
+    trumpet: { time: 1.4, guards: 2 },
+    // phase 2, the burning blade: each cut flings slashEmbers embers across its arc, the stab stabEmbers down its
+    // line; each ember does `damage` and sets whoever it hits burning (burnDps for burnTime s)
+    flame: { slashEmbers: 5, stabEmbers: 3, speed: 240, life: 0.7, damage: 6, burnDps: 6, burnTime: 2.5 },
+  },
+
+  // ---------------------------------------------------------
+  //  BOSS: THE PRINCESS (castle stage 1, her magic study)
+  //  Disturbed at her books she flies into a rage, opening with a potion. She keeps her
+  //  distance and takes turns: a rapid burst of crossbow bolts, three great golden arrows
+  //  that follow you for a few seconds, an ice potion (it chips, freezes for a moment and
+  //  leaves slowing ice) and a fire potion (it bursts into bouncing fireballs and leaves
+  //  burning ground). When someone gets close she blinks away, still nearby (once every
+  //  blink.cooldown s).
+  //  Phase 2 (phase2At): she flings her crossbow away and conjures a magic bow, and the
+  //  study comes alive with magic: furniture floats, and things fly slowly across the room
+  //  (they hurt to touch). Her attacks: a volley of heat-seeking golden arrows that spit
+  //  little bolts out to either side as they fly, a giant golden arrow shot into the sky
+  //  that falls on you, and potions three at a time (less often).
+  // ---------------------------------------------------------
+  princessBoss: {
+    hp: 4100,
+    phase2At: 0.5,
+    contactDamage: 12,
+    speed: 96,
+    keepAway: [190, 320],
+    attackInterval: [1.0, 1.4],  // rest between attacks [phase 1, phase 2]
+    burst: { windup: 0.5, count: 20, every: 0.07, speed: 480, damage: 14 },
+    icePotion: { windup: 0.4, flight: 0.85, radius: 76, damage: 12, freeze: 0.7, slow: 0.5, zoneTime: 4 },
+    firePotion: { windup: 0.4, flight: 0.85, radius: 70, damage: 22, fireballs: 8, fireballSpeed: 200, bounces: 2, fireballDamage: 14,
+      fireRadius: 70, fireTime: 4, burnDps: 8, burnTime: 2 },
+    blink: { cooldown: 15, trigger: 80, distance: [170, 230] },
+    transform: 1.6,              // phase 2 begins: throwing the crossbow away and calling the magic bow (she can't be hurt)
+    // phase 2: `count` golden arrows fanned out, each weaving side to side (waveAmp px either way, waveFreq waves a
+    // second) as it flies straight on, firing a little bolt out of each side every sideEvery s
+    volley: { windup: 0.8, count: 5, spreadDegrees: 80, speed: 200, waveAmp: 12, waveFreq: 0.9, life: 3.5, damage: 22,
+      sideEvery: 0.4, sideSpeed: 150, sideDamage: 18 },
+    // phase 2: an arrow loosed straight up; a mark follows you for `track` s, then locks, and `fall` s later the giant
+    // arrow lands there (everyone within `radius` takes `damage`)
+    sky: { windup: 0.6, track: 1.1, fall: 0.8, radius: 135, damage: 70 },
+    // phase 2: potions thrown `count` at a time, a mix of ice and fire, landing up to `spread` px round you
+    potions: { count: 3, spread: 90, gap: 0.15 },
+    // phase 2: things flying slowly across the study: one every `every` s (at most `max` at once), `damage` to touch
+    flyers: { every: 2.2, max: 4, speed: [70, 100], damage: 16, radius: 18 },
+  },
+
+  // ---------------------------------------------------------
   //  BOSS: THE QUEEN (the castle's garden)
-  //  Keeps her distance and takes turns between waves of homing arrows and quick
-  //  piercing shots aimed where you're going. At phase2At she rings the garden bell:
-  //  hedges start rising as walls and her gardeners come through the flower gates.
+  //  She floats down under her magic umbrella, which is always open, twirling with a
+  //  magic aura. Phase 1 (the hedges stand in a fixed pattern): she walks toward you
+  //  and takes turns between throwing her umbrella (it flies at you, stops and spins
+  //  spraying magic, clockwise one time and anticlockwise the next, is steered after
+  //  you, and at last flies home) and fans of homing bolts. The umbrella can't pass
+  //  through hedges: it bounces off them. At phase2At she rings the garden bell: from
+  //  then on she runs after you, the hedges change pattern now and then, and her one
+  //  attack is the blink: she throws her umbrella, it flies after you shooting bolts
+  //  out of its sides, then she blinks to it, a shockwave bursts where she lands and
+  //  a ring of bolts follows. Hit her while it's in hand and she holds it out in
+  //  front of her: every hit on it heals her instead. Each time the bell tolls her
+  //  gardeners come through the rose gates.
   //  Per-phase values are [phase 1, phase 2].
   // ---------------------------------------------------------
   queen: {
     hp: 6200,
     phase2At: 0.5,
     contactDamage: 18,
-    speed: [110, 140],
-    keepAway: [200, 330],        // the distance she likes to keep from her target
-    attackInterval: [1.5, 1.0],  // rest between attacks
-    // homing arrows: `waves` fans of perWave arrows that chase the nearest hero for `chase` seconds
-    homing: { windup: 0.55, waves: [3, 4], perWave: 5, waveEvery: [0.6, 0.45], spreadDegrees: 70, speed: [220, 250], turn: 2.6, chase: 3, life: 5, damage: 22 },
-    // quick piercing shots, each aimed at where the hero will be (they pass through everyone in the way)
-    pierce: { shots: [4, 5], aim: 0.32, every: [0.34, 0.26], speed: [640, 720], lead: 0.9, damage: 26 },
+    speed: [72, 150],
+    keepAway: [150, 40],         // she closes in to about this far from her target
+    attackInterval: [1.3, 1.2],  // rest between attacks
+    // phase 1: homing bolts, `waves` fans of perWave bolts that chase the nearest hero for `chase` seconds
+    homing: { windup: 0.55, waves: 3, perWave: 5, waveEvery: 0.6, spreadDegrees: 70, speed: 220, turn: 2.4, chase: 2.5, life: 5, damage: 22 },
+    // the thrown umbrella: each leg it flies `leg` s at `speed`, steering after the hero (`steer` rad/s), then
+    // stops and spins for `spin` s, firing `shots` rings of `arms` bolts that turn `turn` rad per shot.
+    // After `stops` stops it flies home. It hurts to touch while it flies.
+    umbrella: { windup: 0.5, speed: 300, steer: 3, leg: 0.85, stops: 3, spin: 1.2, shots: 5, arms: 5, turn: 0.3,
+      boltSpeed: 170, boltDamage: 18, radius: 20, damage: 20, back: 520 },
+    // phase 2: the umbrella flies after the hero for `leg` s, firing a bolt out of each side every sideEvery s;
+    // then the blink is telegraphed for `warn` s; where she lands a shockwave bursts and `rings` rings of
+    // `count` bolts follow, `ringGap` s apart
+    blink: { leg: 1.6, speed: 230, steer: 1.1, sideEvery: 0.16, sideSpeed: 170, sideDamage: 16,
+      warn: 0.85, radius: 280, speed2: 360, width: 18, damage: 28,
+      rings: 1, count: 14, ringGap: 0.3, ringSpeed: 190, ringDamage: 18 },
+    // phase 2: hit while her umbrella is in hand, she holds it out in front (windup s) and for `time` s every
+    // hit on it heals her by healRatio of the damage instead of hurting her
+    parasol: { windup: 0.3, time: 1.8, healRatio: 1, cooldown: 8 },
     bell: { rings: 3, ringEvery: 0.55 },
-    // phase 2: hedge walls `count` at a time every `every` seconds, len tiles long, standing for life seconds
-    hedges: { every: [4, 3], count: 3, len: [3, 5], sprout: 0.8, life: [7, 10], max: 8 },
-    gardeners: { every: 6, perWave: 2, max: 4 },
+    // hedges: fixed layouts that take `sprout` s to grow; in phase 2 a new layout grows every `shuffle` s
+    hedges: { sprout: 0.9, shuffle: 10 },
+    // phase 2: the bell tolls by itself every `every` s (first after `first`), and perWave gardeners come in
+    gardeners: { every: 16, first: 7, perWave: 2, max: 3 },
   },
 
   // ---------------------------------------------------------
   //  BOSS: THE KING (the castle's throne room)
-  //  Phase 1: sits on his throne and shouts, each shout a fan-shaped shockwave that
-  //  also calls a royal guard through one of the two doors; every few shouts he throws
-  //  his scepter, which spins where it lands for a while before it flies back.
+  //  Phase 1: sits on his throne and slams his scepter down, each slam a fan-shaped
+  //  shockwave that rolls across the whole room, and shouts for a royal guard through
+  //  one of the two doors (one per call, up to guards.max at once); every few attacks
+  //  he throws his scepter into the path you'd run from the guards, where it spins for
+  //  a while before it flies back (no slams while it's gone). What he shouts is shown
+  //  in a speech bubble, pinned to the screen's edge when he's out of view.
   //  Phase 2 (phase2At): slams the scepter (a shockwave round the whole room), calls
   //  four bishops who heal him, and takes up his greatsword: from then on he waddles
   //  after you with scepter slams, huge greatsword sweeps and waves of light that stun.
@@ -786,15 +912,17 @@ const CONFIG = {
     hp: 8200,
     phase2At: 0.5,
     contactDamage: 20,
-    shout: { every: 2.3, windup: 0.6, arcDegrees: 70, range: 620, speed: 380, width: 26, damage: 24, knockback: 260 },
-    guards: { max: 4 },
+    shout: { every: 2.3, windup: 0.6, arcDegrees: 70, speed: 380, width: 26, damage: 24, knockback: 260 },
+    guards: { max: 6 },          // each call brings one guard, up to max at once
     throwEvery: 3,               // every throwEvery-th attack is a scepter throw
-    scepter: { windup: 0.6, speed: 470, spin: 4, radius: 50, tick: 0.35, damage: 16, rest: 0.8, back: 520 },
-    slamWave: { radius: 900, speed: 430, width: 22, damage: 30 },
+    // the throw lands `lead` px ahead of the hero, on the side away from the nearest guard
+    scepter: { windup: 0.6, speed: 470, spin: 4, radius: 50, tick: 0.35, damage: 16, rest: 0.8, back: 520, lead: 120 },
+    // every one of his shockwaves rolls on until it has crossed the whole room
+    slamWave: { speed: 430, width: 22, damage: 30 },
     bishops: 4,
     walkSpeed: 40,
     attackInterval: 1.1,
-    slam: { windup: 0.75, radius: 380, speed: 360, width: 18, damage: 30 },
+    slam: { windup: 0.75, speed: 360, width: 18, damage: 30 },
     sword: { windup: 1.1, arcDegrees: 150, reach: 270, damage: 55 },
     light: { windup: 0.9, rings: 2, count: 18, ringGap: 0.35, speed: 210, damage: 12, stun: 3 },
   },

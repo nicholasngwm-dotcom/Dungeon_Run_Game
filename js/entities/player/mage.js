@@ -72,7 +72,7 @@ class Mage extends Player {
   get tipY() { return this.pivotY + 4 + Math.sin(this.aim) * 22; }
 
   get channeling() { return !!this.bird; }
-  /** In bird form she flies over furniture and spike traps (walls still stop her). */
+  /** In bird form she flies over obstacles (cover, furniture, hedges) and spike traps (walls and doors still stop her). */
   get flying() { return !!this.bird; }
   get moveMultiplier() { return this.bird ? this.cfg.bird.speedMultiplier : 1; }
 
@@ -138,7 +138,7 @@ class Mage extends Player {
         p.vy = Math.sin(cur + turn) * c.speed;
       },
     }));
-    Sound.play('magic');
+    Sound.play('arcaneBolt');
   }
 
   // ---------- RMB: fireball ----------
@@ -180,7 +180,7 @@ class Mage extends Player {
       },
       onHit: (p, w) => this.explode(w, p.x, p.y),
     }));
-    Sound.play('fireballCast');
+    Sound.play('frostfireCast');
   }
 
   explode(world, x, y) {
@@ -215,7 +215,7 @@ class Mage extends Player {
       ctx.restore();
     }, true);
     world.shake(6, 0.25);
-    Sound.play('explosion');
+    Sound.play('frostfireBurst');
   }
 
   // ---------- E: lightning strike ----------
@@ -225,7 +225,7 @@ class Mage extends Player {
     if (this.resource.value < this.cfg.lightning.cost) { this.spend(this.cfg.lightning.cost, world); return; }
     this.targeting = true;
     this.placing = false;
-    Sound.play('aim');
+    Sound.play('spellAim');
   }
 
   castLightning(world) {
@@ -241,7 +241,7 @@ class Mage extends Player {
     this.targeting = false;
     this.cooldowns.e = c.cooldown;
     this.strikes.push({ target, t: 0, x: target.hx, y: target.hy });
-    Sound.play('laserCharge');
+    Sound.play('thunderCharge');
   }
 
   updateStrikes(dt, world) {
@@ -275,8 +275,7 @@ class Mage extends Player {
         from = { x: next.hx, y: next.hy };
       }
       world.shake(8, 0.3);
-      Sound.play('laser');
-      Sound.play('explosion', 0.1);
+      Sound.play('thunderStrike');
     }
     removeDead(this.strikes);
   }
@@ -354,7 +353,7 @@ class Mage extends Player {
     this.placing = false;
     this.radius = c.radius;   // tiny hitbox
     this.poof(world);
-    Sound.play('magic');
+    Sound.play('birdForm');
   }
 
   updateBird(dt, world) {
@@ -373,8 +372,15 @@ class Mage extends Player {
   endBird(world) {
     this.bird = null;
     this.radius = 12;
+    // landing on top of cover, furniture or a hedge: she flutters down beside it, onto open floor
+    const f = world.dungeon;
+    if (f.boxHitsWall(this.x, this.y, this.hw, this.hh)) {
+      const pt = f.freePoint(this.x, this.y, this.hw, this.hh);
+      this.x = pt.x;
+      this.y = pt.y;
+    }
     this.poof(world);
-    Sound.play('dash');
+    Sound.play('birdLand');
   }
 
   poof(world) {
@@ -389,7 +395,7 @@ class Mage extends Player {
     this.ult = this.ultMax;
     this.placing = !this.placing;
     this.targeting = false;
-    Sound.play('aim');
+    Sound.play('spellAim');
   }
 
   placeCircle(world) {
@@ -408,7 +414,7 @@ class Mage extends Player {
       ctx.restore();
     }, true);
     world.effects.burst(x, y, { count: 24, colors: MAGE_FX.sparkle, speed: [40, 160], life: [0.4, 0.8], up: 80, size: [1, 3] });
-    Sound.play('burstCharge');
+    Sound.play('manaDrain');
     world.shake(4, 0.3);
   }
 
