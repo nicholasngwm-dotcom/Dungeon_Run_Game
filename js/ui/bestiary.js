@@ -9,7 +9,7 @@ const BESTIARY = {
     { type: 'bletcher', name: 'Bletching Zombie', role: 'ranged', desc: 'Barely moves. Lobs slow globs of spit that poison you for a few seconds.' },
     { type: 'skeleton', name: 'Skeleton Archer', role: 'ranged', desc: 'Keeps its distance and fires fast arrows. A red line shows its aim before it shoots.' },
     { type: 'skeletonWarrior', name: 'Skeleton Warrior', role: 'melee', desc: 'Its shield blocks the first hit it takes. After that it is just a skeleton with a sword.' },
-    { type: 'bomber', name: 'Skeleton Bomber', role: 'special', desc: 'Runs at you and lights its fuse up close. Killing it drops the bomb, which still goes off.' },
+    { type: 'bomber', name: 'Skeleton Bomber', role: 'special', desc: 'Runs at you and lights its fuse up close. Killing it drops the bomb, which still goes off. The blast hurts other enemies too: lure it into a crowd.' },
     { type: 'wraith', name: 'Phantom', role: 'melee', desc: 'Floats fast, then dashes straight at you along a red lane. Step out of the lane.' },
     { type: 'undeadKnight', name: 'Zombie Knight', role: 'melee', desc: 'Extremely slow and tanky, but its huge swings deal massive damage.' },
     { type: 'gravestone', name: 'Tombstone', role: 'summoner', desc: 'Raises undead beside it until it is destroyed, then releases ghosts.' },
@@ -19,15 +19,39 @@ const BESTIARY = {
     { type: 'necromancer', name: 'Necromancer', role: 'summoner', desc: 'Stays back, raising groups of zombies and skeletons while firing souls.' },
     { type: 'reaper', name: 'Reaper', role: 'melee', desc: 'Wide scythe swings and waves of darkness. Teleports next to you if you keep away. Explodes into darkness when it dies: get clear!' },
     { type: 'minigunner', name: 'Skeleton Minigunner', role: 'ranged', desc: 'A big skeleton with a minigun. Spins up, then sprays slow bullets that track you slowly.' },
-    { type: 'zombieSoldier', name: 'Zombie Soldier', role: 'ranged', desc: 'Armoured: shrugs off 40% of all damage. Aims, then fires fast three-round bursts.' },
+    { type: 'zombieSoldier', name: 'Zombie Soldier', role: 'ranged', desc: 'Light armour, easy to bring down, but it aims, then fires three-round bursts of heavy bullets. Get out of the line!' },
     { type: 'skeletonSorcerer', name: 'Skeleton Sorcerer', role: 'summoner', desc: 'Lines of bone hands burst from the ground and stun. Also summons exploding skulls.' },
     { type: 'flyingSkull', name: 'Flying Skull', role: 'special', from: 3, note: 'SUMMONED', desc: 'Summoned by skeleton sorcerers. Flies straight at you and explodes on contact.' },
     { boss: 'phantom', name: 'Phantom King', role: 'boss', from: 1, desc: 'Sovereign of the restless dead. Dashes, laser barrages, and pulling shockwaves. Gets stronger every stage.' },
   ],
+  castle: [
+    { type: 'squire', name: 'Squire', role: 'melee', desc: 'A young soldier of the fallen empire. Quick sword slashes behind a short red cone.' },
+    { type: 'castleArcher', name: 'Castle Archer', role: 'ranged', desc: 'Keeps its distance and looses arrows. A red line shows its aim, then locks just before it fires.' },
+    { type: 'minstrel', name: 'Minstrel', role: 'special', desc: 'Plays a war song: every enemy inside the crimson ring recovers faster between attacks (a red note bobs over them). Plinks notes at you. Kill it first.' },
+    { type: 'gunner', name: 'Squire with a Gun', role: 'ranged', desc: 'Why not. Aims down a long red line, fires one heavy ball, then takes ages to reload: that is your moment.' },
+    { type: 'catapult', name: 'Catapult', role: 'ranged', desc: 'Never moves. Winds back its arm and hurls a boulder that lands on the red circle. Close in and it cannot stop you.' },
+    { type: 'maceSpinner', name: 'Mace Spinner', role: 'melee', desc: 'Up close it whirls both maces round, hurting everything near it again and again as it lurches after you. Then it reels, dizzy.' },
+    { type: 'bishop', name: 'Bishop', role: 'special', desc: 'Fires slow holy orbs, and blesses the ground every few seconds, healing every enemy near it (bosses too). A gold ring shows a blessing gathering.' },
+    { type: 'castleKnight', name: 'Knight', role: 'melee', desc: 'Blackened plate, sword and kite shield. When struck it may raise the shield: hits from the front glance off. Get round it.' },
+    { type: 'cavalry', name: 'Cavalry', role: 'melee', desc: 'Two spear lunges along red lanes, then it rides you down, stabbing as it passes. Hard to stop once it gets going.' },
+    { type: 'castleSorcerer', name: 'Castle Sorcerer', role: 'ranged', desc: 'Conjures bolts in patterns: a ring, a turning spiral, or a circle that closes in on you. Teleports away the first time it gets low.' },
+    { type: 'executioner', name: 'Executioner', role: 'melee', desc: 'A huge axe chop down a red lane. Below a quarter health, a red skull marks you: if the axe lands, you are executed outright.' },
+    { type: 'jester', name: 'Jester', role: 'melee', desc: 'Backflips out of half your hits. Two daggers in a flurry of slashes and a stab, and every cut makes you bleed.' },
+    { type: 'flamingCatapult', name: 'Flaming Catapult', role: 'ranged', desc: 'Tougher than the plain one. Its burning boulders hit harder and leave fire on the ground that sets you alight.' },
+    { type: 'royalGuard', name: 'Royal Guard', role: 'melee', desc: 'A stronger knight with a tower shield that blocks from the front. Also charges at you along a red lane.' },
+    { type: 'prince', name: 'The Prince', role: 'melee', desc: 'Dashes in with his rapier, cuts twice and stabs. At half health he sounds his trumpet and two royal guards join him.' },
+    { type: 'princess', name: 'The Princess', role: 'ranged', desc: 'A crossbow volley of six bolts, the last one magic and chasing you. Throws ice potions that leave slowing ice. Slowly heals herself.' },
+    { type: 'gardener', name: 'Gardener', role: 'ranged', from: 1, note: 'FROM THE QUEEN', desc: 'Comes through the rose gates once the Queen rings her bell. Sprays droplets of magic water from its watering can.' },
+    { boss: 'queen', name: 'The Queen', role: 'boss', from: 1, desc: 'Waves of homing arrows and piercing shots aimed where you are going. At half health she rings the garden bell: hedges rise as walls and gardeners come.' },
+    { boss: 'king', name: 'The King', role: 'boss', from: 1, desc: 'Shouts shockwaves from his throne, calling royal guards, and throws his scepter. At half health he rises with four bishops and his greatsword.' },
+  ],
 };
 
 // portrait scale per enemy (default 1.5) so the big ones still fit the page
-const BESTIARY_SCALE = { undeadKnight: 1.15, minigunner: 1.05, gravestone: 1.4, reaper: 1.3, flyingSkull: 2.4, ghost: 1.3, wraith: 1.3 };
+const BESTIARY_SCALE = {
+  undeadKnight: 1.15, minigunner: 1.05, gravestone: 1.4, reaper: 1.3, flyingSkull: 2.4, ghost: 1.3, wraith: 1.3,
+  cavalry: 1.0, catapult: 1.2, flamingCatapult: 1.2, executioner: 1.05, royalGuard: 1.3,
+};
 
 const BESTIARY_ROLES = ['all', 'melee', 'ranged', 'summoner', 'special', 'boss'];
 const BESTIARY_STAGES = ['all', 1, 2, 3];
@@ -79,6 +103,18 @@ const Bestiary = {
   },
 
   get isOpen() { return !document.getElementById('screen-bestiary').classList.contains('hidden'); },
+
+  /** A dungeon bookmark: the book turns over to that dungeon's chapter (every filter back to ALL). */
+  setTheme(id) {
+    if (!BESTIARY[id] || id === this.theme) return;
+    this.found = null;
+    const oldList = this.entries;
+    this.theme = id;
+    this.stage = 'all';
+    this.role = 'all';
+    this.renderFilters();
+    this.turnToNewList(0, oldList);
+  },
 
   /** A bookmark was pulled: the book turns over from the pages on show to the first of the marked entries. */
   setFilter(kind, value) {
@@ -135,12 +171,23 @@ const Bestiary = {
       drawRoomIcon(c.getContext('2d'), type, 0, 0, 2);
       return c.toDataURL();
     };
-    this.emblems ??= { boss: emblem('boss'), puzzle: emblem('puzzle') };
-    const theme = (name, icon, on, locked) => `<button class="bookmark dungeon${on ? ' on' : ''}${locked ? ' locked' : ''}"${locked ? ' disabled' : ''}>`
+    // the castle's: a gold crown set with a ruby
+    const crown = () => {
+      const c = document.createElement('canvas');
+      c.width = 16;
+      c.height = 16;
+      const ctx = c.getContext('2d');
+      const rows = ['........', 'X..X..X.', 'XX.XX.XX', 'XXXXXXXX', 'XXXrXXXX', 'XXXXXXXX', 'kkkkkkkk', '........'];
+      const colors = { X: '#ecd690', r: '#ff5a6a', k: OUTLINE };
+      rows.forEach((row, j) => [...row].forEach((ch, i) => { if (colors[ch]) { ctx.fillStyle = colors[ch]; ctx.fillRect(i * 2, j * 2 + 1, 2, 2); } }));
+      return c.toDataURL();
+    };
+    this.emblems ??= { boss: emblem('boss'), puzzle: emblem('puzzle'), castle: crown() };
+    const theme = (name, icon, on, locked, id = '') => `<button class="bookmark dungeon${on ? ' on' : ''}${locked ? ' locked' : ''}"${locked ? ' disabled' : ` data-action="bestiaryTheme:${id}"`}>`
       + `<img src="${icon}" alt=""><span>${name}</span></button>`;
     document.getElementById('bestiary-themes').innerHTML = Object.keys(BESTIARY)
-      .map((id) => theme(CONFIG.themes[id].name.toUpperCase(), this.emblems.boss, id === this.theme, false)).join('')
-      + theme('UNDISCOVERED', this.emblems.puzzle, false, true) + theme('UNDISCOVERED', this.emblems.puzzle, false, true);
+      .map((id) => theme(CONFIG.themes[id].name.toUpperCase(), this.emblems[id] || this.emblems.boss, id === this.theme, false, id)).join('')
+      + theme('UNDISCOVERED', this.emblems.puzzle, false, true);
     // stage ribbons read "STAGE I" / "STAGE II" ... so it's clear what they filter
     document.getElementById('bestiary-stages').innerHTML = BESTIARY_STAGES
       .map((s) => mark('stage', s, s === 'all' ? '<small>STAGES</small><b>ALL</b>' : `<small>STAGE</small><b>${romanNumeral(s)}</b>`, this.stage === s, '',
@@ -256,8 +303,9 @@ const Bestiary = {
     const stageText = e.role === 'boss' ? 'ALL STAGES' : e.note ? `${e.note} - STAGE ${first}+` : first === 1 ? 'STAGES 1-3' : first === 3 ? 'STAGE 3 ONLY' : `STAGE ${first}+`;
     let stats;
     if (e.boss) {
-      const c = CONFIG.phantom;
-      stats = `HP ${c.hp} &nbsp; DMG ${c.dashDamage}`;
+      const c = CONFIG[e.boss];
+      const dmg = { phantom: c.dashDamage, queen: c.homing?.damage, king: c.sword?.damage }[e.boss];
+      stats = `HP ${c.hp} &nbsp; DMG ${dmg}`;
     } else {
       const c = CONFIG.enemies[e.type];
       stats = `HP ${c.hp} &nbsp; DMG ${c.damage} &nbsp; SPD ${c.speed}${c.armor ? ` &nbsp; ARMOR ${Math.round(c.armor * 100)}%` : ''}`;
@@ -546,9 +594,9 @@ const Bestiary = {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         continue;
       }
-      const frames = Sprites.phantom;
-      const list = frames.walk || frames.idle;
-      const frame = list[Math.floor(time * (frames.walk ? 8 : 4)) % list.length].img;
+      // each boss's idle loop (the King on his throne)
+      const list = { phantom: Sprites.phantom.walk || Sprites.phantom.idle, queen: Sprites.queen.idle, king: Sprites.king.sit }[entry.boss];
+      const frame = list[Math.floor(time * (entry.boss === 'phantom' ? 8 : 4)) % list.length].img;
       const s = Math.min(3, Math.floor(Math.min(canvas.width / frame.width, canvas.height / frame.height) * 4) / 4);
       const w = frame.width * s;
       const h = frame.height * s;

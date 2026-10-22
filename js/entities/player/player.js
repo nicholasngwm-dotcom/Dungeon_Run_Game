@@ -130,6 +130,7 @@ class Player extends Entity {
     this.updateBuffs(dt, world);
     this.updateBrews(dt, world);
     this.updatePoison(dt, world);
+    this.updateAilments(dt, world);
     this.stunTime -= dt;
     this.tuneSpeed -= dt;
     this.inspired -= dt;
@@ -403,6 +404,48 @@ class Player extends Entity {
     }
   }
 
+  /** Set alight (flaming catapults): burnDps hp per second for `duration`s. Blocked hits don't burn. */
+  burn(dps, duration, world) { this.ailment('burn', dps, duration, world, 'BURNING', '#ff8a3a'); }
+
+  /** Cut open (the jester's daggers): bleeds dps hp per second for `duration`s. */
+  bleed(dps, duration, world) { this.ailment('bleed', dps, duration, world, 'BLEEDING', '#ff5a6a'); }
+
+  /** Burns and bleeding work like poison: a new dose refreshes it and the stronger dps wins. */
+  ailment(kind, dps, duration, world, label, color) {
+    if (this.dead || this.guard > 0 || this.iframes > 0 || this.brews.purity) return;
+    this.ailments ??= {};
+    const a = this.ailments[kind];
+    if (!a) world?.effects.text(this.hx, this.hy - 36, label, { color, size: 7 });
+    this.ailments[kind] = { dps: a ? Math.max(a.dps, dps) : dps, t: Math.max(a ? a.t : 0, duration), tick: a ? a.tick : 0.5, color };
+  }
+
+  updateAilments(dt, world) {
+    if (!this.ailments) return;
+    for (const [kind, a] of Object.entries(this.ailments)) {
+      a.t -= dt;
+      a.tick -= dt;
+      if (kind === 'burn' && Math.random() < dt * 14) {
+        world.effects.flames(this.x + rand(-7, 7), this.y - rand(2, 14), { count: 1, height: rand(12, 20), width: rand(6, 9), life: rand(0.25, 0.4) });
+      } else if (kind === 'bleed' && Math.random() < dt * 7) {
+        world.effects.burst(this.x + rand(-6, 6), this.y - rand(8, 22), { count: 1, colors: ['#c43a44', '#6a1622'], speed: [0, 10], life: [0.3, 0.5], gravity: 300, drag: 0, size: [2, 2] });
+      }
+      if (a.t <= 0) { delete this.ailments[kind]; continue; }
+      if (a.tick > 0) continue;
+      a.tick = 0.5;
+      if (world.practice && world.practice.options.god) continue;
+      const dmg = a.dps * 0.5;
+      this.hp -= dmg;
+      this.sinceHurt = 0;
+      world.effects.text(this.hx, this.hy - 24, `-${Math.round(dmg)}`, { color: a.color, size: 8 });
+      if (this.hp <= 0) {
+        this.hp = 0;
+        this.dead = true;
+        world.effects.burst(this.hx, this.hy, { count: 30, colors: [a.color, '#ffffff', '#6a1622'], speed: [80, 220], life: [0.5, 1] });
+        return;
+      }
+    }
+  }
+
   /** Can't move or act for `duration`s. Blocked hits don't stun. */
   stun(duration, world) {
     if (this.dead || this.guard > 0 || this.iframes > 0 || this.brews.purity) return;
@@ -507,6 +550,7 @@ class Player extends Entity {
     this.hp -= amount;
     this.sinceHurt = 0;
     this.invulnerable = CONFIG.player.hurtInvulnerability;
+    Game.statsOf(this).taken += amount;
     this.flashTime = 0.12;
     world.effects.text(this.hx, this.hy - 24, `-${Math.round(amount)}`, { color: '#ff5050', size: 10 });
     world.effects.burst(this.hx, this.hy, { count: 10, colors: ['#ff4a4a', '#b81e2e'], speed: [60, 160] });
@@ -532,6 +576,7 @@ class Player extends Entity {
     this.reviveProgress = 0;
     this.revivedBy = null;
     this.poisonTime = 0;
+    this.ailments = {};
     this.slowTime = 0;
     this.chillTime = 0;
     this.stunTime = 0;
@@ -578,6 +623,11 @@ class Player extends Entity {
     this.hp = Math.min(this.maxHp, this.hp + amount);
     const gained = this.hp - before;
     if (gained <= 0) return;
+    // scoreboard: healing belongs to the hero whose turn it is (a priestess's spell), or to the healed hero
+    if (world) {
+      const healer = world.players?.includes(world.actor) ? world.actor : this;
+      Game.statsOf(healer).healing += gained;
+    }
     if (quiet) {
       this.healPopup += gained;
       return;
@@ -774,9 +824,10 @@ class Player extends Entity {
     this.brews[pot.family] = { v: pot.value, t: pot.duration, max: pot.duration, tier: pot.tier, tick: cur ? cur.tick : 0, under: cur };
   }
 
-  /** Clears poison, slows, chills and stuns. */
+  /** Clears poison, burns, bleeding, slows, chills and stuns. */
   cleanse() {
     this.poisonTime = 0;
+    this.ailments = {};
     this.slowTime = 0;
     this.chillTime = 0;
     if (this.stunTime > 0) { this.busy = Math.min(this.busy, 0); this.stunTime = 0; }
@@ -877,7 +928,7 @@ class Player extends Entity {
   updateHealPopup(dt, world) {
     this.healPopupTimer -= dt;
     if (this.healPopupTimer > 0 || this.healPopup < 1) return;
-    this.healPopupTimer = 0.8;
+    this.healPopupTimer = 1;
     world.effects.text(this.hx, this.hy - 24, `+${Math.round(this.healPopup)}`, { color: '#6cff7a', size: 8 });
     this.healPopup = 0;
   }

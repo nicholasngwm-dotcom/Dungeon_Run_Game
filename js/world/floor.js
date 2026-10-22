@@ -21,11 +21,13 @@ const ROOM_SIZES = {
 const MAX_CHUNKS = 48;            // painted chunks kept around (the least recently drawn go first)
 
 class FloorMap extends Dungeon {
-  constructor(stage, themeId, seed = Math.floor(Math.random() * 1e9)) {
+  /** opts.boss: the stage boss (the castle paints its boss room as her garden or his throne room). */
+  constructor(stage, themeId, seed = Math.floor(Math.random() * 1e9), opts = {}) {
     super({ custom: true });
     const g = CONFIG.run.grid;
     this.stage = stage;
     this.themeId = themeId;
+    this.bossType = opts.boss || null;
     this.seed = seed;
     this.T = CONFIG.tileSize;
     this.cols = g.cols * g.cellW + 2;
@@ -52,6 +54,18 @@ class FloorMap extends Dungeon {
   // ---------- generation ----------
 
   generate() {
+    for (let tries = 0; tries < 40; tries++) {
+      this.rooms = [];
+      this.links = [];
+      if (this.layout() || tries === 39) break;
+    }
+    for (const r of this.rooms) this.placeRoom(r);
+    for (const l of this.links) this.carveLink(this.rooms[l.a], this.rooms[l.b]);
+    this.placeTorches();
+  }
+
+  /** Grows the tree of rooms and picks their types. False if the layout doesn't suit the boss (try again). */
+  layout() {
     const g = CONFIG.run.grid;
     const count = CONFIG.run.roomCount[this.stage - 1];
     const cells = new Map();                       // "cx,cy" -> room
@@ -90,7 +104,11 @@ class FloorMap extends Dungeon {
     start.type = 'start';
     const depth = this.bfs(start);
     const leaves = this.rooms.filter((r) => r !== start && r.links.length === 1).sort((a, b) => depth[b.id] - depth[a.id]);
-    const boss = leaves.shift() || this.rooms.filter((r) => r !== start).sort((a, b) => depth[b.id] - depth[a.id])[0];
+    // the throne room is entered from the side or from below, never through the wall behind the throne
+    const fits = (r) => this.bossType !== 'king' || !r.links.some((id) => this.rooms[id].gy < r.gy);
+    const boss = leaves.find(fits) || this.rooms.filter((r) => r !== start && fits(r)).sort((a, b) => depth[b.id] - depth[a.id])[0];
+    if (!boss) return false;
+    if (leaves.includes(boss)) leaves.splice(leaves.indexOf(boss), 1);
     boss.type = 'boss';
     const rest = this.rooms.filter((r) => r.type === 'combat');
     const pick = (list) => list.splice(Math.floor(Math.random() * list.length), 1)[0];
@@ -128,10 +146,7 @@ class FloorMap extends Dungeon {
       const [cx, cy] = choose(empty);
       addRoom(cx, cy).type = 'secret';
     }
-
-    for (const r of this.rooms) this.placeRoom(r);
-    for (const l of this.links) this.carveLink(this.rooms[l.a], this.rooms[l.b]);
-    this.placeTorches();
+    return true;
   }
 
   /** Steps from `from` to every room. */
@@ -242,6 +257,7 @@ class FloorMap extends Dungeon {
   placeTorches() {
     const T = this.T;
     for (const r of this.rooms) {
+      if (this.themeId === 'castle' && r.type === 'boss') continue;   // the garden and the throne room have their own lights
       for (let tx = r.x0 + 2; tx <= r.x1 - 2; tx += 5) {
         if (this.grid[r.y0 - 1][tx] !== TILE.WALL || this.grid[r.y0 - 2][tx] !== TILE.WALL) continue;
         this.torches.push({ tx, ty: r.y0 - 2, x: tx * T + 16, y: (r.y0 - 2) * T + 8, seed: Math.random() * 10 });
@@ -277,6 +293,7 @@ class FloorMap extends Dungeon {
     if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return TILE.WALL;
     if (this.locked.has(this.idx(tx, ty))) return TILE.WALL;
     if (this.doorBlocks?.has(this.idx(tx, ty))) return TILE.WALL;   // a shut door or gate (see SwingDoors)
+    if (this.blocks?.has(this.idx(tx, ty))) return TILE.WALL;       // a hedge grown up in the Queen's garden
     return this.grid[ty][tx];
   }
 
@@ -323,15 +340,19 @@ class FloorMap extends Dungeon {
     const p = new PixelArt(size, size);
     p.ctx.translate(-cx * size, -cy * size);
     const rng = seededRandom((this.seed + cx * 7919 + cy * 104729) >>> 0);
-    const B = (x, y) => this.baseTile(x, y);
+    // cover stands on ordinary floor (it is drawn as a prop, see DungeonRun.addCover)
+    const B = (x, y) => { const t = this.baseTile(x, y); return t === TILE.COVER ? TILE.FLOOR : t; };
     const grave = this.themeId === 'graveyard';
+    const castle = this.themeId === 'castle';
     for (let ty = cy * CHUNK; ty < (cy + 1) * CHUNK && ty < this.rows; ty++) {
       for (let tx = cx * CHUNK; tx < (cx + 1) * CHUNK && tx < this.cols; tx++) {
         const x = tx * T;
         const y = ty * T;
         if (B(tx, ty) === TILE.FLOOR) {
           const zone = this.zone[this.idx(tx, ty)];
-          if (grave && zone === ZONE.ROOM) {
+          if (castle) {
+            this.castleFloor(p, tx, ty, zone, rng);
+          } else if (grave && zone === ZONE.ROOM) {
             Grave.grass(p, x, y, rng);
             if (rng() < 0.03 && B(tx, ty - 1) === TILE.FLOOR && B(tx, ty + 1) === TILE.FLOOR) Tiles.graveDecor(p, x, y, rng);
             else if (rng() < 0.015) Tiles.bones(p, x, y, rng);
@@ -352,26 +373,123 @@ class FloorMap extends Dungeon {
         // walls: brick face where floor lies one or two tiles below, flat top otherwise
         const below1 = B(tx, ty + 1) === TILE.FLOOR;
         const below2 = B(tx, ty + 1) !== TILE.FLOOR && B(tx, ty + 2) === TILE.FLOOR;
-        if (grave && (below1 || below2)) {
+        const edges = { left: B(tx - 1, ty) === TILE.FLOOR, right: B(tx + 1, ty) === TILE.FLOOR, up: B(tx, ty - 1) === TILE.FLOOR, down: false };
+        if (castle) {
+          this.castleWall(p, tx, ty, below1 ? 1 : below2 ? 0 : -1, edges, rng);
+        } else if (grave && (below1 || below2)) {
           Grave.wallFace(p, x, y, below1 ? 1 : 0, rng);
         } else if (grave) {
-          Grave.hedge(p, x, y, rng, { left: B(tx - 1, ty) === TILE.FLOOR, right: B(tx + 1, ty) === TILE.FLOOR, up: B(tx, ty - 1) === TILE.FLOOR, down: false });
+          Grave.hedge(p, x, y, rng, edges);
         } else if (below1 || below2) {
           Tiles.wallFace(p, x, y, below1 ? 1 : 0, rng);
         } else {
           Tiles.wallTop(p, x, y, rng);
-          Tiles.wallEdges(p, x, y, {
-            down: false,
-            left: B(tx - 1, ty) === TILE.FLOOR,
-            right: B(tx + 1, ty) === TILE.FLOOR,
-          });
+          Tiles.wallEdges(p, x, y, { down: false, left: edges.left, right: edges.right });
         }
+      }
+    }
+    // things hung on the walls span two tiles, so they go on after every tile (including the row above the chunk)
+    if (castle) {
+      for (let ty = cy * CHUNK - 1; ty < (cy + 1) * CHUNK && ty < this.rows; ty++) {
+        for (let tx = cx * CHUNK; tx < (cx + 1) * CHUNK && tx < this.cols; tx++) this.castleWallHanging(p, tx, ty, B);
       }
     }
     for (const t of this.torches) {
       if (Math.floor(t.tx / CHUNK) === cx && Math.floor(t.ty / CHUNK) === cy) Tiles.torchBracket(p, t.tx * T, t.ty * T);
     }
     return p.canvas;
+  }
+
+  // ---------- the castle's look (see CastleTiles) ----------
+
+  get bossRoom() { return this.rooms.find((r) => r.type === 'boss'); }
+
+  /** True if tile (tx, ty) is inside room r grown by `pad` tiles (and `top` more above, for the tall back wall). */
+  nearRoom(r, tx, ty, pad = 0, top = 0) {
+    return !!r && tx >= r.x0 - pad && tx <= r.x1 + pad && ty >= r.y0 - pad - top && ty <= r.y1 + pad;
+  }
+
+  /** A same-every-time number for a tile (so each chunk agrees on what hangs where). */
+  tileHash(tx, ty) {
+    let h = (Math.imul(tx, 73856093) ^ Math.imul(ty, 19349663) ^ this.seed) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+    return (h ^ (h >>> 16)) >>> 0;
+  }
+
+  castleFloor(p, tx, ty, zone, rng) {
+    const T = this.T;
+    const x = tx * T;
+    const y = ty * T;
+    const boss = this.bossRoom;
+    if (this.nearRoom(boss, tx, ty) && this.bossType === 'queen') {
+      // the garden: gravel paths crossing at the bell, a gravel ring round it, lawn between
+      const mx = (boss.x0 + boss.x1) / 2;
+      const my = (boss.y0 + boss.y1) / 2;
+      const d = Math.hypot(tx - mx, (ty - my) * 1.25);
+      const path = Math.abs(tx - mx) <= 1 || Math.abs(ty - my) <= 1 || (d > 3.2 && d < 4.6);
+      if (path && d > 1.4) CastleTiles.gravel(p, x, y, rng);
+      else if (d <= 1.4) CastleTiles.gravel(p, x, y, rng);
+      else CastleTiles.gardenGrass(p, x, y, rng);
+      return;
+    }
+    if (this.nearRoom(boss, tx, ty) && this.bossType === 'king') {
+      // the throne room: marble, with the red carpet running up the middle to the dais
+      const off = Math.round(tx + 0.5 - (boss.x0 + boss.x1 + 1) / 2 - 0.5);
+      if (Math.abs(off) <= 2 && ty >= boss.y0 + 4) CastleTiles.throneCarpet(p, x, y, rng, off);
+      else CastleTiles.marble(p, x, y, rng, tx, ty);
+      return;
+    }
+    if (zone === ZONE.HALL) {
+      const l = this.hallAt(x + T / 2, y + T / 2);
+      if (l) {
+        let a = this.rooms[l.a];
+        let b = this.rooms[l.b];
+        if (a.gx > b.gx || a.gy > b.gy) [a, b] = [b, a];
+        const along = a.gy === b.gy;
+        CastleTiles.hall(p, x, y, rng, along, along ? ty - a.midY : tx - a.midX);
+        return;
+      }
+    }
+    CastleTiles.floor(p, x, y, rng);
+  }
+
+  /** row: 0 upper wall face, 1 lower wall face, -1 the masonry (or hedge) between rooms. */
+  castleWall(p, tx, ty, row, edges, rng) {
+    const T = this.T;
+    const x = tx * T;
+    const y = ty * T;
+    const boss = this.bossRoom;
+    const garden = this.bossType === 'queen' && this.nearRoom(boss, tx, ty, 2, 1);
+    const throne = this.bossType === 'king' && this.nearRoom(boss, tx, ty, 1, 1);
+    if (row >= 0) {
+      if (garden) CastleTiles.hedgeFace(p, x, y, row, rng);
+      else if (throne) CastleTiles.royalWall(p, x, y, row, rng, tx);
+      else CastleTiles.wallFace(p, x, y, row, rng);
+      return;
+    }
+    if (garden) CastleTiles.hedgeTop(p, x, y, rng, edges);
+    else CastleTiles.wallTop(p, x, y, rng, edges);
+  }
+
+  /** Arrow slits and torn banners along the castle's walls; tall stained glass in the throne room. */
+  castleWallHanging(p, tx, ty, B) {
+    const T = this.T;
+    // only on the upper tile of a two-tile wall face
+    if (B(tx, ty) === TILE.FLOOR || B(tx, ty + 1) === TILE.FLOOR || B(tx, ty + 2) !== TILE.FLOOR) return;
+    if (B(tx - 1, ty + 2) !== TILE.FLOOR || B(tx + 1, ty + 2) !== TILE.FLOOR) return;   // not right at a corner
+    if (this.torches.some((t) => Math.abs(t.tx - tx) <= 1 && t.ty === ty)) return;
+    const boss = this.bossRoom;
+    if (this.bossType === 'queen' && this.nearRoom(boss, tx, ty, 2, 1)) return;
+    if (this.bossType === 'king' && this.nearRoom(boss, tx, ty, 1, 1)) {
+      const mid = (boss.x0 + boss.x1 + 1) / 2;
+      const off = tx + 0.5 - mid;
+      if (Math.abs(Math.abs(off) - 12) < 0.6 || Math.abs(Math.abs(off) - 4.5) < 0.6) CastleTiles.stainedGlass(p, tx * T, ty * T);
+      return;
+    }
+    const h = this.tileHash(tx, ty) % 13;
+    const rng = seededRandom(this.tileHash(tx, ty));
+    if (h === 0) CastleTiles.slit(p, tx * T, ty * T);
+    else if (h === 6 && B(tx, ty + 3) === TILE.FLOOR) CastleTiles.banner(p, tx * T, ty * T, rng);
   }
 
   drawTorches(ctx, time, camera) {

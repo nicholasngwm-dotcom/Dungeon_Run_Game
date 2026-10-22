@@ -310,7 +310,7 @@ class Golem {
         const a = angleTo(bx, by, h.x, h.y);
         const push = solidR + h.hw - d;
         world.dungeon.move(h, Math.cos(a) * push, Math.sin(a) * push);
-        if (this.phase === 2 && !this.isRolling) h.hurt(this.cfg.bodyContactDamage, world, bx, by);
+        if (this.phase === 2 && !this.isRolling) h.hurt(this.cfg.bodyContactDamage, world, bx, by, { contact: true });
       }
     }
   }

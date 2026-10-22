@@ -34,23 +34,27 @@ class Bard extends Player {
 
   primary(world) {
     const c = this.cfg.strum;
-    this.cooldowns.primary = c.cooldown;
+    const song = this.cfg.tunes[this.tune];
+    this.cooldowns.primary = c.cooldown / (1 + (song.attackSpeed || 0));   // she strums faster to the energetic tune
     this.strumAnim = 0.15;
     const tone = BARD_FX[this.tune];
+    const speed = c.speed * (song.noteSpeed || 1);       // energetic notes fly faster, calming ones drift slower
+    const damage = c.damage * (song.noteDamage || 1);    // calming notes hit softer
+    const life = c.life * Math.max(1, 1 / (song.noteSpeed || 1));   // slow notes fly longer, so they reach as far
     const spread = c.spreadDegrees * DEG;
     for (let i = 0; i < c.count; i++) {
       const a = this.aim + (i - (c.count - 1) / 2) * spread;
       const phase = i * 2.1;
       world.playerProjectiles.push(new Projectile({
         x: this.pivotX + Math.cos(a) * 16, y: this.pivotY + Math.sin(a) * 16,
-        vx: Math.cos(a) * c.speed, vy: Math.sin(a) * c.speed,
-        radius: 7, damage: c.damage, life: c.life, knockback: 70, upright: true,
+        vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
+        radius: 7, damage, life, knockback: 70, upright: true,
         sprite: Sprites.projectiles.notes[this.tune][i % 2], glow: tone.rgb, trail: tone.notes.slice(1),
         // bob side to side along the flight like a melody
         homing: (p) => {
           const ang = a + Math.sin(p.age * 14 + phase) * c.wobble;
-          p.vx = Math.cos(ang) * c.speed;
-          p.vy = Math.sin(ang) * c.speed;
+          p.vx = Math.cos(ang) * speed;
+          p.vy = Math.sin(ang) * speed;
         },
         onStrike: (p, w, t) => noteHit(w, t.hx, t.hy, tone.notes),
       }));

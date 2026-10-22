@@ -115,12 +115,20 @@ class DungeonRun {
 
   buildStage() {
     const w = this.world;
-    w.dungeon = new FloorMap(this.stage, this.themeId);
+    // the stage boss: the theme's own, or (the castle) one of its two, never the same twice in a row
+    const options = this.theme.bosses || [this.theme.boss];
+    const fresh = options.filter((b) => b !== this.bossType);
+    this.bossType = choose(fresh.length ? fresh : options);
+    w.dungeon = new FloorMap(this.stage, this.themeId, undefined, { boss: this.bossType });
     this.active = null;
     this.portal = null;
     this.totem = null;
     this.props = [];
-    this.spikes = [];
+    this.spikes = [];            // every spiked tile ({ tx, ty, x, y, offset, pad })
+    this.spikePads = [];         // the square pads they belong to (fire together)
+    this.cover = [];             // solid themed cover in fight rooms ({ kind, tx, ty, w, h, x, y, seed })
+    this.extraLights = [];       // short-lived lights (burning ground, ice), until world time `until`
+    this.sleepers = [];          // combat rooms' first waves, already standing about in them (see populate)
     this.hole = null;            // the glowing hole down to the secret room
     // this stage's shop: the potion shelf (shared) and each hero's upgrade store state
     this.shopSeed = Math.floor(Math.random() * 2 ** 31);
@@ -128,6 +136,8 @@ class DungeonRun {
     this.shopStates = {};
     const f = w.dungeon;
     for (const r of f.rooms) {
+      if (CONFIG.run.cover.rooms.includes(r.type)) this.addCover(r);
+      if (r.type === 'boss' && this.bossType === 'king') this.solidThrone(r);
       if (r.type === 'combat') this.addSpikes(r);
       this.addProps(r);
     }
@@ -135,13 +145,13 @@ class DungeonRun {
     // swinging doors at both ends of every hallway (each room door knows its pair of leaves)
     const leaves = [];
     for (const r of f.rooms) for (const d of r.doors) { d.swing = leaves.length; leaves.push({ ...d.leaf, tiles: d.tiles }); }
-    // the graveyard's are creaking wrought-iron gates
+    // the graveyard's are creaking wrought-iron gates (the castle keeps heavy oak doors)
     const iron = this.themeId === 'graveyard';
     this.doors = new SwingDoors(leaves, iron
       ? { reach: 72, height: 70, edge: 8, style: 'iron', sounds: { open: 'gateCreak', shut: 'gateShut', slam: 'gateClang' } }
       : { reach: 72, height: 64, edge: 10 });
     this.decor = new FloorDecor(f, this);
-    this.fog = this.theme.night ? this.placeFog(f) : [];
+    this.fog = this.theme.night && this.theme.fog !== false ? this.placeFog(f) : [];
     const s = f.startRoom;
     s.state = 'cleared';
     this.visit(s);
@@ -157,7 +167,9 @@ class DungeonRun {
       p.y = s.y + off.y;
     });
     w.camera.follow(s.x, s.y, 0, this.floor.width, this.floor.height, true);
-    w.banner(`${this.theme.name.toUpperCase()} - STAGE ${this.stage}`, this.stage === 1 ? 'Clear the rooms and find the boss' : 'The dead grow stronger', 3);
+    this.populate();
+    const lines = this.theme.stageLines || ['Clear the rooms and find the boss', 'The enemies grow stronger', 'The enemies grow stronger'];
+    w.banner(`${this.theme.name.toUpperCase()} - STAGE ${this.stage}`, this.byStage(lines), 3);
   }
 
   nextStage() {
@@ -207,6 +219,7 @@ class DungeonRun {
     }
     if (this.active) this.updateRoom(dt);
     if (this.active) this.containRoom(dt);
+    this.updateSleepers(dt);
     this.updateSpikes(dt);
     this.updateProps(dt);
     this.decor.update(dt, w);
@@ -266,13 +279,14 @@ class DungeonRun {
       case 'combat':
         r.wave = 0;
         r.waves = R.combat.waves[s];
-        this.spawnWave(r);
+        if (!this.wakeRoom(r)) this.spawnWave(r);
         break;
       case 'defend':
         this.startDefend(r);
         break;
       case 'survival':
         r.timeLeft = R.survival.duration[s];
+        r.timeTotal = r.timeLeft;
         r.spawnTimer = 0.5;
         w.banner('SURVIVE', `Hold out for ${r.timeLeft} seconds`, 1.8);
         break;
@@ -325,7 +339,7 @@ class DungeonRun {
     w.maybeDropHeart(r.cx, r.cy, 0.35);
     // reward chest (in the boss room it sits below the portal)
     const T = this.floor.T;
-    const y = r.type === 'boss' ? r.cy + 3 * T : r.cy + 0.5 * T;
+    const y = r.type === 'boss' ? this.portalSpot(r).y + 3 * T : r.cy + 0.5 * T;
     this.props.push({ kind: 'rewardChest', room: r, x: r.cx, y, label: 'OPEN CHEST', color: '#ffd34a', opened: false, t: 0 });
     w.effects.burst(r.cx, y - 10, { count: 24, colors: ['#ffd34a', '#fff2a0', '#ffffff'], speed: [40, 140], life: [0.3, 0.7], up: 40 });
   }
@@ -532,7 +546,8 @@ class DungeonRun {
       case 'boss':
         if (r.bossDown && !w.boss) {
           this.finish(r);
-          this.portal = { kind: 'portal', x: r.cx, y: r.cy, label: this.stage < 3 ? 'ENTER PORTAL' : 'ESCAPE' };
+          const spot = this.portalSpot(r);
+          this.portal = { kind: 'portal', x: spot.x, y: spot.y, label: this.stage < 3 ? 'ENTER PORTAL' : 'ESCAPE' };
           w.banner(`${r.bossName} DEFEATED`, this.stage < 3 ? 'Enter the portal to go deeper' : 'Enter the portal to escape', 3);
         }
         break;
@@ -557,6 +572,7 @@ class DungeonRun {
     const tooClose = (pt) => w.heroes.some((p) => dist(pt.x, pt.y, p.x, p.y) < 170);
     let pt = this.floor.randomPointIn(r, 2);
     for (let i = 0; i < 20 && tooClose(pt); i++) pt = this.floor.randomPointIn(r, 2);
+    pt = this.floor.freePoint(pt.x, pt.y, 10, 8);   // never inside cover
     w.spawnEnemy(type, pt.x, pt.y);
   }
 
@@ -567,6 +583,76 @@ class DungeonRun {
     const counts = {};
     for (let i = 0; i < n; i++) this.spawnIn(r, this.pickEnemy(counts));
     this.world.banner(`WAVE ${r.wave}/${r.waves}`, '', 1.2);
+  }
+
+  // ---------- the first waves, waiting in their rooms ----------
+
+  /**
+   * Every combat room's first wave is already there when the stage begins, idling and
+   * milling about where you can see them through the doorways. They take no notice
+   * (and can't be hurt) until someone walks in and the doors slam: then they attack,
+   * and the later waves spawn in as usual.
+   */
+  populate() {
+    const f = this.floor;
+    const T = f.T;
+    const c = CONFIG.run.combat;
+    for (const r of f.rooms) {
+      if (r.type !== 'combat' || r.state !== 'idle') continue;
+      const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ x: (t % f.cols + 0.5) * T, y: (Math.floor(t / f.cols) + 0.5) * T }));
+      const n = Math.round((this.byStage(c.perWave) + randInt(0, c.perWaveRandom)) * this.world.playerScale.count);
+      const counts = {};
+      for (let i = 0; i < n; i++) {
+        let pt = f.randomPointIn(r, 2);
+        for (let k = 0; k < 20 && (doors.some((d) => dist(d.x, d.y, pt.x, pt.y) < 5 * T) || (this.hole && this.hole.room === r && dist(this.hole.x, this.hole.y, pt.x, pt.y) < 60)); k++) pt = f.randomPointIn(r, 2);
+        pt = f.freePoint(pt.x, pt.y, 10, 8);
+        const e = createEnemy(this.pickEnemy(counts), pt.x, pt.y);
+        this.world.scaleEnemy(e);
+        e.age = 5;
+        e.room = r;
+        e.home = { x: pt.x, y: pt.y };
+        e.goal = null;
+        e.idle = rand(0.5, 4);
+        e.facing = Math.random() < 0.5 ? 1 : -1;
+        this.sleepers.push(e);
+      }
+    }
+  }
+
+  /** The waiting enemies idle, now and then wandering a few steps from where they stand. */
+  updateSleepers(dt) {
+    const w = this.world;
+    for (const e of this.sleepers) {
+      e.animTime += dt;
+      e.moving = false;
+      if (e.idle > 0 || !(e.speed > 0)) { e.idle -= dt; continue; }
+      if (!e.goal) e.goal = { x: e.home.x + rand(-60, 60), y: e.home.y + rand(-40, 40) };
+      const x0 = e.x;
+      const y0 = e.y;
+      e.moveAngle(w, angleTo(e.x, e.y, e.goal.x, e.goal.y), e.speed * 0.3, dt);
+      if (dist(e.x, e.y, e.goal.x, e.goal.y) < 4 || dist(x0, y0, e.x, e.y) < e.speed * 0.3 * dt * 0.3) {
+        e.goal = null;
+        e.idle = rand(1.5, 4.5);
+      }
+    }
+  }
+
+  /** Someone walked into r: its waiting enemies notice ("!") and the fight is on. False if it had none. */
+  wakeRoom(r) {
+    const w = this.world;
+    const list = this.sleepers.filter((e) => e.room === r);
+    if (!list.length) return false;
+    this.sleepers = this.sleepers.filter((e) => e.room !== r);
+    for (const e of list) {
+      e.moving = false;
+      e.attackCooldown = rand(0.6, 1.3);
+      e.setState('chase');
+      w.enemies.push(e);
+      w.effects.text(e.x, e.y - e.barOffset - 6, '!', { color: '#ff5a4a', size: 12, life: 0.8, rise: 18 });
+    }
+    r.wave = 1;
+    w.banner(`WAVE 1/${r.waves}`, '', 1.2);
+    return true;
   }
 
   /** Clears the remaining enemies without a fight (timers ran out). */
@@ -587,6 +673,7 @@ class DungeonRun {
   startDefend(r, again = false) {
     const c = CONFIG.run.defend;
     r.timeLeft = this.byStage(c.duration);
+    r.timeTotal = r.timeLeft;
     r.waveTimer = 1;
     this.totem = new DefendTotem(r.cx, r.cy + 16, Math.round(this.byStage(c.totemHp)));
     this.world.banner(again ? 'TRY AGAIN' : 'DEFEND THE LANTERN', `Keep it alive for ${r.timeLeft} seconds`, 2);
@@ -626,8 +713,11 @@ class DungeonRun {
 
   startBoss(r) {
     const w = this.world;
-    const type = this.theme.boss;
-    w.boss = Game.createBoss(type, { x: r.cx, y: r.cy - 20 });
+    const type = this.bossType;
+    const T = this.floor.T;
+    // the Queen stands before her bell; the King sits on his throne at the top of the room
+    const at = type === 'queen' ? { x: r.cx, y: r.cy + 3.5 * T } : type === 'king' ? { x: r.cx, y: (r.y0 + 5) * T - 30 } : { x: r.cx, y: r.cy - 20 };
+    w.boss = Game.createBoss(type, at);
     const s = this.scale;
     const b = w.boss;
     b.maxHp = Math.round(b.maxHp * s.hp * w.playerScale.hp);   // stage x party size
@@ -653,14 +743,20 @@ class DungeonRun {
       this.spawnCoins(r.cx, r.cy, randInt(lo, hi));
       // a ring of hearts around where the portal will open, to patch up before going deeper
       const n = CONFIG.run.bossHearts;
+      const spot = this.portalSpot(r);
       for (let i = 0; i < n; i++) {
         const a = -Math.PI / 2 + (i / n) * TAU;
-        const pt = this.floor.freePoint(r.cx + Math.cos(a) * 70, r.cy + Math.sin(a) * 50, 6, 6);
+        const pt = this.floor.freePoint(spot.x + Math.cos(a) * 70, spot.y + Math.sin(a) * 50, 6, 6);
         this.world.pickups.push(new HeartPickup(pt.x, pt.y));
       }
       this.world.effects.burst(r.cx, r.cy - 10, { count: 24, colors: ['#ff5a6a', '#ffb0b8', '#ffffff'], speed: [60, 160], life: [0.3, 0.7], up: 40 });
     }
     Music.play('battle');
+  }
+
+  /** Where a beaten boss room's portal opens (in the garden: on the lawn before the bell, not under it). */
+  portalSpot(r) {
+    return this.bossType === 'queen' ? { x: r.cx, y: r.cy + 3.4 * this.floor.T } : { x: r.cx, y: r.cy };
   }
 
   /** Someone used the portal: the whole party goes on to the next stage (or out, after the last). */
@@ -672,16 +768,88 @@ class DungeonRun {
 
   // ---------- spike traps (combat rooms) ----------
 
+  /**
+   * Cover for a fight room, in the theme's style (the graveyard's headstones and
+   * tombs): solid tiles (TILE.COVER) that stop heroes, enemies and shots alike,
+   * kept clear of the room's middle, its doorways, its walls and each other.
+   */
+  addCover(r) {
+    const kinds = this.theme.cover;
+    if (!kinds) return;
+    const c = CONFIG.run.cover;
+    const f = this.floor;
+    const T = f.T;
+    const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ tx: t % f.cols, ty: Math.floor(t / f.cols) }));
+    const total = kinds.reduce((s, k) => s + k[3], 0);
+    const pickKind = () => {
+      let roll = Math.random() * total;
+      for (const k of kinds) if ((roll -= k[3]) < 0) return k;
+      return kinds[0];
+    };
+    const n = randInt(c.perRoom[0], c.perRoom[1]);
+    for (let k = 0, placed = 0; k < 80 && placed < n; k++) {
+      const [kind, w, h] = pickKind();
+      const tx = randInt(r.x0 + 2, r.x1 - 1 - w);
+      const ty = randInt(r.y0 + 3, r.y1 - 1 - h);
+      const cx = (tx + w / 2) * T;
+      const cy = (ty + h / 2) * T;
+      if (Math.abs(cx - r.cx) < 4 * T && Math.abs(cy - r.cy) < 3 * T) continue;   // the middle stays open
+      if (doors.some((d) => d.tx >= tx - 4 && d.tx <= tx + w + 3 && d.ty >= ty - 4 && d.ty <= ty + h + 3)) continue;
+      if (this.cover.some((o) => tx < o.tx + o.w + 2 && tx + w + 2 > o.tx && ty < o.ty + o.h + 2 && ty + h + 2 > o.ty)) continue;
+      const piece = { kind, tx, ty, w, h, x: tx * T, y: ty * T, seed: Math.floor(Math.random() * 1000), room: r };
+      this.cover.push(piece);
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) f.grid[ty + j][tx + i] = TILE.COVER;
+      placed++;
+    }
+  }
+
+  /** The back of the King's throne is solid (heroes can't slip round behind him). */
+  solidThrone(r) {
+    const f = this.floor;
+    const mid = Math.round((r.x0 + r.x1 + 1) / 2);
+    for (let ty = r.y0; ty <= r.y0 + 1; ty++) for (let tx = mid - 2; tx < mid + 2; tx++) f.grid[ty][tx] = TILE.COVER;
+  }
+
+  /** True if (x, y) is within `pad` px of any piece of cover. */
+  nearCover(x, y, pad) {
+    return this.cover.some((o) => x > o.x - pad && x < o.x + o.w * this.floor.T + pad && y > o.y - pad && y < o.y + o.h * this.floor.T + pad);
+  }
+
+  /** A piece of cover in the dungeon's style (bottom of its tiles at y). */
+  drawCover(ctx, o) {
+    const T = this.floor.T;
+    const set = Sprites.cover && Sprites.cover[o.kind];
+    if (!set) return;
+    const img = set[o.seed % set.length];
+    const bx = Math.round(o.x + (o.w * T) / 2);
+    const by = Math.round(o.y + o.h * T);
+    drawShadow(ctx, bx, by - 3, (o.w * T) / 2 + 2, 6, 0.4);
+    ctx.drawImage(img, bx - Math.round(img.width / 2), by - img.height);
+  }
+
+  /** Square spike pads (2x2 or 4x4) around a combat room, clear of its middle, its doorways and each other. */
   addSpikes(r) {
     const c = CONFIG.run.spikes;
-    const n = randInt(c.perRoom[0], c.perRoom[1]);
-    const T = this.floor.T;
-    for (let i = 0; i < n; i++) {
-      const tx = randInt(r.x0 + 1, r.x1 - 1);
-      const ty = randInt(r.y0 + 1, r.y1 - 1);
-      if (this.spikes.some((s) => s.tx === tx && s.ty === ty)) continue;
-      if (Math.abs(tx * T - r.cx) < 2 * T && Math.abs(ty * T - r.cy) < 2 * T) continue;   // keep the middle clear
-      this.spikes.push({ tx, ty, x: tx * T, y: ty * T, offset: rand(0, c.period), hit: false });
+    const f = this.floor;
+    const T = f.T;
+    const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ tx: t % f.cols, ty: Math.floor(t / f.cols) }));
+    const n = randInt(c.pads[0], c.pads[1]);
+    for (let k = 0, placed = 0; k < 60 && placed < n; k++) {
+      const size = Math.random() < c.bigChance ? 4 : 2;
+      const tx = randInt(r.x0 + 1, r.x1 - size);
+      const ty = randInt(r.y0 + 1, r.y1 - size);
+      const cx = (tx + size / 2) * T;
+      const cy = (ty + size / 2) * T;
+      if (Math.abs(cx - r.cx) < (2.5 + size / 2) * T && Math.abs(cy - r.cy) < (2 + size / 2) * T) continue;
+      if (doors.some((d) => d.tx >= tx - 3 && d.tx <= tx + size + 2 && d.ty >= ty - 3 && d.ty <= ty + size + 2)) continue;
+      if (this.cover.some((o) => tx < o.tx + o.w + 1 && tx + size + 1 > o.tx && ty < o.ty + o.h + 1 && ty + size + 1 > o.ty)) continue;
+      if (this.spikePads.some((p) => tx < p.tx + p.size + 1 && tx + size + 1 > p.tx && ty < p.ty + p.size + 1 && ty + size + 1 > p.ty)) continue;
+      const pad = { tx, ty, size, x: tx * T, y: ty * T, offset: rand(0, c.period), hits: new Set() };
+      this.spikePads.push(pad);
+      for (let j = 0; j < size; j++) {
+        for (let i = 0; i < size; i++) this.spikes.push({ tx: tx + i, ty: ty + j, x: (tx + i) * T, y: (ty + j) * T, offset: pad.offset, pad });
+      }
+      placed++;
     }
   }
 
@@ -694,14 +862,15 @@ class DungeonRun {
     return 0;
   }
 
+  /** A pad's spikes hurt whoever stands on it when they shoot up: once per hero per thrust. */
   updateSpikes() {
     const T = this.floor.T;
-    for (const s of this.spikes) {
-      const up = this.spikeState(s) === 1;
-      if (!up) { s.hit = false; continue; }
-      if (s.hit) continue;
+    for (const pad of this.spikePads) {
+      if (this.spikeState(pad) !== 1) { pad.hits.clear(); continue; }
+      const w = pad.size * T;
       for (const a of this.world.allies) {
-        if (a.x > s.x && a.x < s.x + T && a.y > s.y && a.y < s.y + T && a.hurt(CONFIG.run.spikes.damage, this.world, a.x, a.y + 10)) s.hit = true;
+        if (a.flying || pad.hits.has(a)) continue;   // the bird flies over
+        if (a.x > pad.x && a.x < pad.x + w && a.y > pad.y && a.y < pad.y + w && a.hurt(CONFIG.run.spikes.damage, this.world, a.x, a.y + 10)) pad.hits.add(a);
       }
     }
   }
@@ -748,6 +917,7 @@ class DungeonRun {
       const pt = f.randomPointIn(r, 2);
       if (Math.abs(pt.x - r.cx) < 3 * T && Math.abs(pt.y - r.cy) < 2 * T) continue;
       if (this.spikes.some((s) => Math.abs(s.x + 16 - pt.x) < 48 && Math.abs(s.y + 16 - pt.y) < 48)) continue;
+      if (this.nearCover(pt.x, pt.y, 48)) continue;
       const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ x: (t % f.cols + 0.5) * T, y: (Math.floor(t / f.cols) + 0.5) * T }));
       if (doors.some((d) => dist(d.x, d.y, pt.x, pt.y) < 3 * T)) continue;
       this.hole = { kind: 'hole', room: r, x: pt.x, y: pt.y, label: 'JUMP IN', color: '#fff6c8' };
@@ -1004,6 +1174,15 @@ class DungeonRun {
     if (this.totem) items.push({ y: this.totem.y, draw: (ctx) => this.totem.draw(ctx) });
     if (this.totem && this.totem.souls.length) items.push({ y: this.totem.y + 1000, draw: (ctx) => this.totem.drawSouls(ctx) });
     items.push(...this.decor.getDrawables(this.world.camera));
+    const cam = this.world.camera;
+    for (const o of this.cover) {
+      if (o.x > cam.x + cam.width + 64 || o.x + 96 < cam.x || o.y > cam.y + cam.height + 64 || o.y + 96 < cam.y) continue;
+      items.push({ y: o.y + o.h * this.floor.T - 2, draw: (ctx) => this.drawCover(ctx, o) });
+    }
+    for (const e of this.sleepers) {
+      if (e.x < cam.x - 80 || e.x > cam.x + cam.width + 80 || e.y < cam.y - 40 || e.y > cam.y + cam.height + 120) continue;
+      items.push({ y: e.y, draw: (ctx) => Game.drawEnemy(ctx, e) });
+    }
     items.push(...this.doors.drawables(this.world.camera));
     return items;
   }
@@ -1013,12 +1192,50 @@ class DungeonRun {
   drawGround(ctx) {
     const T = this.floor.T;
     this.decor.drawGround(ctx, this.world.camera);
-    // spikes
+    for (const e of this.sleepers) e.drawGround(ctx);
+    // spike pads: a riveted iron plate with hazard-striped corners, glowing red as it's about to fire
+    for (const pad of this.spikePads) {
+      const st = this.spikeState(pad);
+      const w = pad.size * T;
+      const { x, y } = pad;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x - 2, y - 2, w + 4, w + 4);
+      ctx.fillStyle = '#3a3846';
+      ctx.fillRect(x, y, w, w);
+      ctx.fillStyle = '#6a6878';
+      ctx.fillRect(x, y, w, 2);
+      ctx.fillStyle = '#26242e';
+      ctx.fillRect(x, y + w - 2, w, 2);
+      // hazard stripes in each corner
+      for (const [cx, cy, sx, sy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + w, 1, -1], [x + w, y + w, -1, -1]]) {
+        for (let k = 0; k < 3; k++) {
+          ctx.fillStyle = k % 2 ? '#2a2420' : '#e0a82a';
+          ctx.fillRect(sx > 0 ? cx + k * 3 : cx - (k + 1) * 3, sy > 0 ? cy : cy - 3, 3, 3);
+          ctx.fillRect(sx > 0 ? cx : cx - 3, sy > 0 ? cy + k * 3 : cy - (k + 1) * 3, 3, 3);
+        }
+      }
+      // a yellow-and-black hazard border all the way round
+      ctx.save();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#1a1416';
+      ctx.strokeRect(x + 1, y + 1, w - 2, w - 2);
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = '#f0b830';
+      ctx.strokeRect(x + 1, y + 1, w - 2, w - 2);
+      ctx.restore();
+      for (const [rx, ry] of [[x + 9, y + 9], [x + w - 10, y + 9], [x + 9, y + w - 10], [x + w - 10, y + w - 10]]) {
+        ctx.fillStyle = '#80869a';
+        ctx.fillRect(rx, ry, 2, 2);
+      }
+      if (st !== 0) {
+        const glow = st === 1 ? 0.35 : 0.18 + Math.sin(this.time * 30) * 0.1;
+        ctx.fillStyle = `rgba(255, 60, 40, ${glow})`;
+        ctx.fillRect(x, y, w, w);
+      }
+    }
     for (const s of this.spikes) {
       const st = this.spikeState(s);
-      ctx.fillStyle = 'rgba(20, 16, 24, 0.75)';
-      ctx.fillRect(s.x + 3, s.y + 3, T - 6, T - 6);
-      ctx.fillStyle = '#4a4058';
+      ctx.fillStyle = '#1a1820';
       for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) ctx.fillRect(s.x + 7 + i * 8, s.y + 7 + j * 8, 3, 3);
       if (st === 0) continue;
       const h = st === 1 ? 10 : 3;
@@ -1468,6 +1685,9 @@ class DungeonRun {
       else if (d.kind === 'campfire') out.push({ x: d.x, y: d.y - 10, r: 200 + flick * 10, s: 1, rgb: '255, 150, 60' });
       else if (d.kind === 'prop' && (d.name === 'candelabra' || d.name === 'cauldron')) out.push({ x: d.x, y: d.y - 24, r: 90, s: 0.85, rgb: d.name === 'cauldron' ? '140, 255, 140' : '255, 190, 90' });
     }
+    if (this.themeId === 'castle') CastleDecor.lights(this.decor, out, t);
+    this.extraLights = this.extraLights.filter((l) => l.until > this.world.time);
+    out.push(...this.extraLights);
     for (const pr of this.props) {
       if (pr.kind === 'hole' || pr.kind === 'holeExit') { if (pr.kind === 'holeExit' || pr.reveal > 0) out.push({ x: pr.x, y: pr.y, r: 110 * (pr.kind === 'hole' ? pr.reveal : 1), s: 0.85, rgb: '255, 220, 140' }); }
       else if (pr.kind === 'rewardChest' || pr.kind === 'secretChest' || pr.kind === 'chest') out.push({ x: pr.x, y: pr.y - 10, r: 70, s: 0.6, rgb: '255, 210, 120' });
@@ -1477,7 +1697,7 @@ class DungeonRun {
     if (this.totem) out.push({ x: this.totem.x, y: this.totem.y - 24, r: 180, s: 1, rgb: '106, 216, 255' });
     for (const s of this.spikes) if (this.spikeState(s) === 1) out.push({ x: s.x + 16, y: s.y + 16, r: 30, s: 0.3 });
     const w = this.world;
-    if (w.boss) out.push({ x: w.boss.x, y: w.boss.y - 40, r: 130, s: 0.6, rgb: '200, 120, 255' });
+    if (w.boss) out.push({ x: w.boss.x, y: w.boss.y - 40, r: 150, s: 0.6, rgb: { queen: '255, 130, 210', king: '255, 200, 120' }[this.bossType] || '200, 120, 255' });
     // each hero carries a little light; spells and souls in flight glow as they go
     for (const p of w.players) if (!p.dead) out.push({ x: p.x, y: p.y - 16, r: 130, s: 0.7 });
     for (const p of w.playerProjectiles) out.push({ x: p.x, y: p.y, r: 44, s: 0.55 });
@@ -1485,6 +1705,9 @@ class DungeonRun {
     if (this.totem) for (const s of this.totem.souls) out.push({ x: s.x, y: s.y, r: 40, s: 0.7, rgb: '106, 216, 255' });
     return out;
   }
+
+  /** A light that glows until world time `until` (burning ground, ice...). */
+  addLight(l) { this.extraLights.push(l); }
 
   /** The gloom: cold night darkness with every torch, lamp, candle and spell glowing out of it. */
   drawLighting(ctx, cam) {
@@ -1512,7 +1735,7 @@ class DungeonRun {
         ctx.save();
         ctx.translate(x + i * b.r * 0.8, y + Math.abs(i) * 4);
         ctx.scale(1, 0.42);
-        PFX.smokeBlob(ctx, 0, 0, b.r * (1 - Math.abs(i) * 0.25), ['#7a8c90', '#a8b8b8', '#d4e0dc'], t * 0.15 + i, b.seed + i, 0.9, 4);
+        PFX.smokeBlob(ctx, 0, 0, b.r * (1 - Math.abs(i) * 0.25), this.theme.fog || ['#7a8c90', '#a8b8b8', '#d4e0dc'], t * 0.15 + i, b.seed + i, 0.9, 4);
         ctx.restore();
       }
     }
@@ -1525,6 +1748,41 @@ class DungeonRun {
     const goal = this.objectiveText();
     if (goal) HUD.text(ctx, goal, 946, 30, { size: 7, align: 'right' });
     this.drawMinimap(ctx, 946, 46);
+    this.drawTimer(ctx);
+  }
+
+  /**
+   * Survival and defend rooms: a big countdown at the top of the screen, with a bar
+   * draining as it runs (and the lantern's health while defending). The last five
+   * seconds flash red and tick.
+   */
+  drawTimer(ctx) {
+    const r = this.active;
+    if (!r || !(r.type === 'survival' || r.type === 'defend') || !(r.timeLeft > 0) || r.retry > 0) return;
+    const left = r.timeLeft;
+    const secs = Math.ceil(left);
+    const urgent = left <= 5;
+    if (urgent && secs !== this.lastTick) Sound.play('uiClick');
+    this.lastTick = secs;
+    const x = 480;
+    const w = 190;
+    const h = this.totem ? 58 : 46;
+    const top = 40;
+    HUD.panel(ctx, x - w / 2, top, w, h);
+    if (urgent) {
+      ctx.fillStyle = `rgba(255, 50, 40, ${0.15 + Math.max(0, Math.sin(performance.now() / 90)) * 0.25})`;
+      ctx.fillRect(x - w / 2, top, w, h);
+    }
+    const color = r.type === 'defend' ? '#6ad8ff' : '#ff8a1e';
+    HUD.text(ctx, r.type === 'defend' ? 'DEFEND THE LANTERN' : 'SURVIVE', x, top + 4, { size: 7, align: 'center', color });
+    const pop = urgent ? 1 + Math.max(0, 0.35 - (secs - left)) : 1;
+    HUD.text(ctx, `${secs}`, x, top + 14, { size: Math.round(16 * pop), align: 'center', color: urgent ? '#ff6a5a' : '#ffffff' });
+    // time left
+    HUD.bar(ctx, x - w / 2 + 10, top + 36, w - 20, 5, left / (r.timeTotal || left), urgent ? '#ff5a4a' : color, '#1c1410');
+    if (this.totem) {
+      HUD.text(ctx, 'LANTERN', x - w / 2 + 10, top + 45, { size: 5, color: '#a8e8ff' });
+      HUD.bar(ctx, x - w / 2 + 46, top + 46, w - 56, 4, this.totem.hp / this.totem.maxHp, '#8cf0c8', '#1c1410');
+    }
   }
 
   objectiveText() {
@@ -1580,9 +1838,37 @@ class DungeonRun {
     for (const r of f.rooms) {
       if (!r.seen || r.type === 'secret') continue;
       const { x, y } = pos(r);
-      ctx.fillStyle = r.visited ? (r.state === 'cleared' ? '#4a4058' : '#6a2a3a') : '#2a2438';
-      ctx.fillRect(Math.round(x - bw / 2), Math.round(y - bh / 2), bw, bh);
+      const bx = Math.round(x - bw / 2);
+      const by = Math.round(y - bh / 2);
+      // cleared: green with a tick; a fight still waiting: red-rimmed (pulsing while it's on);
+      // shops and other safe rooms: neutral; seen but not yet visited: dark
+      const fight = LOCKING_ROOMS.includes(r.type);
+      const cleared = r.state === 'cleared' && fight;
+      const todo = fight && r.state !== 'cleared';
+      ctx.fillStyle = cleared ? '#2c4a30' : todo ? (r.visited ? '#6a1e28' : '#3a1a24') : r.visited ? '#4a4058' : '#2a2438';
+      ctx.fillRect(bx, by, bw, bh);
+      if (todo) {
+        const on = r.state === 'active';
+        ctx.strokeStyle = on ? `rgba(255, 90, 80, ${0.6 + Math.sin(this.time * 8) * 0.4})` : '#c83a3a';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+      }
+      if (cleared) ctx.globalAlpha = 0.6;
       drawRoomIcon(ctx, r.type, Math.round(x - 4 * iconPx), Math.round(y - 4 * iconPx), iconPx);
+      ctx.globalAlpha = 1;
+      if (cleared) {
+        // a little tick in the corner
+        const tx = bx + bw - 6;
+        const ty = by + 1;
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(tx - 1, ty + 1, 7, 5);
+        ctx.fillStyle = '#8cff9a';
+        ctx.fillRect(tx, ty + 3, 1, 1);
+        ctx.fillRect(tx + 1, ty + 4, 1, 1);
+        ctx.fillRect(tx + 2, ty + 3, 1, 1);
+        ctx.fillRect(tx + 3, ty + 2, 1, 1);
+        ctx.fillRect(tx + 4, ty + 1, 1, 1);
+      }
       if (r === here) {
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;

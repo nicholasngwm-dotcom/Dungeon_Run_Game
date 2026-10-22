@@ -23,9 +23,18 @@ function enemyShot(world, x, y, angle, speed, opts) {
 }
 
 /** Blast that hurts every hero / clone / defended object in range. */
-function enemyBlast(world, x, y, r, damage, colors = ['#ffb02e', '#ff5a1e', '#3a2a2a']) {
+function enemyBlast(world, x, y, r, damage, colors = ['#ffb02e', '#ff5a1e', '#3a2a2a'], enemyDamage = 0) {
   for (const a of world.allies) {
     if (dist(a.x, a.y, x, y) < r + a.radius) a.hurt(damage, world, x, y);
+  }
+  // a bomb doesn't care whose side you're on: enemyDamage hurts the other enemies caught in it
+  if (enemyDamage > 0) {
+    for (const e of world.enemies) {
+      if (e.dead || dist(e.x, e.y, x, y) >= r + e.radius) continue;
+      e.takeDamage(enemyDamage, world);
+      e.knockback?.(angleTo(x, y, e.x, e.y), 180);
+      world.effects.text(e.hx, e.hy - 20, `${Math.round(enemyDamage)}`, { color: '#ff8a3a', size: 8 });
+    }
   }
   // a scorch mark left on the ground, then the blast: a white-hot fireball, a shockwave
   // racing out to the edge of the blast, licking flames and a rolling cloud of smoke
@@ -200,7 +209,7 @@ class Bomber extends Enemy {
     if (this.dead) return;
     this.exploded = true;
     this.dead = true;
-    enemyBlast(world, this.x, this.y, this.cfg.blastRadius, this.cfg.damage);
+    enemyBlast(world, this.x, this.y, this.cfg.blastRadius, this.cfg.damage, undefined, this.cfg.enemyDamage);
     world.effects.burst(this.hx, this.hy, { count: 12, colors: this.gibColors, speed: [60, 180], life: [0.3, 0.6] });
   }
 
@@ -214,7 +223,7 @@ class Bomber extends Enemy {
     const { x, y } = this;
     const c = this.cfg;
     world.effects.add(c.deathFuse, (ctx, t) => Telegraph.circle(ctx, x, y, c.blastRadius, t, '255, 120, 40'), true);
-    world.after(c.deathFuse, () => enemyBlast(world, x, y, c.blastRadius, c.damage));
+    world.after(c.deathFuse, () => enemyBlast(world, x, y, c.blastRadius, c.damage, undefined, c.enemyDamage));
   }
 
   drawTelegraph(ctx) {
@@ -709,10 +718,16 @@ class ZombieSoldier extends Enemy {
         break;
       case 'burst':
         if (this.stateTime >= this.shots * c.burstEvery) {
-          enemyShot(world, this.hx + Math.cos(this.aim) * 20, this.hy + 2 + Math.sin(this.aim) * 20, this.aim + rand(-0.03, 0.03), c.bulletSpeed, {
-            radius: 4, damage: c.damage, sprite: Sprites.projectiles.bullet, trail: ['#f0d070'],
+          const mx = this.hx + Math.cos(this.aim) * 20;
+          const my = this.hy + 2 + Math.sin(this.aim) * 20;
+          enemyShot(world, mx, my, this.aim + rand(-0.03, 0.03), c.bulletSpeed, {
+            radius: 5, damage: c.damage, sprite: Sprites.projectiles.bullet, trail: ['#ffd070', '#ff8a3a'], glow: '255, 190, 90',
           });
+          // a heavy round: muzzle flash, a kick of smoke
+          world.effects.burst(mx, my, { count: 6, colors: ['#ffffff', '#ffd070', '#ff8a3a'], speed: [60, 160], life: [0.06, 0.16], angle: this.aim, spread: 0.6, size: [1, 3] });
+          world.effects.smoke(mx, my, { count: 2, radius: 6, life: 0.4, rise: 8 });
           Sound.play('enemyArrow', 0.02);
+          Sound.play('impact', 0.02);
           if (++this.shots >= c.burst) { this.setState('chase'); this.attackCooldown = c.cooldown + rand(0, 0.5); }
         }
         break;

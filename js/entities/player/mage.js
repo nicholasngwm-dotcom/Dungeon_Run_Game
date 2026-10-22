@@ -72,6 +72,8 @@ class Mage extends Player {
   get tipY() { return this.pivotY + 4 + Math.sin(this.aim) * 22; }
 
   get channeling() { return !!this.bird; }
+  /** In bird form she flies over furniture and spike traps (walls still stop her). */
+  get flying() { return !!this.bird; }
   get moveMultiplier() { return this.bird ? this.cfg.bird.speedMultiplier : 1; }
 
   handleMouse(world) {
@@ -363,11 +365,6 @@ class Mage extends Player {
     // the bird faces the way it flies (not the mouse), keeping its heading when hovering or flying straight up/down
     if (this.moving && this.moveDir.x) b.facing = this.moveDir.x > 0 ? 1 : -1;
     this.facing = b.facing;
-    // the flight restores mana, a few motes drifting up into the bird
-    this.gainResource(this.cfg.bird.manaPerSecond * dt);
-    if (Math.random() < dt * 8) {
-      world.effects.burst(this.x + rand(-10, 10), this.y + rand(-2, 6), { count: 1, colors: ['#3fc2a8', '#f0fff8'], speed: [5, 15], life: [0.3, 0.5], up: 40, size: [2, 3] });
-    }
     if (this.moving && Math.random() < 0.3) {
       world.effects.burst(this.x, this.y - 18, { count: 1, colors: ['#3fc2a8', '#9cf0d8'], speed: [5, 20], life: [0.2, 0.4], size: [2, 3] });
     }

@@ -21,6 +21,7 @@ const KEY_ACTIONS = [
   ['interact', 'Interact / revive'],
   ['music', 'Toggle music'],
   ['cursor', 'Mouse / crosshair'],
+  ['scoreboard', 'Scoreboard (hold)'],
 ];
 
 const Settings = {
@@ -34,7 +35,7 @@ const Settings = {
     keys: {
       up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',
       e: 'KeyE', f: 'KeyF', ult: 'KeyQ', dodge: 'ShiftLeft',
-      interact: 'KeyE', music: 'KeyM', cursor: 'KeyC',
+      interact: 'KeyE', music: 'KeyM', cursor: 'KeyC', scoreboard: 'Tab',
       item1: 'Digit1', item2: 'Digit2', item3: 'Digit3', item4: 'Digit4', item5: 'Digit5',
     },
   },

@@ -7,6 +7,15 @@ const WOOD = ['#2a1a10', '#4a2e1c', '#6a4428', '#8c5e36', '#ae7c4a'];
 const STONE = ['#2a2834', '#423f50', '#5c586c', '#78738a', '#9a95ac'];
 const IRON = ['#1e2028', '#363a46', '#545a6a', '#7a8092', '#a8aebc'];
 
+// the keep's cats: [name, coat ramp darkest first, eye colour]
+const CAT_COATS = {
+  ginger: { name: 'WHISKERS', coat: ['#7a3a1a', '#b8622a', '#e08a44', '#f4b878'], eye: '#2a1a10' },
+  black: { name: 'SOOT', coat: ['#08060c', '#16121c', '#2a2432', '#443c50'], eye: '#c8e040' },
+  grey: { name: 'PEBBLE', coat: ['#34343e', '#585864', '#86869a', '#b4b4c4'], eye: '#2a1a10' },
+  white: { name: 'SNOWDROP', coat: ['#9a929e', '#c8c0cc', '#ece6ee', '#ffffff'], eye: '#4a8aff' },
+  cream: { name: 'BISCUIT', coat: ['#6a4a2a', '#a8845a', '#dcc29a', '#f6e8cc'], eye: '#2a1a10' },
+};
+
 const PROP_DEFS = {
   anvil: [34, 26, (p) => {
     const S = IRON;
@@ -402,6 +411,7 @@ const PROP_DEFS = {
   catSit: [16, 14, (p) => cat(p, 'sit', 0)],
   catWalk1: [16, 14, (p) => cat(p, 'walk', 0)],
   catWalk2: [16, 14, (p) => cat(p, 'walk', 1)],
+  catHappy: [16, 14, (p) => cat(p, 'happy', 0)],
 
   // the keep's fireplace: a stone surround under a wooden mantel (the fire is drawn live)
   hearth: [66, 60, (p) => {
@@ -477,6 +487,8 @@ const PROP_DEFS = {
 
   // ---------- training grounds ----------
 
+  // a fresh straw butt for the live targets (TrainingTarget sticks arrows in as you hit it)
+  targetClean: [36, 46, (p) => archeryButt(p, false)],
   // straw archery butt on an easel, peppered with arrows
   target: [36, 46, (p) => {
     p.line(6, 45, 13, 8, WOOD[1], 3); p.line(30, 45, 23, 8, WOOD[1], 3);   // easel legs
@@ -626,9 +638,25 @@ const PROP_DEFS = {
   }],
 };
 
-/** A little ginger cat facing right, sitting or mid-stride (step 0/1). */
-function cat(p, mode, step) {
-  const C = ['#7a3a1a', '#b8622a', '#e08a44', '#f4b878'];
+/**
+ * A little cat facing right: sitting, mid-stride (step 0/1), or "happy" (sitting with its eyes
+ * squeezed shut and its tail up, being petted). C = coat ramp, darkest first; eye = eye colour.
+ */
+function cat(p, mode, step, C = CAT_COATS.ginger.coat, eye = '#2a1a10') {
+  if (mode === 'happy') {
+    p.round(3, 5, 8, 8, C[2], 3);
+    p.rect(4, 6, 3, 6, C[3]);
+    p.line(3, 11, 1, 4, C[1]);                      // tail straight up
+    p.px(2, 3, C[1]);
+    p.round(8, 2, 7, 6, C[2], 2);                   // head tipped back into the hand
+    p.px(9, 1, C[2]); p.px(13, 1, C[2]);
+    const shut = eye === '#2a1a10' ? '#2a1a10' : C[3];   // ^ ^ eyes (pale on a dark coat)
+    p.px(10, 5, shut); p.px(11, 4, shut); p.px(12, 5, shut);
+    p.px(13, 5, shut); p.px(14, 4, shut); p.px(15, 5, shut);
+    p.px(12, 6, '#e8a0a0');
+    p.rect(7, 12, 2, 1, C[3]); p.rect(10, 12, 2, 1, C[3]);
+    return;
+  }
   if (mode === 'sit') {
     p.round(3, 5, 8, 8, C[2], 3);                  // body
     p.rect(4, 6, 3, 6, C[3]);
@@ -636,7 +664,7 @@ function cat(p, mode, step) {
     p.px(0, 8, C[1]);
     p.round(8, 1, 7, 6, C[2], 2);                   // head
     p.px(9, 0, C[2]); p.px(13, 0, C[2]);            // ears
-    p.px(11, 3, '#2a1a10'); p.px(13, 3, '#2a1a10'); // eyes
+    p.px(11, 3, eye); p.px(13, 3, eye); // eyes
     p.px(12, 5, '#e8a0a0');
     p.rect(7, 12, 2, 1, C[3]); p.rect(10, 12, 2, 1, C[3]);
     for (const x of [4, 6]) p.px(x, 8, C[1]);       // stripes
@@ -647,7 +675,7 @@ function cat(p, mode, step) {
   p.line(1, 5, 0, 1, C[1]);                          // tail up
   p.round(10, 1, 6, 5, C[2], 2);                    // head
   p.px(11, 0, C[2]); p.px(14, 0, C[2]);
-  p.px(13, 3, '#2a1a10');
+  p.px(13, 3, eye);
   for (const x of [4, 7]) p.px(x, 4, C[1]);
   // legs mid-stride
   const a = step ? 1 : -1;
@@ -697,6 +725,12 @@ function banner(p, dark, mid, trim) {
 /** Builds Sprites.props from PROP_DEFS. */
 function buildPropSprites() {
   Sprites.props = {};
+  // every coat of cat in each pose: catSit_black, catWalk1_grey, catHappy_cream...
+  for (const [coat, c] of Object.entries(CAT_COATS)) {
+    for (const [pose, mode, step] of [['Sit', 'sit', 0], ['Walk1', 'walk', 0], ['Walk2', 'walk', 1], ['Happy', 'happy', 0]]) {
+      PROP_DEFS[`cat_`] = [16, 14, (p) => cat(p, mode, step, c.coat, c.eye)];
+    }
+  }
   for (const [name, [w, h, fn]] of Object.entries(PROP_DEFS)) {
     Sprites.props[name] = { img: PixelArt.make(w + 2, h + 2, (p) => { p.ctx.translate(1, 1); fn(p); }, OUTLINE, 'soft'), ax: Math.round(w / 2) + 1, ay: h };
   }
@@ -748,4 +782,23 @@ function stoneify(img) {
   }
   ctx.putImageData(d, 0, 0);
   return c;
+}
+
+/** A straw archery butt on an easel (arrows: a few old ones stuck in it). */
+function archeryButt(p, arrows) {
+  p.line(6, 45, 13, 8, WOOD[1], 3); p.line(30, 45, 23, 8, WOOD[1], 3);   // easel legs
+  p.line(18, 45, 18, 30, WOOD[0], 2);
+  p.circle(18, 20, 15, '#c8a85a');                 // straw boss
+  p.circle(18, 20, 13, '#efe6d2');
+  p.circle(18, 20, 10, '#d84a4a');
+  p.circle(18, 20, 7, '#efe6d2');
+  p.circle(18, 20, 4, '#d84a4a');
+  p.circle(18, 20, 2, '#ffd34a');
+  if (arrows) {
+    for (const [x, y, dx] of [[20, 18, 7], [12, 24, -6], [24, 26, 8], [16, 13, -7], [21, 21, 6]]) {
+      p.line(x, y, x + dx, y - 4, '#8c5e36');
+      p.rect(x + dx - (dx > 0 ? 0 : 2), y - 6, 3, 3, '#efe6d2');
+    }
+  }
+  p.line(4, 8, 7, 12, '#c8a85a'); p.line(30, 30, 33, 28, '#c8a85a');     // loose straw
 }

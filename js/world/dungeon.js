@@ -1,7 +1,7 @@
 // The arena: tile grid, pre-rendered background, wall collision and torches.
 
 // PILLAR = cover cap (top tile), PILLAR_FACE = its brick front. Both are solid.
-const TILE = { FLOOR: 0, WALL: 1, FACE: 2, PILLAR: 3, PILLAR_FACE: 4 };
+const TILE = { FLOOR: 0, WALL: 1, FACE: 2, PILLAR: 3, PILLAR_FACE: 4, COVER: 5 };   // COVER: solid themed cover standing on the floor (see DungeonRun.addCover)
 
 // Top-left tiles of the optional 2x2 cover pillars (off by default: the arena is open).
 const PILLARS = [[6, 7], [30, 7], [11, 13], [25, 13], [6, 19], [30, 19]];

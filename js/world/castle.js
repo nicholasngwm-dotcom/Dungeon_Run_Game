@@ -121,6 +121,8 @@ class CastleKeep extends Dungeon {
    * walk out of it.
    */
   move(e, dx, dy) {
+    // fliers (the mage's bird) pass over furniture; only walls stop them
+    if (e.flying) return Dungeon.prototype.move.call(this, e, dx, dy);
     let hitX = false;
     let hitY = false;
     const step = (axis, d) => {

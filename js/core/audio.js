@@ -267,6 +267,86 @@ const SFX = {
     s.tone({ type: 'square', freq: 200, to: 30, dur: 0.6, vol: 0.2 });
   },
 
+  // --- Lobby cats ---
+  // a little two-note mew
+  meow: (s) => {
+    s.tone({ type: 'triangle', freq: 820, to: 1150, dur: 0.12, vol: 0.06 });
+    s.tone({ type: 'triangle', freq: 1150, to: 700, dur: 0.22, vol: 0.06, delay: 0.12 });
+  },
+  // a soft rumbling purr
+  purr: (s) => {
+    for (let i = 0; i < 10; i++) s.noise({ dur: 0.07, vol: 0.05, filter: 'lowpass', freq: 220, delay: i * 0.09 });
+    s.tone({ type: 'sine', freq: 48, dur: 0.9, vol: 0.06 });
+  },
+
+  // --- Castle ---
+  // a matchlock going off: a sharp crack and a rolling boom
+  musket: (s) => {
+    s.noise({ dur: 0.06, vol: 0.45, filter: 'highpass', freq: 1800 });
+    s.noise({ dur: 0.45, vol: 0.35, filter: 'lowpass', freq: 900, to: 90 });
+    s.tone({ type: 'square', freq: 140, to: 50, dur: 0.2, vol: 0.12 });
+  },
+  // the catapult's arm slamming into its crossbar
+  catapult: (s) => {
+    s.noise({ dur: 0.25, vol: 0.3, filter: 'bandpass', freq: 500, to: 200, q: 2 });
+    s.tone({ type: 'triangle', freq: 110, to: 60, dur: 0.25, vol: 0.18 });
+    s.tone({ type: 'square', freq: 220, dur: 0.05, vol: 0.05, delay: 0.02 });
+  },
+  // a herald's fanfare: three bright rising notes and a held one
+  trumpet: (s) => {
+    [523, 659, 784, 1046].forEach((f, i) => s.tone({ type: 'sawtooth', freq: f, dur: i === 3 ? 0.5 : 0.14, vol: 0.06, delay: i * 0.14 }));
+    [523, 659, 784, 1046].forEach((f, i) => s.tone({ type: 'square', freq: f * 1.005, dur: i === 3 ? 0.5 : 0.14, vol: 0.025, delay: i * 0.14 }));
+  },
+  // a big bronze bell: a low strike with long, slightly out-of-tune overtones
+  bell: (s) => {
+    s.tone({ type: 'sine', freq: 196, dur: 2.2, vol: 0.22 });
+    s.tone({ type: 'sine', freq: 392 * 1.01, dur: 1.6, vol: 0.1 });
+    s.tone({ type: 'sine', freq: 466, dur: 1.2, vol: 0.06 });
+    s.tone({ type: 'triangle', freq: 1175, dur: 0.6, vol: 0.04 });
+    s.noise({ dur: 0.05, vol: 0.12, filter: 'highpass', freq: 2500 });
+  },
+  // the King bellowing: a deep growl with a rumbling shockwave under it
+  kingShout: (s) => {
+    s.tone({ type: 'sawtooth', freq: 150, to: 95, dur: 0.6, vol: 0.2 });
+    s.tone({ type: 'square', freq: 110, to: 70, dur: 0.6, vol: 0.12 });
+    s.noise({ dur: 0.7, vol: 0.3, filter: 'lowpass', freq: 600, to: 80 });
+  },
+  glass: (s) => {
+    for (let i = 0; i < 5; i++) s.tone({ type: 'triangle', freq: 1800 + nativeRandom() * 1400, dur: 0.08, vol: 0.05, delay: i * 0.025 });
+    s.noise({ dur: 0.15, vol: 0.2, filter: 'highpass', freq: 3000 });
+  },
+  splash: (s) => {
+    s.noise({ dur: 0.2, vol: 0.15, filter: 'bandpass', freq: 1200, to: 500, q: 1 });
+    s.tone({ type: 'sine', freq: 600, to: 300, dur: 0.1, vol: 0.05 });
+  },
+  crossbow: (s) => {
+    s.tone({ type: 'square', freq: 320, to: 180, dur: 0.05, vol: 0.08 });
+    s.noise({ dur: 0.06, vol: 0.14, filter: 'highpass', freq: 2500 });
+  },
+  // hooves pounding: a quick four-beat
+  gallop: (s) => {
+    for (let i = 0; i < 6; i++) s.noise({ dur: 0.05, vol: 0.18, filter: 'lowpass', freq: 400, delay: i * 0.11 + (i % 2) * 0.03 });
+  },
+  // a holy chime rising
+  blessing: (s) => {
+    [880, 1109, 1319, 1760].forEach((f, i) => s.tone({ type: 'sine', freq: f, dur: 0.5, vol: 0.06, delay: i * 0.07 }));
+  },
+  // an execution: a heavy chop and a low toll
+  execute: (s) => {
+    s.noise({ dur: 0.4, vol: 0.5, filter: 'lowpass', freq: 1000, to: 60 });
+    s.tone({ type: 'sine', freq: 98, dur: 1.4, vol: 0.2, delay: 0.1 });
+    s.tone({ type: 'sine', freq: 147, dur: 1.0, vol: 0.08, delay: 0.1 });
+  },
+  jesterFlip: (s) => {
+    s.noise({ dur: 0.18, vol: 0.18, filter: 'bandpass', freq: 800, to: 2600, q: 1 });
+    s.tone({ type: 'triangle', freq: 1200, to: 1800, dur: 0.08, vol: 0.05, delay: 0.08 });
+    s.tone({ type: 'triangle', freq: 1500, to: 2200, dur: 0.08, vol: 0.04, delay: 0.14 });
+  },
+  swordDraw: (s) => {
+    s.noise({ dur: 0.45, vol: 0.22, filter: 'bandpass', freq: 3500, to: 5000, q: 4 });
+    s.tone({ type: 'triangle', freq: 1400, to: 1600, dur: 0.4, vol: 0.04 });
+  },
+
   // --- Game flow ---
   waveStart: (s) => {
     [0, 0.12, 0.24].forEach((d, i) => s.tone({ type: 'square', freq: [330, 440, 660][i], dur: 0.12, vol: 0.1, delay: d }));

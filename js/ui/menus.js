@@ -218,6 +218,7 @@ const Menus = {
       case 'theme': app.startDungeonRun({ mode: 'set', theme: arg }); break;
       case 'dungeonBack': this.showDungeonView('modes'); break;
       case 'bestiaryFilter': Bestiary.setFilter(arg, arg2); break;
+      case 'bestiaryTheme': Bestiary.setTheme(arg); break;
       case 'bestiaryFlip': Bestiary.flip(Number(arg)); break;
       case 'potionGroup': PotionGuide.setGroup(arg); break;
       case 'dialogOption': Dialog.choose(Number(arg)); break;

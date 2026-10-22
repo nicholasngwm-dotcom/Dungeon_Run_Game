@@ -33,13 +33,14 @@ const CONFIG = {
   classes: {
     warrior: {
       // passive: after taking `hits` hits, the next one is blocked automatically
-      passive: { name: 'Tanker', hits: 4 },
+      // passive: every `hits` hits the next one is blocked, and enemy bodies do `contactReduction` less damage
+      passive: { name: 'Tanker', hits: 4, contactReduction: 0.5 },
       name: 'Knight',
       hp: 350,
       speed: 180,
       // LMB: slash, slash, stab
       combo:  { damage: 34, cooldown: 0.34, resetTime: 0.9, range: 82, arcDegrees: 130, knockback: 180,
-                stabDamage: 95, stabCooldown: 0.6, stabRange: 170, stabWidth: 40, stabLunge: 36, stabKnockback: 340 },
+                stabDamage: 95, stabCooldown: 0.4, stabRange: 170, stabWidth: 40, stabLunge: 36, stabKnockback: 340 },
       // RMB (hold): raise the barrier shield the knight carries, `distance` px ahead and facing the aim.
       // It's its own wall, so it soaks enemy projectiles (arrows, fireballs, lasers) crossing it; melee goes through.
       // Regens after `regenDelay` once lowered; if broken, it's down for `breakCooldown`.
@@ -90,8 +91,8 @@ const CONFIG = {
       lightning: { damage: 240, cost: 120, cooldown: 3, delay: 1, selectRadius: 70,
                    arcRange: 240, arcDamage: 140, arcCount: 4 },
       // F: turn into a small, fast bird (tiny hitbox, can't cast). F again lands early.
-      // F: bird form; flying restores manaPerSecond mana (more than it costs over a full flight)
-      bird:      { cost: 50, cooldown: 6, duration: 4, speedMultiplier: 1.8, radius: 5, manaPerSecond: 22 },
+      // F: bird form: flies over furniture and spike traps (walls still stop it)
+      bird:      { cost: 50, cooldown: 6, duration: 4, speedMultiplier: 1.8, radius: 5 },
       // Q: place a magic circle (LMB, RMB cancels) that drains enemies in it into mana.
       // While a circle is active, RMB / E / F cooldowns are capped at activeCooldown seconds.
       ult:       { charge: 1400, duration: 5, radius: 130, dps: 50, tick: 0.25, manaSteal: 0.35, maxRange: 300, activeCooldown: 1 },
@@ -102,8 +103,8 @@ const CONFIG = {
       name: 'Rogue',
       hp: 200,
       speed: 218,
-      resource: { name: 'ENERGY', max: 200, regen: 1, perKill: 4, color: '#f0c040' },
-      dagger:   { damage: 13, cost: 2, cooldown: 0.4, speed: 580, spreadDegrees: 22, count: 3 },
+      resource: { name: 'ENERGY', max: 200, regen: 1, perKill: 9, color: '#f0c040' },
+      dagger:   { damage: 15, cost: 2, cooldown: 0.4, speed: 580, spreadDegrees: 22, count: 3 },
       // RMB: dash-slash; enemies under half hp start bleeding. Every enemy hit is marked for
       // markDuration; if a marked enemy dies, the strike's cooldown resets.
       strike:   { damage: 45, cost: 30, cooldown: 1.2, distance: 190, duration: 0.18, invulnerability: 0.3,
@@ -111,7 +112,7 @@ const CONFIG = {
       // E: block window; a successful parry refunds energy and speeds you up
       parry:    { window: 0.5, cooldown: 4, energy: 75, speedMultiplier: 1.4, speedDuration: 4 },
       // F: the next LMB becomes a dagger storm
-      storm:    { cost: 100, cooldown: 8, duration: 3, interval: 0.06, spreadDegrees: 64, damage: 11 },
+      storm:    { cost: 100, cooldown: 8, duration: 3, interval: 0.06, spreadDegrees: 64, damage: 13 },
       // Q: vanish, return with exploding clones that hunt enemies on their own
       ult:      { charge: 1500, vanish: 0.5, clones: 3, cloneRange: 130, cloneHp: 140, cloneDamageTaken: 1.5, cloneDamageDealt: 0.85,
                   cloneLife: 10, cloneFireInterval: 0.55, burstDaggers: 18, burstDamage: 42,
@@ -126,13 +127,13 @@ const CONFIG = {
       // light orbs: no regen; refilled only by orbs dropped from marked enemies (can't pick one up when full)
       resource:  { name: 'LIGHT', max: 4, regen: 0, color: '#ffe680' },
       // LMB: a beam of light falls on the cursor after `delay`
-      ray:       { damage: 46, cooldown: 0.6, delay: 0.3, radius: 42, maxRange: 380 },
+      ray:       { damage: 46, cooldown: 0.6, delay: 0.3, radius: 56, maxRange: 380 },
       // RMB: missiles that each seek a different enemy and mark it for markDuration
       missiles:  { count: 5, damage: 22, cooldown: 6, speed: 330, turnRate: 6, life: 2.6, markDuration: 10 },
       // E: aim a healing rune (LMB places it, RMB / E cancels; heal is hp per second)
       rune:      { cost: 2, cooldown: 8, heal: 50, duration: 4, radius: 85, maxRange: 300 },
       // F: then LMB shields the ally nearest the cursor, RMB shields yourself
-      aegis:     { cost: 2, cooldown: 10, hp: 150, duration: 8, selectRadius: 80 },
+      aegis:     { cost: 2, cooldown: 10, hp: 100, duration: 8, selectRadius: 80 },
       // Q: charge for up to powerTime (LMB releases early), then throw a stunning light bomb at the cursor.
       // Damage, radius and stun scale from their minimums up to full.
       ult:       { charge: 1600, powerTime: 4, moveMultiplier: 0.4, maxRange: 380, flightTime: 0.35,
@@ -147,7 +148,10 @@ const CONFIG = {
       // LMB: strum `count` magic notes in a small fan; they bob side to side as they fly
       strum:   { damage: 17, cooldown: 0.35, count: 3, spreadDegrees: 16, speed: 430, life: 0.95, wobble: 0.45 },
       // RMB: swap tunes. Energetic: +speed (move speed). Calming: heal hp per second.
-      tunes:   { cooldown: 1, energetic: { speed: 0.2 }, calming: { heal: 3 } },
+      // the tune also shapes her own notes (allies don't get these): energetic ones fly faster (noteSpeed) and she
+      // strums faster (attackSpeed); calming ones fly slower (same reach) and hit softer (noteDamage)
+      tunes:   { cooldown: 1, energetic: { speed: 0.2, noteSpeed: 1.35, attackSpeed: 0.3 },
+                 calming: { heal: 3, noteSpeed: 0.65, noteDamage: 0.75 } },
       // E: inspire every hero in the ensemble (passive radius): faster attacks and more damage for `duration`s,
       // and her song swells meanwhile: Energetic gives boostSpeed, Calming heals boostHeal per second
       morale:  { cooldown: 12, duration: 5, attackSpeed: 0.15, damage: 0.15, boostSpeed: 0.3, boostHeal: 10 },
@@ -261,7 +265,8 @@ const CONFIG = {
     },
     // Skeleton bomber: runs at you, lights the fuse when close; also goes off when killed
     bomber: {
-      hp: 70, speed: 88, radius: 13, damage: 38,
+      hp: 70, speed: 88, radius: 13, damage: 55,
+      enemyDamage: 60,   // its blast hurts the other enemies around it too
       triggerRange: 60, fuse: 0.8, blastRadius: 80, deathFuse: 0.35,
     },
     // Candlehead: skeleton that fires souls; a soul knocks you back hard
@@ -301,7 +306,7 @@ const CONFIG = {
     },
     // stage 3: Zombie soldier: armoured (takes `armor` less damage), fires fast bullet bursts
     zombieSoldier: {
-      hp: 320, speed: 50, radius: 14, damage: 16, armor: 0.4,
+      hp: 220, speed: 50, radius: 14, damage: 28, armor: 0.15,   // fragile now, but every bullet of its 3-round burst hits hard
       preferredMin: 160, preferredMax: 300, windup: 0.55, burst: 3, burstEvery: 0.12, bulletSpeed: 540, cooldown: 1.9,
       knockbackResist: 0.5,
     },
@@ -317,6 +322,123 @@ const CONFIG = {
   },
 
   // ---------------------------------------------------------
+  //  CASTLE ENEMIES (dungeon runs): the corrupted court of a fallen empire.
+  // ---------------------------------------------------------
+  castleEnemies: {
+    // Squire: a young soldier with a sword; quick, simple slashes
+    squire: {
+      hp: 110, speed: 78, radius: 13, damage: 20,
+      attackRange: 50, attackReach: 66, attackArcDegrees: 120, windup: 0.45, recovery: 0.45, cooldown: 0.9,
+    },
+    // Castle archer: keeps away and looses arrows (red aim line first)
+    castleArcher: {
+      hp: 80, speed: 70, radius: 13, damage: 18,
+      preferredMin: 180, preferredMax: 310, windup: 0.75, aimLockAt: 0.3, cooldown: 1.8, arrowSpeed: 380,
+    },
+    // Minstrel: plays a war song; every other enemy within auraRadius recovers attackSpeed faster
+    // between attacks. Plinks the odd note at you too
+    minstrel: {
+      hp: 90, speed: 62, radius: 13, damage: 10,
+      preferredMin: 200, preferredMax: 320, auraRadius: 200, attackSpeed: 0.4, noteEvery: 2.4, noteSpeed: 190,
+    },
+    // Squire with a gun: aims (a long red line), fires one heavy ball, then takes its time reloading
+    gunner: {
+      hp: 95, speed: 60, radius: 13, damage: 34,
+      preferredMin: 190, preferredMax: 340, windup: 0.85, aimLockAt: 0.25, bulletSpeed: 640, reload: 2.6,
+    },
+    // Catapult: never moves; hurls boulders that land where the red circle shows
+    catapult: {
+      hp: 300, speed: 0, radius: 20, damage: 40, contactDamage: 0,
+      range: 560, windup: 1.0, flight: 1.1, cooldown: 3.0, blastRadius: 62,
+      knockbackResist: 1, stunResist: 0.5, heartChance: 0.3,
+    },
+    // stage 2+: Flaming catapult: tougher; its burning boulders hit harder and leave fire that burns (burnDps for burnTime)
+    flamingCatapult: {
+      hp: 480, speed: 0, radius: 20, damage: 52, contactDamage: 0,
+      range: 580, windup: 1.0, flight: 1.1, cooldown: 3.2, blastRadius: 66,
+      fireRadius: 64, fireTime: 4, burnDps: 9, burnTime: 3,
+      knockbackResist: 1, stunResist: 0.5, heartChance: 0.35,
+    },
+    // Mace spinner: up close it whirls both maces round, hurting anyone inside spinRadius every tickEvery
+    // seconds while it lurches after you, then staggers dizzily
+    maceSpinner: {
+      hp: 210, speed: 70, radius: 15, damage: 9,
+      spinRange: 95, spinWindup: 0.5, spinRadius: 58, spinTime: 2.6, tickEvery: 0.22, spinSpeed: 62, dizzy: 1.1, cooldown: 1.6,
+      knockbackResist: 0.4,
+    },
+    // Bishop: keeps back, fires slow holy orbs, and every healEvery seconds blesses the ground around it,
+    // healing every enemy (and boss) inside healRadius by healAmount of their max hp
+    bishop: {
+      hp: 150, speed: 52, radius: 13, damage: 14,
+      preferredMin: 200, preferredMax: 320, orbEvery: 2.6, orbSpeed: 180,
+      healEvery: 6, healWindup: 1.2, healRadius: 150, healAmount: 0.3, bossHeal: 0.02,
+    },
+    // Knight: sword and kite shield; when hit it may raise the shield (blockChance), blocking hits from the front
+    castleKnight: {
+      hp: 260, speed: 54, radius: 15, damage: 30,
+      attackRange: 58, attackReach: 78, attackArcDegrees: 120, windup: 0.6, recovery: 0.5, cooldown: 1.1,
+      blockChance: 0.35, blockTime: 1.4, blockCooldown: 2.5, knockbackResist: 0.5, stunResist: 0.3,
+    },
+    // Cavalry: two spear lunges along red lanes, then rides you down for rideTime (stabbing as it passes), then lunges again
+    cavalry: {
+      hp: 340, speed: 110, radius: 18, damage: 30, contactDamage: 12,
+      lungeWindup: 0.5, lungeDistance: 190, lungeTime: 0.24, lungeWidth: 34, lunges: 2, lungeGap: 0.35,
+      rideTime: 3.4, rideSpeed: 175, turnRate: 2.2, stabRange: 58, stabEvery: 0.55, rest: 0.8,
+      knockbackResist: 0.8, stunResist: 0.4,
+    },
+    // Castle sorcerer: conjures magic bolts in patterns (a ring, a spiral, or a circle closing in on you);
+    // the first time its hp drops below blinkBelow it teleports away
+    castleSorcerer: {
+      hp: 200, speed: 50, radius: 13, damage: 16,
+      preferredMin: 210, preferredMax: 330, castEvery: 3.2, castWindup: 0.7, boltSpeed: 170,
+      ringCount: 12, spiralArms: 3, spiralTime: 1.4, spiralEvery: 0.1, closeCount: 7, closeRadius: 150, closeDelay: 0.7,
+      blinkBelow: 0.35,
+    },
+    // stage 2+: Executioner: a huge overhead axe chop. A hero below executeBelow of their hp is executed outright
+    // if it lands (a red skull marks who is in danger)
+    executioner: {
+      hp: 520, speed: 46, radius: 17, damage: 48,
+      attackRange: 76, attackReach: 104, attackWidth: 56, windup: 1.0, recovery: 0.8, cooldown: 1.2,
+      executeBelow: 0.25, knockbackResist: 0.7, stunResist: 0.5,
+    },
+    // stage 2+: Jester: dodges dodgeChance of your hits with a backflip; slashes and stabs with two daggers that make you bleed
+    jester: {
+      hp: 170, speed: 112, radius: 13, damage: 14,
+      attackRange: 46, attackReach: 62, attackArcDegrees: 110, windup: 0.3, recovery: 0.3, cooldown: 0.75, combo: 3,
+      dodgeChance: 0.5, dodgeDistance: 76, dodgeTime: 0.32, bleedDps: 6, bleedTime: 3,
+    },
+    // stage 2+: Royal guard: a stronger knight that also charges at you (chargeDamage) along a red lane
+    royalGuard: {
+      hp: 420, speed: 58, radius: 16, damage: 36,
+      attackRange: 62, attackReach: 84, attackArcDegrees: 130, windup: 0.65, recovery: 0.5, cooldown: 1.1,
+      blockChance: 0.4, blockTime: 1.4, blockCooldown: 2.5,
+      chargeEvery: 5.5, chargeRange: [140, 380], chargeWindup: 0.6, chargeSpeed: 430, chargeDistance: 280, chargeWidth: 40, chargeDamage: 40,
+      knockbackResist: 0.7, stunResist: 0.4,
+    },
+    // stage 3: The Prince: dashes in slashing and stabbing; at half hp he sounds his trumpet for summonCount royal guards
+    prince: {
+      hp: 700, speed: 96, radius: 15, damage: 30,
+      attackRange: 190, dashWindup: 0.45, dashDistance: 150, dashTime: 0.18, dashWidth: 36,
+      comboReach: 70, comboArcDegrees: 130, comboGap: 0.28, recovery: 0.7, cooldown: 1.3,
+      summonAt: 0.5, summonCount: 2, knockbackResist: 0.6, stunResist: 0.4,
+    },
+    // stage 3: The Princess: a crossbow volley of `volley` bolts (the last a magic bolt that chases you for homingTime);
+    // throws ice potions that leave a slowing patch of ice; slowly heals herself (regen of max hp per second)
+    princess: {
+      hp: 520, speed: 70, radius: 13, damage: 16,
+      preferredMin: 210, preferredMax: 340, volleyWindup: 0.6, volley: 6, volleyEvery: 0.13, boltSpeed: 470,
+      magicSpeed: 230, homingTime: 3, magicDamage: 24, volleyCooldown: 2.6,
+      potionEvery: 5.5, potionFlight: 0.9, iceRadius: 70, iceTime: 4, iceSlow: 0.5, regen: 0.015,
+      knockbackResist: 0.4, stunResist: 0.3,
+    },
+    // the Queen's gardeners (her second phase): water droplets from a magic watering can
+    gardener: {
+      hp: 90, speed: 64, radius: 13, damage: 14,
+      preferredMin: 150, preferredMax: 280, windup: 0.6, cooldown: 1.8, dropSpeed: 250, drops: 3, spreadDegrees: 22, coins: 0,
+    },
+  },
+
+  // ---------------------------------------------------------
   //  DUNGEON THEMES (dungeon runs)
   //  enemies: [type, weight] per stage; stage 2/3 lists include their exclusives.
   //  Every theme's boss appears in all three stages, scaled by CONFIG.run.stages.
@@ -327,6 +449,8 @@ const CONFIG = {
       blurb: 'Restless dead, poison and bone. Ruled by the Phantom King.',
       // the floor is gloomy: night darkness (rgb tint, 0-1) that torches, lamps and candles cut through, and drifting fog
       night: { dark: 0.55, color: '6, 12, 22' },
+      // solid cover in its fight rooms: [kind, width, height (tiles), weight]
+      cover: [['headstone', 1, 1, 5], ['tomb', 2, 1, 2]],
       boss: 'phantom',
       enemies: {
         1: [['zombie', 5], ['bletcher', 2], ['skeleton', 3], ['skeletonWarrior', 3], ['bomber', 2], ['wraith', 2],
@@ -342,6 +466,31 @@ const CONFIG = {
       summons: ['zombie', 'skeleton', 'skeletonWarrior', 'bletcher', 'bomber', 'candlehead'],
       // big, slow or summoning enemies: at most this many per wave
       heavy: { undeadKnight: 1, gravestone: 1, necromancer: 1, reaper: 1, minigunner: 1, skeletonSorcerer: 1 },
+      // the banner as each stage begins
+      stageLines: ['Clear the rooms and find the boss', 'The dead grow stronger', 'The dead grow stronger'],
+    },
+    castle: {
+      name: 'Castle',
+      blurb: 'A corrupted empire\'s fallen keep. Ruled by the Queen and the King.',
+      // a darker, colder gloom with a violet cast, and no fog or mist
+      night: { dark: 0.6, color: '12, 6, 22' },
+      fog: false,
+      cover: [['crates', 1, 1, 4], ['pillar', 1, 1, 3], ['statue', 2, 1, 2]],
+      // each stage rolls one of these (never the same one twice in a row)
+      bosses: ['queen', 'king'],
+      enemies: {
+        1: [['squire', 5], ['castleArcher', 3], ['minstrel', 1], ['gunner', 2], ['catapult', 1], ['maceSpinner', 2],
+            ['bishop', 1], ['castleKnight', 2], ['cavalry', 1], ['castleSorcerer', 1]],
+        2: [['squire', 4], ['castleArcher', 3], ['minstrel', 1], ['gunner', 2], ['catapult', 1], ['maceSpinner', 2],
+            ['bishop', 1], ['castleKnight', 2], ['cavalry', 1], ['castleSorcerer', 2],
+            ['executioner', 1], ['jester', 2], ['flamingCatapult', 1], ['royalGuard', 1]],
+        3: [['squire', 3], ['castleArcher', 3], ['minstrel', 1], ['gunner', 2], ['catapult', 1], ['maceSpinner', 2],
+            ['bishop', 1], ['castleKnight', 2], ['cavalry', 1], ['castleSorcerer', 2],
+            ['executioner', 1], ['jester', 2], ['flamingCatapult', 1], ['royalGuard', 2], ['prince', 1], ['princess', 1]],
+      },
+      summons: ['squire', 'castleArcher', 'castleKnight'],
+      heavy: { catapult: 1, flamingCatapult: 1, cavalry: 1, executioner: 1, bishop: 1, minstrel: 1, castleSorcerer: 1, prince: 1, princess: 1, royalGuard: 2 },
+      stageLines: ['Clear the rooms and find the throne', 'The fallen court stirs', 'The crown awaits'],
     },
   },
 
@@ -353,8 +502,8 @@ const CONFIG = {
     // rather than many more of them; the counts below only creep up
     stages: [
       { hp: 1, damage: 1, speed: 1 },
-      { hp: 1.85, damage: 1.35, speed: 1.06 },
-      { hp: 2.8, damage: 1.65, speed: 1.12 },
+      { hp: 1.5, damage: 1.35, speed: 1.06 },
+      { hp: 2.1, damage: 1.65, speed: 1.12 },
     ],
     // random mode: chance weight of rolling a theme already used this run (vs 1 for a new one)
     repeatThemeWeight: 0.05,
@@ -390,8 +539,12 @@ const CONFIG = {
     // per run; rerolling the three costs reroll.base, + reroll.step more each time at the same shop
     shop: { stagePrice: [1, 1.4, 1.8], reroll: { base: 6, step: 4 } },
     survival: { duration: [30, 40, 50], spawnEvery: [1.3, 1.2, 1.1], perSpawn: 2, maxAlive: [12, 13, 14] },
+    // cover (blocks heroes, enemies and shots alike): perRoom[0]-perRoom[1] pieces of the theme's cover in these rooms
+    cover: { perRoom: [3, 5], rooms: ['combat', 'survival'] },
     // spike traps (combat rooms only): pop up every `period` seconds for `up` seconds
-    spikes: { period: 4, up: 0.8, warn: 0.4, damage: 16, perRoom: [6, 10] },
+    // they come in square pads (2x2, or 4x4 bigChance of the time), pads[0]-pads[1] per combat room;
+    // a pad's spikes peek out (warn) then shoot up together
+    spikes: { period: 4, up: 0.8, warn: 0.6, damage: 16, pads: [2, 4], bigChance: 0.3 },
     // special rooms (one or two per floor); not functional yet
     specials: ['blacksmith', 'wishingWell', 'heroStatue', 'restaurant5', 'mountTrader', 'darkTrader',
                'friendlyTrader', 'treasure', 'helper'],
@@ -432,7 +585,7 @@ const CONFIG = {
   },
 
   // mana orbs only drop for mana users; picking one up triggers the Mage's Mana Surge passive
-  drops: { heartChance: 0.1, heartHeal: 45, manaChance: 0.3, manaRestore: 15, coinMagnet: 220 },   // coinMagnet: how far coins fly to you from (px)
+  drops: { heartChance: 0.1, heartHeal: 45, manaChance: 0.45, manaRestore: 15, coinMagnet: 220 },   // coinMagnet: how far coins fly to you from (px)
 
   // buff orbs dropped by mimics (one random type each); picking one up again refreshes it
   buffs: {
@@ -454,6 +607,9 @@ const CONFIG = {
   ],
   // each wave after the first adds this much enemy hp / damage (wave 5: +60% hp, +32% damage)
   waveScaling: { hp: 0.15, damage: 0.08 },
+  // debuffs on bosses (they ignore plain stuns): a freeze chills a boss instead, for chillTime x the freeze's
+  // length, during which it moves and attacks at chillSpeed of its usual speed
+  bossDebuffs: { chillTime: 1.5, chillSpeed: 0.5 },
   // chance of each boss appearing after the last wave
   bosses: { golem: 0.5, phantom: 0.5 },
   waveBreak: 3,           // pause between waves
@@ -579,6 +735,7 @@ const CONFIG = {
     vanishTime: 0.45,
     hiddenTime: 0.55,
     appearTime: 0.7,        // telegraph ring at the destination
+    appearNova: { count: 16, delay: 0.6 },   // on reappearing: a ring of count eye lasers (4 more in phase 3), then delay s before the pull
     appearDistance: [130, 180],
 
     // Pull shockwaves after reappearing
@@ -591,7 +748,58 @@ const CONFIG = {
     pullSurgeDecay: 3,      // ...fading out at this rate (per second)
     pulseLaserEvery: 0.08,  // seconds between random lasers sprayed in every direction
   },
+
+  // ---------------------------------------------------------
+  //  BOSS: THE QUEEN (the castle's garden)
+  //  Keeps her distance and takes turns between waves of homing arrows and quick
+  //  piercing shots aimed where you're going. At phase2At she rings the garden bell:
+  //  hedges start rising as walls and her gardeners come through the flower gates.
+  //  Per-phase values are [phase 1, phase 2].
+  // ---------------------------------------------------------
+  queen: {
+    hp: 6200,
+    phase2At: 0.5,
+    contactDamage: 18,
+    speed: [110, 140],
+    keepAway: [200, 330],        // the distance she likes to keep from her target
+    attackInterval: [1.5, 1.0],  // rest between attacks
+    // homing arrows: `waves` fans of perWave arrows that chase the nearest hero for `chase` seconds
+    homing: { windup: 0.55, waves: [3, 4], perWave: 5, waveEvery: [0.6, 0.45], spreadDegrees: 70, speed: [220, 250], turn: 2.6, chase: 3, life: 5, damage: 22 },
+    // quick piercing shots, each aimed at where the hero will be (they pass through everyone in the way)
+    pierce: { shots: [4, 5], aim: 0.32, every: [0.34, 0.26], speed: [640, 720], lead: 0.9, damage: 26 },
+    bell: { rings: 3, ringEvery: 0.55 },
+    // phase 2: hedge walls `count` at a time every `every` seconds, len tiles long, standing for life seconds
+    hedges: { every: [4, 3], count: 3, len: [3, 5], sprout: 0.8, life: [7, 10], max: 8 },
+    gardeners: { every: 6, perWave: 2, max: 4 },
+  },
+
+  // ---------------------------------------------------------
+  //  BOSS: THE KING (the castle's throne room)
+  //  Phase 1: sits on his throne and shouts, each shout a fan-shaped shockwave that
+  //  also calls a royal guard through one of the two doors; every few shouts he throws
+  //  his scepter, which spins where it lands for a while before it flies back.
+  //  Phase 2 (phase2At): slams the scepter (a shockwave round the whole room), calls
+  //  four bishops who heal him, and takes up his greatsword: from then on he waddles
+  //  after you with scepter slams, huge greatsword sweeps and waves of light that stun.
+  // ---------------------------------------------------------
+  king: {
+    hp: 8200,
+    phase2At: 0.5,
+    contactDamage: 20,
+    shout: { every: 2.3, windup: 0.6, arcDegrees: 70, range: 620, speed: 380, width: 26, damage: 24, knockback: 260 },
+    guards: { max: 4 },
+    throwEvery: 3,               // every throwEvery-th attack is a scepter throw
+    scepter: { windup: 0.6, speed: 470, spin: 4, radius: 50, tick: 0.35, damage: 16, rest: 0.8, back: 520 },
+    slamWave: { radius: 900, speed: 430, width: 22, damage: 30 },
+    bishops: 4,
+    walkSpeed: 40,
+    attackInterval: 1.1,
+    slam: { windup: 0.75, radius: 380, speed: 360, width: 18, damage: 30 },
+    sword: { windup: 1.1, arcDegrees: 150, reach: 270, damage: 55 },
+    light: { windup: 0.9, rings: 2, count: 18, ringGap: 0.35, speed: 210, damage: 12, stun: 3 },
+  },
 };
 
-// graveyard enemies are ordinary enemies too (CONFIG.enemies[type] is what they read)
+// graveyard and castle enemies are ordinary enemies too (CONFIG.enemies[type] is what they read)
 Object.assign(CONFIG.enemies, CONFIG.graveyardEnemies);
+Object.assign(CONFIG.enemies, CONFIG.castleEnemies);

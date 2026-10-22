@@ -79,6 +79,7 @@ const HUD = {
     }
     this.drawBanner(ctx, game);
     const p = game.localPlayer;
+    if (game.run && Input.down('scoreboard')) this.drawScoreboard(ctx, game);
     if (game.run?.active && p.strayTime > 0) {
       const left = Math.max(0, CONFIG.run.strayReturn - p.strayTime).toFixed(1);
       this.text(ctx, `OUTSIDE THE ROOM - RETURNING IN ${left}s`, 480, 400, { size: 8, align: 'center', color: '#e0c0ff' });
@@ -651,6 +652,58 @@ const HUD = {
     }
   },
 
+  /**
+   * Held Tab in a dungeon: every hero's run so far (kills, damage dealt, healing done,
+   * damage taken, times downed). The best in each column gets a gold star; you're highlighted.
+   */
+  drawScoreboard(ctx, game) {
+    const cols = [['KILLS', 'kills', '#ff8a6a'], ['DAMAGE', 'damage', '#ffd34a'], ['HEALING', 'healing', '#8cff9a'], ['TAKEN', 'taken', '#ff6a7a'], ['DEATHS', 'deaths', '#c8b8ff']];
+    const players = game.players;
+    const rowH = 30;
+    const w = 600;
+    const h = 74 + players.length * rowH;
+    const x = 480 - w / 2;
+    const y = Math.max(40, 250 - h / 2);
+    ctx.fillStyle = 'rgba(8, 4, 14, 0.55)';
+    ctx.fillRect(0, 0, 960, 540);
+    this.panel(ctx, x, y, w, h);
+    const run = game.run;
+    const secs = Math.floor(game.time);
+    this.text(ctx, 'SCOREBOARD', x + 14, y + 10, { size: 12, color: '#f2a541' });
+    this.text(ctx, `${run.theme.name.toUpperCase()}  STAGE ${run.stage}/3   ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, x + w - 14, y + 14, { size: 7, align: 'right', color: '#d8c8a0' });
+    const colX = (i) => x + 250 + i * 72;
+    cols.forEach(([label, , color], i) => this.text(ctx, label, colX(i), y + 40, { size: 6, align: 'center', color }));
+    ctx.fillStyle = 'rgba(220, 180, 76, 0.35)';
+    ctx.fillRect(x + 10, y + 52, w - 20, 1);
+    const best = cols.map(([, key]) => Math.max(...players.map((p) => Game.statsOf(p)[key])));
+    players.forEach((p, r) => {
+      const ry = y + 58 + r * rowH;
+      const me = p === game.localPlayer;
+      if (me) {
+        ctx.fillStyle = 'rgba(255, 220, 120, 0.1)';
+        ctx.fillRect(x + 8, ry - 2, w - 16, rowH - 2);
+      }
+      // the hero's face, their name and class
+      const icon = Sprites.heroes[p.classId].idle[0].img;
+      ctx.globalAlpha = p.dead ? 0.45 : 1;
+      this.socket(ctx, x + 28, ry, 24);
+      ctx.drawImage(icon, 22, 8, 22, 22, x + 17, ry + 1, 22, 22);
+      ctx.globalAlpha = 1;
+      const name = p.name || (me ? 'YOU' : 'HERO');
+      this.text(ctx, name.toUpperCase(), x + 48, ry + 2, { size: 7, color: me ? '#ffe680' : '#f4ead7' });
+      this.text(ctx, `${CONFIG.classes[p.classId].name.toUpperCase()}${p.dead ? '  - DOWN' : ''}`, x + 48, ry + 14, { size: 5, color: p.dead ? '#e04545' : '#a99bbd' });
+      const s = Game.statsOf(p);
+      cols.forEach(([, key, color], i) => {
+        const v = Math.round(s[key]);
+        // the best in a column (deaths: no prize for those)
+        const top = players.length > 1 && key !== 'deaths' && key !== 'taken' && v > 0 && v === Math.round(best[i]);
+        this.text(ctx, v >= 10000 ? `${(v / 1000).toFixed(1)}K` : `${v}`, colX(i), ry + 6, { size: 8, align: 'center', color: top ? color : '#f4ead7' });
+        if (top) PFX.star(ctx, colX(i) + 26, ry + 10, 2, '#ffd34a', '#ffffff');
+      });
+    });
+    this.text(ctx, `HOLD ${Settings.label('scoreboard')}`, x + w / 2, y + h - 12, { size: 5, align: 'center', color: '#8a7660' });
+  },
+
   drawBanner(ctx, game) {
     const b = game.bannerData;
     if (!b) return;
@@ -663,16 +716,44 @@ const HUD = {
     ctx.globalAlpha = 1;
   },
 
+  /**
+   * The aiming crosshair: a gold ring broken into four arcs, four bold white ticks
+   * crossing it and a glowing centre, all outlined dark so it reads on any floor.
+   */
   drawCrosshair(ctx, x, y) {
     x = Math.round(x);
     y = Math.round(y);
+    const R = 12;
+    ctx.save();
+    // soft glow behind, so it never gets lost in a busy fight
+    const g = ctx.createRadialGradient(x, y, 0, x, y, R + 6);
+    g.addColorStop(0, 'rgba(255, 220, 120, 0.22)');
+    g.addColorStop(1, 'rgba(255, 220, 120, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - R - 6, y - R - 6, (R + 6) * 2, (R + 6) * 2);
+    // the ring: four arcs between the ticks
+    for (const [w, col] of [[5, OUTLINE], [2, '#ffd36a']]) {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = w;
+      for (let i = 0; i < 4; i++) {
+        const a = (i * Math.PI) / 2 + Math.PI / 4;
+        ctx.beginPath();
+        ctx.arc(x, y, R, a - 0.5, a + 0.5);
+        ctx.stroke();
+      }
+    }
+    // ticks from just off the centre to past the ring
     ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x - 9, y - 2, 6, 4); ctx.fillRect(x + 3, y - 2, 6, 4);
-    ctx.fillRect(x - 2, y - 9, 4, 6); ctx.fillRect(x - 2, y + 3, 4, 6);
+    ctx.fillRect(x - R - 5, y - 2, 12, 4); ctx.fillRect(x + R - 7, y - 2, 12, 4);
+    ctx.fillRect(x - 2, y - R - 5, 4, 12); ctx.fillRect(x - 2, y + R - 7, 4, 12);
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x - 8, y - 1, 5, 2); ctx.fillRect(x + 3, y - 1, 5, 2);
-    ctx.fillRect(x - 1, y - 8, 2, 5); ctx.fillRect(x - 1, y + 3, 2, 5);
-    ctx.fillStyle = '#f2a541';
+    ctx.fillRect(x - R - 4, y - 1, 10, 2); ctx.fillRect(x + R - 6, y - 1, 10, 2);
+    ctx.fillRect(x - 1, y - R - 4, 2, 10); ctx.fillRect(x - 1, y + R - 6, 2, 10);
+    // the centre
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 2, y - 2, 4, 4);
+    ctx.fillStyle = '#ffd36a';
     ctx.fillRect(x - 1, y - 1, 2, 2);
+    ctx.restore();
   },
 };

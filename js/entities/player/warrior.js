@@ -453,6 +453,11 @@ class Warrior extends Player {
 
   get tankerReady() { return this.hitsTaken >= this.cfg.passive.hits; }
 
+  /** Enemy bodies bump off the armour: contact hits do less damage. */
+  absorb(amount, world, fromX, fromY, opts) {
+    return opts.contact ? amount * (1 - this.cfg.passive.contactReduction) : amount;
+  }
+
   onHitTaken() {
     this.hitsTaken = Math.min(this.cfg.passive.hits, this.hitsTaken + 1);
   }

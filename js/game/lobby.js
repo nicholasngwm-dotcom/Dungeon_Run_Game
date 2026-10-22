@@ -83,7 +83,7 @@ class LobbyHub {
       // hay bales, lantern posts and a bench to rest on
       ['weaponRack', 33.2, 16.75], ['weaponRack', 40.4, 16.75], ['bannerGreen', 35.0, 16.9],
       ['dummy', 33.7, 23.8], ['dummyBroken', 39.4, 23.4], ['pell', 33.5, 27.3], ['pell', 39.6, 27.6],
-      ['target', 50.4, 18.6], ['target', 50.4, 21.8], ['target', 50.4, 25.0], ['barrel', 44.3, 17.4], ['crate', 44.4, 28.4],
+      ['barrel', 44.3, 17.4], ['crate', 44.4, 28.4],
       ['dummyBurnt', 43.3, 26.8], ['hayBale', 32.9, 29.6], ['hayBale', 48.6, 29.5], ['hayBale', 50.9, 29.4],
       ['lampPost', 33.3, 20.6], ['lampPost', 44.2, 22.4], ['bench', 41.4, 29.6],
       // the garden corner beside the workshop: an apple tree, the well, flowers and a bench in the shade
@@ -100,6 +100,9 @@ class LobbyHub {
       const fp = PROP_FOOTPRINT[o.name];
       if (fp) d.addObstacle?.(o.x - fp[0] / 2, o.y - fp[1], fp[0], fp[1]);
     }
+    // the archery lane's targets are live (TrainingTarget, made by the game): hit them like the dummy
+    this.targets = [[50.4, 18.6], [50.4, 21.8], [50.4, 25.0]].map(([tx, ty]) => ({ x: tx * T, y: ty * T }));
+    for (const t of this.targets) d.addObstacle?.(t.x - 13, t.y - 8, 26, 8);
     const base = { hero: [32, 12], bestiary: [24, 6], legend: [44, 5], potions: [48, 10], practice: [26, 6], clock: [24, 10], hourglass: [34, 10] };
     for (const s of this.stations) {
       const fp = base[s.kind];
@@ -135,8 +138,15 @@ class LobbyHub {
     ].map(([text, tx, ty, sy]) => ({ text, x: tx * T, y: ty * T, sortY: sy * T }));
     this.signposts = [{ text: 'TRAINING GROUNDS', x: 34.6 * T, y: 19.0 * T }];
 
-    // a cat wanders the hall and naps by the fire (visual only)
-    this.catPath = [[17.5, 18.4], [22, 17], [22, 24.5], [25.5, 26.4], [22, 21.5], [26.5, 18.2], [22.5, 8.5]].map(([tx, ty]) => ({ x: tx * T, y: ty * T }));
+    // the keep's cats, each with its own haunts: it sits a while at each spot, then trots to the next.
+    // Walk up and press E to pet one: it stops, leans into it and purrs
+    this.cats = [
+      ['ginger', [[17.5, 18.4], [22, 17], [22, 24.5], [25.5, 26.4], [22, 21.5], [26.5, 18.2], [22.5, 8.5]], 6],
+      ['black', [[4.2, 19.2], [7.4, 21.6], [5.2, 25.2], [9.4, 25.6], [7.2, 18.6]], 7],
+      ['grey', [[36.2, 21.2], [42.5, 20.4], [46.4, 24.2], [38.6, 26.8], [45.2, 28.2]], 5],
+      ['white', [[25.5, 25.3], [21.8, 27.6], [28.4, 27.4]], 11],
+      ['cream', [[45.2, 13.1], [48.2, 11.2], [47.6, 7.6], [44.6, 8.6]], 8],
+    ].map(([coat, path, sit], i) => ({ coat, name: CAT_COATS[coat].name, sit, t: i * 7.3, pet: 0, path: path.map(([tx, ty]) => ({ x: tx * T, y: ty * T })) }));
     // fireflies drifting through the keep and the yard
     this.motes = Array.from({ length: 44 }, (_, i) => ({
       x: (2 + ((i * 0.618) % 1) * 50) * T, y: (5.5 + ((i * 0.382) % 1) * 24) * T, s: i * 1.7,
@@ -156,6 +166,14 @@ class LobbyHub {
       if (left < 0.05 || left > 23.9) this.timeWarp = null;
     }
     this.clock = (this.clock || 0) + dt * rate;
+    // cats go about their rounds, except while someone is petting them
+    for (const c of this.cats) {
+      if (c.pet > 0) {
+        c.pet -= dt;
+        c.heart = (c.heart || 0) - dt;
+        if (c.heart <= 0) { c.heart = 0.45; this.heartFx(c); }
+      } else c.t += dt;
+    }
     this.updateDoors(dt);
   }
 
@@ -268,6 +286,7 @@ class LobbyHub {
   interact(hero) {
     hero.nearStation = null;
     hero.nearSeat = null;
+    hero.nearCat = null;
     if (hero.seat) {
       const s = hero.seat;
       const leave = Input.pressed('interact') || Input.pressed('dodge') || ['up', 'down', 'left', 'right'].some((a) => Input.down(a));
@@ -290,6 +309,19 @@ class LobbyHub {
       return;
     }
     if (hero.nearStation) return;
+    // a cat close by can be petted
+    best = 34;
+    for (const c of this.cats) {
+      const s = this.catState(c);
+      const d = dist(hero.x, hero.y, s.x, s.y);
+      if (d < best) { best = d; hero.nearCat = c; }
+    }
+    if (hero.nearCat && Input.pressed('interact')) {
+      Input.consume('interact');
+      this.pet(hero.nearCat, hero);
+      return;
+    }
+    if (hero.nearCat) return;
     // otherwise the closest free seat within reach
     best = 30;
     for (const s of this.seats) {
@@ -308,6 +340,42 @@ class LobbyHub {
       hero.kby = 0;
       if (hero === this.world.localPlayer) Sound.play('uiClick');
     }
+  }
+
+  /** Petting a cat: it stops, turns to you, leans in with its eyes shut and purrs, hearts drifting up. */
+  pet(c, hero) {
+    const s = this.catState(c);
+    const fresh = !(c.pet > 0);
+    c.pet = 2.6;
+    c.heart = 0;
+    c.petFlip = hero.x < s.x;
+    hero.facing = s.x >= hero.x ? 1 : -1;
+    c.pets = (c.pets || 0) + 1;
+    if (hero === this.world.localPlayer) {
+      Sound.play(fresh ? 'meow' : 'purr', 0.3);
+      if (fresh) Sound.play('purr');
+      this.world.effects.text(s.x, s.y - 30, `${c.name} PURRS`, { color: '#ffb0c8', size: 7, life: 1.2, rise: 20 });
+    }
+  }
+
+  /** A little pixel heart floating up off a cat being petted (visual only). */
+  heartFx(c) {
+    const s = this.catState(c);
+    const x0 = s.x + vrand(-6, 6);
+    const y0 = s.y - 14;
+    const sway = vrand(0, 6);
+    this.world.effects.add(1.1, (ctx, t) => {
+      const x = Math.round(x0 + Math.sin(t * 6 + sway) * 4);
+      const y = Math.round(y0 - t * 34);
+      ctx.globalAlpha = t < 0.7 ? 1 : (1 - t) / 0.3;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x - 3, y - 2, 7, 5); ctx.fillRect(x - 2, y + 3, 5, 1); ctx.fillRect(x - 1, y + 4, 3, 1);
+      ctx.fillStyle = '#ff6a8a';
+      ctx.fillRect(x - 2, y - 1, 2, 3); ctx.fillRect(x + 1, y - 1, 2, 3); ctx.fillRect(x - 1, y + 1, 3, 2); ctx.fillRect(x, y + 3, 1, 1);
+      ctx.fillStyle = '#ffd0dc';
+      ctx.fillRect(x - 2, y - 1, 1, 1);
+      ctx.globalAlpha = 1;
+    });
   }
 
   /** Off the seat, onto the nearest clear floor beside it. */
@@ -407,25 +475,30 @@ class LobbyHub {
     items.push(...this.doorDrawables());
     for (const s of this.signs) items.push({ y: s.sortY, draw: (ctx) => this.drawSign(ctx, s.text, s.x, s.y) });
     for (const s of this.signposts) items.push({ y: s.y, draw: (ctx) => this.drawSignpost(ctx, s) });
-    const cat = this.catState();
-    items.push({
-      y: cat.y,
-      draw: (ctx) => {
-        drawShadow(ctx, cat.x, cat.y, 6, 2, 0.3);
-        drawProp(ctx, cat.walking ? (Math.floor(this.time * 8) % 2 ? 'catWalk1' : 'catWalk2') : 'catSit', cat.x, cat.y, cat.flip);
-      },
-    });
+    for (const c of this.cats) {
+      const s = this.catState(c);
+      const pose = c.pet > 0 ? 'Happy' : s.walking ? (Math.floor(this.time * 8) % 2 ? 'Walk1' : 'Walk2') : 'Sit';
+      items.push({
+        y: s.y,
+        draw: (ctx) => {
+          drawShadow(ctx, s.x, s.y, 6, 2, 0.3);
+          // purring: a gentle wobble
+          const purr = c.pet > 0 ? Math.round(Math.sin(this.time * 30) * 0.6) : 0;
+          drawProp(ctx, `cat${pose}_${c.coat}`, s.x + purr, s.y, c.pet > 0 ? c.petFlip : s.flip);
+        },
+      });
+    }
     return items;
   }
 
-  /** Where the cat is: it sits a while at each spot, then trots to the next. */
-  catState() {
-    const sit = 6;
+  /** Where a cat is on its rounds: it sits a while at each spot, then trots to the next. */
+  catState(c) {
+    const sit = c.sit;
     const walkSpeed = 34;
-    const path = this.catPath;
+    const path = c.path;
     const legs = path.map((a, i) => { const b = path[(i + 1) % path.length]; return dist(a.x, a.y, b.x, b.y) / walkSpeed; });
     const total = legs.reduce((s, l) => s + l + sit, 0);
-    let t = this.time % total;
+    let t = c.t % total;
     for (let i = 0; i < path.length; i++) {
       const a = path[i];
       const b = path[(i + 1) % path.length];
@@ -617,6 +690,9 @@ class LobbyHub {
     const bob = Math.sin(this.time * 5) * 2;
     if (me.seat) {
       HUD.text(ctx, `[${Settings.label('interact')}] ${me.seat.bed ? 'GET UP' : 'STAND UP'}`, me.x, me.y - (me.seat.bed ? 70 : 64) + bob, { size: 7, align: 'center', color: '#ffe680' });
+    } else if (me.nearCat && !me.nearStation) {
+      const s = this.catState(me.nearCat);
+      HUD.text(ctx, `[${Settings.label('interact')}] PET ${me.nearCat.name}`, s.x, s.y - 30 + bob, { size: 7, align: 'center', color: '#ffe680' });
     } else if (me.nearSeat && !me.nearStation) {
       HUD.text(ctx, `[${Settings.label('interact')}] ${me.nearSeat.bed ? 'SLEEP' : 'SIT'}`, me.nearSeat.x, me.nearSeat.y - (me.nearSeat.bed ? 56 : 30) + bob, { size: 7, align: 'center', color: '#ffe680' });
     }

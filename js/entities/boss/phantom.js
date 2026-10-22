@@ -146,7 +146,11 @@ class PhantomKing {
         this.y = this.dest.y;
         this.alpha = clamp(this.t / c.appearTime, 0, 1);
         if (Math.random() < 0.6) this.wisp(world, 40);
-        if (this.t >= c.appearTime) this.startPulse(world);
+        if (this.t >= c.appearTime) this.startNova(world);
+        break;
+      case 'nova':
+        // the ring of lasers flies out; only then does the pull begin
+        if (this.t >= c.appearNova.delay) this.startPulse(world);
         break;
       case 'pulse': this.updatePulse(dt, world); break;
       case 'barrage': this.updateBarrage(dt, world); break;
@@ -444,6 +448,31 @@ class PhantomKing {
     return { x: best.x, y: best.y };
   }
 
+  /** Reappearing: a wave of lasers blasts out all around him, before he starts pulling. */
+  startNova(world) {
+    const c = this.cfg.appearNova;
+    this.setState('nova');
+    this.alpha = 1;
+    const n = this.phase === 3 ? c.count + 4 : c.count;
+    const off = rand(0, TAU);
+    for (let i = 0; i < n; i++) this.fireLaser(world, this.hx, this.hy - 10, off + (i / n) * TAU);
+    const x = this.hx;
+    const y = this.hy;
+    world.effects.add(0.5, (ctx, t) => {
+      const r = 20 + t * 160;
+      ctx.save();
+      ctx.globalAlpha = 1 - t;
+      PFX.ring(ctx, x, y, r, r * 0.7, '#ff4ad8', 2, { thick: t < 0.3 ? 3 : 1 });
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, x, y, 50 * (1 - t) + 10, '255, 70, 220', 1.2 * (1 - t));
+      ctx.restore();
+    });
+    world.effects.burst(x, y, { count: 24, colors: ['#33195a', '#ff4ad8', '#ffd0f6'], speed: [60, 200], life: [0.3, 0.6] });
+    world.shake(4, 0.2);
+    Sound.play('phantomAppear');
+    Sound.play('eyeLaser');
+  }
+
   startPulse(world) {
     this.setState('pulse');
     this.alpha = 1;
@@ -526,7 +555,7 @@ class PhantomKing {
     if (this.state === 'dash' || this.alpha < 0.6) return;
     // measured at ground level (its shadow), like the dash lane
     for (const p of world.heroes) {
-      if (dist(this.x, this.y, p.x, p.y) < this.cfg.contactRadius + p.hw) p.hurt(this.cfg.contactDamage, world, this.x, this.y);
+      if (dist(this.x, this.y, p.x, p.y) < this.cfg.contactRadius + p.hw) p.hurt(this.cfg.contactDamage, world, this.x, this.y, { contact: true });
     }
   }
 
@@ -716,7 +745,7 @@ class PhantomKing {
   // ---------------------------------------------------------
 
   get angry() {
-    return this.phase === 3 || this.eyeCharge >= 0 || ['dashWindup', 'dash', 'pulse', 'barrage'].includes(this.state);
+    return this.phase === 3 || this.eyeCharge >= 0 || ['dashWindup', 'dash', 'nova', 'pulse', 'barrage'].includes(this.state);
   }
 
   currentFrame() {

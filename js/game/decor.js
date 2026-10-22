@@ -30,6 +30,7 @@ class FloorDecor {
       if (this.run.spikes.some((s) => Math.abs(s.x + 16 - pt.x) < 40 && Math.abs(s.y + 16 - pt.y) < 40)) continue;
       if (this.run.props.some((p) => p.room === r && dist(p.x, p.y, pt.x, pt.y) < 80)) continue;
       if (this.items.some((d) => dist(d.x, d.y, pt.x, pt.y) < minGap)) continue;
+      if (this.run.nearCover?.(pt.x, pt.y, 40)) continue;   // not on or against cover
       return pt;
     }
     return null;
@@ -40,6 +41,7 @@ class FloorDecor {
   }
 
   decorate(r) {
+    if (this.floor.themeId === 'castle' && CastleDecor.decorate(this, r)) return;
     const T = this.floor.T;
     const area = (r.x1 - r.x0 + 1) * (r.y1 - r.y0 + 1);
     const many = (n) => Math.max(1, Math.round(n * area / 250));
@@ -123,6 +125,8 @@ class FloorDecor {
   update(dt, world) {
     this.time += dt;
     const p = world.localPlayer;   // visual only: crows and mist react to this screen's hero
+    const castle = this.floor.themeId === 'castle';
+    if (castle) CastleDecor.update(this, dt, world);
     for (const d of this.items) {
       if (d.kind === 'crow') this.updateCrow(d, dt, p);
       else if (d.kind === 'campfire' && nativeRandom() < dt * 8) {
@@ -132,9 +136,9 @@ class FloorDecor {
       }
     }
     removeDead(this.items);
-    // mist drifting up out of the ground near the hero
+    // mist drifting up out of the ground near the hero (the graveyard only)
     this.mistTimer -= dt;
-    if (this.mistTimer <= 0 && !p.dead) {
+    if (!castle && this.mistTimer <= 0 && !p.dead) {
       this.mistTimer = 0.12;
       world.effects.burst(p.x + vrand(-460, 460), p.y + vrand(-260, 260), {
         count: 1, colors: ['rgba(120, 160, 140, 0.25)', 'rgba(90, 120, 110, 0.22)'], speed: [4, 12], up: 8, life: [2, 3.5], size: [6, 10],
@@ -171,6 +175,7 @@ class FloorDecor {
   drawGround(ctx, cam) {
     for (const d of this.items) {
       if (!this.visible(d, cam, 200)) continue;
+      if (this.floor.themeId === 'castle') CastleDecor.drawGround(this, ctx, d);
       if (d.kind === 'rug') this.drawRug(ctx, d);
       if (d.kind === 'runeCircle') this.drawRuneCircle(ctx, d);
       if (d.kind === 'lampPost' || d.kind === 'campfire') {
@@ -192,10 +197,11 @@ class FloorDecor {
   getDrawables(cam) {
     return this.items
       .filter((d) => d.kind !== 'rug' && d.kind !== 'runeCircle' && this.visible(d, cam))
-      .map((d) => ({ y: d.kind === 'crow' && d.flying ? d.y + 400 : d.y, draw: (ctx) => this.drawItem(ctx, d) }));
+      .map((d) => ({ y: d.kind === 'crow' && d.flying ? d.y + 400 : CastleDecor.sortY(d), draw: (ctx) => this.drawItem(ctx, d) }));
   }
 
   drawItem(ctx, d) {
+    if (CastleDecor.draws(d.kind)) return CastleDecor.drawItem(this, ctx, d);
     const x = Math.round(d.x);
     const y = Math.round(d.y);
     const R = (rx, ry, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x + rx, y + ry, w, h); };

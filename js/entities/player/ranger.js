@@ -236,6 +236,7 @@ class Ranger extends Player {
     const hit = this.hitCircle(world, x, y, c.radius, c.damage, { knockback: 0, sound: 'hit' });
     for (const t of hit) {
       if (t.freeze) t.freeze(c.freeze);
+      else if (world.isBossTarget(t)) world.chillBoss(c.freeze);   // bosses can't be frozen solid: they're chilled
       else t.stun?.(c.freeze);
     }
     world.effects.burst(x, y, { count: 28, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [80, 240], life: [0.3, 0.6], size: [2, 4] });

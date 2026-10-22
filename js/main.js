@@ -6,7 +6,7 @@
 //   ?class=warrior&boss  start at a random boss (&boss=golem or &boss=phantom to pick)
 //   ?class=mage&practice start in the practice range
 //   ?lobby               start in the lobby (&class=... to pick the hero; &panel=hero:mage or &panel=workshop opens a station)
-//   ?run=graveyard       start a set-dungeon run (?run=random for random mode; &stage=2 or 3 to skip ahead)
+//   ?run=graveyard       start a set-dungeon run (?run=castle, or ?run=random for random mode; &stage=2 or 3 to skip ahead)
 //   ?run=graveyard&visit=special&special=blacksmith   start inside a room type (shop, special, boss...),
 //                        optionally forcing which special room it is
 
@@ -36,6 +36,7 @@ const App = {
       ['Forging the heroes...', buildHeroSprites],
       ['Raising the dead...', () => { buildEnemySprites(); buildBossSprites(); buildPhantomSprites(); }],
       ['Sharpening the blades...', () => { buildItemSprites(); buildGraveyardSprites(); }],   // graveyard after the items: it adds to Sprites.projectiles
+      ['Crowning the court...', () => { buildCastleSprites(); buildQueenSprites(); buildKingSprites(); buildRoyalSetPieces(); buildCastleDecor(); }],
       ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); }],
       ['Brewing potions...', () => { buildPotionSprites(); buildIconSprites(); }],
       ['Rehearsing the battles...', () => MenuShowcase.start(0)],

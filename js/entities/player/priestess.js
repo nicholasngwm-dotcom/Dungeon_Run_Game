@@ -22,6 +22,31 @@ function holyCross(ctx, x, y, size, t, k = 2) {
   ctx.restore();
 }
 
+/** A little green-and-gold cross of healing light floating up from (x, y) and fading (visual only). */
+function healCross(world, x, y) {
+  const gold = vrand(0, 1) < 0.35;
+  const drift = vrand(-6, 6);
+  world.effects.add(0.9, (ctx, t) => {
+    const cx = Math.round(x + drift * t);
+    const cy = Math.round(y - t * 32);
+    const s = t < 0.15 ? 1 : 2;
+    ctx.save();
+    ctx.globalAlpha = 1 - t * t;
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, cx, cy, 7, gold ? '255, 230, 140' : '140, 255, 160', 0.6, 1);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(cx - s - 1, cy - s * 2 - 1, s * 2 + 2, s * 4 + 2);
+    ctx.fillRect(cx - s * 2 - 1, cy - s - 1, s * 4 + 2, s * 2 + 2);
+    ctx.fillStyle = gold ? '#ffe680' : '#8cf0a0';
+    ctx.fillRect(cx - s, cy - s * 2, s * 2, s * 4);
+    ctx.fillRect(cx - s * 2, cy - s, s * 4, s * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(cx - s + 1, cy - s * 2 + 1, 1, 1);
+    ctx.restore();
+  });
+}
+
 class Priestess extends Player {
   constructor(x, y) {
     super('priestess', x, y);
@@ -236,8 +261,22 @@ class Priestess extends Player {
       for (const a of world.allies) {
         if (!a.heal || !this.inRune(r, a)) continue;
         a.heal(c.heal * dt, world, true);
-        if (Math.random() < dt * 8) {
-          world.effects.burst(a.x + rand(-8, 8), a.y - rand(4, 24), { count: 1, colors: ['#9cf0a0', '#fff6c8'], speed: [5, 15], life: [0.4, 0.7], up: 40 });
+        // little crosses of light float up off whoever is being healed, and every so often
+        // a ring of light washes up over their feet
+        if (vrand(0, 1) < dt * 7) healCross(world, a.x + vrand(-10, 10), a.y - vrand(6, 26));
+        a.runeGlow = (a.runeGlow || 0) - dt;
+        if (a.runeGlow <= 0) {
+          a.runeGlow = 1;
+          const hx = a.x;
+          const hy = a.y;
+          world.effects.add(0.6, (ctx, t) => {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 1 - t;
+            PFX.ring(ctx, hx, hy + 2 - t * 26, 14 + t * 6, (14 + t * 6) * 0.45, '#9cf0a0', 2, { thick: 2 });
+            PFX.glow(ctx, hx, hy - 14, 22, '140, 255, 160', 0.5 * (1 - t));
+            ctx.restore();
+          });
         }
       }
     }
@@ -449,12 +488,33 @@ class Priestess extends Player {
       PFX.line(ctx, r.x, r.y, r.x + Math.cos(a) * rad * 0.7, r.y + Math.sin(a) * rad * 0.7 * sy, '#ffe680', 2);
     }
     PFX.star(ctx, r.x, r.y, 2, '#9cf0a0', '#ffffff', 2);
-    // rising motes
-    ctx.fillStyle = '#c8ffd0';
-    for (let i = 0; i < 8; i++) {
-      const a = (i * TAU) / 8;
-      const h = ((r.t * 30 + i * 9) % 36);
-      ctx.fillRect(PFX.snap(r.x + Math.cos(a) * rad * 0.6, 2), PFX.snap(r.y + Math.sin(a) * rad * 0.6 * sy - h, 2), 2, 2);
+    // healing ripples spreading out from the middle
+    for (let i = 0; i < 2; i++) {
+      const k = (r.t * 0.7 + i * 0.5) % 1;
+      ctx.globalAlpha = fade * (1 - k) * 0.6;
+      PFX.ring(ctx, r.x, r.y, rad * k, rad * k * sy, '#c8ffd0', 2);
+    }
+    ctx.globalAlpha = fade;
+    // a soft pillar of light rising off the rune
+    const pulse = 0.75 + Math.sin(r.t * 3) * 0.25;
+    const g = ctx.createLinearGradient(0, r.y - 110, 0, r.y);
+    g.addColorStop(0, 'rgba(160, 255, 180, 0)');
+    g.addColorStop(1, `rgba(160, 255, 180, ${0.16 * pulse})`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(r.x, r.y - 55, rad * 0.75, 55, 0, 0, TAU);
+    ctx.fill();
+    PFX.glow(ctx, r.x, r.y, rad * 0.9, '255, 230, 140', 0.25 * pulse, 4, rad * 0.9 * sy);
+    // little crosses of light drifting up out of it
+    for (let i = 0; i < 9; i++) {
+      const a = (i * TAU) / 9 + i;
+      const k = ((r.t * 0.6 + i * 0.11) % 1);
+      const cx = PFX.snap(r.x + Math.cos(a) * rad * 0.55 * (1 - k * 0.3), 2);
+      const cy = PFX.snap(r.y + Math.sin(a) * rad * 0.55 * sy - k * 60, 2);
+      ctx.globalAlpha = fade * Math.sin(k * Math.PI);
+      ctx.fillStyle = i % 3 ? '#c8ffd0' : '#ffe680';
+      ctx.fillRect(cx - 1, cy - 3, 2, 6);
+      ctx.fillRect(cx - 3, cy - 1, 6, 2);
     }
     ctx.restore();
   }

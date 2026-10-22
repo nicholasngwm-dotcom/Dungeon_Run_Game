@@ -67,6 +67,7 @@ class Game {
       // a dummy in the sparring ring out in the yard to try abilities on
       const T = CONFIG.tileSize;
       this.dummies.push(new TrainingDummy(36.5 * T, 24.8 * T));
+      for (const t of this.lobby.targets) this.dummies.push(new TrainingTarget(t.x, t.y));
       if (opts.welcome) this.banner('THE LOBBY', 'Pick a hero, then head through the gate', 2.6);
     }
     if (this.run) this.run.start();
@@ -181,6 +182,7 @@ class Game {
         Sound.play(sound || 'hit', 0.04);
       }
     }
+    if (this.players.includes(src)) Game.statsOf(src).damage += dmg;
     if (!fromUlt && !src.dead) src.gainUlt(dmg);
     src.onDamageDealt(target, dmg, this);
     if (this.practice) {
@@ -188,6 +190,23 @@ class Game {
       this.practice.total += dmg;
     }
     return dmg;
+  }
+
+  /** True if `t` is the boss or one of its hittable parts (the golem's fists...). */
+  isBossTarget(t) {
+    return !!this.boss && (t === this.boss || this.boss.getTargets().includes(t));
+  }
+
+  /**
+   * Debuffs reach bosses too, all but plain stuns: a freeze can't lock a boss in ice,
+   * so it chills it instead (slowed for longer than the freeze would have lasted).
+   */
+  chillBoss(duration) {
+    const b = this.boss;
+    if (!b) return;
+    const c = CONFIG.bossDebuffs;
+    if (!(b.chillUntil > this.time)) this.effects.text(b.hx, b.hy - 60, 'CHILLED', { color: '#9ad0ff', size: 8 });
+    b.chillUntil = Math.max(b.chillUntil || 0, this.time + duration * c.chillTime);
   }
 
   /** Damage over time (bleed etc.), ticking twice a second; it belongs to the hero who applied it. */
@@ -258,6 +277,12 @@ class Game {
   }
 
   addEnemy(enemy) {
+    this.scaleEnemy(enemy);
+    this.enemies.push(enemy);
+  }
+
+  /** Stage / wave and party-size toughness for a new enemy (addEnemy; the run's waiting first waves). */
+  scaleEnemy(enemy) {
     const s = this.enemyScale;
     if (s.hp !== 1 || s.damage !== 1) {
       const cfg = enemy.cfg;
@@ -267,7 +292,6 @@ class Game {
       enemy.hp = enemy.maxHp;
     }
     if (s.speed) enemy.speed *= s.speed;
-    this.enemies.push(enemy);
   }
 
   /** Stage / wave scaling times party size (boss minions and the practice range don't scale with waves). */
@@ -377,7 +401,7 @@ class Game {
       this.weakenScale = Game.weakenOf(e, this);
       for (const a of this.allies) {
         if (a.contactImmune) continue;
-        if (dist(e.x, e.y, a.x, a.y) < e.radius + a.radius) a.hurt(damage, this, e.x, e.y);
+        if (dist(e.x, e.y, a.x, a.y) < e.radius + a.radius) a.hurt(damage, this, e.x, e.y, { contact: true });
       }
     }
     this.weakenScale = 1;
@@ -459,11 +483,20 @@ class Game {
     return entries[0][0];
   }
 
+  /** A hero's scoreboard numbers for this run (kills, damage dealt, healing done, damage taken, deaths). */
+  static statsOf(p) {
+    return p.stats || (p.stats = { kills: 0, damage: 0, healing: 0, taken: 0, deaths: 0 });
+  }
+
   static createBoss(type, center) {
-    return type === 'phantom' ? new PhantomKing(center.x, center.y) : new Golem(center.x, center.y + 40);
+    if (type === 'phantom') return new PhantomKing(center.x, center.y);
+    if (type === 'queen') return new Queen(center.x, center.y);
+    if (type === 'king') return new King(center.x, center.y);
+    return new Golem(center.x, center.y + 40);
   }
 
   onBossDefeated() {
+    if (this.boss && this.players.includes(this.boss.lastHitBy)) Game.statsOf(this.boss.lastHitBy).kills++;
     if (this.run) return this.run.onBossDefeated();
     if (this.practice) {
       this.banner(`${this.boss.name} DEFEATED`, 'Spawn it again from the panel');
@@ -688,7 +721,12 @@ class Game {
       if (this.boss.sleepMeter > 0 && this.boss.lullabyTick !== this.time) {
         this.boss.sleepMeter = Math.max(0, this.boss.sleepMeter - CONFIG.classes.bard.lullaby.meterDecay * dt);
       }
-      if (!(this.boss.sleepUntil > this.time)) this.boss.update(dt, this);
+      // a chilled boss (frozen by ice) moves and attacks at a fraction of its speed
+      const chill = this.boss.chillUntil > this.time ? CONFIG.bossDebuffs.chillSpeed : 1;
+      if (chill < 1 && vrand(0, 1) < dt * 10) {
+        this.effects.burst(this.boss.hx + vrand(-30, 30), this.boss.hy + vrand(-30, 20), { count: 1, colors: ['#e6f6ff', '#9ad0ff'], speed: [5, 20], life: [0.4, 0.8], up: 20, size: [1, 3] });
+      }
+      if (!(this.boss.sleepUntil > this.time)) this.boss.update(dt * chill, this);
       this.weakenScale = Projectile.enemyScale = 1;
       this.bossFocus = null;
       if (this.boss.dead) this.boss = null;
@@ -714,9 +752,15 @@ class Game {
     const dead = this.enemies.filter((e) => e.dead);
     if (this.run) for (const e of dead) this.run.onEnemyKilled(e);
     this.kills += dead.length;
+    for (const e of dead) if (this.players.includes(e.lastHitBy) && !e.exploded) Game.statsOf(e.lastHitBy).kills++;
     for (const e of dead) {
       const killer = this.players.includes(e.lastHitBy) ? e.lastHitBy : this.players[0];
       killer.onKill(this);
+    }
+    // scoreboard: a hero going down counts as a death
+    for (const p of this.players) {
+      if (p.dead && !p.wasDown) Game.statsOf(p).deaths++;
+      p.wasDown = p.dead;
     }
     removeDead(this.enemies);
     removeDead(this.clones);
@@ -858,6 +902,7 @@ class Game {
     for (const p of this.playerProjectiles) p.draw(ctx);
     for (const p of this.enemyProjectiles) p.draw(ctx);
     if (this.boss) this.boss.drawOverlay(ctx);
+    if (this.boss && this.boss.chillUntil > this.time) this.drawBossChill(ctx);
     this.effects.draw(ctx);
     if (this.boss) HUD.drawBossBars(ctx, this.boss);
     this.dungeon.drawTorches(ctx, this.time, this.camera);
@@ -870,6 +915,24 @@ class Game {
 
     ctx.drawImage(this.vignette, 0, 0);
     if (!this.showcase) HUD.draw(ctx, this);
+  }
+
+  /** A chilled boss: frost glinting over it, a pale blue cast and an icy ring at its feet. */
+  drawBossChill(ctx) {
+    const b = this.boss;
+    const left = b.chillUntil - this.time;
+    const a = Math.min(1, left * 2);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, b.hx, b.hy, 70, '140, 200, 255', 0.45 * a, 2, 60);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = a;
+    PFX.ring(ctx, b.x, b.y, 46, 18, '#9ad0ff', 2, { dash: [4, 3], spin: this.time * 0.6 });
+    for (let i = 0; i < 6; i++) {
+      const ang = this.time * 0.8 + (i / 6) * TAU;
+      PFX.shard(ctx, b.x + Math.cos(ang) * 40, b.y + Math.sin(ang) * 15 - 4, -Math.PI / 2, 10, 4, ICE_COLORS, 2);
+    }
+    ctx.restore();
   }
 
   /**

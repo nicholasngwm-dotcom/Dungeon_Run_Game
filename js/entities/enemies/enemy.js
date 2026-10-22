@@ -43,6 +43,7 @@ class Enemy extends Entity {
     this.weakened = this.weakenUntil > world.time;   // (for drawing)
     if (this.asleep && !(this.stunTime > dt)) this.asleep = false;
     this.waking = (this.waking || 0) - dt;
+    this.hasted = (this.hasted || 0) - dt;   // a minstrel's war song (see Minstrel)
     // the Bard's lullaby meter drains whenever no lullaby reached this enemy this tick
     if (this.sleepMeter > 0 && this.lullabyTick !== world.time) this.sleepMeter = Math.max(0, this.sleepMeter - CONFIG.classes.bard.lullaby.meterDecay * dt);
     if (this.stunTime > 0) {
@@ -327,6 +328,14 @@ class Enemy extends Entity {
     ctx.fillRect(x - 1, y + 3, 3, 2);
   }
 
+  /** Spurred on by a minstrel's song: a little red note bobbing over its head. */
+  drawHasted(ctx) {
+    const img = Sprites.projectiles.redNote;
+    const x = Math.round(this.x - this.radius - 10);
+    const y = Math.round(this.y - this.barOffset - 10 + Math.sin(this.animTime * 6) * 2);
+    ctx.drawImage(img, x, y);
+  }
+
   /** Lazy "z z Z" drifting up from a sleeping enemy. */
   drawSleep(ctx) {
     const y0 = this.y - this.barOffset - 4;
@@ -389,6 +398,7 @@ class Enemy extends Entity {
   /** Circling stars over stunned enemies (an ice block if frozen, z's if asleep, a startled "!" while waking). */
   drawStun(ctx) {
     this.drawWeaken(ctx);
+    if (this.hasted > 0) this.drawHasted(ctx);
     if (this.sleepMeter > 0 && !this.asleep) this.drawSleepMeter(ctx);
     if (!(this.stunTime > 0)) return;
     if (this.frozenTime > 0) return this.drawIceBlock(ctx);
@@ -428,6 +438,11 @@ function createEnemy(type, x, y) {
     bletcher: Bletcher, skeletonWarrior: SkeletonWarrior, bomber: Bomber, candlehead: Candlehead,
     shadowalker: Shadowalker, necromancer: Necromancer, reaper: Reaper, minigunner: Minigunner,
     zombieSoldier: ZombieSoldier, skeletonSorcerer: SkeletonSorcerer, flyingSkull: FlyingSkull,
+    // castle
+    squire: Squire, castleArcher: CastleArcher, minstrel: Minstrel, gunner: Gunner, catapult: Catapult,
+    flamingCatapult: FlamingCatapult, maceSpinner: MaceSpinner, bishop: Bishop, castleKnight: CastleKnight,
+    cavalry: Cavalry, castleSorcerer: CastleSorcerer, executioner: Executioner, jester: Jester,
+    royalGuard: RoyalGuard, prince: Prince, princess: Princess, gardener: Gardener,
   };
   return new classes[type](x, y, type);
 }
