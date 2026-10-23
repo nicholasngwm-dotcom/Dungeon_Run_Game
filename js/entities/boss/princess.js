@@ -302,7 +302,7 @@ class RoyalPrincess {
     Sound.play('fireImpact');
     world.shake(4, 0.2);
     world.effects.burst(at.x, at.y - 6, { count: 30, colors: ['#ffd34a', '#ff8a1e', '#e0461e', '#ffffff'], speed: [60, 220], life: [0.3, 0.7], up: 60 });
-    world.effects.flames(at.x, at.y + 4, { count: 5, spread: 20, height: 26, width: 12, life: 0.6 });
+    world.effects.flames(at.x, at.y + 4, { count: 5, spread: 20, height: 26, width: 12, life: 0.6, colors: ENEMY_FIRE_COLORS });
     for (const a of hitAround(world, at.x, at.y, c.radius, c.damage)) a.burn?.(c.burnDps, c.burnTime, world);
     // bouncing fireballs flung out all round
     const off = rand(0, TAU);
@@ -311,7 +311,7 @@ class RoyalPrincess {
       world.enemyProjectiles.push(new Projectile({
         x: at.x + Math.cos(a) * 10, y: at.y - 8 + Math.sin(a) * 6, vx: Math.cos(a) * c.fireballSpeed, vy: Math.sin(a) * c.fireballSpeed,
         radius: 6, damage: c.fireballDamage, life: 2.6, bounces: c.bounces, friendly: false,
-        sprite: Sprites.projectiles.golemFireball, spin: 8, glow: '255, 140, 40', trail: ['#ffd34a', '#ff8a1e', '#e0461e'],
+        sprite: Sprites.projectiles.golemFireball, spin: 8, glow: '255, 60, 40', trail: ['#ff3a26', '#c81a1a', '#8a0c12'],
         onHit: (pr, w, t) => {
           if (t) t.burn?.(c.burnDps, c.burnTime, w);
           w.effects.burst(pr.x, pr.y, { count: 6, colors: ['#ffd34a', '#ff8a1e'], speed: [30, 90], life: [0.15, 0.3] });

@@ -88,14 +88,12 @@ const HUD = {
       this.text(ctx, `OUTSIDE THE ROOM - RETURNING IN ${left}s`, 480, 400, { size: 8, align: 'center', color: '#e0c0ff' });
     }
     if (p.targeting) {
-      const msg = p.classId === 'mage' ? 'LEFT CLICK: PICK LIGHTNING TARGET   RIGHT CLICK: CANCEL' : 'LEFT CLICK: FIRE VOLLEY   RIGHT CLICK: CANCEL';
-      this.text(ctx, msg, 480, 440, { size: 8, align: 'center', color: p.classId === 'mage' ? '#9cf0d8' : '#a8cc6a' });
+      const msg = { mage: 'LEFT CLICK: PICK LIGHTNING TARGET', rocketeer: `LEFT CLICK: FIRE BARRAGE (${p.ammo} ROCKETS)` }[p.classId] || 'LEFT CLICK: FIRE VOLLEY';
+      const color = { mage: '#9cf0d8', rocketeer: '#ff9a3a' }[p.classId] || '#a8cc6a';
+      this.text(ctx, `${msg}   RIGHT CLICK: CANCEL`, 480, 440, { size: 8, align: 'center', color });
     }
     if (p.placing) {
       this.text(ctx, 'LEFT CLICK: PLACE DRAIN CIRCLE   RIGHT CLICK: CANCEL', 480, 440, { size: 8, align: 'center', color: '#9cf0d8' });
-    }
-    if (p.placingRune) {
-      this.text(ctx, 'LEFT CLICK: PLACE HEALING RUNE   RIGHT CLICK: CANCEL', 480, 440, { size: 8, align: 'center', color: '#9cf0a0' });
     }
     if (p.choosingAegis) {
       this.text(ctx, 'LEFT CLICK: AEGIS ON ALLY', 474, 440, { size: 8, align: 'right', color: '#ffe680' });
@@ -105,8 +103,8 @@ const HUD = {
     if (p.choosingArrow) {
       this.text(ctx, 'LEFT CLICK: FIRE ARROW', 474, 440, { size: 8, align: 'right', color: '#ff8a1e' });
       this.text(ctx, 'RIGHT CLICK: ICE ARROW', 486, 440, { size: 8, color: '#9ad0ff' });
-      this.text(ctx, `${Settings.label('f')}: CANCEL`, 480, 456, { size: 6, align: 'center', color: '#d8c8a0' });
     }
+    this.drawAbilityTooltip(ctx, p);
   },
 
   /** Coin counter next to the health bar (dungeon runs); pops when coins come in. */
@@ -180,7 +178,15 @@ const HUD = {
     if (p.resource) {
       const r = p.resource;
       this.bar(ctx, 60, 34, 170, 8, r.value / r.max, r.color, '#1c1410');
-      this.text(ctx, `${r.name} ${Math.floor(r.value)}`, 145, 34, { size: 6, align: 'center' });
+      // run dry (or just refused for being short): the bar's rim and label go red
+      const out = r.value < 1;
+      const warn = out || (p.resourceShort > 0 && Math.floor(performance.now() / 90) % 2 === 0);
+      if (warn) {
+        ctx.strokeStyle = '#ff3a3a';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(57, 31, 176, 14);
+      }
+      this.text(ctx, out ? `OUT OF ${r.name}!` : `${r.name} ${Math.floor(r.value)}`, 145, 34, { size: 6, align: 'center', color: warn ? '#ff4a4a' : '#f4ead7' });
       y = 50;
     }
     this.text(ctx, p.cfg.name.toUpperCase(), 60, y, { size: 8, color: '#f2a541' });
@@ -190,6 +196,25 @@ const HUD = {
     this.drawBuffs(ctx, p, 12, y + 16 + (info ? (info.maxPips || info.bar != null ? 26 : 15) + 8 : 0));
 
     // abilities
+    const icons = Sprites.icons[p.classId];
+    for (const s of this.abilitySlots(p)) {
+      if (s.slot === 'q') { this.ultSlot(ctx, s.x, s.y, p); continue; }
+      const icon = s.icon || (s.slot === 'dodge' ? Sprites.icons.dodge : icons[s.slot]);
+      const cd = s.cd ?? p.cooldowns[s.slot];
+      const max = s.max ?? p.maxCooldowns[s.slot];
+      // a slot glows while its ability is held (the knight's raised shield), or when an extra is armed
+      const armed = s.slot && p.slotHeld(s.slot) ? 'held' : !!s.armed;
+      const short = s.slot && !p.canAfford(s.slot) ? p.resource.name : null;
+      this.abilitySlot(ctx, s.x, s.y, s.key, s.name, cd, max, icon, s.slot ? p.slotCharges?.[s.slot] : null, armed, s.slot || s.name, short);
+    }
+    this.drawInventory(ctx, p);
+  },
+
+  /**
+   * The ability slots along the bottom right, ending with the ultimate in the corner:
+   * [{ key, name, slot, guide, x, y, w, h, ...extra }]. guide is the slot's entry in heroGuide.
+   */
+  abilitySlots(p) {
     const slots = [
       { key: 'LMB', name: p.icons.primary, slot: 'primary' },
       { key: 'RMB', name: p.icons.secondary, slot: 'secondary' },
@@ -199,19 +224,35 @@ const HUD = {
     ];
     // class extras (the knight's shield bash) go right after the slot they belong to
     for (const extra of p.extraSlots) slots.splice(slots.findIndex((s) => s.slot === extra.after) + 1, 0, extra);
-    // abilities sit bottom-right, ending with the ultimate in the corner
-    const icons = Sprites.icons[p.classId];
     const x0 = 960 - 14 - 70 - 6 - slots.length * 70;
-    slots.forEach((s, i) => {
-      const icon = s.icon || (s.slot === 'dodge' ? Sprites.icons.dodge : icons[s.slot]);
-      const cd = s.cd ?? p.cooldowns[s.slot];
-      const max = s.max ?? p.maxCooldowns[s.slot];
-      // a slot glows while its ability is held (the knight's raised shield), or when an extra is armed
-      const armed = s.slot && p.slotHeld(s.slot) ? 'held' : !!s.armed;
-      this.abilitySlot(ctx, x0 + i * 70, 474, s.key, s.name, cd, max, icon, s.slot ? p.slotCharges?.[s.slot] : null, armed, s.slot || s.name);
-    });
-    this.ultSlot(ctx, 960 - 14 - 70, 474, p);
-    this.drawInventory(ctx, p);
+    slots.forEach((s, i) => Object.assign(s, { x: x0 + i * 70, y: 474, w: 62, h: 50, guide: s.slot || s.guide }));
+    slots.push({ key: Settings.label('ult'), name: p.icons.q, slot: 'q', guide: 'q', x: 960 - 14 - 70, y: 474, w: 70, h: 50 });
+    return slots;
+  },
+
+  /**
+   * Hovering the mouse over an ability slot: its name and one short line on what it
+   * does (HERO_TIPS; the lobby's hero panel has the full descriptions).
+   */
+  drawAbilityTooltip(ctx, p) {
+    if (this.bagDrag) return;
+    const m = Input._mouse;
+    const s = this.abilitySlots(p).find((o) => m.x >= o.x && m.x < o.x + o.w && m.y >= o.y && m.y < o.y + o.h);
+    if (!s) return;
+    let title;
+    let sub;
+    if (s.guide === 'dodge') {
+      title = `Dodge (${s.key})`;
+      sub = 'Quick dash, untouchable for a moment.';
+    } else {
+      this.guideCache = this.guideCache?.id === p.classId ? this.guideCache : { id: p.classId, guide: heroGuide(p.classId) };
+      const a = this.guideCache.guide.abilities.find((o) => o.icon === s.guide);
+      if (!a) return;
+      title = `${a.name} (${s.key})`;
+      sub = HERO_TIPS[p.classId]?.[s.guide] || a.desc;
+    }
+    if (s.slot && s.slot !== 'dodge' && !p.canAfford(s.slot)) sub += ` Not enough ${p.resource.name.toLowerCase()}.`;
+    this.tooltip(ctx, s.x + s.w / 2, s.y - 8, title, '#f2a541', sub);
   },
 
   /**
@@ -523,6 +564,7 @@ const HUD = {
     if (p.rapidArrows > 0) s.push(`RAPID x${p.rapidArrows}`);
     if (p.stormReady) s.push('STORM READY');
     if (p.cleave) s.push(`POWER ${Math.floor(p.cleavePower * 100)}% (LMB)`);
+    if (p.jumpCharge) s.push(`JUMP ${Math.floor(p.jumpPower * 100)}%`);
     if (p.spin) s.push(`SPIN (${Settings.label('e')}: STOP)`);
     if (p.regenerating) s.push('REGEN');
     return s.join(' ');
@@ -530,7 +572,8 @@ const HUD = {
 
   /** charges (optional): { count, max, refill 0-1 } for abilities with stored uses. */
   /** armed: the slot glows - true while the ability can be used right now, 'held' while it is being held (glows even on cooldown). */
-  abilitySlot(ctx, x, y, key, name, cd, max, icon, charges = null, armed = false, id = null) {
+  /** short: the resource's name when there isn't enough of it to use the ability (the slot goes red). */
+  abilitySlot(ctx, x, y, key, name, cd, max, icon, charges = null, armed = false, id = null, short = null) {
     const w = 62;
     const h = 50;
     this.panel(ctx, x, y, w, h);
@@ -558,6 +601,17 @@ const HUD = {
     } else {
       ctx.fillStyle = '#6cff7a';
       ctx.fillRect(x + 6, y + h - 4, w - 12, 2);
+    }
+    if (short) {
+      // can't be paid for: a red wash and rim, and the name swapped for a warning
+      ctx.fillStyle = 'rgba(120, 10, 16, 0.55)';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = '#ff3a3a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      ctx.fillStyle = '#2e1f17';
+      ctx.fillRect(x + 2, y + 37, w - 4, 10);
+      this.text(ctx, `NO ${short}`, x + w / 2, y + 39, { size: 5, align: 'center', color: '#ff4a4a' });
     }
     if (charges) {
       this.text(ctx, `x${charges.count}`, x + w - 4, y + 4, { size: 7, align: 'right', color: charges.count ? '#ffe680' : '#8a7660' });

@@ -1,5 +1,5 @@
-// Archer (class id 'ranger'): LMB arrow, RMB camo (invisible + fast, broken by
-// attacking), E rapid fire, F fire/ice arrow (choose with LMB/RMB),
+// Archer (class id 'ranger'): LMB arrow, RMB fire/ice arrow (choose with LMB/RMB),
+// E rapid fire, F camo (invisible + fast, broken by attacking),
 // Q arrow volley (mark an area, then LMB rains arrows).
 
 // pixel effect colours: the archer's hood greens and linen, plus fire and frost
@@ -27,12 +27,12 @@ class Ranger extends Player {
     const c = this.cfg;
     this.weapon = Sprites.weapons.bow;
     this.maxCooldowns = {
-      primary: c.arrow.cooldown, secondary: c.camo.cooldown, e: c.rapidFire.cooldown,
-      f: c.elemental.cooldown, dodge: this.dodgeCooldown,
+      primary: c.arrow.cooldown, secondary: c.elemental.cooldown, e: c.rapidFire.cooldown,
+      f: c.camo.cooldown, dodge: this.dodgeCooldown,
     };
-    this.icons = { primary: 'ARROW', secondary: 'CAMO', e: 'RAPID', f: 'FIRE/ICE', q: 'VOLLEY' };
+    this.icons = { primary: 'ARROW', secondary: 'FIRE/ICE', e: 'RAPID', f: 'CAMO', q: 'VOLLEY' };
     this.targeting = false;     // Q pressed: choosing where the volley lands
-    this.choosingArrow = false; // F pressed: LMB fire arrow, RMB ice arrow
+    this.choosingArrow = false; // RMB pressed: LMB fire arrow, RMB ice arrow
     this.targetPos = { x, y };
     this.volleys = [];
     this.rapidArrows = 0;
@@ -101,11 +101,13 @@ class Ranger extends Player {
     Sound.play('bowShot');
   }
 
-  // ---------- RMB: swift camo ----------
+  // ---------- F: swift camo ----------
 
-  secondary(world) {
+  abilityF(world) {
     const c = this.cfg.camo;
-    this.cooldowns.secondary = c.cooldown;
+    this.cooldowns.f = c.cooldown;
+    this.choosingArrow = false;
+    this.targeting = false;
     this.camo = c.duration;
     this.slowTime = 0; // cleanse
     this.chillTime = 0;
@@ -127,19 +129,19 @@ class Ranger extends Player {
     Sound.play('rapidFire');
   }
 
-  // ---------- F: fire / ice arrow ----------
+  // ---------- RMB: fire / ice arrow ----------
 
-  /** F opens the choice (F again cancels); the click then fires the arrow. */
-  abilityF() {
-    this.choosingArrow = !this.choosingArrow;
+  /** RMB opens the choice; the next click fires the arrow (LMB fire, RMB ice). */
+  secondary() {
+    this.choosingArrow = true;
     this.targeting = false;
-    Sound.play(this.choosingArrow ? 'bowDraw' : 'uiClick');
+    Sound.play('bowDraw');
   }
 
   shootElemental(world, c, opts) {
     this.breakCamo(world);
     this.choosingArrow = false;
-    this.cooldowns.f = this.cfg.elemental.cooldown;
+    this.cooldowns.secondary = this.cfg.elemental.cooldown;
     this.cooldowns.primary = 0.25; // so the choosing click doesn't also loose a normal arrow
     this.recoil = 0.15;
     world.playerProjectiles.push(new Projectile({
@@ -449,10 +451,6 @@ class Ranger extends Player {
   /** Ability outlines while a key is held: rapid fire on herself, the elemental arrow's line, the volley's circle. */
   abilityPreview(slot) {
     if (slot === 'e') return { self: true };
-    if (slot === 'f') {
-      const c = this.cfg.elemental.fire;
-      return { lane: { x: this.pivotX, y: this.pivotY, angle: this.aim, length: c.speed * 1.4, width: 14 } };
-    }
     if (slot === 'q') return { circle: { x: this.targetPos.x, y: this.targetPos.y, r: this.cfg.ult.radius } };
     return null;
   }

@@ -342,6 +342,12 @@ class Mage extends Player {
     world.effects.burst(x, y, { count: 16, colors: ['#ffffff', '#9cf0d8', '#3fc2a8'], speed: [100, 260], life: [0.15, 0.35], size: [1, 3] });
   }
 
+  /** Mana per slot (E while picking a target only cancels). */
+  abilityCost(slot) {
+    const c = this.cfg;
+    return { primary: c.bolt.cost, secondary: c.fireball.cost, e: this.targeting ? 0 : c.lightning.cost, f: c.bird.cost }[slot] || 0;
+  }
+
   // ---------- F: bird form ----------
 
   abilityF(world) {

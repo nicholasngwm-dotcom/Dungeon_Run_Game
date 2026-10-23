@@ -158,12 +158,13 @@ class Game {
    * charge and kill credit. sound: null for silent ticks. fromUlt: damage from
    * an ultimate doesn't charge the ultimate. Returns the damage dealt (0 if none).
    */
-  damageTarget(target, amount, { angle = 0, knockback = 0, sound = 'hit', noCrit = false, color = '#ffffff', fromUlt = false, source = null } = {}) {
+  damageTarget(target, amount, { angle = 0, knockback = 0, sound = 'hit', noCrit = false, crit: forced = null, color = '#ffffff', fromUlt = false, source = null } = {}) {
     const src = source || this.actor || this.players[0];
-    const crit = !noCrit && Math.random() < (src.critChance ?? CONFIG.player.critChance);
+    // crit: true / false decides it up front (one roll shared by a whole attack, e.g. a rocket and its blast)
+    const crit = forced ?? (!noCrit && Math.random() < (src.critChance ?? CONFIG.player.critChance));
     // a Bard-weakened target takes extra damage
     const weak = target.weakenUntil > this.time ? 1 + CONFIG.classes.bard.ult.weakenTaken : 1;
-    const dmg = Math.max(1, Math.round(amount * weak * (crit ? CONFIG.player.critMultiplier : 1) * src.damageMultiplier * src.buffDamage * src.upgradeDamage));
+    const dmg = Math.max(1, Math.round(amount * weak * (crit ? src.critMultiplier ?? CONFIG.player.critMultiplier : 1) * src.damageMultiplier * src.buffDamage * src.upgradeDamage));
     if (!target.takeDamage(dmg, this)) return 0;
     // a sleeping boss is jolted awake: it takes a moment to come round
     if (this.boss && this.boss.sleepUntil > this.time + CONFIG.classes.bard.lullaby.wake && this.boss.getTargets().includes(target)) {
@@ -261,6 +262,7 @@ class Game {
   get allies() {
     const list = this.heroes;
     list.push(...this.clones.filter((c) => !c.dead));
+    list.push(...this.barriers.filter((b) => b.ally && !b.dead));   // the Baker's oven: enemies can hit it
     if (this.run) list.push(...this.run.allies());
     return list;
   }
@@ -274,7 +276,15 @@ class Game {
     if (this.run && this.run.totem && !this.run.totem.dead) return this.run.defendTarget(enemy);
     let best = null;
     let bestD = Infinity;
-    for (const a of this.allies) {
+    const allies = this.allies;
+    // a taunting ally (the Baker's oven) draws every enemy within its range to it first
+    for (const a of allies) {
+      if (!a.taunt) continue;
+      const d = dist(enemy.x, enemy.y, a.x, a.y);
+      if (d < a.taunt && d < bestD) { bestD = d; best = a; }
+    }
+    if (best) return best;
+    for (const a of allies) {
       const d = dist(enemy.x, enemy.y, a.x, a.y);
       if (a.invisible && d > (a.detectRange ?? CONFIG.player.invisibleDetectRange)) continue;
       if (d < bestD) { bestD = d; best = a; }
@@ -433,7 +443,7 @@ class Game {
       for (const a of this.allies) {
         // measured on the same flattened ring that's drawn (0.7 as tall as it is wide)
         if (h.hit.has(a) || Math.abs(Math.hypot(a.x - h.x, (a.y - h.y) / 0.7) - h.r) > h.width) continue;
-        if (a.hurt(h.damage, this, h.x, h.y)) h.hit.add(a);
+        if (a.hurt(h.damage, this, h.x, h.y, { shockwave: true })) h.hit.add(a);
       }
     }
     removeDead(this.hazards);
@@ -1179,9 +1189,11 @@ class Game {
     const s = CONFIG.enemyDrawScale;
     const x = Math.round(e.x);
     const y = Math.round(e.y);
+    // squashed flat under the Baker's giant cake, springing back up over its last 0.4s
+    const flat = e.squash > 0 ? (e.squash > 0.4 ? 0.3 : 1 - 0.7 * (e.squash / 0.4)) : 1;
     ctx.save();
     ctx.translate(x, y);
-    ctx.scale(s, s);
+    ctx.scale(s * (2 - flat), s * flat);
     ctx.translate(-x, -y);
     e.draw(ctx);
     ctx.restore();

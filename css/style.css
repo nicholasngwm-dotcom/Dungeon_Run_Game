@@ -174,6 +174,12 @@ html, body {
   transform: rotate(45deg);
 }
 #menu-scene-dots i.on { background: var(--accent); }
+#menu-scene-dots i { cursor: pointer; }
+#menu-scene-dots i:hover { background: rgba(244, 234, 215, 0.7); }
+.menu-scene-hint { font-size: 8px; color: rgba(244, 234, 215, 0.45); }
+/* the fight behind the menu is clickable (next scene); the menu panel itself is not */
+#screen-menu { cursor: pointer; }
+#screen-menu .menu-panel { cursor: default; }
 @keyframes menu-in {
   from { opacity: 0; transform: translateX(-24px); }
   to { opacity: 1; transform: none; }
@@ -336,6 +342,27 @@ h2 {
 
 /* ===== Lobby panels ===== */
 .menu-buttons.row { flex-direction: row; }
+
+/* ===== Pause: the hero sheet beside the buttons ===== */
+.pause-layout { display: flex; gap: 28px; align-items: center; }
+.pause-hero {
+  width: 360px; max-height: 420px; overflow-y: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px; text-align: left;
+  background: var(--panel);
+  border: 3px solid var(--border);
+  box-shadow: inset 2px 2px 0 var(--panel-light);
+}
+.pause-stats { display: flex; flex-direction: column; gap: 4px; }
+.pause-stats .stat { grid-template-columns: 110px 1fr; }
+.pause-stats .stat-value { font-size: 8px; }
+.pause-stats em { font-style: normal; color: #8cff9a; }
+.pause-sub { font-size: 8px; color: var(--muted); border-top: 2px solid #1c120c; padding-top: 7px; }
+.pause-upgrades { display: flex; flex-direction: column; gap: 5px; }
+.pause-upgrade { display: flex; gap: 8px; align-items: center; padding: 4px; background: #24180f; border: 2px solid #1c120c; }
+.pause-upgrade canvas { width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
+.pause-upgrade b { display: block; font-size: 12px; font-weight: normal; margin-bottom: 2px; }
+.pause-upgrade span { font-size: 8px; color: #d8cfe4; }
+.pause-none { font-size: 8px; color: var(--muted); line-height: 1.6; }
 
 /* ===== Hero panel (lobby statues) ===== */
 /* everything is Alagard: 8px for small labels, 12px for running text, bigger for headings */

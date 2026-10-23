@@ -40,8 +40,11 @@ class LobbyHub {
     const d = world.dungeon;
     this.stations = [];
     // hall of heroes: a row of statues along the north wall
-    Object.keys(CONFIG.classes).forEach((id, i) => {
-      this.stations.push({ kind: 'hero', id, x: (3.1 + i * 1.55) * T, y: 8.6 * T, r: 40, prompt: `PICK ${CONFIG.classes[id].name.toUpperCase()}` });
+    // (spread over the hall's width, closer together the more heroes there are)
+    const heroIds = Object.keys(CONFIG.classes);
+    const gap = Math.min(1.55, 8.1 / Math.max(1, heroIds.length - 1));
+    heroIds.forEach((id, i) => {
+      this.stations.push({ kind: 'hero', id, x: (2.95 + i * gap) * T, y: 8.6 * T, r: 34, prompt: `PICK ${CONFIG.classes[id].name.toUpperCase()}`, label: i % 2 });
     });
     this.stations.push({ kind: 'workshop', x: 36.6 * T, y: 9.6 * T, r: 56, prompt: 'WORKSHOP' });
     // out in the yard, by the path from the keep's side door
@@ -699,7 +702,8 @@ class LobbyHub {
     for (const s of this.stations) {
       if (s.kind === 'hero') {
         const current = this.world.localPlayer.classId === s.id;
-        HUD.text(ctx, CONFIG.classes[s.id].name.toUpperCase(), s.x, s.y + 12, { size: 6, align: 'center', color: current ? '#ffe680' : '#d8c8a0' });
+        // names staggered on two rows so neighbours' don't run together
+        HUD.text(ctx, CONFIG.classes[s.id].name.toUpperCase(), s.x, s.y + 12 + s.label * 9, { size: 6, align: 'center', color: current ? '#ffe680' : '#d8c8a0' });
       }
     }
     const s = this.near;

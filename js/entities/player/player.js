@@ -84,14 +84,17 @@ class Player extends Entity {
   get speedMultiplier() {
     return (this.slowTime > 0 ? CONFIG.golem.slowAmount : 1) * (this.chillTime > 0 ? this.chillAmount : 1)
       * (this.buffs.speed > 0 ? CONFIG.buffs.speed.multiplier : 1) * this.moveMultiplier * (1 + this.brew('speed'))
-      * (this.tuneSpeed > 0 ? 1 + this.tuneSpeedAmount : 1);
+      * (this.tuneSpeed > 0 ? 1 + this.tuneSpeedAmount : 1) * (this.buffs.sugar > 0 ? CONFIG.buffs.sugar.speed : 1);
   }
 
   /** The value of a running potion effect (0 when none). */
   brew(family) { return this.brews[family] ? this.brews[family].v : 0; }
 
-  /** Crit chance: the base rate plus Focus potions. */
-  get critChance() { return CONFIG.player.critChance + this.brew('focus'); }
+  /** Crit chance: the hero's base rate (CONFIG.classes[id].crit, or the shared one) plus Focus potions. */
+  get critChance() { return (this.cfg.crit?.chance ?? CONFIG.player.critChance) + this.brew('focus'); }
+
+  /** Crit damage: this hero's own (CONFIG.classes[id].crit), or the shared one. */
+  get critMultiplier() { return this.cfg.crit?.multiplier ?? CONFIG.player.critMultiplier; }
 
   /** How much further this hero's hits knock enemies back (Bulldose potions). */
   get knockbackMultiplier() { return 1 + this.brew('bulldose'); }
@@ -141,9 +144,11 @@ class Player extends Entity {
     }
     for (let i = 0; i < this.inventory.length; i++) if (Input.pressed(`item${i + 1}`)) this.useItem(i, world);
     this.busy -= dt;
+    this.resourceShort = (this.resourceShort || 0) - dt;
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
     for (const k of Object.keys(this.cooldowns)) {
       const rate = k === 'primary' ? this.attackSpeed * (1 + this.brew('rage')) * (this.inspired > 0 ? 1 + CONFIG.classes.bard.morale.attackSpeed : 1)
+        * (this.buffs.sugar > 0 ? CONFIG.buffs.sugar.attackSpeed : 1)
         : k === 'dodge' ? 1 : this.abilityHaste;
       this.cooldowns[k] -= dt * rate;
     }
@@ -223,6 +228,8 @@ class Player extends Entity {
         else this.tryAbility(slot, world, () => {});   // the class's own refusal (sound, or nothing)
         return;
       }
+      // not enough mana / energy / light: refused outright, no aiming outline
+      if (!this.canAfford(slot)) { this.spend(this.abilityCost(slot), world); return; }
       if (Input.down(key) && this.abilityPreview(slot)) this.aimHold = { slot, key };
       else this.castSlot(slot, world);
       return;
@@ -280,14 +287,28 @@ class Player extends Entity {
     fn();
   }
 
-  /** Spends mana/energy; shows a warning and returns false if short. */
+  /**
+   * Mana / energy / light the ability in a HUD slot would take right now (0 if
+   * none, or when pressing it would only cancel or end something). Classes override.
+   */
+  abilityCost() { return 0; }
+
+  /** True if this hero has enough of their resource for the ability in `slot`. */
+  canAfford(slot) {
+    const cost = this.abilityCost(slot);
+    return !this.resource || cost <= 0 || this.resource.value >= cost;
+  }
+
+  /** Spends mana/energy; shows a red warning (and the HUD flashes) and returns false if short. */
   spend(cost, world) {
     if (!this.resource || cost <= 0) return true;
     if (this.resource.value < cost) {
       Sound.play('denied');
+      this.resourceShort = 0.8;   // the HUD's resource bar flashes red for this long
       if (!this.noResourceCd || world.time > this.noResourceCd) {
         this.noResourceCd = world.time + 0.6;
-        world.effects.text(this.hx, this.hy - 30, `NO ${this.resource.name}`, { color: this.resource.color, size: 7 });
+        const name = this.resource.name;
+        world.effects.text(this.hx, this.hy - 34, this.resource.value < 1 ? `OUT OF ${name}!` : `NOT ENOUGH ${name}!`, { color: '#ff3a3a', size: 9, life: 0.9 });
       }
       return false;
     }
@@ -373,6 +394,9 @@ class Player extends Entity {
    */
   absorb(amount) { return amount; }
 
+  /** True if this hero is holding off a ground shockwave coming from (x, y) (the Knight's shield). */
+  blocksShockwave() { return false; }
+
   // ---------- enemy status effects: poison and stun ----------
 
   /** Poisons for `duration`s (a new dose refreshes it; the stronger dps wins). Blocked hits don't poison. */
@@ -425,7 +449,7 @@ class Player extends Entity {
       a.t -= dt;
       a.tick -= dt;
       if (kind === 'burn' && Math.random() < dt * 14) {
-        world.effects.flames(this.x + rand(-7, 7), this.y - rand(2, 14), { count: 1, height: rand(12, 20), width: rand(6, 9), life: rand(0.25, 0.4) });
+        world.effects.flames(this.x + rand(-7, 7), this.y - rand(2, 14), { count: 1, height: rand(12, 20), width: rand(6, 9), life: rand(0.25, 0.4), colors: ENEMY_FIRE_COLORS });
       } else if (kind === 'bleed' && Math.random() < dt * 7) {
         world.effects.burst(this.x + rand(-6, 6), this.y - rand(8, 22), { count: 1, colors: ['#c43a44', '#6a1622'], speed: [0, 10], life: [0.3, 0.5], gravity: 300, drag: 0, size: [2, 2] });
       }
@@ -528,6 +552,7 @@ class Player extends Entity {
    */
   hurt(amount, world, fromX, fromY, opts = {}) {
     if (this.dead || this.isInvulnerable) return false;
+    this.lastBlocked = true;            // set false below once the hit really lands
     amount *= world.weakenScale ?? 1;   // hits from a Bard-weakened enemy
     if (this.guard > 0) return true;
     amount = this.absorbAegis(amount, world);
@@ -537,6 +562,7 @@ class Player extends Entity {
       return true;
     }
     if (this.passiveBlock(world, fromX, fromY)) return true;
+    this.lastBlocked = false;
     // Ironskin: flat defence off every hit (always at least 1 gets through)
     if (this.brews.ironskin) amount = Math.max(1, amount - this.brew('ironskin'));
     // Thorns: part of the hit goes back at whoever dealt it
@@ -697,6 +723,10 @@ class Player extends Entity {
     if (this.buffs.damage > 0 && Math.random() < 0.3) {
       world.effects.burst(this.x + rand(-10, 10), this.y - rand(0, 26), { count: 1, colors: ['#ff5a4a', '#ffb0a0'], speed: [10, 30], life: [0.3, 0.5], up: 40 });
     }
+    // sugar rush: pink and white sprinkles fizzing off them
+    if (this.buffs.sugar > 0 && vrand(0, 1) < 0.45) {
+      world.effects.burst(this.x + vrand(-10, 10), this.y - vrand(0, 28), { count: 1, colors: ['#ff8ad0', '#ffffff', '#8ad8ff', '#ffe680'], speed: [10, 40], life: [0.3, 0.5], up: 30, size: [1, 2] });
+    }
   }
 
   /** Damage multiplier from the POWER buff and Strength potions (applied on top of damageMultiplier). */
@@ -790,8 +820,8 @@ class Player extends Entity {
         const r = this.resource;
         if (!r) { say('NO MANA TO RESTORE', '#d8c8a0'); return false; }
         if (r.value >= r.max) { say(`FULL ${r.name}`, '#d8c8a0'); return false; }
-        // light orbs come in ones: 20 -> 1, 50 -> 2, 100 -> 4
-        const amount = r.name === 'LIGHT' ? Math.max(1, Math.round(pot.value / 25)) : pot.value;
+        // light orbs and rockets come in ones: 20 -> 1, 50 -> 2, 100 -> 4
+        const amount = r.name === 'LIGHT' || r.name === 'AMMO' ? Math.max(1, Math.round(pot.value / 25)) : pot.value;
         r.value = Math.min(r.max, r.value + amount);
         say(`+${amount} ${r.name}`, r.color);
         break;
@@ -939,7 +969,7 @@ class Player extends Entity {
     for (const t of world.getTargets()) {
       if (opts.exclude && opts.exclude.has(t)) continue;
       if (dist(x, y, t.hx, t.hy) > r + t.radius) continue;
-      world.damageTarget(t, damage, { angle: angleTo(x, y, t.hx, t.hy), knockback: opts.knockback ?? 120, sound: opts.sound, fromUlt: opts.fromUlt });
+      world.damageTarget(t, damage, { angle: angleTo(x, y, t.hx, t.hy), knockback: opts.knockback ?? 120, sound: opts.sound, fromUlt: opts.fromUlt, crit: opts.crit ?? null });
       if (opts.stun) t.stun?.(opts.stun);
       hit.push(t);
     }
@@ -1082,6 +1112,62 @@ class Player extends Entity {
 
 /** Factory used by the game to create the chosen hero. */
 function createHero(classId, x, y) {
-  const classes = { warrior: Warrior, ranger: Ranger, mage: Mage, rogue: Rogue, priestess: Priestess, bard: Bard };
+  const classes = { warrior: Warrior, ranger: Ranger, mage: Mage, rogue: Rogue, priestess: Priestess, bard: Bard, rocketeer: Rocketeer, baker: Baker };
   return new classes[classId](x, y);
+}
+
+/**
+ * A patch of the heroes' burning ground (the Rocketeer's IBFR, the Baker's exploding oven):
+ * orange-gold flames over charred floor for `life`s (never the enemies' red). Every half
+ * second it scorches the enemies standing in it (dps) and sets them alight (burnDps for
+ * burnTime); the damage is owner's.
+ */
+function heroFireZone(world, owner, x, y, { r, life, dps, burnDps, burnTime }) {
+  const stage = world.run ? world.run.stage : 0;
+  let left = life;
+  const tick = () => {
+    left -= 0.5;
+    if (left < 0 || (world.run && world.run.stage !== stage)) return;
+    world.setActor(owner);
+    for (const t of world.getTargets()) {
+      if (Math.hypot(t.x - x, (t.y - y) / 0.55) > r + t.radius) continue;
+      world.damageTarget(t, dps * 0.5, { sound: null, noCrit: true, color: '#ffb02e', fromUlt: true, source: owner });
+      if (t.dead) continue;
+      const burning = world.dots.find((d) => d.target === t && d.kind === 'burn' && d.source === owner);
+      if (burning) burning.t = Math.max(burning.t, burnTime);
+      else world.addDot(t, burnDps, burnTime, '#ff8a1e', 'burn');
+    }
+    world.setActor(null);
+    world.after(0.5, tick);
+  };
+  world.after(0.5, tick);
+  // charred ground under a dashed ring of embers
+  world.effects.add(life, (ctx, t) => {
+    const k = t < 0.9 ? 1 : (1 - t) / 0.1;
+    ctx.save();
+    ctx.globalAlpha = 0.65 * k;
+    PFX.disc(ctx, x, y, r, r * 0.55, '#1e1208', 3);
+    ctx.globalAlpha = 0.8 * k;
+    PFX.ring(ctx, x, y, r * 0.95, r * 0.52, '#ffb02e', 2, { dash: [4, 3], spin: t * 3 });
+    ctx.restore();
+  }, true);
+  // tongues of orange-gold flame dancing all over it
+  world.effects.add(life, (ctx, t) => {
+    const k = t < 0.9 ? 1 : (1 - t) / 0.1;
+    const secs = t * life;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, x, y - 8, r * 1.05, '255, 170, 70', 0.5 * k * (0.85 + Math.sin(secs * 11) * 0.15), 2, r * 0.6);
+    ctx.restore();
+    ctx.globalAlpha = k;
+    const n = Math.round(r / 9);
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.4;
+      const d = (i % 5) / 4.5;
+      const lick = 1 + Math.sin(secs * 7 + i * 2.3) * 0.25;
+      PFX.flame(ctx, x + Math.cos(a) * r * d, y + Math.sin(a) * r * 0.5 * d, 13, (18 + (i % 3) * 8) * lick, secs * 9 + i * 1.7, FIRE_COLORS);
+    }
+    ctx.globalAlpha = 1;
+  });
+  world.run?.addLight({ x, y, r: r * 2.4, s: 0.95, rgb: '255, 190, 90', until: world.time + life });
 }

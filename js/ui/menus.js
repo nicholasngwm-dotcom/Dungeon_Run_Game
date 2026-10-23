@@ -315,13 +315,66 @@ const Menus = {
   /** Pause menu; "Return to Lobby" only makes sense outside the lobby. */
   /** Pause menu. Multiplayer: the world doesn't stop, and leaving replaces the lobby / quit buttons. */
   /** In multiplayer only the host gets "Return to Lobby" (in the lobby it rebuilds it, which resyncs everyone). */
-  showPause(inLobby, mp = false, host = false) {
+  showPause(inLobby, mp = false, host = false, hero = null) {
     const lobbyBtn = document.getElementById('pause-lobby');
     lobbyBtn.classList.toggle('hidden', mp ? !host : inLobby);
     lobbyBtn.textContent = mp && inLobby ? 'Restart Lobby (resync)' : 'Return to Lobby';
     document.getElementById('pause-quit').textContent = mp ? 'Leave Game' : 'Quit to Menu';
     document.querySelector('#screen-pause h2').textContent = mp ? 'Menu' : 'Paused';
+    this.showPauseHero(hero);
     this.show('pause');
+  },
+
+  /**
+   * The pause menu's hero sheet: the hero as they are right now (health, crit, attack
+   * speed and the rest, with shop upgrades and potions counted in) and the upgrades
+   * they've bought this run.
+   */
+  showPauseHero(p) {
+    const box = document.getElementById('pause-hero');
+    box.classList.toggle('hidden', !p);
+    if (!p) return;
+    const pct = (f) => `${Math.round(f * 100)}%`;
+    const bonus = (f) => (Math.abs(f - 1) < 0.005 ? '' : ` <em>(${f > 1 ? '+' : ''}${Math.round((f - 1) * 100)}%)</em>`);
+    const base = p.cfg;
+    const stats = [
+      ['HEALTH', `${Math.ceil(p.hp)} / ${p.maxHp}`, '#e84a4a'],
+      ['DAMAGE', `${pct(p.upgradeDamage * p.buffDamage)}`, '#ff8a4a'],
+      ['CRIT CHANCE', pct(p.critChance), '#ffd34a'],
+      ['CRIT DAMAGE', `x${p.critMultiplier}`, '#ff9a2a'],
+      ['ATTACK SPEED', `${pct(p.attackSpeed)}${bonus(p.attackSpeed)}`, '#ffd34a'],
+      ['ABILITY HASTE', `${pct(p.abilityHaste)}${bonus(p.abilityHaste)}`, '#c08aff'],
+      ['MOVE SPEED', `${Math.round(p.speed)}${bonus(p.speed / base.speed)}`, '#6cff7a'],
+      ['HP REGEN', p.bonusRegen ? `+${p.bonusRegen}/s always, +${CONFIG.player.regen.hpPerSecond}/s out of combat` : `+${CONFIG.player.regen.hpPerSecond}/s out of combat`, '#6cff7a'],
+      ['DODGE', `${Math.round(p.dodgeCooldown * 10) / 10}s cd`, '#8ad8ff'],
+    ];
+    if (p.resource) {
+      const r = p.resource;
+      stats.push([r.name, `${Math.floor(r.value)} / ${r.max}${r.regen ? ` (+${r.regen}/s)` : ''}`, r.color]);
+    }
+    stats.push(['ULTIMATE', p.ultReady ? 'READY' : pct(p.ult / p.ultMax), '#c08aff']);
+    if (App.game?.run || p.coins) stats.push(['COINS', `${p.coins}`, '#ffd34a']);
+    const owned = SHOP_UPGRADES.filter((u) => p.upgradeLevels[u.id]);
+    box.innerHTML = `
+      <div class="hero-head">
+        <div class="hero-portrait"><canvas id="pause-portrait" width="64" height="64"></canvas></div>
+        <div><h2>${base.name}</h2><div class="hero-role">${heroGuide(p.classId).role.toUpperCase()}</div></div>
+      </div>
+      <div class="pause-stats">${stats.map(([label, value, color]) => `
+        <div class="stat"><span class="stat-label">${label}</span><span class="stat-value" style="color:${color}">${value}</span></div>`).join('')}
+      </div>
+      <div class="pause-sub">UPGRADES</div>
+      <div class="pause-upgrades">${owned.length ? owned.map((u, i) => `
+        <div class="pause-upgrade"><canvas data-u="${i}" width="32" height="32"></canvas><div><b style="color:${u.color}">${u.name}</b><span>${u.desc}</span></div></div>`).join('')
+        : '<p class="pause-none">None yet. Buy one at a shop room in a dungeon run.</p>'}
+      </div>`;
+    const portrait = document.getElementById('pause-portrait').getContext('2d');
+    portrait.imageSmoothingEnabled = false;
+    portrait.drawImage(p.frames.idle[0].img, 0, 0);
+    for (const c of box.querySelectorAll('canvas[data-u]')) {
+      const u = owned[Number(c.dataset.u)];
+      drawUpgradeIcon(c.getContext('2d'), u.id, u.color);
+    }
   },
 
   /** mpRole: null (single player), 'host' or 'client' - only the host can take everyone back to the lobby. */

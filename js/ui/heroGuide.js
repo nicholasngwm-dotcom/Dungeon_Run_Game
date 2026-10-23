@@ -15,10 +15,10 @@ const HERO_GUIDE = {
     abilities: [
       { key: 'PASSIVE', name: c.passive.name, tags: [],
         desc: `After you take ${c.passive.hits} hits, the next hit is blocked completely. The bar under your health shows the count. Touching enemies also does ${pct(c.passive.contactReduction)} less damage.` },
-      { key: 'LMB', icon: 'primary', name: 'Sword Combo', tags: [`${c.combo.damage} / ${c.combo.damage} / ${c.combo.stabDamage} dmg`],
-        desc: `Hold to attack: two wide slashes, then a long lunging stab that hits a line and knocks enemies far back. Stop for ${sec(c.combo.resetTime)} and the combo starts over.` },
+      { key: 'LMB', icon: 'primary', name: 'Sword Swings', tags: [`${c.combo.damage} dmg`, `every ${sec(c.combo.cooldown)}`],
+        desc: 'Hold to keep swinging your sword in wide arcs, sweeping from left to right and back again, hitting everything in front of you.' },
       { key: 'RMB', icon: 'secondary', name: 'Barrier Shield', tags: [`${c.barrier.hp} shield hp`],
-        desc: `Hold to raise a shield that stops enemy arrows, fireballs and lasers (not melee). You move at ${pct(c.barrier.moveMultiplier)} speed. It refills when lowered, but if it breaks it is gone for ${sec(c.barrier.breakCooldown)}.` },
+        desc: `Hold to raise a shield that stops enemy arrows, fireballs and lasers, and ground shockwaves rolling at you from the front (not melee). You move at ${pct(c.barrier.moveMultiplier)} speed. It refills when lowered, but if it breaks it is gone for ${sec(c.barrier.breakCooldown)}.` },
       { key: 'RMB+LMB', icon: 'bash', name: 'Shield Bash', tags: [`${c.bash.damage} dmg`, `${sec(c.bash.stun)} stun`, `${sec(c.bash.cooldown)} cd`],
         desc: 'While holding up the shield, press LMB to lunge forward with it, hitting and stunning every enemy in front of you and knocking them back. Its slot glows when it is ready to use.' },
       { key: 'E', icon: 'e', name: 'Whirlwind', tags: [`${sec(c.spin.cooldown)} cd`, `${c.spin.damage} dmg per hit`],
@@ -39,12 +39,12 @@ const HERO_GUIDE = {
         desc: `The fastest hero (speed ${c.speed}), and your dodge recharges in ${sec(c.passive.dodgeCooldown)} instead of ${sec(CONFIG.player.dodge.cooldown)}.` },
       { key: 'LMB', icon: 'primary', name: 'Arrow', tags: [`${c.arrow.damage} dmg`, `every ${sec(c.arrow.cooldown)}`],
         desc: `Fire an arrow at the cursor. It pierces through ${c.arrow.pierce} enemy and keeps flying.` },
-      { key: 'RMB', icon: 'secondary', name: 'Swift Camo', tags: [`${sec(c.camo.cooldown)} cd`, `${sec(c.camo.duration)}`],
-        desc: `Turn invisible and clear harmful effects, moving ${pct(c.camo.speedMultiplier - 1)} faster. Enemies can only spot you from very close. Attacking with anything drops the camo straight away.` },
+      { key: 'RMB', icon: 'secondary', name: 'Fire / Ice Arrow', tags: [`${sec(c.elemental.cooldown)} cd`],
+        desc: `Right click, then choose: LMB fires a fire arrow (${c.elemental.fire.damage} damage, pierces everything, burns for ${sec(c.elemental.fire.burnDuration)}); RMB fires an ice arrow that freezes every enemy near where it lands for ${sec(c.elemental.ice.freeze)}.` },
       { key: 'E', icon: 'e', name: 'Rapid Fire', tags: [`${sec(c.rapidFire.cooldown)} cd`],
         desc: `Your next ${c.rapidFire.arrows} arrows fire much faster, deal ${pct(c.rapidFire.damageBonus)} more damage and pierce further.` },
-      { key: 'F', icon: 'f', name: 'Fire / Ice Arrow', tags: [`${sec(c.elemental.cooldown)} cd`],
-        desc: `Press F, then choose: LMB fires a fire arrow (${c.elemental.fire.damage} damage, pierces everything, burns for ${sec(c.elemental.fire.burnDuration)}); RMB fires an ice arrow that freezes every enemy near where it lands for ${sec(c.elemental.ice.freeze)}.` },
+      { key: 'F', icon: 'f', name: 'Swift Camo', tags: [`${sec(c.camo.cooldown)} cd`, `${sec(c.camo.duration)}`],
+        desc: `Turn invisible and clear harmful effects, moving ${pct(c.camo.speedMultiplier - 1)} faster. Enemies can only spot you from very close. Attacking with anything drops the camo straight away.` },
       { key: 'Q', icon: 'q', name: 'Volley', tags: [`charge: deal ${c.ult.charge} dmg`, `${c.ult.arrows} arrows`],
         desc: `Press Q to show the target circle, LMB to place it (Q again or RMB cancels). Arrows rain down on the area for ${sec(c.ult.duration)}, ${c.ult.damage} damage each.` },
     ],
@@ -80,7 +80,7 @@ const HERO_GUIDE = {
       { key: 'LMB', icon: 'primary', name: 'Dagger Fan', tags: [`${c.dagger.count} x ${c.dagger.damage} dmg`, `${c.dagger.cost} energy`],
         desc: `Throw ${c.dagger.count} daggers in a small spread. Up close every dagger can hit the same enemy.` },
       { key: 'RMB', icon: 'secondary', name: 'Swift Strike', tags: [`${c.strike.damage} dmg`, `${c.strike.cost} energy`],
-        desc: `Dash toward the cursor, slashing everything you pass and taking no damage during the dash. Enemies hit are marked for ${sec(c.strike.markDuration)}: if one dies, Swift Strike is ready again at once. Enemies under half health start to bleed.` },
+        desc: `Dash toward the cursor, slashing everything you pass and taking no damage during the dash. Kill an enemy with it and Swift Strike is ready again at once. Enemies it hits are marked for ${sec(c.strike.markDuration)}: if one of them dies, it's ready again too. Enemies under half health start to bleed.` },
       { key: 'E', icon: 'e', name: 'Parry', tags: [`${sec(c.parry.cooldown)} cd`],
         desc: `Raise your guard for ${sec(c.parry.window)}. If an attack hits you then, it is blocked and you gain ${c.parry.energy} energy and move ${pct(c.parry.speedMultiplier - 1)} faster for ${sec(c.parry.speedDuration)}.` },
       { key: 'F', icon: 'f', name: 'Dagger Storm', tags: [`${c.storm.cost} energy`, `${sec(c.storm.cooldown)} cd`],
@@ -96,15 +96,15 @@ const HERO_GUIDE = {
     blurb: 'Heals and shields the team, marks enemies with light, and stuns with a holy bomb.',
     abilities: [
       { key: 'PASSIVE', name: c.passive.name, tags: [],
-        desc: `Hitting an enemy marked by your Light Missiles has a ${pct(c.passive.orbChance)} chance to drop a light orb. Light orbs (max ${c.resource.max}) never refill on their own; this is how you get them back.` },
+        desc: `Hitting an enemy marked by your Light Missiles has a ${pct(c.passive.orbChance)} chance to drop a light orb, and killing one always drops one. Light orbs (max ${c.resource.max}) never refill on their own; this is how you get them back.` },
       { key: 'LMB', icon: 'primary', name: 'Ray of Light', tags: [`${c.ray.damage} dmg`, `every ${sec(c.ray.cooldown)}`],
         desc: `A beam of light falls on the cursor after ${sec(c.ray.delay)}, hitting every enemy in a small circle. Aim where enemies will be.` },
       { key: 'RMB', icon: 'secondary', name: 'Light Missiles', tags: [`${c.missiles.count} x ${c.missiles.damage} dmg`, `${sec(c.missiles.cooldown)} cd`],
         desc: `Fire ${c.missiles.count} homing missiles that each seek a different enemy and mark it for ${sec(c.missiles.markDuration)}. Marked enemies can drop light orbs (see passive).` },
       { key: 'E', icon: 'e', name: 'Healing Rune', tags: [`${c.rune.cost} light`, `${sec(c.rune.cooldown)} cd`],
-        desc: `Press E, then LMB to place a rune (RMB or E cancels). Allies standing in it heal ${c.rune.heal} hp per second for ${sec(c.rune.duration)}.` },
+        desc: `Press E and a healing rune appears at your feet straight away. Allies standing in it heal ${c.rune.heal} hp per second for ${sec(c.rune.duration)}.` },
       { key: 'F', icon: 'f', name: 'Guardian Aegis', tags: [`${c.aegis.cost} light`, `${sec(c.aegis.cooldown)} cd`],
-        desc: `Press F, then LMB to shield the ally nearest the cursor or RMB to shield yourself. The shield absorbs ${c.aegis.hp} damage for ${sec(c.aegis.duration)}.` },
+        desc: `Press F, then LMB to shield the ally nearest the cursor or RMB to shield yourself. On a teammate the shield absorbs ${c.aegis.allyHp} damage, on yourself ${c.aegis.selfHp}; it lasts ${sec(c.aegis.duration)}.` },
       { key: 'Q', icon: 'q', name: 'Light Bomb', tags: [`charge: deal ${c.ult.charge} dmg`, `up to ${c.ult.damage} dmg`],
         desc: `Charge for up to ${sec(c.ult.powerTime)} (LMB throws early), then hurl a bomb at the cursor. The longer you charge, the bigger the blast, the damage and the stun (up to ${sec(c.ult.stun)}).` },
     ],
@@ -131,7 +131,108 @@ HERO_GUIDE.bard = (c) => ({
   ],
 });
 
+HERO_GUIDE.baker = (c) => ({
+  role: 'Support - Control',
+  difficulty: 2,
+  blurb: 'Pelts enemies with cake, flours them senseless, feeds the team pastries and drops a cake the size of a house.',
+  abilities: [
+    { key: 'PASSIVE', name: c.passive.name, tags: [],
+      desc: `Every cake splat leaves sticky icing on the floor for ${sec(c.passive.time)}: enemies walking through it move ${pct(c.passive.slow)} slower.` },
+    { key: 'LMB', icon: 'primary', name: 'Cake Toss', tags: [`${c.cake.damage} dmg`, `every ${sec(c.cake.cooldown)}`],
+      desc: `Lob a cake high in an arc onto the cursor (a small ring shows where it'll land). Whoever it lands right on takes the full hit, everyone else in the gooey splat ${c.cake.splash}.` },
+    { key: 'RMB', icon: 'secondary', name: 'Flour Bomb', tags: [`${sec(c.flour.confuse)} confuse`, `${sec(c.flour.cooldown)} cd`],
+      desc: `Throw a sack of flour at the cursor. It bursts into a big cloud for ${sec(c.flour.cloudTime)}: every enemy in it is confused for ${sec(c.flour.confuse)}, staggering about at random and attacking nobody. Bosses shrug it off.` },
+    { key: 'E', icon: 'e', name: 'Fresh Pastries', tags: [`${c.pastries.count} x ${c.pastries.heal} hp`, `${sec(c.pastries.cooldown)} cd`],
+      desc: `Your next left click throws ${c.pastries.count} pastries round the cursor instead of a cake: shortcake, pancakes, macarons, crêpes and more. Anyone (you too) can pick one up to heal ${c.pastries.heal} hp and get a sugar rush: ${pct(CONFIG.buffs.sugar.speed - 1)} faster movement and ${pct(CONFIG.buffs.sugar.attackSpeed - 1)} faster attacks for ${sec(CONFIG.buffs.sugar.duration)}.` },
+    { key: 'F', icon: 'f', name: 'Oven', tags: [`${c.oven.hp} hp`, `${sec(c.oven.cooldown)} cd`],
+      desc: `Set an oven down in front of you. It stops enemy shots, and every enemy within ${c.oven.taunt} px (the pink ring) goes after it instead of your team. After ${sec(c.oven.life)}, or when it's broken, it blows up: fire everywhere for ${sec(c.oven.fireTime)} (burning enemies) and ${c.oven.food} pastries flung out.` },
+    { key: 'Q', icon: 'q', name: 'Mega Cake', tags: [`charge: deal ${c.ult.charge} dmg`, `${c.ult.damage} dmg`],
+      desc: `Drop a massive cake from the sky on the cursor. Its shadow grows for ${sec(c.ult.fall)}, then it squashes every enemy under it flat (${sec(c.ult.stun)} stun) and melts into a huge patch of sticky icing.` },
+  ],
+});
+
+HERO_GUIDE.rocketeer = (c) => ({
+  role: 'Damage - Demolition',
+  difficulty: 2,
+  blurb: 'Blows everything up. Splash damage from range, rocket jumps out of trouble, and a giant rocket that flattens walls.',
+  abilities: [
+    { key: 'PASSIVE', name: c.passive.name, tags: [],
+      desc: `Your own rockets never hurt you or your allies, and your blasts knock enemies ${pct(c.passive.knockback - 1)} further. And if you go down, the three rockets on your back go off: a ${c.passive.lastStand.damage} damage blast round you that leaves the ground burning. The panel under your health shows the rockets loaded.` },
+    { key: 'LMB', icon: 'primary', name: 'Old Rocket Launcher', tags: [`${c.rocket.damage + c.rocket.splash} direct`, `${c.rocket.splash} splash`, `${c.resource.max} ammo`],
+      desc: `Fire a rocket that explodes on whatever it hits, hurting every enemy nearby. You hold ${c.resource.max} rockets; a moment after you stop firing they reload one at a time (one every ${sec(c.resource.reload)}).` },
+    { key: 'RMB', icon: 'secondary', name: 'Rocket Jump', tags: [`${c.jump.damage} dmg`, `${sec(c.jump.cooldown)} cd`],
+      desc: `Hold to charge, aiming with the cursor: a ring shows where you'll land and a red ring the blast at your feet. Let go to fire a rocket into the floor (hurting enemies around you) and fly up to ${c.jump.maxDistance} px, over obstacles. The longer you charge, the longer you stay up (${sec(c.jump.flightTime[0])} to ${sec(c.jump.flightTime[1])}), and nothing can hurt you in the air. You can call in a Barrage while you're up there.` },
+    { key: 'E', icon: 'e', name: 'Barrage', tags: [`${c.barrage.damage} dmg each`, `${sec(c.barrage.cooldown)} cd`],
+      desc: 'Press E, then left click an area to rain rockets on it (right click or E cancels): one rocket for every rocket in your launcher (it empties it), each landing at a random spot. Works mid rocket jump.' },
+    { key: 'F', icon: 'f', name: 'Ammo Pack', tags: [`${c.ammoPack.charges} packs`, `${sec(c.ammoPack.cooldown)} each`],
+      desc: `Drop an ammo pack at your feet that refills your launcher on the spot. You carry ${c.ammoPack.charges}; each one restocks on its own.` },
+    { key: 'Q', icon: 'q', name: 'IBFR', tags: [`charge: deal ${c.ult.charge} dmg`, `${c.ult.damage} dmg`],
+      desc: `The Insanely Big F*cking Rocket. It weaves toward the cursor and goes off on whatever it hits: a massive blast that knocks down every wall and obstacle near it and leaves the ground burning for ${sec(c.ult.fireTime)}, setting enemies alight.` },
+  ],
+});
+
 /** The guide for a hero class. */
+/** One short line per ability for the in-game hover tooltip: HERO_TIPS[id][icon]. */
+const HERO_TIPS = {
+  warrior: {
+    primary: 'Wide sword swings, side to side.',
+    secondary: 'Hold: shield blocks shots and shockwaves.',
+    bash: 'Shield up + LMB: lunge, stun enemies.',
+    e: 'Spin, hitting all around you. E stops.',
+    f: 'Rush forward, stunning enemies.',
+    q: 'Charge up, then a huge line strike.',
+  },
+  ranger: {
+    primary: 'Piercing arrow.',
+    secondary: 'Then LMB fire arrow (burns), RMB ice arrow (freezes).',
+    e: 'Next arrows fire faster and harder.',
+    f: 'Turn invisible and faster.',
+    q: 'Place a circle; arrows rain on it.',
+  },
+  mage: {
+    primary: 'Homing magic orbs.',
+    secondary: 'Exploding ball, wide area.',
+    e: 'Click an enemy: lightning strikes and chains.',
+    f: 'Become a fast bird. Can\'t attack.',
+    q: 'Place a circle that drains enemies for mana.',
+  },
+  rogue: {
+    primary: 'Throw a fan of daggers.',
+    secondary: 'Dash through enemies, untouchable.',
+    e: 'Block the next hit for energy and speed.',
+    f: 'Next LMB: a storm of daggers.',
+    q: 'Vanish; shadow clones hunt enemies.',
+  },
+  priestess: {
+    primary: 'Beam of light at the cursor.',
+    secondary: 'Homing missiles that mark enemies.',
+    e: 'Healing rune at your feet.',
+    f: 'Shield an ally (LMB) or yourself (RMB).',
+    q: 'Charge, then throw a stunning light bomb.',
+  },
+  bard: {
+    primary: 'Strum a fan of magic notes.',
+    secondary: 'Swap tune: speed or healing.',
+    e: 'Allies attack faster and harder.',
+    f: 'Lullaby puts nearby enemies to sleep.',
+    q: 'Wave of notes that weakens enemies.',
+  },
+  rocketeer: {
+    primary: 'Exploding rocket. Reloads one at a time.',
+    secondary: 'Hold to charge, release to rocket jump.',
+    e: 'Pick an area, click: rain your rockets on it.',
+    f: 'Refill your rockets.',
+    q: 'Giant rocket: destroys obstacles, leaves fire.',
+  },
+  baker: {
+    primary: 'Lob a cake. Splats leave slowing icing.',
+    secondary: 'Flour cloud: enemies wander confused.',
+    e: 'Next throw: pastries that heal + sugar rush.',
+    f: 'Oven: draws enemies, blocks shots, blows up in 5s.',
+    q: 'Drop a massive cake: squashes and stuns.',
+  },
+};
+
 function heroGuide(id) {
   return HERO_GUIDE[id](CONFIG.classes[id]);
 }
@@ -143,15 +244,17 @@ function heroStats(id) {
   const maxHp = Math.max(...all.map((k) => k.hp));
   const maxSpeed = Math.max(...all.map((k) => k.speed));
   const dodge = c.passive.dodgeCooldown || CONFIG.player.dodge.cooldown;
+  const critRate = c.crit?.chance ?? CONFIG.player.critChance;
+  const critDamage = c.crit?.multiplier ?? CONFIG.player.critMultiplier;
   const stats = [
     { label: 'HEALTH', value: `${c.hp}`, bar: c.hp / maxHp, color: '#e84a4a' },
     { label: 'SPEED', value: `${c.speed}`, bar: c.speed / maxSpeed, color: '#6cff7a' },
-    { label: 'CRIT RATE', value: pct(CONFIG.player.critChance), bar: CONFIG.player.critChance / 0.3, color: '#ffd34a' },
-    { label: 'CRIT DAMAGE', value: `x${CONFIG.player.critMultiplier}`, bar: (CONFIG.player.critMultiplier - 1) / 1.5, color: '#ff9a2a' },
+    { label: 'CRIT RATE', value: pct(critRate), bar: critRate / 0.3, color: '#ffd34a' },
+    { label: 'CRIT DAMAGE', value: `x${critDamage}`, bar: (critDamage - 1) / 1.5, color: '#ff9a2a' },
     { label: 'DODGE', value: `${sec(dodge)} cd`, bar: CONFIG.player.dodge.cooldown / dodge / 1.6, color: '#8ad8ff' },
   ];
   if (c.resource) {
-    const regen = c.resource.regen ? `+${c.resource.regen}/s` : 'no regen';
+    const regen = c.resource.reload ? `1 per ${sec(c.resource.reload)}` : c.resource.regen ? `+${c.resource.regen}/s` : 'no regen';
     stats.push({ label: c.resource.name, value: `${c.resource.max} (${regen})`, bar: null, color: c.resource.color });
   }
   stats.push({ label: 'ULTIMATE', value: `deal ${c.ult.charge} dmg`, bar: null, color: '#c08aff' });

@@ -56,7 +56,7 @@ function enemyBlast(world, x, y, r, damage, colors = ['#ffb02e', '#ff5a1e', '#3a
     PFX.ring(ctx, x, y, r * e, r * 0.55 * e, '#ffe0a0', 2, { thick: t < 0.3 ? 3 : 1 });
     ctx.restore();
   });
-  world.effects.flames(x, y, { count: 6, spread: r * 0.45, height: 26, width: 12, life: 0.55 });
+  world.effects.flames(x, y, { count: 6, spread: r * 0.45, height: 26, width: 12, life: 0.55, colors: ENEMY_FIRE_COLORS });
   world.effects.smoke(x, y - 14, { count: 10, radius: r * 0.45, life: 0.9, rise: 30 });
   world.effects.burst(x, y - 10, { count: 30, colors, speed: [80, 260], life: [0.3, 0.7], size: [2, 5] });
   world.shake(5, 0.2);

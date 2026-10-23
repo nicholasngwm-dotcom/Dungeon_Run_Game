@@ -141,7 +141,8 @@ class DungeonRun {
     this.props = [];
     this.spikes = [];            // every spiked tile ({ tx, ty, x, y, offset, pad })
     this.spikePads = [];         // the square pads they belong to (fire together)
-    this.cover = [];             // solid themed cover in fight rooms ({ kind, tx, ty, w, h, x, y, seed })
+    this.cover = [];             // every obstacle in the rooms: themed cover, walls and solid decor ({ kind, tx, ty, w, h, x, y, seed, item?, fixed? })
+    this.rubble = [];            // what's left of obstacles a big blast knocked down ({ x, y, material, seed })
     this.extraLights = [];       // short-lived lights (burning ground, ice), until world time `until`
     this.sleepers = [];          // combat rooms' first waves, already standing about in them (see populate)
     this.hole = null;            // the glowing hole down to the secret room
@@ -151,7 +152,7 @@ class DungeonRun {
     this.shopStates = {};
     const f = w.dungeon;
     for (const r of f.rooms) {
-      if (CONFIG.run.cover.rooms.includes(r.type)) this.addCover(r);
+      if (CONFIG.run.cover.rooms.includes(r.type)) { this.addWalls(r); this.addCover(r); }
       if (r.type === 'boss' && this.bossType === 'king') this.solidThrone(r);
       if (r.type === 'boss' && this.bossType === 'princess') this.studyCover(r);
       if (r.type === 'combat') this.addSpikes(r);
@@ -843,11 +844,94 @@ class DungeonRun {
     }
   }
 
-  /** The back of the King's throne is solid (heroes can't slip round behind him). */
+  /**
+   * Short stretches of wall standing in a fight room (the theme's walls: [kind, w, h]), kept
+   * like cover clear of the middle, the doorways and the other obstacles, so a room always
+   * stays open all the way round them. Big rockets can knock them down.
+   */
+  addWalls(r) {
+    const kinds = this.theme.walls;
+    if (!kinds) return;
+    const f = this.floor;
+    const T = f.T;
+    const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ tx: t % f.cols, ty: Math.floor(t / f.cols) }));
+    const n = randInt(...CONFIG.run.walls.perRoom);
+    for (let k = 0, placed = 0; k < 60 && placed < n; k++) {
+      const [kind, w, h] = choose(kinds);
+      const tx = randInt(r.x0 + 3, r.x1 - 2 - w);
+      const ty = randInt(r.y0 + 3, r.y1 - 2 - h);
+      if (tx < r.x0 + 3 || ty < r.y0 + 3) continue;
+      const cx = (tx + w / 2) * T;
+      const cy = (ty + h / 2) * T;
+      if (Math.abs(cx - r.cx) < 4.5 * T && Math.abs(cy - r.cy) < 3.5 * T) continue;
+      if (doors.some((d) => d.tx >= tx - 4 && d.tx <= tx + w + 3 && d.ty >= ty - 4 && d.ty <= ty + h + 3)) continue;
+      if (this.cover.some((o) => tx < o.tx + o.w + 2 && tx + w + 2 > o.tx && ty < o.ty + o.h + 2 && ty + h + 2 > o.ty)) continue;
+      const piece = { kind, tx, ty, w, h, x: tx * T, y: ty * T, seed: 0, room: r, material: 'stone' };
+      this.cover.push(piece);
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) f.grid[ty + j][tx + i] = TILE.COVER;
+      placed++;
+    }
+  }
+
+  /** What a piece of cover is made of (picks its rubble when it's blown apart). */
+  coverMaterial(kind) {
+    return { crates: 'wood', study: 'wood' }[kind] || 'stone';
+  }
+
+  /**
+   * A big blast at (x, y): every obstacle (walls, cover, solid decor) with a tile within r
+   * is knocked down: its tiles become floor again and rubble is left where it stood.
+   * Boss-room fixtures (the throne, the bell, the desk) hold. Returns how many fell.
+   */
+  destroyObstacles(x, y, r) {
+    const f = this.floor;
+    const T = f.T;
+    let n = 0;
+    for (const o of this.cover) {
+      if (o.fixed || o.dead) continue;
+      // nearest point of its footprint to the blast
+      const nx = clamp(x, o.x, o.x + o.w * T);
+      const ny = clamp(y, o.y, o.y + o.h * T);
+      if (dist(x, y, nx, ny) > r) continue;
+      o.dead = true;
+      n++;
+      for (let j = 0; j < o.h; j++) for (let i = 0; i < o.w; i++) {
+        if (f.grid[o.ty + j][o.tx + i] === TILE.COVER) f.grid[o.ty + j][o.tx + i] = TILE.FLOOR;
+        this.rubble.push({ x: (o.tx + i + 0.5) * T, y: (o.ty + j + 0.75) * T, material: o.material || this.coverMaterial(o.kind), seed: o.tx * 7 + o.ty * 13 + i * 3 + j });
+      }
+      if (o.item) o.item.dead = true;   // solid decor goes with it
+      const cx = o.x + (o.w * T) / 2;
+      const cy = o.y + (o.h * T) / 2;
+      const colors = { wood: ['#5b3922', '#9c6c3e', '#3b2416'], metal: ['#585d6c', '#adb2c0', '#383b48'], plant: ['#264228', '#6a9a52', '#5b3922'] }[o.material] || ['#56546a', '#8e8ca2', '#3e3c4c'];
+      this.world.effects.burst(cx, cy - 10, { count: 14 + o.w * o.h * 4, colors, speed: [80, 260], life: [0.4, 0.9], up: 120, gravity: 420, size: [2, 4] });
+      this.world.effects.smoke(cx, cy - 6, { count: 3 + o.w * o.h, radius: 14, life: 0.9, rise: 18, colors: ['#3a3430', '#5a524a', '#8a8070'] });
+    }
+    removeDead(this.cover);
+    if (n) Sound.play('partBreak');
+    return n;
+  }
+
+  /** Rubble left by knocked-down obstacles, flat on the floor under everyone. */
+  drawRubble(ctx) {
+    const cam = this.world.camera;
+    for (const b of this.rubble) {
+      if (b.x < cam.x - 40 || b.x > cam.x + cam.width + 40 || b.y < cam.y - 40 || b.y > cam.y + cam.height + 40) continue;
+      const set = Sprites.rubble[b.material] || Sprites.rubble.stone;
+      const img = set[b.seed % set.length];
+      ctx.drawImage(img, Math.round(b.x - img.width / 2), Math.round(b.y - img.height / 2));
+    }
+  }
+
+  /**
+   * The King's throne is solid from the wall down to its seat, the whole height of its
+   * tall back, so heroes can't walk up behind it (and it's drawn under them, see CastleDecor.sortY).
+   */
   solidThrone(r) {
     const f = this.floor;
     const mid = Math.round((r.x0 + r.x1 + 1) / 2);
-    for (let ty = r.y0; ty <= r.y0 + 1; ty++) for (let tx = mid - 2; tx < mid + 2; tx++) f.grid[ty][tx] = TILE.COVER;
+    for (let ty = r.y0; ty <= r.y0 + 3; ty++) for (let tx = mid - 2; tx < mid + 2; tx++) f.grid[ty][tx] = TILE.COVER;
+    // (no art of its own: the throne decor draws it; fixed, so no blast knocks it down)
+    this.cover.push({ kind: 'throne', tx: mid - 2, ty: r.y0, w: 4, h: 4, x: (mid - 2) * f.T, y: r.y0 * f.T, seed: 0, room: r, fixed: true, item: null, hidden: true });
   }
 
   /**
@@ -1248,7 +1332,8 @@ class DungeonRun {
     items.push(...this.decor.getDrawables(this.world.camera));
     const cam = this.world.camera;
     for (const o of this.cover) {
-      if (o.x > cam.x + cam.width + 64 || o.x + 96 < cam.x || o.y > cam.y + cam.height + 64 || o.y + 96 < cam.y) continue;
+      if (o.item || o.hidden) continue;   // solid decor and the throne are drawn by the decor
+      if (o.x > cam.x + cam.width + 64 || o.x + o.w * this.floor.T + 32 < cam.x || o.y - 40 > cam.y + cam.height || o.y + o.h * this.floor.T + 40 < cam.y) continue;
       items.push({ y: o.y + o.h * this.floor.T - 2, draw: (ctx) => this.drawCover(ctx, o) });
     }
     for (const e of this.sleepers) {
@@ -1263,6 +1348,7 @@ class DungeonRun {
 
   drawGround(ctx) {
     const T = this.floor.T;
+    this.drawRubble(ctx);
     this.decor.drawGround(ctx, this.world.camera);
     for (const e of this.sleepers) e.drawGround(ctx);
     // spike pads: a riveted iron plate with hazard-striped corners, glowing red as it's about to fire

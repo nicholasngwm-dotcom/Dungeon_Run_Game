@@ -1,24 +1,29 @@
 // The main menu's backdrop: real fights played by the game itself. Each scene is a
-// Game in the arena with heroes on autopilot (fed synthetic input, the way multiplayer
-// feeds each hero its player's input) against an army or a boss. Scenes rotate with
-// a fade, the heroes can't fall and bosses never quite die, and it all runs muted.
+// Game with heroes on autopilot (fed synthetic input, the way multiplayer feeds each
+// hero its player's input) against an army or a boss: in the graveyard arena, or (castle
+// scenes) in one of the castle's boss rooms, built the way a boss practice floor is.
+// Scenes rotate with a fade (clicking the fight skips to the next), the heroes can't
+// fall and bosses never quite die, and it all runs muted.
 
 // Every hero is in exactly four scenes, so each gets the same screen time.
+// castle: the castle boss whose room the scene is fought in (its boss only if `boss` is set).
 const SHOWCASE_SCENES = [
-  { heroes: ['warrior'], army: ['zombie', 'skeleton', 'zombie', 'skeletonWarrior', 'undeadKnight', 'zombie'], size: 7 },
-  { heroes: ['mage'], boss: 'golem' },
+  { heroes: ['warrior', 'baker'], army: ['zombie', 'skeleton', 'zombie', 'skeletonWarrior', 'undeadKnight', 'zombie'], size: 8 },
+  { heroes: ['mage', 'rocketeer'], boss: 'golem' },
   { heroes: ['ranger', 'bard'], army: ['wraith', 'ghost', 'wraith', 'skeleton', 'candlehead'], size: 8 },
   { heroes: ['rogue', 'priestess'], boss: 'phantom' },
-  { heroes: ['warrior', 'ranger', 'priestess'], army: ['zombieSoldier', 'skeletonSorcerer', 'zombie', 'slime', 'skeleton', 'bletcher'], size: 10 },
-  { heroes: ['mage', 'rogue', 'bard'], boss: 'golem' },
-  { heroes: ['priestess', 'bard'], army: ['ghost', 'shadowalker', 'skeletonWarrior', 'zombie', 'candlehead'], size: 8 },
-  { heroes: ['warrior', 'mage', 'ranger', 'rogue'], boss: 'phantom' },
-  // the finale: the whole party against the graveyard
-  { heroes: ['warrior', 'ranger', 'mage', 'rogue', 'priestess', 'bard'], army: ['zombie', 'skeleton', 'undeadKnight', 'skeletonWarrior', 'zombieSoldier', 'slime', 'wraith', 'bletcher'], size: 16 },
+  { heroes: ['rocketeer', 'warrior', 'priestess'], castle: 'prince', army: ['squire', 'castleArcher', 'castleKnight', 'squire', 'maceSpinner', 'jester'], size: 9 },
+  { heroes: ['baker', 'mage', 'ranger'], castle: 'queen', boss: 'queen' },
+  { heroes: ['rogue', 'bard', 'baker'], castle: 'prince', boss: 'prince' },
+  { heroes: ['rocketeer', 'priestess', 'mage'], castle: 'princess', boss: 'princess' },
+  { heroes: ['warrior', 'ranger', 'rogue', 'bard'], castle: 'king', boss: 'king' },
+  // the finale: the whole party against the castle's garrison in the throne room
+  { heroes: ['warrior', 'ranger', 'mage', 'rogue', 'priestess', 'bard', 'rocketeer', 'baker'], castle: 'king',
+    army: ['squire', 'castleKnight', 'castleArcher', 'royalGuard', 'maceSpinner', 'jester', 'castleSorcerer', 'executioner'], size: 16 },
 ];
 
 // how close each hero likes to fight (melee heroes wade in, casters keep their distance)
-const SHOWCASE_RANGE = { warrior: 42, rogue: 48, bard: 170, priestess: 200, mage: 230, ranger: 260 };
+const SHOWCASE_RANGE = { warrior: 42, rogue: 48, bard: 170, priestess: 200, mage: 230, ranger: 260, rocketeer: 210, baker: 180 };
 
 const MenuShowcase = {
   scene: -1,
@@ -31,25 +36,34 @@ const MenuShowcase = {
 
   /** Plays SHOWCASE_SCENES[i] (or the next one) from a short head start, so it opens mid-fight. */
   start(i = (this.scene + 1) % SHOWCASE_SCENES.length) {
+    this.wire();
     this.scene = i;
     const s = SHOWCASE_SCENES[i];
     const roster = s.heroes.map((classId, n) => ({ id: `s${n}`, name: '', classId }));
     const noop = () => {};
-    const g = new Game(s.heroes[0], { onGameOver: noop, onVictory: noop, onInteract: noop, onToast: noop, onNpc: noop, onPurchase: noop },
-      { roster, localId: 's0', showcase: true });
+    const opts = { roster, localId: 's0', showcase: true };
+    // castle scenes: a boss practice floor, just the entrance and that boss's room
+    if (s.castle) opts.run = { mode: 'set', theme: 'castle', practiceBoss: s.castle };
+    const g = new Game(s.heroes[0], { onGameOver: noop, onVictory: noop, onInteract: noop, onToast: noop, onNpc: noop, onPurchase: noop, onPracticeReturn: noop },
+      opts);
     g.director.update = noop;   // no waves: the scene brings its own enemies
-    const d = g.dungeon;
+    // nothing locks or starts a boss cutscene when the heroes walk in: every room counts as cleared
+    if (g.run) for (const r of g.run.floor.rooms) { r.state = 'cleared'; r.visited = r.seen = true; }
+    const arena = this.arenaFor(g, s);
+    this.arena = arena;
     // the heroes can be knocked about but never fall
     g.players.forEach((p, n) => {
       const hurt = p.hurt.bind(p);
       p.hurt = (amount, ...rest) => hurt(Math.min(amount, Math.max(0, p.hp - p.maxHp * 0.35)), ...rest);
-      p.x = (s.boss ? d.center.x + 120 : this.anchor(d).x) + (n - (g.players.length - 1) / 2) * 50;
-      p.y = s.boss ? d.playerStart.y - 40 : this.anchor(d).y;
+      const spot = g.dungeon.freePoint(arena.heroes.x + (n - (g.players.length - 1) / 2) * 44, arena.heroes.y + (n % 2) * 18, p.hw, p.hh);
+      p.x = spot.x;
+      p.y = spot.y;
     });
     if (s.boss) {
-      g.boss = Game.createBoss(s.boss, d.center);
+      g.boss = Game.createBoss(s.boss, arena.bossAt);
       // skip a boss's entrance: the scene opens mid-fight
-      if ('introAt' in g.boss) { g.boss.intro = 0; g.boss.alpha = 1; g.boss.revealed = true; }
+      if ('intro' in g.boss) g.boss.intro = 0;
+      if ('introAt' in g.boss) { g.boss.alpha = 1; g.boss.revealed = true; }
     } else {
       this.armyAt = 0;
     }
@@ -100,15 +114,15 @@ const MenuShowcase = {
     this.armyAt -= dt;
     if (this.armyAt > 0 || g.enemies.length + g.pendingSpawns >= s.size) return;
     this.armyAt = 0.45;
-    const d = g.dungeon;
-    const T = d.T;
+    const b = this.arena.bounds;
     const hero = g.players[0];
-    // mostly from the right, where the fight is framed
+    // mostly from the right, where the fight is framed, on open floor (never inside an obstacle)
     const a = (Math.random() - 0.5) * Math.PI * 1.3;
     const r = 170 + Math.random() * 110;
-    const x = clamp(hero.x + Math.cos(a) * r, 2 * T, d.width - 2 * T);
-    const y = clamp(hero.y + Math.sin(a) * r * 0.75, 5 * T, d.height - 2 * T);
-    g.spawnEnemy(s.army[Math.floor(Math.random() * s.army.length)], x, y);
+    const x = clamp(hero.x + Math.cos(a) * r, b.left, b.right);
+    const y = clamp(hero.y + Math.sin(a) * r * 0.75, b.top, b.bottom);
+    const pt = g.dungeon.freePoint(x, y, 12, 8);
+    g.spawnEnemy(s.army[Math.floor(Math.random() * s.army.length)], pt.x, pt.y);
   },
 
   /** What a bot hero "presses" this tick: closes in or keeps range, circles its foe, attacks and casts. */
@@ -131,9 +145,9 @@ const MenuShowcase = {
       if (bot.strafeAt <= 0) { bot.strafe = -bot.strafe; bot.strafeAt = 1.6 + Math.random() * 1.6; }
       vx = (dx / dd) * toward - (dy / dd) * bot.strafe * 0.7;
       vy = (dy / dd) * toward + (dx / dd) * bot.strafe * 0.7;
-      // stay on the arena's right side (the camera can't follow further left than the
-      // wall, and the menu covers the left of the screen), and off the walls
-      const anchor = this.anchor(d);
+      // stay near the scene's anchor (in the arena, its right side: the camera can't follow
+      // further left than the wall, and the menu covers the left of the screen), and off the walls
+      const { anchor, bounds } = this.arena;
       const ax = anchor.x - p.x;
       const ay = anchor.y - p.y;
       const far = Math.hypot(ax, ay);
@@ -143,8 +157,10 @@ const MenuShowcase = {
         vy += (ay / far) * pull;
       }
       const T = d.T;
-      if (p.y < 6 * T) vy += 1;
-      if (p.y > d.height - 3 * T) vy -= 1;
+      if (p.y < bounds.top + T) vy += 1;
+      if (p.y > bounds.bottom - T) vy -= 1;
+      if (p.x < bounds.left + T) vx += 1;
+      if (p.x > bounds.right - T) vx -= 1;
       inp.ml = 1;
       // a click now and then answers any "pick a spot" ability with the foe's position
       inp.lp = Math.floor(this.time * 4) !== Math.floor((this.time - dt) * 4) ? 1 : 0;
@@ -182,9 +198,33 @@ const MenuShowcase = {
     return inp;
   },
 
-  /** Where the heroes are kept: right of centre, so the camera can show them clear of the menu. */
-  anchor(d) {
-    return { x: d.width - CONFIG.screen.width / 2 + 120, y: d.center.y + 40 };
+  /**
+   * Where a scene is fought: the play area's bounds, where the heroes start and are kept
+   * (anchor), and where its boss stands. The graveyard arena keeps the heroes right of
+   * centre, clear of the menu; a castle boss room puts them before its boss (each boss
+   * where its own fight opens: the King on his throne, the Princess at her desk...).
+   */
+  arenaFor(g, s) {
+    const d = g.dungeon;
+    const T = d.T;
+    if (!g.run) {
+      const anchor = { x: d.width - CONFIG.screen.width / 2 + 120, y: d.center.y + 40 };
+      return {
+        bounds: { left: 2 * T, top: 5 * T, right: d.width - 2 * T, bottom: d.height - 2 * T },
+        anchor, bossAt: d.center,
+        heroes: s.boss ? { x: d.center.x + 120, y: d.playerStart.y - 40 } : anchor,
+      };
+    }
+    const r = d.bossRoom;
+    const bounds = { left: (r.x0 + 1) * T, top: (r.y0 + 1) * T, right: r.x1 * T, bottom: r.y1 * T };
+    const bossAt = {
+      queen: { x: r.cx, y: r.cy + 3.5 * T },
+      king: { x: r.cx, y: (r.y0 + 5) * T - 30 },
+      princess: { x: r.cx, y: (r.y0 + 4) * T - 6 },
+      prince: { x: r.cx, y: r.cy },
+    }[s.boss] || { x: r.cx, y: r.cy };
+    const heroes = s.boss ? { x: bossAt.x + 90, y: Math.min(bounds.bottom - T, bossAt.y + 4 * T) } : { x: r.cx + 60, y: r.cy + T };
+    return { bounds, anchor: heroes, bossAt, heroes };
   },
 
   /** The boss, or the nearest risen enemy. */
@@ -229,10 +269,29 @@ const MenuShowcase = {
     }
   },
 
-  /** The dots in the corner of the menu: which of the scenes is playing. */
+  /** The dots in the corner of the menu: which of the scenes is playing (click one to jump to it). */
   showTitle() {
     const dots = document.getElementById('menu-scene-dots');
     if (!dots) return;
-    dots.innerHTML = SHOWCASE_SCENES.map((_, i) => `<i class="${i === this.scene ? 'on' : ''}"></i>`).join('');
+    dots.innerHTML = SHOWCASE_SCENES.map((_, i) => `<i data-scene="${i}" class="${i === this.scene ? 'on' : ''}"></i>`).join('');
+  },
+
+  /**
+   * Clicking the fight (anywhere on the menu screen but its buttons and panel) cuts to the
+   * next scene; clicking a dot jumps to that scene. Hooked up once, on the first scene.
+   */
+  wire() {
+    if (this.wired) return;
+    const screen = document.getElementById('screen-menu');
+    if (!screen) return;
+    this.wired = true;
+    screen.addEventListener('click', (e) => {
+      if (!this.game) return;
+      const dot = e.target.closest('[data-scene]');
+      if (dot) { this.start(Number(dot.dataset.scene)); Sound.play('uiClick'); return; }
+      if (e.target.closest('.menu-panel, button, a, input')) return;
+      this.start();
+      Sound.play('uiClick');
+    });
   },
 };

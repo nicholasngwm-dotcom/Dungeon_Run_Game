@@ -174,26 +174,38 @@ class LightPickup extends Pickup {
     world.effects.burst(p.hx, p.hy, { count: 10, colors: ['#ffe680', '#fff6c8', '#ffffff'], speed: [30, 90], life: [0.3, 0.5], up: 30 });
   }
 
+  /**
+   * A floating holy cross of pale blue-white light inside a halo, rays turning behind it and a
+   * spark circling it: nothing like the round gold coins, so it's easy to tell apart on the floor.
+   */
   draw(ctx) {
     if (this.age > this.lifetime - 3 && Math.floor(this.age * 8) % 2) return; // blink before vanishing
-    const cy = this.y - 8 + Math.sin(this.age * 4) * 3;
+    const x = Math.round(this.x);
+    const cy = Math.round(this.y - 12 + Math.sin(this.age * 4) * 3);
     drawShadow(ctx, this.x, this.y + 4, 6, 2);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const r = 14 + Math.sin(this.age * 6) * 2;
-    const g = ctx.createRadialGradient(this.x, cy, 1, this.x, cy, r);
-    g.addColorStop(0, 'rgba(255, 250, 220, 0.9)');
-    g.addColorStop(0.35, 'rgba(255, 230, 128, 0.5)');
-    g.addColorStop(1, 'rgba(255, 210, 90, 0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(this.x - r, cy - r, r * 2, r * 2);
+    PFX.glow(ctx, x, cy, 16 + Math.sin(this.age * 6) * 2, '190, 225, 255', 0.9);
+    // four soft rays slowly turning behind the cross
+    for (let i = 0; i < 4; i++) {
+      const a = this.age * 1.5 + (i * Math.PI) / 2;
+      PFX.beam(ctx, x, cy, a, 12, 3, ['#6aa8ff', '#c8e4ff'], 1);
+    }
+    PFX.ring(ctx, x, cy, 9, 9, 'rgba(200, 230, 255, 0.7)', 1);
     ctx.restore();
+    // the cross: outline, pale blue, white heart
     ctx.fillStyle = OUTLINE;
-    ctx.fillRect(Math.round(this.x) - 3, Math.round(cy) - 3, 7, 7);
-    ctx.fillStyle = '#ffe680';
-    ctx.fillRect(Math.round(this.x) - 2, Math.round(cy) - 2, 5, 5);
+    ctx.fillRect(x - 2, cy - 6, 5, 13);
+    ctx.fillRect(x - 5, cy - 3, 11, 5);
+    ctx.fillStyle = '#9ad0ff';
+    ctx.fillRect(x - 1, cy - 5, 3, 11);
+    ctx.fillRect(x - 4, cy - 2, 9, 3);
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(Math.round(this.x) - 1, Math.round(cy) - 1, 2, 2);
+    ctx.fillRect(x, cy - 4, 1, 8);
+    ctx.fillRect(x - 3, cy - 1, 7, 1);
+    // a spark circling it
+    const sa = this.age * 5;
+    PFX.star(ctx, x + Math.cos(sa) * 11, cy + Math.sin(sa) * 6, Math.floor(this.age * 8) % 2 ? 2 : 1, '#c8e4ff', '#ffffff', 1);
   }
 }
 
@@ -259,5 +271,70 @@ class CoinPickup extends Pickup {
       ctx.fillStyle = '#fff2a0';
       ctx.fillRect(x - w + 1, y - r + 1, 1, r);
     }
+  }
+}
+
+/**
+ * One of the Baker's pastries: tossed in an arc from (x0, y0) to where it lands, then sitting
+ * on the floor for any hero to eat: heals `heal` hp and gives a sugar rush (CONFIG.buffs.sugar).
+ * kind is a key of Sprites.pastries.
+ */
+class PastryPickup extends Pickup {
+  constructor(x0, y0, x, y, kind, { heal, life, flightTime }) {
+    super(x, y);
+    this.x0 = x0;
+    this.y0 = y0;
+    this.kind = kind;
+    this.heal = heal;
+    this.lifetime = life;
+    this.flightTime = flightTime;
+    this.magnet = 36;
+    this.sound = 'pastryEat';
+  }
+
+  get landed() { return this.age >= this.flightTime; }
+
+  /** Anyone will have one (even at full health, for the sugar rush). */
+  wanted() { return this.landed; }
+
+  update(dt, world) {
+    const was = this.landed;
+    super.update(dt, world);
+    if (!was && this.landed) {
+      // it plops down with a little bounce of crumbs
+      world.effects.burst(this.x, this.y - 4, { count: 6, colors: ['#f4e0b8', '#ff8ad0', '#ffffff'], speed: [20, 60], life: [0.2, 0.4], up: 40 });
+    }
+  }
+
+  collect(p, world) {
+    p.heal(this.heal, world);
+    const b = CONFIG.buffs.sugar;
+    p.addBuff('sugar', b.duration);
+    world.effects.text(p.hx, p.hy - 40, 'SUGAR RUSH!', { color: b.color, size: 9, life: 1 });
+    world.effects.burst(p.hx, p.hy, { count: 16, colors: ['#ff8ad0', '#ffffff', '#8ad8ff', '#ffe680'], speed: [40, 140], life: [0.3, 0.6], up: 30 });
+  }
+
+  draw(ctx) {
+    const img = Sprites.pastries[this.kind];
+    if (!this.landed) {
+      // in flight: big, arcing over, turning as it goes
+      const k = this.age / this.flightTime;
+      const x = lerp(this.x0, this.x, k);
+      const y = lerp(this.y0, this.y, k) - Math.sin(k * Math.PI) * 70;
+      drawShadow(ctx, x, lerp(this.y0, this.y, k) + 4, 8, 3, 0.25);
+      ctx.save();
+      ctx.translate(x, y - img.height);
+      ctx.scale(1.8, 1.8);
+      drawRotated(ctx, img, 0, 0, img.width / 2, img.height / 2, k * TAU);
+      ctx.restore();
+      return;
+    }
+    // on the floor, drawn larger (and bobbing) so it's easy to spot, with a soft pink sparkle
+    if (this.age > this.lifetime - 3 && Math.floor(this.age * 8) % 2) return;   // blinking before it goes stale
+    const s = 1.5;
+    const bob = Math.sin(this.age * 4) * 2;
+    drawShadow(ctx, this.x, this.y + 4, 10, 3);
+    ctx.drawImage(img, Math.round(this.x - (img.width * s) / 2), Math.round(this.y - img.height * s + bob), Math.round(img.width * s), Math.round(img.height * s));
+    if (Math.floor(this.age * 3) % 3 === 0) PFX.star(ctx, this.x + 12, this.y - img.height * s - 2 + bob, 2, '#ff8ad0', '#ffffff', 1);
   }
 }

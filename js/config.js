@@ -1,4 +1,4 @@
-// =============================================================
+﻿// =============================================================
 //  GAME BALANCE & SETTINGS
 //  Every tunable number lives here. Times are in seconds,
 //  speeds in pixels/second, distances in pixels.
@@ -36,40 +36,42 @@ const CONFIG = {
       // passive: every `hits` hits the next one is blocked, and enemy bodies do `contactReduction` less damage
       passive: { name: 'Tanker', hits: 4, contactReduction: 0.5 },
       name: 'Knight',
-      hp: 350,
-      speed: 180,
-      // LMB: slash, slash, stab
-      combo:  { damage: 34, cooldown: 0.34, resetTime: 0.9, range: 82, arcDegrees: 130, knockback: 180,
-                stabDamage: 95, stabCooldown: 0.4, stabRange: 170, stabWidth: 40, stabLunge: 36, stabKnockback: 340 },
+      hp: 450,
+      speed: 200,
+      crit: { chance: 0.1, multiplier: 1.5 },   // crit rate and crit damage (heroes without one use CONFIG.player's)
+      // LMB: sword swings, sweeping left to right then back
+      combo:  { damage: 42, cooldown: 0.27, range: 82, arcDegrees: 130, knockback: 180 },
       // RMB (hold): raise the barrier shield the knight carries, `distance` px ahead and facing the aim.
-      // It's its own wall, so it soaks enemy projectiles (arrows, fireballs, lasers) crossing it; melee goes through.
+      // It's its own wall, so it soaks enemy projectiles (arrows, fireballs, lasers) crossing it, and ground
+      // shockwaves rolling at it from the front (within shockwaveArc degrees of the aim); melee goes through.
       // Regens after `regenDelay` once lowered; if broken, it's down for `breakCooldown`.
-      barrier: { hp: 400, regen: 80, regenDelay: 1.2, breakCooldown: 5, distance: 34, width: 96, thickness: 14,
-                 moveMultiplier: 0.8 },
+      barrier: { hp: 150, regen: 80, regenDelay: 1.2, breakCooldown: 5, distance: 34, width: 96, thickness: 14,
+                 moveMultiplier: 0.8, shockwaveArc: 150 },
       // LMB while the shield is up: shield bash. Lunges `distance` px over `time`s, hitting enemies in front
       // of the shield (within `reach`, inside `arcDegrees`) once each: damage, knockback and a stun.
-      bash:    { damage: 45, stun: 1.2, knockback: 320, cooldown: 4, distance: 70, time: 0.15, reach: 56, arcDegrees: 120 },
+      bash:    { damage: 45, stun: 1.2, knockback: 520, cooldown: 4, distance: 70, time: 0.15, reach: 56, arcDegrees: 120 },
       // E: spin attack, moving faster while spinning
       spin:   { damage: 22, tick: 0.22, duration: 5.5, radius: 88, knockback: 90, moveMultiplier: 1.35, cooldown: 12 },   // cooldown starts once the spin ends (or E cancels it)
       // F: wind up, then charge through enemies, stunning them. Holds `charges` uses; each refills over `cooldown`s
-      charge: { windup: 0.5, distance: 330, time: 0.35, width: 44, damage: 35, stun: 1.0, knockback: 260, cooldown: 10, charges: 2 },
+      charge: { windup: 0.25, distance: 330, time: 0.35, width: 44, damage: 35, stun: 1.0, knockback: 260, cooldown: 10, charges: 2 },
       // Q: power up, then a huge downward strike along the aim line.
       // LMB releases it early; damage scales from minPower up to full.
       ult:    { charge: 2100, powerTime: 3, moveMultiplier: 0.3, damage: 300, minPower: 0.35, length: 360, width: 84 },
     },
     ranger: {
       // passive: fastest hero, and a shorter dodge cooldown
-      passive: { name: 'Agility', dodgeCooldown: 1.1 },
+      passive: { name: 'Agility', dodgeCooldown: 1.4 },
       name: 'Archer',
       hp: 225,
-      speed: 230,   // fastest hero (Agility)
+      speed: 250,   // fastest hero (Agility)
+      crit: { chance: 0.15, multiplier: 2 },
       arrow:     { damage: 34, cooldown: 0.75, speed: 660, pierce: 1 },
-      // RMB: camo. Cleanse, invisible and faster; enemies only spot you within detectRange.
+      // F: camo. Cleanse, invisible and faster; enemies only spot you within detectRange.
       // Any attack (arrow, fire/ice arrow, volley) drops the camo straight away.
       camo:      { cooldown: 12, duration: 4, speedMultiplier: 1.4, detectRange: 120 },
       // E: the next arrows fire faster with +25% damage and pierce
       rapidFire: { cooldown: 9, arrows: 5, fireCooldown: 0.28, damageBonus: 0.25, pierceBonus: 0.25 },
-      // F: pick a special arrow, then LMB fire / RMB ice.
+      // RMB: pick a special arrow, then LMB fire / RMB ice.
       // Fire: high damage, pierces everything, burns. Ice: weak, but freezes an area.
       elemental: { cooldown: 7,
                    fire: { damage: 90, speed: 780, pierce: 99, burnDps: 16, burnDuration: 4 },
@@ -83,26 +85,28 @@ const CONFIG = {
       passive: { name: 'Mana Surge', damageMultiplier: 1.2, duration: 2 },
       name: 'Mage',
       hp: 250,
-      speed: 186,
+      speed: 180,
+      crit: { chance: 0.1, multiplier: 1.5 },
       resource:  { name: 'MANA', max: 200, regen: 5, color: '#3fc2a8' },
       bolt:      { damage: 24, cost: 3, cooldown: 0.3, speed: 360, turnRate: 7, seekRange: 420, life: 2.2 },
-      fireball:  { damage: 90, cost: 20, cooldown: 3, speed: 340, radius: 95, maxRange: 450 },
+      fireball:  { damage: 90, cost: 30, cooldown: 3, speed: 340, radius: 95, maxRange: 450 },
       // E: pick a target with LMB, lightning strikes after `delay` and arcs
       lightning: { damage: 240, cost: 120, cooldown: 3, delay: 1, selectRadius: 70,
                    arcRange: 240, arcDamage: 140, arcCount: 4 },
       // F: turn into a small, fast bird (tiny hitbox, can't cast). F again lands early.
       // F: bird form: flies over obstacles (cover, pillars, furniture, hedges) and spike traps; walls and doors still stop it
-      bird:      { cost: 50, cooldown: 6, duration: 4, speedMultiplier: 1.8, radius: 5 },
+      bird:      { cost: 30, cooldown: 6, duration: 4, speedMultiplier: 1.8, radius: 5 },
       // Q: place a magic circle (LMB, RMB cancels) that drains enemies in it into mana.
       // While a circle is active, RMB / E / F cooldowns are capped at activeCooldown seconds.
       ult:       { charge: 1400, duration: 5, radius: 130, dps: 50, tick: 0.25, manaSteal: 0.35, maxRange: 300, activeCooldown: 1 },
     },
     rogue: {
       // passive: each kill in a streak adds damage (up to maxStreak); the streak ends after `duration`s without a kill
-      passive: { name: 'Killing Streak', maxStreak: 10, damagePerStreak: 0.03, duration: 3 },
+      passive: { name: 'Killing Streak', maxStreak: 10, damagePerStreak: 0.03, duration: 4 },
       name: 'Rogue',
       hp: 200,
-      speed: 218,
+      speed: 220,
+      crit: { chance: 0.15, multiplier: 1.5 },
       resource: { name: 'ENERGY', max: 200, regen: 1, perKill: 9, color: '#f0c040' },
       dagger:   { damage: 15, cost: 2, cooldown: 0.4, speed: 580, spreadDegrees: 22, count: 3 },
       // RMB: dash-slash; enemies under half hp start bleeding. Every enemy hit is marked for
@@ -119,21 +123,22 @@ const CONFIG = {
                   burstPierce: 3, burstStun: 1.5 },
     },
     priestess: {
-      // passive: hitting an enemy marked by the light missiles may drop a light orb
-      passive: { name: 'Divine Mark', orbChance: 0.3 },
+      // passive: hitting an enemy marked by the light missiles may drop a light orb (orbChance), and killing one always does
+      passive: { name: 'Divine Mark', orbChance: 0.18 },
       name: 'Priestess',
       hp: 225,
-      speed: 192,
+      speed: 180,
+      crit: { chance: 0.05, multiplier: 2 },
       // light orbs: no regen; refilled only by orbs dropped from marked enemies (can't pick one up when full)
       resource:  { name: 'LIGHT', max: 4, regen: 0, color: '#ffe680' },
       // LMB: a beam of light falls on the cursor after `delay`
       ray:       { damage: 46, cooldown: 0.6, delay: 0.3, radius: 56, maxRange: 380 },
       // RMB: missiles that each seek a different enemy and mark it for markDuration
       missiles:  { count: 5, damage: 22, cooldown: 6, speed: 330, turnRate: 6, life: 2.6, markDuration: 10 },
-      // E: aim a healing rune (LMB places it, RMB / E cancels; heal is hp per second)
-      rune:      { cost: 2, cooldown: 8, heal: 50, duration: 4, radius: 85, maxRange: 300 },
-      // F: then LMB shields the ally nearest the cursor, RMB shields yourself
-      aegis:     { cost: 2, cooldown: 10, hp: 100, duration: 8, selectRadius: 80 },
+      // E: a healing rune appears at her feet straight away (heal is hp per second)
+      rune:      { cost: 2, cooldown: 8, heal: 50, duration: 4, radius: 85 },
+      // F: then LMB shields the ally nearest the cursor (allyHp), RMB shields yourself (selfHp)
+      aegis:     { cost: 2, cooldown: 10, allyHp: 150, selfHp: 50, duration: 8, selectRadius: 80 },
       // Q: charge for up to powerTime (LMB releases early), then throw a stunning light bomb at the cursor.
       // Damage, radius and stun scale from their minimums up to full.
       ult:       { charge: 1600, powerTime: 4, moveMultiplier: 0.4, maxRange: 380, flightTime: 0.35,
@@ -144,7 +149,8 @@ const CONFIG = {
       passive: { name: 'Ensemble', radius: 190 },
       name: 'Bard',
       hp: 225,
-      speed: 200,
+      speed: 180,
+      crit: { chance: 0.05, multiplier: 1.5 },
       // LMB: strum `count` magic notes in a small fan; they bob side to side as they fly
       strum:   { damage: 17, cooldown: 0.35, count: 3, spreadDegrees: 16, speed: 430, life: 0.95, wobble: 0.45 },
       // RMB: swap tunes. Energetic: +speed (move speed). Calming: heal hp per second.
@@ -158,11 +164,66 @@ const CONFIG = {
       // F: play a lullaby for `duration`s, free to move. Enemies within `radius` fill a sleep meter while they
       // hear it (it drains again at meterDecay/s out of range); after `exposure`s they fall asleep for `sleep`s
       // (bosses for bossSleep). A hit wakes a sleeper: it takes `wake`s to come round.
-      lullaby: { cooldown: 18, duration: 6, radius: 180, exposure: 3, sleep: 6, bossSleep: 4, wake: 1, meterDecay: 1 },
+      lullaby: { cooldown: 18, duration: 6, radius: 180, exposure: 2.5, sleep: 6, bossSleep: 4, wake: 1, meterDecay: 1 },
       // Q: a wave of piercing notes; each enemy is hit once, knocked back and weakened for `weaken`s
       // (deals weakenDamage less damage and takes weakenTaken more)
       ult:     { charge: 1500, notes: 11, spreadDegrees: 70, damage: 85, speed: 470, life: 0.9, knockback: 320,
-                 weaken: 4, weakenDamage: 0.3, weakenTaken: 0.3 },
+                 weaken: 4, weakenDamage: 0.45, weakenTaken: 0.45 },
+    },
+    rocketeer: {
+      // passive: his own rockets never hurt him (he rides the blasts), his blasts throw enemies further, and when
+      // he goes down the three rockets on his back go off: a blast (damage in radius) that leaves the ground burning
+      passive: { name: 'Blast Rider', knockback: 1.3,
+                 lastStand: { damage: 140, radius: 120, fireRadius: 110, fireTime: 4, fireDps: 22, burnDps: 10, burnTime: 3 } },
+      name: 'Rocketeer',
+      hp: 250,
+      speed: 180,
+      crit: { chance: 0.1, multiplier: 1.5 },
+      // ammo: rockets in the launcher. They reload one at a time, every `reload`s, starting `reloadDelay`s after a shot
+      resource: { name: 'AMMO', max: 5, regen: 0, color: '#ff9a3a', reload: 0.75, reloadDelay: 0.45 },
+      // LMB: an old rocket launcher. A direct hit takes `damage` + `splash` as one hit; everyone else in the burst
+      // round it (`radius`) takes `splash`. (A crit multiplies each of those, so a direct crit hits hardest.)
+      rocket:   { damage: 18, splash: 46, radius: 64, cost: 1, cooldown: 0.36, speed: 440, life: 1.4, knockback: 170 },
+      // RMB (hold): charge a rocket jump. He fires a rocket at his feet (splash damage round where he stood) and is
+      // flung toward the cursor, up to lerp(minDistance, maxDistance, charge) away, flying over obstacles. The
+      // charge also sets his air time (lerp of flightTime) and how high he goes (height); he can't be hurt in the air
+      jump:     { cooldown: 7, chargeTime: 0.9, minDistance: 110, maxDistance: 330, flightTime: [0.4, 1.2], height: [55, 140],
+                  damage: 48, radius: 82, knockback: 260, moveMultiplier: 0.5 },
+      // E: pick an area (E, then LMB fires; E again or RMB cancels; works mid rocket jump too): one rocket per rocket
+      // in the launcher (it empties it), each landing at a random spot in the area `interval`s apart
+      barrage:  { cooldown: 9, radius: 130, maxRange: 380, interval: 0.11, flightTime: 0.6, damage: 44, blastRadius: 56 },
+      // F: drops an ammo pack at his feet that refills the launcher on the spot. Holds `charges` packs; each restocks over `cooldown`s
+      ammoPack: { cooldown: 14, charges: 2 },
+      // Q: the IBFR. A huge unstable rocket weaving (amplitude, waves per second) toward the cursor; it goes off on
+      // whatever it hits, or after `life`s: a massive blast that knocks down every obstacle within `destroyRadius`
+      // and leaves the ground burning (fireRadius) for fireTime, setting enemies alight (burnDps for burnTime)
+      ult:      { charge: 1900, speed: 250, life: 2.4, amplitude: 22, waves: 2.2, damage: 360, radius: 190,
+                  destroyRadius: 170, knockback: 420, fireRadius: 120, fireTime: 6, fireDps: 26, burnDps: 12, burnTime: 3 },
+    },
+    baker: {
+      // passive: every cake splat leaves sticky icing on the floor for `time`s; enemies in it move `slow` slower
+      passive: { name: 'Sticky Icing', time: 4, radius: 42, slow: 0.4 },
+      name: 'Baker',
+      hp: 225,
+      speed: 200,
+      crit: { chance: 0.05, multiplier: 1.5 },
+      // LMB: lob a cake in an arc to the cursor (up to `range`): enemies right where it lands (`hitRadius`) take `damage`,
+      // the rest of the splat (`radius`) `splash`. Flight time is flightTime + distance / speed; drawn `scale` x bigger
+      cake:     { damage: 40, splash: 20, hitRadius: 16, radius: 46, cooldown: 0.75, range: 330, flightTime: 0.2, speed: 800, scale: 2 },
+      // RMB: a sack of flour thrown at the cursor (up to maxRange); it bursts into a cloud (`radius`) that hangs
+      // for `cloudTime`s, confusing every enemy in it for `confuse`s: they stagger about aimlessly and can't attack
+      flour:    { cooldown: 8, damage: 10, radius: 85, cloudTime: 2.5, confuse: 3, speed: 380, maxRange: 400 },
+      // E: her next LMB throws `count` pastries round the cursor instead; they land as treats anyone can pick up:
+      // each heals `heal` hp and gives a sugar rush (CONFIG.buffs.sugar). Uneaten ones go stale after `life`s
+      pastries: { cooldown: 12, count: 4, heal: 25, spread: 130, flightTime: 0.55, life: 18 },
+      // F: an oven set down in front of her: it stops enemy shots, and enemies within `taunt` px go after it instead
+      // of her team. When its hp runs out, or after `life`s, it blows: a blast (`damage` in `radius`), fire everywhere
+      // (fireRadius, for fireTime, burning enemies) and `food` pastries flung out
+      oven:     { cooldown: 16, hp: 320, life: 5, taunt: 170, distance: 46, radius: 24, damage: 60, blastRadius: 120,
+                  fireRadius: 130, fireTime: 5, fireDps: 24, burnDps: 10, burnTime: 3, food: 3 },
+      // Q: a massive cake dropped from the sky on the cursor (up to maxRange): its shadow grows for `fall`s, then it
+      // squashes everything under it (`radius`): damage and a stun. It stands for `stay`s, then melts into icing.
+      ult:      { charge: 1700, maxRange: 420, fall: 1.1, radius: 140, damage: 300, stun: 2, stay: 2.5 },
     },
   },
 
@@ -481,6 +542,8 @@ const CONFIG = {
       night: { dark: 0.34, color: '6, 12, 22' },
       // solid cover in its fight rooms: [kind, width, height (tiles), weight]
       cover: [['headstone', 1, 1, 5], ['tomb', 2, 1, 2]],
+      // stretches of wall standing in its fight rooms: [kind, width, height (tiles)]
+      walls: [['graveWallH', 3, 1], ['graveWallV', 1, 3]],
       boss: 'phantom',
       enemies: {
         1: [['zombie', 5], ['bletcher', 2], ['skeleton', 3], ['skeletonWarrior', 3], ['bomber', 2], ['wraith', 2],
@@ -506,6 +569,7 @@ const CONFIG = {
       night: { dark: 0.24, color: '12, 6, 22' },
       fog: false,
       cover: [['crates', 1, 1, 4], ['pillar', 1, 1, 3], ['statue', 2, 1, 2]],
+      walls: [['keepWallH', 3, 1], ['keepWallV', 1, 3]],
       // the boss of each stage: the Prince or the Princess, then the Queen, then the King
       stageBosses: { 1: ['prince', 'princess'], 2: ['queen'], 3: ['king'] },
       enemies: {
@@ -571,6 +635,8 @@ const CONFIG = {
     survival: { duration: [30, 40, 50], spawnEvery: [1.3, 1.2, 1.1], perSpawn: 2, maxAlive: [12, 13, 14] },
     // cover (blocks heroes, enemies and shots alike): perRoom[0]-perRoom[1] pieces of the theme's cover in these rooms
     cover: { perRoom: [3, 5], rooms: ['combat', 'survival'] },
+    // walls (the theme's): perRoom[0]-perRoom[1] short stretches in the same rooms, placed before the cover
+    walls: { perRoom: [1, 2] },
     // spike traps (combat rooms only): pop up every `period` seconds for `up` seconds
     // they come in square pads (2x2, or 4x4 bigChance of the time), pads[0]-pads[1] per combat room;
     // a pad's spikes peek out (warn) then shoot up together
@@ -622,6 +688,7 @@ const CONFIG = {
     regen:  { name: 'REGEN', duration: 8, perSecond: 0.03, color: '#6cff7a' },  // 3% max hp/s even while hit (24% total)
     speed:  { name: 'SPEED', duration: 8, multiplier: 1.3, color: '#ffd34a' },  // +30% move speed
     damage: { name: 'POWER', duration: 8, multiplier: 1.25, color: '#ff5a4a' }, // +25% damage, stacks with passives
+    sugar:  { name: 'SUGAR', duration: 5, speed: 1.25, attackSpeed: 1.3, color: '#ff8ad0' },  // the Baker's pastries: faster feet and hands
   },
 
   // ---------------------------------------------------------
@@ -783,9 +850,10 @@ const CONFIG = {
 
   // ---------------------------------------------------------
   //  BOSS: THE PRINCE (castle stage 1, the training grounds)
-  //  He rides in on his horse and leaps down to fight. He runs you down and dashes in
-  //  (a medium-range dash down a red lane, chaining dash after dash while you're out of
-  //  reach), cutting twice and stabbing only once you're within his sword's reach. At
+  //  He rides in on his horse and leaps down to fight. Every attack is the same pattern:
+  //  he runs you down, dashes in (a medium-range dash down a red lane), then lays into
+  //  you with a flurry of cuts and long-reaching stabs, stepping in with each blow (every
+  //  stab is called out by a red lane first). At
   //  phase2At he sounds his trumpet: two royal guards and his own bodyguard
   //  march in, and he sets his blade alight: every cut and stab flings embers (flame) that
   //  set you burning. He keeps the same pace in both phases. While his bodyguard stands, a
@@ -793,17 +861,19 @@ const CONFIG = {
   // ---------------------------------------------------------
   princeBoss: {
     hp: 4600,
-    phase2At: 0.35,
+    phase2At: 0.45,
     contactDamage: 14,
     speed: 195,
     dashRange: 270,              // he dashes when you're within this
-    dash: { windup: 0.36, distance: 205, time: 0.18, width: 52, damage: 24, chain: 1 },
-    // the sword, whenever you're within reach (off a dash, or walking up to you): wide cuts and long stabs in
-    // `pattern` order, `gap` s apart, after a `windup` s tell when he starts it on foot
-    combo: { reach: 90, arcDegrees: 145, gap: 0.22, windup: 0.32, damage: 24, stabReach: 1.5,
-      pattern: ['cut', 'cut', 'stab', 'cut', 'stab'] },
-    recovery: 0.7,               // after the cuts
-    cooldown: 1.3,               // before he can dash again (after his cuts or a dash)
+    dash: { windup: 0.36, distance: 205, time: 0.18, width: 52, damage: 24 },
+    // the flurry straight after every dash: wide cuts and stabs in `pattern` order, `gap` s apart. Each blow
+    // steps him `step` px toward you. A stab is a long thrust (`stabRange` px, `stabWidth` wide) shown by a red
+    // lane for `stabWindup` s before it lands
+    combo: { reach: 90, arcDegrees: 145, gap: 0.2, damage: 24, step: 14,
+      stabRange: 188, stabWidth: 34, stabWindup: 0.38, stabStep: 34, stabDamage: 30,
+      pattern: ['cut', 'cut', 'cut', 'stab', 'cut'] },
+    recovery: 1.8,               // after every dash and flurry he stops to catch his breath (open to hits)
+    cooldown: 1.6,               // then this long on his feet before he can dash again
     trumpet: { time: 1.4, guards: 2 },
     // phase 2, the burning blade: each cut flings slashEmbers embers across its arc, the stab stabEmbers down its
     // line; each ember does `damage` and sets whoever it hits burning (burnDps for burnTime s)
@@ -913,7 +983,7 @@ const CONFIG = {
     phase2At: 0.5,
     contactDamage: 20,
     shout: { every: 2.3, windup: 0.6, arcDegrees: 70, speed: 380, width: 26, damage: 24, knockback: 260 },
-    guards: { max: 6 },          // each call brings one guard, up to max at once
+    guards: { max: 6, respawnDelay: 5 },   // each call brings one guard, up to max at once; none for respawnDelay s after one dies
     throwEvery: 3,               // every throwEvery-th attack is a scepter throw
     // the throw lands `lead` px ahead of the hero, on the side away from the nearest guard
     scepter: { windup: 0.6, speed: 470, spin: 4, radius: 50, tick: 0.35, damage: 16, rest: 0.8, back: 520, lead: 120 },

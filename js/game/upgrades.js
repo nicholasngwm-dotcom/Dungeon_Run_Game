@@ -52,6 +52,11 @@ const SHOP_UPGRADES = [
     apply(p) { p.resource.max += 2; p.resource.value += 2; },
   },
   {
+    id: 'ammo', name: 'Bandolier', price: 26, color: '#ff9a3a', resource: 'AMMO',
+    desc: '+2 rockets in the launcher (and two loaded)',
+    apply(p) { p.resource.max += 2; p.resource.value += 2; },
+  },
+  {
     id: 'haste', name: 'War Focus', price: 26, color: '#c08aff', resource: null,
     desc: 'Abilities (RMB, E, F) recharge 25% faster',
     apply(p) { p.abilityHaste *= 1.25; },
@@ -86,6 +91,10 @@ function drawUpgradeIcon(ctx, id, color) {
       px(3, 10, 7, 3, color); px(4, 14, 6, 3, color); px(5, 18, 5, 2, color); break;
     case 'mana': case 'light': // glowing orb
       px(8, 8, 16, 16, D); px(9, 9, 14, 14, color); px(11, 11, 4, 4, '#ffffff'); break;
+    case 'ammo': // a belt of three rockets
+      px(3, 20, 26, 4, '#5e3a1e'); px(3, 20, 26, 1, '#84562c');
+      for (const x of [6, 14, 22]) { px(x, 6, 5, 14, D); px(x + 1, 7, 3, 12, '#c8342a'); px(x + 1, 4, 3, 3, '#e0c47a'); px(x + 1, 8, 1, 10, '#ee6a4a'); }
+      break;
     case 'energy': // lightning bolt
       px(16, 3, 6, 4, color); px(12, 7, 7, 6, color); px(10, 13, 12, 3, color); px(14, 16, 5, 6, color); px(12, 22, 4, 6, color); break;
     case 'haste': // hourglass

@@ -47,12 +47,40 @@ class Enemy extends Entity {
     this.rallied = (this.rallied || 0) - dt; // a general's call to charge (see General)
     // the Bard's lullaby meter drains whenever no lullaby reached this enemy this tick
     if (this.sleepMeter > 0 && this.lullabyTick !== world.time) this.sleepMeter = Math.max(0, this.sleepMeter - CONFIG.classes.bard.lullaby.meterDecay * dt);
+    this.sticky = (this.sticky || 0) - dt;   // standing in the Baker's icing (see speedBoost)
+    this.squash = (this.squash || 0) - dt;   // flattened under her giant cake (drawing only)
     if (this.stunTime > 0) {
       this.stunTime -= dt;
       return;
     }
+    if (this.confused > 0) return this.updateConfused(dt, world);
     this.stateTime += dt;
     this.think(dt, world);
+  }
+
+  /**
+   * Floured by the Baker: confused for `duration`s. It forgets what it was doing and
+   * staggers about in random directions, attacking nobody.
+   */
+  confuse(duration, world) {
+    if (this.dead || !(this.speed > 0)) return;   // things that can't walk (gravestones, turrets) can't wander off
+    if (!(this.confused > 0)) world?.effects.text(this.hx, this.hy - 30, 'CONFUSED', { color: '#f4ead7', size: 7 });
+    this.confused = Math.max(this.confused || 0, duration * (1 - (this.cfg.stunResist || 0)));
+    if (this.state === 'windup') this.setState('chase');
+  }
+
+  updateConfused(dt, world) {
+    this.confused -= dt;
+    this.confuseTurn = (this.confuseTurn || 0) - dt;
+    if (this.confuseTurn <= 0 || this.confuseHeading === undefined) {
+      this.confuseTurn = rand(0.4, 1);
+      this.confuseHeading = rand(0, TAU);
+    }
+    const x0 = this.x;
+    const y0 = this.y;
+    this.moveAngle(world, this.confuseHeading, this.speed * 0.65, dt);
+    if (dist(x0, y0, this.x, this.y) < this.speed * dt * 0.2) this.confuseTurn = 0;   // bumped into something: turn
+    if (this.confused <= 0 && this.state !== 'chase') this.setState('chase');
   }
 
   think() {}
@@ -89,8 +117,10 @@ class Enemy extends Entity {
     if (dist(x1, y1, this.x, this.y) < speed * dt * 0.2) this.detour *= -1; // hit a wall that way, try the other side
   }
 
-  /** Movement speed multiplier: rallied by a general, it runs faster. */
-  get speedBoost() { return this.rallied > 0 ? this.rallySpeed || 1 : 1; }
+  /** Movement speed multiplier: rallied by a general, it runs faster; stuck in the Baker's icing, slower. */
+  get speedBoost() {
+    return (this.rallied > 0 ? this.rallySpeed || 1 : 1) * (this.sticky > 0 ? 1 - CONFIG.classes.baker.passive.slow : 1);
+  }
 
   moveAngle(world, a, speed, dt) {
     speed *= this.speedBoost;
@@ -437,6 +467,7 @@ class Enemy extends Entity {
     if (this.hasted > 0) this.drawHasted(ctx);
     if (this.rallied > 0 || this.shieldHp > 0) this.drawRally(ctx);
     if (this.sleepMeter > 0 && !this.asleep) this.drawSleepMeter(ctx);
+    if (this.confused > 0 && !(this.stunTime > 0)) return this.drawConfused(ctx);
     if (!(this.stunTime > 0)) return;
     if (this.frozenTime > 0) return this.drawIceBlock(ctx);
     if (this.asleep) return this.drawSleep(ctx);
@@ -448,6 +479,19 @@ class Enemy extends Entity {
       ctx.fillRect(Math.round(this.x + Math.cos(a) * 10) - 2, Math.round(y + Math.sin(a) * 3) - 2, 5, 5);
       ctx.fillStyle = '#ffe680';
       ctx.fillRect(Math.round(this.x + Math.cos(a) * 10) - 1, Math.round(y + Math.sin(a) * 3) - 1, 3, 3);
+    }
+  }
+
+  /** Confused: a puff of flour hanging on it, and question marks wheeling round its head. */
+  drawConfused(ctx) {
+    const y = this.y - this.barOffset - 8;
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    PFX.disc(ctx, this.x, this.hy, this.radius + 4, this.radius * 0.8, '#f4f0e8', 2);
+    ctx.restore();
+    for (let i = 0; i < 3; i++) {
+      const a = this.animTime * 4 + (i * TAU) / 3;
+      HUD.text(ctx, '?', Math.round(this.x + Math.cos(a) * 11), Math.round(y + Math.sin(a) * 3) - 4, { size: 8, align: 'center', color: i === 1 ? '#ff8ad0' : '#f4ead7' });
     }
   }
 

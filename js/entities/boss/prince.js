@@ -2,10 +2,10 @@
 //  THE PRINCE (castle stage 1, the training grounds)
 //
 //  He gallops out of the stable gate on his white charger, reins in, and leaps down
-//  into the sparring ring; the horse trots back out. Then he is relentless: he runs
-//  you down and dashes in once (a medium-range dash down a red lane), then keeps after
-//  you on foot. Whenever you're within his sword's reach he lays into you with a string
-//  of cuts and stabs (combo.pattern). At 35% health he sounds his trumpet: two royal guards and his
+//  into the sparring ring; the horse trots back out. Then he is relentless, and every
+//  attack goes the same way: he runs you down, dashes in (a medium-range dash down a red
+//  lane), then lays into you with a flurry of cuts and long stabs (combo.pattern), stepping
+//  in with each blow; every stab is called out by a red lane first. At 45% health he sounds his trumpet: two royal guards and his
 //  own bodyguard (a flail and a massive shield) march in, and he sets his blade alight:
 //  every cut and stab flings embers that set you burning. His pace stays the same. While
 //  his bodyguard stands, a ribbon of light joins them and the Prince can't be hurt.
@@ -17,6 +17,12 @@ const PRINCE_SCALE = 1.5;
 // the entrance: the ride out of the gate, the leap down, then he draws his sword (seconds)
 const PRINCE_INTRO = { ride: 1.5, leap: 0.55, total: 2.5 };
 const HORSE_SCALE = 1.35;
+// his slash crescents (Warrior.drawSlashFx palettes): gold, and alight once his blade burns
+const PRINCE_FX = {
+  gold: { slash: ['#ffffff', '#fffbe8', '#ecd690', '#a07a24'], slashGlow: ['#8a6a26', '#5a3a1a'], flare: '#fff2a0' },
+  fire: { slash: ['#fff2a0', '#ffd34a', '#ff8a1e', '#e0461e'], slashGlow: ['#a03a14', '#5a1a0a'], flare: '#ffd34a' },
+};
+const THRUST_TIME = 0.16;   // the rapier shoots out and back on a stab
 
 class RoyalPrince {
   constructor(x, y) {
@@ -44,8 +50,12 @@ class RoyalPrince {
     this.t = 0;
     this.cooldown = 0.6;
     this.aim = 0;
-    this.chainLeft = 0;
     this.cut = 0;
+    this.lungeLeft = 0;      // px left of the step he takes with a blow of his flurry
+    this.swingDir = 1;       // which way the next cut sweeps
+    this.blow = null;        // the last blow of his flurry, for the sword animation: { stab, at, dir }
+    this.ghostT = 0;         // afterimages while dashing
+    this.stabEnd = null;     // where the stab being lined up ends
     this.horse = null;       // his charger during the entrance: { x, y, facing, state, t }
   }
 
@@ -136,6 +146,13 @@ class RoyalPrince {
     this.moving = false;
     this.cooldown -= dt;
     const p = world.player;
+    // the short step he takes with each blow of his flurry
+    if (this.lungeLeft > 0 && this.state === 'combo') {
+      const s = Math.min(this.lungeLeft, 420 * dt);
+      this.lungeLeft -= s;
+      world.dungeon.move(this, Math.cos(this.aim) * s, Math.sin(this.aim) * s);
+      this.moving = true;
+    } else this.lungeLeft = 0;
     switch (this.state) {
       case 'walk': this.updateWalk(dt, world, p); break;
       case 'dashWindup':
@@ -144,9 +161,7 @@ class RoyalPrince {
         break;
       case 'dash': this.updateDash(dt, world, p); break;
       case 'combo': this.updateCombo(dt, world, p); break;
-      case 'recover':
-        if (this.t >= this.P(this.cfg.recovery)) { this.setState('walk'); this.cooldown = this.P(this.cfg.cooldown); }
-        break;
+      case 'recover': this.updateWinded(dt, world); break;
       case 'trumpet': this.updateTrumpet(dt, world); break;
     }
     // his guard has fallen: the light between them shatters and he can be hurt again
@@ -160,7 +175,7 @@ class RoyalPrince {
     this.contactDamage(world);
   }
 
-  /** Runs straight at you; within dashing range he dashes. */
+  /** Runs straight at you; within dashing range (and off cooldown) he dashes. */
   updateWalk(dt, world, p) {
     if (p.dead) return;
     const d = dist(this.x, this.y, p.x, p.y);
@@ -172,36 +187,30 @@ class RoyalPrince {
     this.moving = dist(x0, y0, this.x, this.y) > 0.1;
     this.facing = p.x >= this.x ? 1 : -1;
     if (this.moving && vrand(0, 1) < 0.3) world.effects.burst(this.x - this.facing * 8, this.y, { count: 1, colors: ['#7a6448', '#5a4632'], speed: [10, 30], life: [0.2, 0.4] });
-    // close enough to cross swords: straight into his cuts and stabs
-    if (d <= this.swordReach + p.radius) {
-      this.startCombo(p, false);
-      return;
-    }
-    if (d < this.cfg.dashRange && this.cooldown <= 0) {
-      this.chainLeft = this.P(this.cfg.dash.chain);
-      this.startDash(world, p, 1);
-    }
+    if (d < this.cfg.dashRange && this.cooldown <= 0) this.startDash(world, p);
   }
 
-  get swordReach() { return this.cfg.combo.reach * PRINCE_SCALE * 0.9; }
-
-  /** His cuts and stabs: the first comes right off a dash, or after a short tell on foot. */
-  startCombo(p, offDash) {
-    const c = this.cfg.combo;
+  /** Straight off a dash: the flurry of cuts and stabs. */
+  startCombo(world, p) {
     this.setState('combo');
     this.cut = 0;
-    this.t = offDash ? this.P(c.gap) * 0.6 : this.P(c.gap) - c.windup;
-    this.aim = angleTo(this.x, this.y, p.x, p.y);
-    this.facing = Math.cos(this.aim) >= 0 ? 1 : -1;
-    if (!offDash) Sound.play('windup');
+    this.blow = null;
+    if (!p.dead) this.aimBlow(world, p);
   }
 
   /** The current blow of his combo is a stab (not a cut). */
   get stabbing() { return this.cfg.combo.pattern[this.cut] === 'stab'; }
 
-  startDash(world, p, windupScale) {
+  /** Turns to face p for the next blow; a stab's lane stops at the first wall. */
+  aimBlow(world, p) {
+    this.aim = angleTo(this.x, this.y, p.x, p.y);
+    this.facing = Math.cos(this.aim) >= 0 ? 1 : -1;
+    this.stabEnd = world.dungeon.raycast(this.x, this.y, this.aim, this.cfg.combo.stabRange);
+  }
+
+  startDash(world, p) {
     this.aimAt(world, p);
-    this.windup = this.P(this.cfg.dash.windup) * windupScale;
+    this.windup = this.P(this.cfg.dash.windup);
     this.setState('dashWindup');
     Sound.play('windup');
   }
@@ -220,6 +229,22 @@ class RoyalPrince {
     const y0 = this.y;
     world.dungeon.move(this, Math.cos(this.aim) * step, Math.sin(this.aim) * step);
     this.dashed += step;
+    // fading copies of him streaming behind
+    this.ghostT -= dt;
+    if (this.ghostT <= 0) {
+      this.ghostT = 0.035;
+      const img = this.currentFrame().img;
+      const gx = this.x;
+      const gy = this.y;
+      const flip = this.facing < 0;
+      world.effects.add(0.25, (ctx, t) => {
+        ctx.save();
+        ctx.translate(Math.round(gx), Math.round(gy));
+        ctx.scale(PRINCE_SCALE, PRINCE_SCALE);
+        drawSprite(ctx, img, 0, 0, ENEMY_ANCHOR.x, ENEMY_ANCHOR.y, flip, 0.4 * (1 - t));
+        ctx.restore();
+      });
+    }
     this.moving = true;
     for (const a of world.allies) {
       if (this.dashHits.has(a) || pointSegmentDistance(a.x, a.y, x0, y0, this.x, this.y) > c.width / 2 + a.radius) continue;
@@ -230,58 +255,149 @@ class RoyalPrince {
     if (this.dashed >= c.distance || dist(x0, y0, this.x, this.y) < step * 0.3) this.afterDash(world, p);
   }
 
-  /**
-   * After a dash: within sword's reach, he cuts and stabs; otherwise he dashes again
-   * (a quicker windup) while he has dashes left in the chain, then runs you down on foot
-   * (no dashing until his cooldown is over) to cut you there.
-   */
+  /** Every dash ends in his flurry, wherever you are (he turns and steps in after you). */
   afterDash(world, p) {
-    if (!p.dead && dist(this.x, this.y, p.x, p.y) <= this.swordReach + p.radius) {
-      this.startCombo(p, true);
-    } else if (!p.dead && this.chainLeft > 1) {
-      this.chainLeft--;
-      this.startDash(world, p, 0.55);
-    } else {
-      this.setState('walk');
-      this.cooldown = this.P(this.cfg.cooldown);
-    }
+    this.startCombo(world, p);
   }
 
-  /** Cuts and stabs in the combo's pattern (each aimed at you as it comes). */
+  /**
+   * The flurry: cuts and stabs in the combo's pattern, each aimed at you as it comes and
+   * stepping him in after you. A stab is called out by a red lane (it locks on partway
+   * through the tell), then thrusts the whole length of it.
+   */
   updateCombo(dt, world, p) {
     const c = this.cfg.combo;
-    if (this.t < this.P(c.gap)) return;
-    if (!p.dead) { this.aim = angleTo(this.x, this.y, p.x, p.y); this.facing = Math.cos(this.aim) >= 0 ? 1 : -1; }
     const stab = this.stabbing;
+    const wait = stab ? c.stabWindup : this.P(c.gap);
+    if (!p.dead && (!stab || this.t < wait * 0.6)) this.aimBlow(world, p);
+    if (stab && this.t < dt * 1.5) Sound.play('windup', 0.1);
+    if (this.t < wait) return;
+    // step in with the blow (unless already on top of you)
+    if (p.dead || dist(this.x, this.y, p.x, p.y) > 46) this.lungeLeft = stab ? c.stabStep : c.step;
     const reach = c.reach * PRINCE_SCALE * 0.75;
-    for (const a of world.allies) {
-      const d = dist(this.x, this.y, a.x, a.y);
-      const off = Math.abs(angleDiff(this.aim, angleTo(this.x, this.y, a.x, a.y)));
-      const hit = stab ? off < 0.35 && d < reach * c.stabReach + a.radius : off <= (c.arcDegrees * DEG) / 2 && d < reach + a.radius;
-      if (hit && a.hurt(c.damage, world, this.x, this.y)) a.knockback?.(this.aim, stab ? 260 : 140);
-    }
-    if (stab) {
+    if (stab) this.thrust(world);
+    else {
+      for (const a of world.allies) {
+        const d = dist(this.x, this.y, a.x, a.y);
+        const off = Math.abs(angleDiff(this.aim, angleTo(this.x, this.y, a.x, a.y)));
+        if (off <= (c.arcDegrees * DEG) / 2 && d < reach + a.radius && a.hurt(c.damage, world, this.x, this.y)) a.knockback?.(this.aim, 140);
+      }
+      // a gold crescent sweeping with the blade, each cut the opposite way to the last
       const sx = this.x;
       const sy = this.y - 18;
-      const ex = sx + Math.cos(this.aim) * reach * c.stabReach;
-      const ey = sy + Math.sin(this.aim) * reach * c.stabReach;
-      world.effects.add(0.2, (ctx, t) => {
-        ctx.save();
-        ctx.globalAlpha = 1 - t;
-        ctx.strokeStyle = '#fffbe8';
-        ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(lerp(sx, ex, 0.4 + t * 0.6), lerp(sy, ey, 0.4 + t * 0.6)); ctx.stroke();
-        ctx.restore();
-      });
-      Sound.play('swordStab');
-    } else {
-      Enemy.prototype.swipeFx.call({ x: this.x, y: this.y - 10, attackAngle: this.aim, cfg: { attackArcDegrees: c.arcDegrees, attackReach: reach } }, world, '255, 220, 140');
+      const aim = this.aim;
+      const dir = this.swingDir;
+      const pal = this.blazing ? PRINCE_FX.fire : PRINCE_FX.gold;
+      world.effects.add(SLASH_FX_LIFE, (ctx, t) => Warrior.drawSlashFx(ctx, sx, sy, aim, c.arcDegrees * DEG, reach, dir, t, pal));
       Sound.play('swordSwing');
     }
     if (this.blazing) this.flingEmbers(world, stab, reach);
+    this.blow = { stab, at: this.time, dir: this.swingDir };
+    if (!stab) this.swingDir = -this.swingDir;
     this.cut++;
     this.t = 0;
     if (this.cut >= c.pattern.length) this.setState('recover');
+  }
+
+  /**
+   * After every dash and flurry he stops to catch his breath (recovery s): bent over, sword
+   * point down in the dirt, panting out little clouds, sweat flying off him.
+   */
+  updateWinded(dt, world) {
+    if (this.t < dt * 1.5) world.effects.text(this.hx, this.headY - 6, 'HUFF... PUFF...', { color: '#d8c8a0', size: 7, life: 1.2 });
+    const mouth = { x: this.x + this.facing * 16, y: this.y - 38 * PRINCE_SCALE * (1 - this.pose().squash) };
+    this.puff = (this.puff ?? 0) - dt;
+    if (this.puff <= 0) {
+      this.puff = 0.45;
+      world.effects.smoke(mouth.x, mouth.y, { count: 2, radius: 5, life: 0.5, rise: 10, colors: ['#e8e4dc', '#c8c4bc', '#f4f0ea'] });
+    }
+    if (vrand(0, 1) < dt * 3) {
+      world.effects.burst(this.x + vrand(-10, 10), this.y - 56, { count: 1, colors: ['#9ad0ff', '#d8f0ff'], speed: [20, 50], life: [0.3, 0.5], up: 40, gravity: 260, size: [2, 2] });
+    }
+    if (this.t >= this.P(this.cfg.recovery)) { this.setState('walk'); this.cooldown = this.P(this.cfg.cooldown); }
+  }
+
+  /**
+   * His body pose: lean (radians toward where he faces) and squash (0 = standing tall).
+   * Small amounts only, so the sprite never looks stretched.
+   */
+  pose() {
+    const t = this.t;
+    switch (this.state) {
+      case 'dashWindup': {
+        const k = Math.min(1, t / Math.max(0.05, this.windup * 0.5));
+        return { lean: 0.1 * k, squash: 0.07 * k };   // crouching to spring
+      }
+      case 'dash': return { lean: 0.2, squash: -0.03 };
+      case 'combo': {
+        const age = this.blow ? this.time - this.blow.at : 1;
+        const hit = Math.max(0, 1 - age / 0.15);   // a jolt forward with each blow
+        if (this.stabbing) {
+          const k = Math.min(1, t / this.cfg.combo.stabWindup);
+          return { lean: -0.06 * k + 0.12 * hit, squash: 0.04 * k };   // drawn back, coiled for the thrust
+        }
+        return { lean: 0.12 * hit, squash: 0.02 * hit };
+      }
+      case 'recover': {
+        // winded: eases down into a hunch, heaving with each breath, then straightens up
+        const k = clamp(Math.min(t / 0.25, (this.P(this.cfg.recovery) - t) / 0.3), 0, 1);
+        const pant = (Math.sin(t * 9) + 1) / 2;
+        return { lean: 0.14 * k, squash: k * (0.03 + pant * 0.035) };
+      }
+    }
+    return { lean: 0, squash: 0 };
+  }
+
+  /**
+   * The rapier in his hand: angle a and how far it's pushed out along the blade (reach).
+   * Cuts sweep it across the arc in step with the crescent; a stab draws it back, then
+   * shoots it out and back; winded he leans on it, point in the dirt.
+   */
+  swordPose(pos, f) {
+    const rest = { a: f > 0 ? -0.35 : Math.PI + 0.35, reach: 0 };
+    if (this.intro > 0) return pos.seated ? { a: f > 0 ? -1.1 : Math.PI + 1.1, reach: 0 } : rest;
+    switch (this.state) {
+      case 'dashWindup': return { a: this.aim + Math.PI * 0.8 * (f > 0 ? 1 : -1), reach: -2 };   // drawn back behind him
+      case 'dash': return { a: this.aim + (f > 0 ? -0.35 : 0.35), reach: 4 };
+      case 'recover': return { a: f > 0 ? 1.25 : Math.PI - 1.25, reach: 2 };
+      case 'combo': {
+        const half = (this.cfg.combo.arcDegrees * DEG) / 2;
+        const b = this.blow;
+        const age = b ? this.time - b.at : 1;
+        if (b && b.stab && age < THRUST_TIME) {
+          const k = age / THRUST_TIME;
+          return { a: this.aim, reach: 16 * Math.sin(Math.PI * Math.min(1, k * 1.6)) };   // out fast, back slower
+        }
+        if (this.stabbing) return { a: this.aim, reach: -8 * Math.min(1, this.t / (this.cfg.combo.stabWindup * 0.6)) };
+        if (b && !b.stab) {
+          // sweeping through the last cut, then held at the end of it (the next cut comes back the other way)
+          const k = swingEase(Math.min(1, age / SWING_TIME));
+          return { a: this.aim + lerp(-half, half, k) * b.dir, reach: 2 };
+        }
+        return { a: this.aim - half * this.swingDir, reach: 0 };   // raised, ready for the first cut
+      }
+    }
+    return rest;
+  }
+
+  /** A long stab down the telegraphed lane: everyone in it is run through and thrown back. */
+  thrust(world) {
+    const c = this.cfg.combo;
+    const sx = this.x;
+    const sy = this.y;
+    const end = this.stabEnd || { x: sx + Math.cos(this.aim) * c.stabRange, y: sy + Math.sin(this.aim) * c.stabRange };
+    for (const a of world.allies) {
+      if (pointSegmentDistance(a.x, a.y, sx, sy, end.x, end.y) > c.stabWidth / 2 + (a.radius || 10)) continue;
+      if (a.hurt(c.stabDamage, world, sx, sy)) a.knockback?.(this.aim, 280);
+    }
+    // a bright golden (or, once his blade burns, fiery) streak the length of the thrust, at hand height
+    const len = dist(sx, sy, end.x, end.y);
+    const aim = this.aim;
+    const colors = this.blazing ? ['#e0461e', '#ff8a1e', '#ffd34a', '#fff2a0'] : ['#a07a24', '#e8b040', '#fffbe8', '#ffffff'];
+    world.effects.add(0.3, (ctx, t) => Warrior.drawLineFx(ctx, sx, sy - 18, aim, len, c.stabWidth, colors, t));
+    world.effects.burst(end.x, end.y - 18, { count: 10, colors: ['#fffbe8', '#ecd690', '#ffffff'], speed: [60, 180], life: [0.15, 0.35] });
+    world.shake(4, 0.15);
+    Sound.play('swordStab');
   }
 
   // ---------- phase 2: the trumpet ----------
@@ -338,11 +454,11 @@ class RoyalPrince {
       const speed = c.speed * (stab ? 1.25 : rand(0.85, 1.1));
       world.enemyProjectiles.push(new Projectile({
         x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, radius: 5, damage: c.damage, life: c.life, friendly: false,
-        glow: '255, 140, 50', trail: ['#ffd34a', '#ff8a1e', '#e0461e'],
+        glow: '255, 60, 40', trail: ['#ff3a26', '#c81a1a', '#8a0c12'],
         // a small licking flame, not a fireball: drawn here, flickering and shrinking as it flies
         aura: (ctx, p) => {
           const k = 1 - p.age / c.life;
-          PFX.flame(ctx, p.x, p.y + 4, 6 + 3 * k, 9 + 7 * k, p.age * 18 + i, FIRE_COLORS);
+          PFX.flame(ctx, p.x, p.y + 4, 6 + 3 * k, 9 + 7 * k, p.age * 18 + i, ENEMY_FIRE_COLORS);
         },
         onHit: (pr, w, t) => {
           if (t) t.burn?.(c.burnDps, c.burnTime, w);
@@ -493,6 +609,11 @@ class RoyalPrince {
     if (this.state === 'dashWindup' && this.dashEnd) {
       Telegraph.line(ctx, this.x, this.y, this.dashEnd.x, this.dashEnd.y, this.cfg.dash.width, this.t / this.windup);
     }
+    // each stab of his flurry is called out down its whole length before it lands
+    if (this.state === 'combo' && this.stabbing && this.stabEnd) {
+      const c = this.cfg.combo;
+      Telegraph.line(ctx, this.x, this.y, this.stabEnd.x, this.stabEnd.y, c.stabWidth, this.t / c.stabWindup);
+    }
   }
 
   /** Before the ride begins he's still in the stable (not yet in the yard). */
@@ -547,7 +668,10 @@ class RoyalPrince {
     ctx.restore();
     ctx.save();
     ctx.translate(Math.round(x), Math.round(y));
-    ctx.scale(S, S);
+    // his pose, tipped round his feet: leaning into blows and dashes, crouched to spring, hunched when winded
+    const pose = at || this.intro > 0 ? { lean: 0, squash: 0 } : this.pose();
+    ctx.rotate(f * pose.lean);
+    ctx.scale(S * (1 + pose.squash * 0.6), S * (1 - pose.squash));
     if (pos.seated) {
       // in the saddle: only the top half shows above the horse's back
       ctx.beginPath();
@@ -567,12 +691,20 @@ class RoyalPrince {
         drawRotated(ctx, T.img, f * 4, hy - 8, T.pivotX, T.pivotY, a, Math.cos(a) < 0);
       } else {
         const R = Sprites.weapons.rapier;
-        let a;
-        if (this.intro > 0) a = pos.seated ? (f > 0 ? -1.1 : Math.PI + 1.1) : (f > 0 ? -0.35 : Math.PI + 0.35);
-        else if (this.state === 'dash' || this.state === 'dashWindup') a = this.aim + (f > 0 ? -0.5 : 0.5);
-        else if (this.state === 'combo') a = this.aim + (this.stabbing ? 0 : (this.cut % 2 ? 0.8 : -0.7) * f);
-        else a = f > 0 ? -0.35 : Math.PI + 0.35;
-        drawRotated(ctx, R.img, f * 8, hy + 4, R.pivotX, R.pivotY, a, Math.cos(a) < 0);
+        const { a, reach } = at ? { a: f > 0 ? -0.35 : Math.PI + 0.35, reach: 0 } : this.swordPose(pos, f);
+        const wx = f * 8 + Math.cos(a) * reach;
+        const wy = hy + 4 + Math.sin(a) * reach;
+        drawRotated(ctx, R.img, wx, wy, R.pivotX, R.pivotY, a, Math.cos(a) < 0);
+        if (!at && this.state === 'combo' && this.stabbing) {
+          // a glint flickering on the point as he draws back for a stab
+          const tx = wx + Math.cos(a) * 24;
+          const ty = wy + Math.sin(a) * 24;
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          PFX.glow(ctx, tx, ty, 8, '255, 120, 100', 0.8);
+          PFX.star(ctx, tx, ty, Math.floor(this.time * 16) % 2 ? 3 : 2, '#fffbe8', '#ffffff', 1);
+          ctx.restore();
+        }
         if (this.blazing) {
           // the blade alight: flames licking up its length, and a hot glow round it
           const ca = Math.cos(a);
@@ -583,7 +715,7 @@ class RoyalPrince {
           ctx.restore();
           for (let i = 0; i < 4; i++) {
             const k = 8 + i * 8;
-            PFX.flame(ctx, f * 8 + ca * k, hy + 4 + sa * k, 5, 7 + (i % 2) * 3 + Math.sin(this.time * 13 + i) * 2, this.time * 10 + i * 1.7, FIRE_COLORS, 1);
+            PFX.flame(ctx, f * 8 + ca * k, hy + 4 + sa * k, 5, 7 + (i % 2) * 3 + Math.sin(this.time * 13 + i) * 2, this.time * 10 + i * 1.7, ENEMY_FIRE_COLORS, 1);
           }
         }
       }

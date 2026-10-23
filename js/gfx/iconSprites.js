@@ -118,8 +118,8 @@ function buildIconSprites() {
     },
     ranger: {
       primary: icon((p) => arrow(p, 4, 24, 21, 7, { fletch: FLETCH })),
-      // camo leaf
-      secondary: icon((p) => {
+      // F: camo leaf
+      f: icon((p) => {
         p.poly([[4, 24], [6, 10], [14, 3], [24, 4], [22, 14], [14, 22]], '#4f6a45');
         p.poly([[6, 22], [8, 11], [14, 5], [22, 6], [20, 13], [13, 20]], '#88a446');
         p.line(4, 24, 20, 8, '#3a5030', 1);
@@ -131,7 +131,7 @@ function buildIconSprites() {
         arrow(p, 8, 25, 24, 11, { head: '#a8cc6a', fletch: FLETCH });
       }),
       // fire arrow over ice arrow
-      f: icon((p) => {
+      secondary: icon((p) => {
         arrow(p, 3, 11, 19, 3, { head: '#ff8a1e', shaft: L[4], fletch: '#ffd34a' });
         flame(p, 22, 6, 3);
         arrow(p, 3, 25, 19, 17, { head: '#9ad0ff', shaft: L[4], fletch: '#e6f6ff' });

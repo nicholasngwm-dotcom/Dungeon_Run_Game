@@ -71,7 +71,11 @@ class Rogue extends Player {
     if (!target.dead || !this.marks.has(target)) return;
     const live = this.marks.get(target) > world.time;
     this.marks.delete(target);
-    if (!live) return;
+    if (live) this.resetStrike(world, target);
+  }
+
+  /** Swift strike is ready again at once: a marked enemy died, or the strike itself killed one. */
+  resetStrike(world, target) {
     this.cooldowns.secondary = 0;
     world.effects.text(this.hx, this.hy - 30, 'STRIKE RESET', { color: '#ff6060', size: 7 });
     world.effects.burst(target.hx, target.hy, { count: 14, colors: ['#ff6060', '#ffffff', '#9a2230'], speed: [60, 180], life: [0.2, 0.45] });
@@ -242,7 +246,8 @@ class Rogue extends Player {
       d.hit.add(t);
       const wounded = t.hp / t.maxHp < c.bleedBelow;
       world.damageTarget(t, c.damage, { angle: d.angle, knockback: 200 });
-      if (!t.dead) this.marks.set(t, world.time + c.markDuration);
+      if (t.dead) this.resetStrike(world, t);   // cut down by the strike itself: ready again
+      else this.marks.set(t, world.time + c.markDuration);
       if (wounded && !t.dead) {
         world.addDot(t, c.bleedDps, c.bleedDuration, undefined, 'bleed');
         world.effects.text(t.hx, t.hy - 34, 'BLEED', { color: '#ff6060', size: 7 });
@@ -293,6 +298,13 @@ class Rogue extends Player {
     world.shake(3, 0.1);
     Sound.play('parry');
     return 0;
+  }
+
+  /** Energy per slot (LMB is free while the storm is readied; F does nothing then). */
+  abilityCost(slot) {
+    const c = this.cfg;
+    const ready = this.stormReady || this.storm;
+    return { primary: ready ? 0 : c.dagger.cost, secondary: c.strike.cost, f: ready ? 0 : c.storm.cost }[slot] || 0;
   }
 
   // ---------- F: dagger storm ----------

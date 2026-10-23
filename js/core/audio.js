@@ -276,6 +276,112 @@ const SFX = {
     s.tone({ type: 'square', freq: 120, to: 30, dur: 0.35, vol: 0.18 });
   },
 
+  // --- Baker ---
+  // a cake lobbed: a soft whoosh
+  cakeThrow: (s) => s.whoosh({ from: 300, to: s.vary(1400), dur: 0.16, vol: 0.22, q: 0.9, swell: 0.4 }),
+  // SPLAT: a wet slap and a squelch
+  cakeSplat: (s) => {
+    const p = s.vary(1, 0.12);
+    s.layer({ src: 'noise', dur: 0.12, vol: 0.3, filter: 'lowpass', ffreq: 1800 * p, fto: 300 });
+    s.layer({ src: 'sine', freq: 260 * p, to: 70, dur: 0.14, vol: 0.25 });
+    s.layer({ src: 'sine', freq: 520 * p, to: 180, dur: 0.1, vol: 0.08, delay: 0.06, vib: 40, vibRate: 30 });
+  },
+  // flour bursting out: a big soft poof
+  flourPoof: (s) => {
+    s.layer({ src: 'noise', dur: 0.5, attack: 0.02, vol: 0.32, filter: 'lowpass', ffreq: 900, fto: 200, wet: 0.3 });
+    s.layer({ src: 'noise', dur: 0.25, vol: 0.08, filter: 'highpass', ffreq: 3000 });
+  },
+  // pastries ready: a cheerful little bell
+  pastryReady: (s) => [1568, 2093].forEach((f, i) => s.layer({ src: 'sine', freq: f, dur: 0.3, vol: 0.06, delay: i * 0.08, wet: 0.3 })),
+  // pastries tossed: a flurry of soft whooshes
+  pastryToss: (s) => [0, 0.06, 0.12, 0.18].forEach((d) => s.whoosh({ from: 500, to: s.vary(1800), dur: 0.12, vol: 0.12, delay: d })),
+  // a pastry eaten: a crunchy nom and a sparkle
+  pastryEat: (s) => {
+    s.layer({ src: 'noise', dur: 0.06, vol: 0.2, filter: 'bandpass', ffreq: 2400, q: 2 });
+    s.layer({ src: 'noise', dur: 0.06, vol: 0.16, delay: 0.09, filter: 'bandpass', ffreq: 2000, q: 2 });
+    [1319, 1760, 2637].forEach((f, i) => s.layer({ src: 'sine', freq: f, dur: 0.2, vol: 0.05, delay: 0.15 + i * 0.05, wet: 0.3 }));
+  },
+  // the oven set down: a heavy clank and the door rattling
+  ovenPlace: (s) => {
+    s.layer({ src: 'sine', freq: 110, to: 50, dur: 0.18, vol: 0.35 });
+    s.ring({ freq: 900, dur: 0.3, vol: 0.05, delay: 0.02 });
+    s.layer({ src: 'square', freq: 180, to: 120, dur: 0.05, vol: 0.05, delay: 0.12, filter: 'lowpass', ffreq: 1000 });
+  },
+  // a shot clanging off the oven
+  ovenHit: (s) => s.ring({ freq: s.vary(1200), dur: 0.2, vol: 0.06 }),
+  // the oven's fuse ticking down: a kitchen-timer tick
+  ovenTick: (s) => s.layer({ src: 'square', freq: 2400, dur: 0.025, vol: 0.04, filter: 'highpass', ffreq: 1500 }),
+  // put away quietly: a kitchen-timer ding
+  ovenDing: (s) => s.ring({ freq: 2093, dur: 0.6, vol: 0.08, wet: 0.3 }),
+  // the oven blowing up
+  ovenBoom: (s) => {
+    s.layer({ src: 'brown', dur: 0.9, vol: 0.6, filter: 'lowpass', ffreq: 1600, fto: 70, wet: 0.35 });
+    s.layer({ src: 'sine', freq: 90, to: 28, dur: 0.6, vol: 0.4 });
+    s.ring({ freq: 700, dur: 0.6, vol: 0.06, delay: 0.05 });
+    s.ring({ freq: 2093, dur: 0.5, vol: 0.05, delay: 0.25 });
+  },
+  // the mega cake coming down: a long falling whistle
+  megaCakeFall: (s) => s.layer({ src: 'sine', freq: 2200, to: 500, dur: 1.1, attack: 0.1, vol: 0.08, wet: 0.2 }),
+  // SQUASH: an enormous soft thud and a wobble
+  megaCakeSlam: (s) => {
+    s.layer({ src: 'brown', dur: 0.8, vol: 0.7, filter: 'lowpass', ffreq: 700, fto: 50, wet: 0.4 });
+    s.layer({ src: 'sine', freq: 70, to: 25, dur: 0.7, vol: 0.5 });
+    s.layer({ src: 'sine', freq: 180, to: 140, dur: 0.6, vol: 0.12, delay: 0.1, vib: 30, vibRate: 12 });
+    s.layer({ src: 'noise', dur: 0.25, vol: 0.25, filter: 'lowpass', ffreq: 1500, fto: 300 });
+  },
+
+  // --- Rocketeer ---
+  // a rocket leaving the tube: a hollow thump and a hissing rush away
+  rocketLaunch: (s) => {
+    const p = s.vary(1, 0.08);
+    s.layer({ src: 'sine', freq: 140 * p, to: 50, dur: 0.14, vol: 0.3 });
+    s.layer({ src: 'noise', dur: 0.32, attack: 0.02, vol: 0.22, filter: 'bandpass', ffreq: 900 * p, fto: 3600, q: 0.8, wet: 0.15 });
+    s.layer({ src: 'noise', dur: 0.08, vol: 0.12, filter: 'highpass', ffreq: 5000 });
+  },
+  // its blast: a crack, a deep boom and debris rattling down
+  rocketBoom: (s) => {
+    const p = s.vary(1, 0.1);
+    s.layer({ src: 'noise', dur: 0.08, vol: 0.35, filter: 'highpass', ffreq: 2500, drive: 3 });
+    s.layer({ src: 'brown', dur: 0.6, attack: 0.005, vol: 0.55, filter: 'lowpass', ffreq: 1600 * p, fto: 90, wet: 0.3 });
+    s.layer({ src: 'sine', freq: 90 * p, to: 32, dur: 0.45, vol: 0.4 });
+    s.layer({ src: 'noise', dur: 0.3, vol: 0.05, delay: 0.12, filter: 'bandpass', ffreq: 3000, q: 2 });
+  },
+  // a rocket slid into the launcher: a metal clunk and a click
+  rocketReload: (s) => {
+    s.layer({ src: 'square', freq: 220, to: 140, dur: 0.05, vol: 0.06, filter: 'lowpass', ffreq: 1200 });
+    s.layer({ src: 'noise', dur: 0.03, vol: 0.12, delay: 0.07, filter: 'highpass', ffreq: 4000 });
+    s.ring({ freq: 1800, dur: 0.12, vol: 0.02, delay: 0.07 });
+  },
+  // winding up the rocket jump: a rising whine
+  jumpCharge: (s) => {
+    s.layer({ src: 'sawtooth', freq: 160, to: 520, dur: 0.8, attack: 0.1, vol: 0.05, filter: 'lowpass', ffreq: 900, fto: 2400 });
+  },
+  // the rocket jump: a boom underfoot and the whoosh of him flying off
+  rocketJump: (s) => {
+    s.layer({ src: 'brown', dur: 0.45, vol: 0.45, filter: 'lowpass', ffreq: 1400, fto: 100, wet: 0.2 });
+    s.layer({ src: 'sine', freq: 110, to: 40, dur: 0.3, vol: 0.35 });
+    s.whoosh({ from: 400, to: 2600, dur: 0.4, vol: 0.3, q: 1, swell: 0.5 });
+  },
+  // the ammo pack dropped and torn open: a thud, then rockets clacking in
+  ammoPack: (s) => {
+    s.layer({ src: 'sine', freq: 120, to: 60, dur: 0.12, vol: 0.3 });
+    [0.1, 0.17, 0.24, 0.31].forEach((d) => s.layer({ src: 'square', freq: 260, to: 150, dur: 0.04, vol: 0.05, delay: d, filter: 'lowpass', ffreq: 1400 }));
+    s.ring({ freq: 1400, dur: 0.2, vol: 0.03, delay: 0.33 });
+  },
+  // the IBFR lighting up: a long, unsteady roar
+  ibfrLaunch: (s) => {
+    s.layer({ src: 'brown', dur: 1.4, attack: 0.1, vol: 0.5, filter: 'lowpass', ffreq: 500, fto: 1400, wet: 0.3 });
+    s.layer({ src: 'sawtooth', freq: 70, to: 140, dur: 1.2, vol: 0.08, vib: 12, vibRate: 9, filter: 'lowpass', ffreq: 600 });
+    s.layer({ src: 'noise', dur: 1.2, attack: 0.2, vol: 0.12, filter: 'bandpass', ffreq: 1800, q: 0.7 });
+  },
+  // the IBFR going off: an enormous boom rolling round the room
+  ibfrBoom: (s) => {
+    s.layer({ src: 'noise', dur: 0.15, vol: 0.45, filter: 'highpass', ffreq: 1800, drive: 4 });
+    s.layer({ src: 'brown', dur: 2, attack: 0.01, vol: 0.8, filter: 'lowpass', ffreq: 2000, fto: 50, wet: 0.5, drive: 2 });
+    s.layer({ src: 'sine', freq: 70, to: 22, dur: 1.4, vol: 0.55 });
+    s.layer({ src: 'noise', dur: 1, vol: 0.08, delay: 0.3, filter: 'bandpass', ffreq: 2500, q: 1.5, wet: 0.4 });
+  },
+
   // --- Rogue ---
   dagger: (s) => s.noise({ dur: 0.06, vol: 0.18, filter: 'highpass', freq: 4000, to: 2000 }),
   dash: (s) => {

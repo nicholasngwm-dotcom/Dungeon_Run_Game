@@ -27,9 +27,11 @@ class Projectile {
       fx: null,            // fn(projectile, dt, world) each step, for extra trail effects (visual only)
       aura: null,          // fn(ctx, projectile) drawn under the sprite (flames, frost...)
       upright: false,      // keep the sprite upright (music notes) instead of turning it to the flight
+      scale: 1,            // draw the sprite this much bigger (the hitbox stays `radius`)
       hitSet: null,        // share one with sibling shots so each target is only hit once by the whole volley
       hitSound: 'hit',
       fromUlt: false,      // damage from an ultimate doesn't charge the ultimate
+      crit: null,          // true / false: this shot's crit is already decided (null: roll on each hit)
       owner: Projectile.actor, // hero who fired it (null for enemy shots)
     }, opts);
     if (!this.friendly) this.damage *= Projectile.enemyScale;
@@ -86,7 +88,7 @@ class Projectile {
       this.hitSet.add(t);
       if (this.damage > 0) {
         world.damageTarget(t, this.damage, {
-          angle: Math.atan2(this.vy, this.vx), knockback: this.knockback, sound: this.hitSound, fromUlt: this.fromUlt,
+          angle: Math.atan2(this.vy, this.vx), knockback: this.knockback, sound: this.hitSound, fromUlt: this.fromUlt, crit: this.crit,
         });
       }
       if (this.onStrike) this.onStrike(this, world, t);
@@ -134,7 +136,12 @@ class Projectile {
     if (this.aura) this.aura(ctx, this);
     if (this.sprite) {
       const angle = this.upright ? 0 : this.spin ? this.age * this.spin : Math.atan2(this.vy, this.vx);
-      drawRotated(ctx, this.sprite, this.x, this.y, this.sprite.width / 2, this.sprite.height / 2, angle);
+      if (this.scale === 1) return drawRotated(ctx, this.sprite, this.x, this.y, this.sprite.width / 2, this.sprite.height / 2, angle);
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.scale(this.scale, this.scale);
+      drawRotated(ctx, this.sprite, 0, 0, this.sprite.width / 2, this.sprite.height / 2, angle);
+      ctx.restore();
     }
   }
 }

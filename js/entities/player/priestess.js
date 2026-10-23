@@ -1,6 +1,6 @@
 // Priestess: spends light orbs (no regen; marked enemies drop more).
 // LMB ray of light at the cursor, RMB light missiles that mark enemies,
-// E healing rune, F guardian aegis (LMB ally / RMB self), Q charged light bomb.
+// E healing rune at her feet, F guardian aegis (LMB ally / RMB self), Q charged light bomb.
 
 // pixel effect colours: holy gold and white, with her blue and a healing green
 const PRIESTESS_FX = {
@@ -62,7 +62,6 @@ class Priestess extends Player {
     this.marks = new Map();     // missile marks: target -> world.time the mark expires
     this.runes = [];
     this.choosingAegis = false; // F pressed: LMB ally, RMB self
-    this.placingRune = false;   // E pressed: LMB places the rune, RMB cancels
     this.bomb = null;           // charging the Q: { t }
     this.bombs = [];            // thrown bombs in flight
   }
@@ -80,11 +79,6 @@ class Priestess extends Player {
 
   handleMouse(world) {
     const m = Input.mouse;
-    if (this.placingRune) {
-      if (m.rightPressed) this.placingRune = false;
-      else if (m.leftPressed) this.placeRune(world);
-      return;
-    }
     if (this.choosingAegis) {
       if (m.leftPressed) this.castAegis(world, this.allyAtCursor(world));
       else if (m.rightPressed) this.castAegis(world, this);
@@ -207,7 +201,9 @@ class Priestess extends Player {
   onDamageDealt(target, dmg, world) {
     const until = this.marks.get(target);
     if (!(until > world.time)) return;
-    if (Math.random() < this.cfg.passive.orbChance) {
+    // killing a marked enemy always shakes loose a light orb; other hits on it only sometimes do
+    if (target.dead) this.marks.delete(target);
+    if (target.dead || Math.random() < this.cfg.passive.orbChance) {
       world.pickups.push(new LightPickup(target.x + rand(-10, 10), target.y + rand(-6, 6)));
     }
   }
@@ -220,23 +216,13 @@ class Priestess extends Player {
 
   // ---------- E: rune of healing ----------
 
-  /** E starts placing the rune (E again cancels); light is only spent once it's placed. */
+  /** E lays the rune down at her feet straight away (it stays where it was cast). */
   abilityE(world) {
     const c = this.cfg.rune;
-    if (this.placingRune) { this.placingRune = false; Sound.play('uiClick'); return; }
-    if (this.resource.value < c.cost) { this.spend(c.cost, world); return; }
-    this.placingRune = true;
-    this.choosingAegis = false;
-    Sound.play('aim');
-  }
-
-  placeRune(world) {
-    const c = this.cfg.rune;
-    this.placingRune = false;
-    this.cooldowns.primary = 0.25; // so the placing click doesn't also cast a ray
     if (!this.spend(c.cost, world)) return;
     this.cooldowns.e = c.cooldown;
-    const pt = this.aimPoint(world, c.maxRange);
+    this.choosingAegis = false;
+    const pt = { x: this.x, y: this.y };
     this.runes.push({ x: pt.x, y: pt.y, t: 0 });
     world.effects.burst(pt.x, pt.y, { count: 18, colors: ['#9cf0a0', '#ffe680', '#ffffff'], speed: [30, 110], life: [0.3, 0.6], up: 40 });
     // a ring of light settling down onto the rune
@@ -294,9 +280,8 @@ class Priestess extends Player {
 
   /** F opens the choice (F again cancels); LMB shields the ally at the cursor, RMB yourself. */
   abilityF(world) {
-    if (!this.choosingAegis && this.resource.value < this.cfg.aegis.cost) { this.spend(this.cfg.aegis.cost, world); return; }
+    if (!this.choosingAegis && !this.canAfford('f')) { this.spend(this.cfg.aegis.cost, world); return; }
     this.choosingAegis = !this.choosingAegis;
-    this.placingRune = false;
     Sound.play(this.choosingAegis ? 'aim' : 'uiClick');
   }
 
@@ -319,7 +304,8 @@ class Priestess extends Player {
     this.cooldowns.primary = 0.25; // so the choosing click doesn't also cast a ray
     if (!this.spend(c.cost, world)) return;
     this.cooldowns.f = c.cooldown;
-    target.applyAegis(c.hp, c.duration, world);
+    // a teammate gets the stronger shield; on herself it's a lighter one
+    target.applyAegis(target === this ? c.selfHp : c.allyHp, c.duration, world);
     Sound.play('aegis');
   }
 
@@ -328,7 +314,6 @@ class Priestess extends Player {
   ultimate(world) {
     this.bomb = { t: 0 };
     this.choosingAegis = false;
-    this.placingRune = false;
     world.effects.text(this.hx, this.hy - 34, 'CHARGING', { color: '#ffe680', size: 8 });
     Sound.play('lightCharge');
   }
@@ -448,11 +433,6 @@ class Priestess extends Player {
 
   drawGroundExtras(ctx) {
     for (const r of this.runes) this.drawRune(ctx, r);
-    if (this.placingRune && this.world && this.isLocal) {
-      // preview: the rune, pulsing where it would land
-      const pt = this.aimPoint(this.world, this.cfg.rune.maxRange);
-      this.drawRune(ctx, { x: pt.x, y: pt.y, t: 1 + (this.animTime % 1) }, 0.55 + Math.sin(this.animTime * 8) * 0.15);
-    }
     for (const r of this.rays) {
       PFX.zone(ctx, r.x, r.y, this.cfg.ray.radius, r.t / this.cfg.ray.delay, PRIESTESS_FX.gold, { spin: r.t * 3 });
     }
@@ -559,12 +539,15 @@ class Priestess extends Player {
     ctx.restore();
   }
 
-  /** Ability outlines while a key is held: where the rune goes, who gets the aegis, the light bomb's blast. */
+  /** Light orbs per slot (F while choosing only cancels). */
+  abilityCost(slot) {
+    if (slot === 'e') return this.cfg.rune.cost;
+    if (slot === 'f') return this.choosingAegis ? 0 : this.cfg.aegis.cost;
+    return 0;
+  }
+
+  /** Ability outlines while a key is held: who gets the aegis, the light bomb's blast (the rune casts on the press). */
   abilityPreview(slot) {
-    if (slot === 'e') {
-      const pt = this.aimPoint(this.world, this.cfg.rune.maxRange);
-      return { circle: { x: pt.x, y: pt.y, r: this.cfg.rune.radius, sy: MAGIC_CIRCLE_SY } };
-    }
     if (slot === 'f') {
       const a = this.world ? this.allyAtCursor(this.world) : this;
       return { circle: { x: a.x, y: a.y + 4, r: 24, sy: 0.5 } };

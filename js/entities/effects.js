@@ -7,6 +7,8 @@ const PIXEL_FONT = 'Alagard, monospace';
 const SMOKE_COLORS = ['#1c1c26', '#3e3e52', '#62627c'];
 const ICE_COLORS = ['#4a8aff', '#9ad0ff', '#e6f6ff', '#ffffff'];
 const FIRE_COLORS = ['#a8200e', '#e0461e', '#ff8a1e', '#ffd34a', '#fff6c8'];
+// enemy fire burns a deep blood red, so it never looks like the heroes' orange-gold flames on the floor
+const ENEMY_FIRE_COLORS = ['#4a0408', '#8a0c12', '#c81a1a', '#ff3a26', '#ff9a80'];
 
 /**
  * Canvas text font for a size on the game's old 8px-grid scale (5 = smallest

@@ -1,12 +1,11 @@
-// Knight (class id 'warrior'): LMB slash-slash-stab combo, RMB (hold) carried barrier shield,
-// E spin attack, F stunning charge, Q world-cutting slash.
+// Knight (class id 'warrior'): LMB side-to-side sword swings, RMB (hold) carried barrier shield
+// (also stops ground shockwaves), E spin attack, F stunning charge, Q world-cutting slash.
 
 // pixel effect colours, outer edge first: steel and white with the knight's red and gold
 const KNIGHT_FX = {
   slash: ['#ffffff', '#e4e7ee', '#adb2c0', '#cc5046'],
   slashGlow: ['#6a7290', '#7c1f2a'],   // soft underlay behind slashes ('lighter')
   flare: '#fff2a0',
-  thrust: ['#adb2c0', '#e4e7ee', '#ffffff'],
   cleave: ['#a07a24', '#dcb44c', '#fbe796', '#ffffff'],
   sparks: ['#ffffff', '#e4e7ee', '#cc5046'],
   lane: '225, 230, 245',
@@ -29,11 +28,8 @@ class Warrior extends Player {
     };
     this.icons = { primary: 'COMBO', secondary: 'SHIELD', e: 'SPIN', f: 'CHARGE', q: 'CLEAVE' };
     this.swingTime = 0;
-    this.swingDir = 1;
-    this.comboStep = 0;
-    this.comboTimer = 0;
-    this.stab = null;      // short lunge on the 3rd hit
-    this.bash = null;      // shield bash lunge in progress
+    this.swingDir = 1;     // which way the next swing sweeps (flips every swing)
+    this.bash = null;     // shield bash lunge in progress
     this.bashCooldown = 0;
     this.barrier = new KnightBarrier(this); // carried shield wall, raised with RMB
     this.spin = null;
@@ -54,23 +50,12 @@ class Warrior extends Player {
     return 1;
   }
 
-  // ---------- LMB: combo ----------
+  // ---------- LMB: sword swings ----------
 
+  /** Each swing sweeps the blade across the other way: left to right, then back. */
   primary(world) {
-    const c = this.cfg.combo;
-    if (this.comboTimer <= 0) this.comboStep = 0;
-    this.comboTimer = c.resetTime;
-    if (this.comboStep < 2) {
-      this.slash(world);
-      this.cooldowns.primary = c.cooldown;
-      this.maxCooldowns.primary = c.cooldown;
-      this.comboStep++;
-    } else {
-      this.stabAttack(world);
-      this.cooldowns.primary = c.stabCooldown;
-      this.maxCooldowns.primary = c.stabCooldown;
-      this.comboStep = 0;
-    }
+    this.cooldowns.primary = this.cfg.combo.cooldown;
+    this.slash(world);
   }
 
   slash(world) {
@@ -101,9 +86,10 @@ class Warrior extends Player {
   /**
    * The combo slash at t (0..1 of SLASH_FX_LIFE). The crescent's bright outer
    * edge sits on the hit range and sweeps the full hit arc in step with the
-   * blade, then its tail chases the head and it burns out.
+   * blade, then its tail chases the head and it burns out. pal: colours (the
+   * knight's steel by default; the Prince passes his gold).
    */
-  static drawSlashFx(ctx, px, py, aim, arc, range, dir, t) {
+  static drawSlashFx(ctx, px, py, aim, arc, range, dir, t, pal = KNIGHT_FX) {
     const sweep = SWING_TIME / SLASH_FX_LIFE;                // the blade's share of the effect
     const u = Math.min(1, t / sweep);
     const start = aim - (arc / 2) * dir;
@@ -114,10 +100,10 @@ class Warrior extends Player {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = 0.45 * fade;
-    PFX.slash(ctx, px, py, range + 2, tail, head, width * 1.7, KNIGHT_FX.slashGlow, 2, true);
+    PFX.slash(ctx, px, py, range + 2, tail, head, width * 1.7, pal.slashGlow, 2, true);
     ctx.globalCompositeOperation = 'source-over';   // solid crescent, so overlapping chunks don't blow out
     ctx.globalAlpha = fade;
-    PFX.slash(ctx, px, py, range, tail, head, width, KNIGHT_FX.slash, 2, true);
+    PFX.slash(ctx, px, py, range, tail, head, width, pal.slash, 2, true);
     ctx.globalCompositeOperation = 'lighter';
     // speed lines just outside the edge, and a flare riding the leading tip
     ctx.globalAlpha = 0.6 * fade;
@@ -127,7 +113,7 @@ class Warrior extends Player {
       const hx = px + Math.cos(head) * (range - 4);
       const hy = py + Math.sin(head) * (range - 4);
       PFX.glow(ctx, hx, hy, 10, '255, 242, 160', 0.9);
-      PFX.star(ctx, hx, hy, 4, KNIGHT_FX.flare, '#ffffff', 2);
+      PFX.star(ctx, hx, hy, 4, pal.flare, '#ffffff', 2);
     }
     ctx.restore();
   }
@@ -145,18 +131,6 @@ class Warrior extends Player {
       ctx.restore();
     });
     world.effects.burst(x, y, { count: 7, colors: KNIGHT_FX.sparks, speed: [90, 200], life: [0.12, 0.28], size: [2, 3], angle, spread: 1.2 });
-  }
-
-  stabAttack(world) {
-    const c = this.cfg.combo;
-    this.stab = { t: 0, angle: this.aim };
-    this.busy = 0.12;
-    const x1 = this.pivotX;
-    const y1 = this.pivotY;
-    this.hitLine(world, x1, y1, this.aim, c.stabRange, c.stabWidth, c.stabDamage, { knockback: c.stabKnockback });
-    this.lineFx(world, x1, y1, this.aim, c.stabRange, c.stabWidth, KNIGHT_FX.thrust, 0.2);
-    world.shake(3, 0.1);
-    Sound.play('swordStab');
   }
 
   // ---------- RMB (hold): carried barrier shield ----------
@@ -191,7 +165,7 @@ class Warrior extends Player {
   get extraSlots() {
     return [{
       after: 'secondary', key: 'RMB+LMB', name: 'BASH', cd: this.bashCooldown, max: this.cfg.bash.cooldown,
-      icon: Sprites.icons.warrior.bash,
+      icon: Sprites.icons.warrior.bash, guide: 'bash',
     }];
   }
 
@@ -414,13 +388,6 @@ class Warrior extends Player {
   updateAbility(dt, world) {
     this.updateChargeCharges(dt);
     this.swingTime -= dt;
-    this.comboTimer -= dt;
-    if (this.stab) {
-      this.stab.t += dt;
-      const speed = this.cfg.combo.stabLunge / 0.12;
-      if (this.stab.t < 0.12) world.dungeon.move(this, Math.cos(this.stab.angle) * speed * dt, Math.sin(this.stab.angle) * speed * dt);
-      else this.stab = null;
-    }
     if (this.spin) this.updateSpin(dt, world);
     if (this.charge) this.updateCharge(dt, world);
     if (this.cleave) this.updateCleave(dt, world);
@@ -452,9 +419,24 @@ class Warrior extends Player {
 
   get tankerReady() { return this.hitsTaken >= this.cfg.passive.hits; }
 
-  /** Enemy bodies bump off the armour: contact hits do less damage. */
+  /**
+   * Enemy bodies bump off the armour: contact hits do less damage. A ground shockwave
+   * rolling at the raised shield from the front breaks on it (the shield soaks the hit).
+   */
   absorb(amount, world, fromX, fromY, opts) {
+    if (opts.shockwave && this.blocksShockwave(fromX, fromY)) {
+      this.barrier.absorb(amount, world, this.barrier.x, this.barrier.hy);
+      world.effects.text(this.barrier.x, this.barrier.hy - 30, 'BLOCKED', { color: '#e4e7ee', size: 7 });
+      return 0;
+    }
     return opts.contact ? amount * (1 - this.cfg.passive.contactReduction) : amount;
+  }
+
+  /** True while the shield is up and facing a shockwave coming from (x, y). */
+  blocksShockwave(x, y) {
+    if (!this.barrier.raised || x === undefined) return false;
+    const arc = this.cfg.barrier.shockwaveArc * DEG;
+    return Math.abs(angleDiff(this.aim, angleTo(this.x, this.y, x, y))) <= arc / 2;
   }
 
   onHitTaken() {
@@ -567,15 +549,9 @@ class Warrior extends Player {
     return null;
   }
 
-  get weaponReach() {
-    if (this.stab) return 26;
-    return 10;
-  }
-
   weaponAngle() {
     if (this.spin) return this.spin.t * 22;
     if (this.charge) return this.charge.angle;
-    if (this.stab) return this.stab.angle;
     if (this.cleave) return -Math.PI / 2 + 0.3 * this.facing;
     if (this.swingTime > 0) {
       // follows the slash effect across the same arc

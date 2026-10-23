@@ -23,7 +23,7 @@ VS Code Live Server.
 | `index.html?lobby&class=rogue` | Start in the lobby as the Rogue |
 | `index.html?run=graveyard&class=mage` | Start a Graveyard set-dungeon run (`run=random` for random mode, `&stage=2` or `3` to skip ahead) |
 
-Class ids in the URL are `warrior` (Knight), `ranger` (Archer), `mage`, `rogue` and `priestess`.
+Class ids in the URL are `warrior` (Knight), `ranger` (Archer), `mage`, `rogue`, `priestess`, `bard`, `rocketeer` and `baker`.
 
 ## Lobby
 
@@ -143,7 +143,8 @@ js/
   config.js             ALL balance numbers (HP, damage, cooldowns, waves, boss)
   main.js               entry point, screen flow, main loop
   core/                 utils, settings (saved), input (key bindings), audio (SFX + music), camera
-  gfx/                  procedural pixel art: heroes, enemies, boss, items, tiles
+  gfx/                  procedural pixel art: heroes, enemies, boss, items, tiles,
+                        obstacleSprites.js (room walls and the rubble left when obstacles are blown up)
     heroes/             one file per hero + cute.js (the shared chibi style and 8-frame poses)
     enemies/            zombies, skeletons, spirits and casters in the same style (npcSprites.js too)
   world/dungeon.js      arena map, wall collision, torches
@@ -153,7 +154,7 @@ js/
     projectile.js       configurable projectile (homing, bouncing, piercing)
     effects.js          particles, damage numbers, attack telegraphs
     pickup.js           heart, mana, light and buff orb drops
-    player/             Player base + Knight (warrior.js), Archer (ranger.js), Mage, Rogue, Priestess
+    player/             Player base + Knight (warrior.js), Archer (ranger.js), Mage, Rogue, Priestess, Bard, Rocketeer, Baker
     enemies/            Enemy base + Zombie, Slime, Wraith, Skeleton, UndeadKnight,
                         Gravestone (raises zombies/skeletons), Ghost (slowing aura),
                         Mimic (tough lunging chest, drops regen/speed/power buffs),
@@ -168,7 +169,7 @@ js/
   net/net.js            peer-to-peer connections (PeerJS): host / join by room code
   net/session.js        multiplayer lockstep: input bundles, commands, scenes, desync checks
   game/upgrades.js      shop upgrades + the shop window
-  game/decor.js         dungeon set dressing (trees, lamps, crows, campfire, shop furniture)
+  game/decor.js         dungeon set dressing; everything standing in a room is a solid obstacle (FloorDecor.solidify)
 ```
 
 ## Tuning

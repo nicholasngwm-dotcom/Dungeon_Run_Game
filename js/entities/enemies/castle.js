@@ -454,12 +454,12 @@ class Catapult extends Enemy {
       const load = this.cluster ? [[-7, 2], [7, 2], [0, -5]] : [[0, 0]];   // a heap of burning shot, or one boulder
       for (const [dx, dy] of load) ctx.drawImage(img, Math.round(b.x + dx - img.width / 2), Math.round(b.y + dy - img.height / 2 - 4));
       ctx.globalAlpha = 1;
-      if (this.flaming && vrand(0, 1) < 0.5) PFX.flame(ctx, b.x, b.y - 8, 8, 12, this.animTime * 8, FIRE_COLORS);
+      if (this.flaming && vrand(0, 1) < 0.5) PFX.flame(ctx, b.x, b.y - 8, 8, 12, this.animTime * 8, ENEMY_FIRE_COLORS);
     }
     this.drawFrame(ctx, fr.base, this.anchor, alpha);
     if (this.flaming) {
       const bx = this.x + (6 - this.anchor.x) * this.facing;
-      PFX.flame(ctx, bx, this.y - 30, 8, 12, this.animTime * 8, FIRE_COLORS);
+      PFX.flame(ctx, bx, this.y - 30, 8, 12, this.animTime * 8, ENEMY_FIRE_COLORS);
     }
     this.drawHealthBar(ctx);
   }
@@ -482,7 +482,7 @@ class FlamingCatapult extends Catapult {
       x: at.x, y: at.y, r: c.fireRadius, life: c.fireTime, every: 0.25,
       tick: (w, x, y, r) => {
         for (const a of w.allies) if (dist(a.x, a.y, x, y) < r + a.radius * 0.5) a.burn?.(dps, c.burnTime, w);
-        if (vrand(0, 1) < 0.9) w.effects.flames(x + vrand(-r * 0.7, r * 0.7), y + vrand(-r * 0.35, r * 0.35), { count: 1, height: vrand(16, 26), width: vrand(8, 12), life: 0.5 });
+        if (vrand(0, 1) < 0.9) w.effects.flames(x + vrand(-r * 0.7, r * 0.7), y + vrand(-r * 0.35, r * 0.35), { count: 1, height: vrand(16, 26), width: vrand(8, 12), life: 0.5, colors: ENEMY_FIRE_COLORS });
       },
       draw: (ctx, x, y, r, t) => {
         const k = t < 0.85 ? 1 : (1 - t) / 0.15;
@@ -499,7 +499,7 @@ class FlamingCatapult extends Catapult {
         const secs = t * c.fireTime;
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        PFX.glow(ctx, x, y - 6, r * 1.05, '255, 110, 30', 0.55 * k * (0.85 + Math.sin(secs * 13) * 0.15), 2, r * 0.6);
+        PFX.glow(ctx, x, y - 6, r * 1.05, '255, 40, 30', 0.55 * k * (0.85 + Math.sin(secs * 13) * 0.15), 2, r * 0.6);
         ctx.restore();
         ctx.globalAlpha = k;
         for (let i = 0; i < 11; i++) {
@@ -508,11 +508,11 @@ class FlamingCatapult extends Catapult {
           const fx = x + Math.cos(a) * r * d;
           const fy = y + Math.sin(a) * r * 0.5 * d;
           const lick = 1 + Math.sin(secs * 7 + i * 2.3) * 0.25;
-          PFX.flame(ctx, fx, fy, 12, (16 + (i % 3) * 7) * lick, secs * 9 + i * 1.7, FIRE_COLORS);
+          PFX.flame(ctx, fx, fy, 12, (16 + (i % 3) * 7) * lick, secs * 9 + i * 1.7, ENEMY_FIRE_COLORS);
         }
         ctx.globalAlpha = 1;
       },
-      light: { r: c.fireRadius * 2.4, rgb: '255, 130, 50', s: 0.95 },
+      light: { r: c.fireRadius * 2.4, rgb: '255, 60, 50', s: 0.95 },
     });
   }
 }

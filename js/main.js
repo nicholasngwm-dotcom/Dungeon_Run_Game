@@ -37,8 +37,8 @@ const App = {
       ['Raising the dead...', () => { buildEnemySprites(); buildBossSprites(); buildPhantomSprites(); }],
       ['Sharpening the blades...', () => { buildItemSprites(); buildGraveyardSprites(); }],   // graveyard after the items: it adds to Sprites.projectiles
       ['Crowning the court...', () => { buildCastleSprites(); buildQueenSprites(); buildKingSprites(); buildRoyalSetPieces(); buildCastleDecor(); }],
-      ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); }],
-      ['Brewing potions...', () => { buildPotionSprites(); buildIconSprites(); }],
+      ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); buildObstacleSprites(); }],   // obstacles after the cover (they add to Sprites.cover)
+      ['Brewing potions...', () => { buildPotionSprites(); buildIconSprites(); buildRocketeerSprites(); buildBakerSprites(); }],   // the rocketeer's and baker's gear add to the weapons, items and icons
       ['Rehearsing the battles...', () => MenuShowcase.start(0)],
     ];
     const started = performance.now();
@@ -404,7 +404,7 @@ const App = {
   pause() {
     if (this.state !== 'playing') return;
     this.state = 'paused';
-    Menus.showPause(!!this.game.lobby, !!this.mp, !!(this.mp && this.mp.isHost));
+    Menus.showPause(!!this.game.lobby, !!this.mp, !!(this.mp && this.mp.isHost), this.game.localPlayer);
   },
 
   resume() {

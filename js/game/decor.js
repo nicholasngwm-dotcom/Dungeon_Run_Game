@@ -1,9 +1,26 @@
-// Set dressing for a dungeon floor: none of it blocks movement, it's there to
-// make rooms feel alive. Dead trees, soul-flame lamp posts, flickering
-// candles, coffins, bone piles, crows that take off when you get close, a
-// campfire in the start room, and barrels / crates / shelves / rugs in the
-// shop. Drifting mist rises around the hero. Placement happens once, inside the
-// shared simulation; the idle animation (crows, embers, mist) is visual only.
+// Set dressing for a dungeon floor. Everything standing in a room is a solid obstacle
+// (see solidify): dead trees, soul-flame lamp posts, coffins, urns, a campfire in
+// the start room, barrels / crates / shelves in the shop, the castle's braziers and
+// armour... Only flat things on the floor (rugs, rune circles) and the boss rooms'
+// doors and gates in the walls aren't. Drifting mist rises around the hero.
+// Placement happens once, inside the shared simulation; the idle animation
+// (embers, mist) is visual only.
+
+// Footprints of the solid decor: [width in tiles, material (its rubble), fixed (no blast moves it)].
+// Props ('prop' items) take their width from their sprite.
+const DECOR_SOLID = {
+  campfire: [1, 'stone'], signpost: [1, 'wood'], lampPost: [1, 'metal'], deadTree: [1, 'wood'], coffin: [2, 'wood'],
+  urn: [1, 'stone'], shelf: [3, 'wood'], barrel: [1, 'wood'], crate: [1, 'wood'], bottleStand: [1, 'wood'],
+  bottleCrate: [1, 'wood'], herbBasket: [1, 'plant'], crystal: [1, 'stone'], brazier: [1, 'metal'], armor: [1, 'metal'],
+  banner: [1, 'wood'], cage: [1, 'metal'], statue: [1, 'stone'], topiary: [1, 'plant'], roseBush: [1, 'plant'],
+  gardenBell: [3, 'metal', true], studyDesk: [3, 'wood', true],
+};
+// Flat on the floor, or part of a wall or a boss's seat: kept, but not solid.
+const DECOR_FLAT = new Set(['rug', 'runeCircle', 'throneDoor', 'roseGate', 'throne']);
+// Small clutter that can't stand as an obstacle: left out.
+const DECOR_CLUTTER = new Set(['crow', 'bonePile', 'floatingBooks', 'floatingBook', 'rubble']);
+const PROP_CLUTTER = new Set(['flowers', 'goldPile', 'skullPile', 'bookStack']);
+const PROP_MATERIAL = { plant: 'plant', hayBale: 'plant', candelabra: 'metal', cauldron: 'metal', globe: 'metal', statueBust: 'stone' };
 
 class FloorDecor {
   constructor(floor, run) {
@@ -13,6 +30,63 @@ class FloorDecor {
     this.time = 0;
     this.mistTimer = 0;
     for (const r of floor.rooms) this.decorate(r);
+    this.solidify();
+  }
+
+  /**
+   * Turns everything standing in the rooms into a solid obstacle: its tiles become cover
+   * (DungeonRun.cover, so shots stop on it and big blasts knock it down) and it's lined up
+   * on them. Clutter, and anything that would block a doorway, a spike pad, a keeper or
+   * another obstacle, is left out.
+   */
+  solidify() {
+    const f = this.floor;
+    const T = f.T;
+    const run = this.run;
+    const doors = new Set();
+    for (const r of f.rooms) {
+      for (const t of r.doors.flatMap((d) => d.tiles)) {
+        const tx = t % f.cols;
+        const ty = Math.floor(t / f.cols);
+        for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) doors.add(f.idx(tx + i, ty + j));
+      }
+    }
+    const spikes = new Set(run.spikes.map((s) => f.idx(s.tx, s.ty)));
+    for (const d of this.items) {
+      if (DECOR_FLAT.has(d.kind) || (d.kind === 'prop' && d.name === 'chair')) continue;   // (the Princess sits on her chair)
+      // loose candles on the floor become a standing candelabra (still lighting the gloom)
+      if (d.kind === 'candles') Object.assign(d, { kind: 'prop', name: 'candelabra' });
+      if (DECOR_CLUTTER.has(d.kind) || (d.kind === 'prop' && PROP_CLUTTER.has(d.name))) { d.dead = true; continue; }
+      let w;
+      let material;
+      let fixed = false;
+      if (d.kind === 'prop') {
+        const pr = Sprites.props[d.name];
+        w = clamp(Math.round((pr ? pr.img.width : T) / T), 1, 3);
+        material = PROP_MATERIAL[d.name] || 'wood';
+      } else if (DECOR_SOLID[d.kind]) {
+        [w, material, fixed = false] = DECOR_SOLID[d.kind];
+      } else {
+        d.dead = true;
+        continue;
+      }
+      const tx = Math.round(d.x / T - w / 2);
+      const ty = Math.floor((d.y - 2) / T);
+      const tiles = [];
+      for (let i = 0; i < w; i++) tiles.push([tx + i, ty]);
+      const room = f.roomAt(d.x, d.y);
+      const clear = tiles.every(([x, y]) => f.baseTile(x, y) === TILE.FLOOR && !doors.has(f.idx(x, y)) && !spikes.has(f.idx(x, y)))
+        && !run.props.some((p) => p.room === room && Math.abs(p.x - (tx + w / 2) * T) < (w / 2 + 1) * T && Math.abs(p.y - (ty + 0.5) * T) < 1.5 * T);
+      if (!clear) {
+        if (fixed) continue;   // a boss fixture stays where it was put, solid or not
+        d.dead = true;
+        continue;
+      }
+      if (!fixed) d.x = (tx + w / 2) * T;   // stand it square on its tiles
+      for (const [x, y] of tiles) f.grid[y][x] = TILE.COVER;
+      run.cover.push({ kind: 'decor', item: d, tx, ty, w, h: 1, x: tx * T, y: ty * T, seed: 0, room, material, fixed });
+    }
+    removeDead(this.items);
   }
 
   // ---------- placement ----------

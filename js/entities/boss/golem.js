@@ -512,6 +512,11 @@ class Golem {
       for (const p of world.heroes) {
         if (s.hitHeroes.has(p) || p.isInvulnerable || Math.abs(dist(p.x, p.y, s.x, s.y) - s.r) >= 16) continue;
         s.hitHeroes.add(p);
+        // a knight's raised shield breaks the ring before it reaches him
+        if (p.blocksShockwave?.(s.x, s.y)) {
+          world.effects.text(p.hx, p.hy - 28, 'BLOCKED', { color: '#e4e7ee', size: 7 });
+          continue;
+        }
         p.slowTime = c.slowDuration;
         world.effects.text(p.hx, p.hy - 28, 'SLOWED', { color: '#d8b070', size: 7 });
       }

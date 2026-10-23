@@ -3,7 +3,7 @@
 // rooms the Queen's garden (the bell she rings, the rose gates her gardeners come
 // through, roses and topiary) or the King's throne room (the throne, the two side
 // doors his guards march through, braziers lining the carpet).
-// None of it blocks movement. The bell's swing and the doors are visual only.
+// FloorDecor.solidify makes the standing pieces solid obstacles. The bell's swing and the doors are visual only.
 
 const CastleDecor = {
   /** Fills room r. Returns false for rooms it leaves to FloorDecor (shops, specials). */
@@ -183,9 +183,12 @@ const CastleDecor = {
     ctx.restore();
   },
 
-  /** Where an item sorts among the characters (the throne and doors stand at the back). */
+  /**
+   * Where an item sorts among the characters (the throne and doors stand at the back).
+   * The throne sorts by the top of its back, so it's always drawn under anyone near it.
+   */
   sortY(d) {
-    if (d.kind === 'throne') return d.y - 40;
+    if (d.kind === 'throne') return d.y - 150;
     if (d.kind === 'throneDoor') return d.y - 4;
     return d.y;
   },

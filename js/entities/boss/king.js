@@ -52,6 +52,8 @@ class King {
     this.courier = null;      // the guard bringing the greatsword
     this.doorTurn = 0;
     this.step = 0;
+    this.guardReadyAt = 0;    // after a guard falls he must wait before calling another
+    this.lastGuards = 0;
   }
 
   get name() { return 'THE KING'; }
@@ -115,6 +117,7 @@ class King {
     this.updateWaves(dt, world);
     this.updateScepter(dt, world);
     this.updateCourier(dt, world);
+    this.watchGuards(world);
     if (this.intro > 0) return this.updateIntro(dt, world);
     if (this.dying > 0) return this.updateDeath(dt, world);
     this.t += dt;
@@ -268,9 +271,9 @@ class King {
    * guards.max). False if none could come.
    */
   callGuard(world) {
-    const alive = world.enemies.filter((e) => e.owner === this && e.type === 'royalGuard' && !e.dead).length;
+    const alive = this.guardsAlive(world);
     const doors = this.doors(world);
-    if (alive >= this.cfg.guards.max || !doors.length) return false;
+    if (alive >= this.cfg.guards.max || !doors.length || this.time < this.guardReadyAt) return false;
     const door = doors[this.doorTurn++ % doors.length];
     this.say(world, choose(['GUARD! TO ME!', 'GUARDS! SEIZE THEM!', 'ANOTHER GUARD!']));
     Sound.play('guardHorn');
@@ -284,6 +287,17 @@ class King {
       world.effects.burst(pt.x, pt.y - 20, { count: 10, colors: ['#3e3a48', '#c8a456'], speed: [30, 90], life: [0.2, 0.5] });
     });
     return true;
+  }
+
+  guardsAlive(world) {
+    return world.enemies.filter((e) => e.owner === this && e.type === 'royalGuard' && !e.dead).length;
+  }
+
+  /** Whenever one of his guards falls, he can't call another for guards.respawnDelay s. */
+  watchGuards(world) {
+    const alive = this.guardsAlive(world);
+    if (alive < (this.lastGuards || 0)) this.guardReadyAt = this.time + this.cfg.guards.respawnDelay;
+    this.lastGuards = alive;
   }
 
   openDoor(door, time) {
@@ -305,7 +319,8 @@ class King {
         if (Math.abs(Math.hypot(dx, dy) - w.r) > w.width / 2 + (a.radius || 10) * 0.5) continue;
         if (Math.abs(angleDiff(w.angle, Math.atan2(dy, dx))) > w.arc / 2) continue;
         w.hit.add(a);
-        if (a.hurt(c.damage, world, w.x, w.y)) a.knockback?.(angleTo(w.x, w.y, a.x, a.y), c.knockback);
+        // a knight's raised shield breaks the wave: no knockback
+        if (a.hurt(c.damage, world, w.x, w.y, { shockwave: true }) && !a.lastBlocked) a.knockback?.(angleTo(w.x, w.y, a.x, a.y), c.knockback);
       }
     }
     removeDead(this.waves);
