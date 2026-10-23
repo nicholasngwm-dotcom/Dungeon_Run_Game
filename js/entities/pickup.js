@@ -280,8 +280,9 @@ class CoinPickup extends Pickup {
  * kind is a key of Sprites.pastries.
  */
 class PastryPickup extends Pickup {
-  constructor(x0, y0, x, y, kind, { heal, life, flightTime }) {
+  constructor(x0, y0, x, y, kind, { heal, life, flightTime, premium = false }) {
     super(x, y);
+    this.premium = premium;   // Premium Baking Goods: its sugar rush stacks
     this.x0 = x0;
     this.y0 = y0;
     this.kind = kind;
@@ -309,8 +310,12 @@ class PastryPickup extends Pickup {
   collect(p, world) {
     p.heal(this.heal, world);
     const b = CONFIG.buffs.sugar;
-    p.addBuff('sugar', b.duration);
-    world.effects.text(p.hx, p.hy - 40, 'SUGAR RUSH!', { color: b.color, size: 9, life: 1 });
+    // premium pastries stack the rush (up to 3); plain ones just start or refresh it
+    const stacks = p.buffs.sugar > 0 ? p.sugarStacks || 1 : 0;
+    p.sugarStacks = this.premium ? Math.min(3, stacks + 1) : Math.max(1, stacks);
+    p.buffs.sugar = b.duration;
+    p.buffMax.sugar = b.duration;
+    world.effects.text(p.hx, p.hy - 40, p.sugarStacks > 1 ? `SUGAR RUSH x${p.sugarStacks}!` : 'SUGAR RUSH!', { color: b.color, size: 9, life: 1 });
     world.effects.burst(p.hx, p.hy, { count: 16, colors: ['#ff8ad0', '#ffffff', '#8ad8ff', '#ffe680'], speed: [40, 140], life: [0.3, 0.6], up: 30 });
   }
 
@@ -338,3 +343,4 @@ class PastryPickup extends Pickup {
     if (Math.floor(this.age * 3) % 3 === 0) PFX.star(ctx, this.x + 12, this.y - img.height * s - 2 + bob, 2, '#ff8ad0', '#ffffff', 1);
   }
 }
+

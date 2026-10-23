@@ -64,10 +64,19 @@ enemies can be up at once.
 **Coins**: enemies drop coins (tougher ones drop more; summoned ones rarely), the boss
 drops a pile, and every cleared room leaves a chest worth 5 coins. Coins last for the
 whole run. Spend them in the **shop**: Mira sells potions (your bag holds 5 slots,
-up to 10 of a kind each) and Bram the enchanter offers three of six big stat
-upgrades (max HP, regen, attack speed, damage, move speed, plus one for your hero:
-mana regen, energy regen, extra light orbs, or faster abilities). Pick one per shop;
-each can only be owned once per run. Every shop price rises with the stage. In defend rooms,
+up to 10 of a kind each) and Bram the enchanter keeps three upgrades on his table at a
+time. Buy as many as you can afford: the first costs 30 coins and each one bought makes the
+next cost 10 more for the rest of the run; a bought card is replaced by a new one. Rerolling
+costs 10, then 5 more each time, back to 10 at the next stage's shop. Each upgrade can be
+owned once. Entering each stage you also choose one free upgrade from three, and a wishing
+well's wish is sometimes an upgrade instead of potions.
+
+**Upgrades**: 24 shared ones (Vital Heart, Tesla Armour, Deadly Precision, Coin Siphon...;
+the few that need something only some heroes have, like mana, rockets, followers or a melee
+basic attack, only show up for those heroes) and 13 hero upgrades, framed in gold with the
+hero's name, that only ever show up for that hero. Hold Tab (the scoreboard) to see every
+player's upgrades: hover one to read it; cooldowns, stacks and "active right now" glows show on
+the icons, and they flash when they go off. Potion prices rise with the stage. In defend rooms,
 enemies chase you once they spot you and go back for the lantern if you outrun them.
 
 The restaurant (its chef just chats for now), special rooms (blacksmith, wishing well, hero statue,
@@ -168,7 +177,8 @@ js/
   ui/dialog.js          NPC dialogue box (typewriter text, choices)
   net/net.js            peer-to-peer connections (PeerJS): host / join by room code
   net/session.js        multiplayer lockstep: input bundles, commands, scenes, desync checks
-  game/upgrades.js      shop upgrades + the shop window
+  game/upgrades.js      shop upgrades (what they do, the Upgrades hooks) + the shop window
+  gfx/upgradeSprites.js the upgrade icons
   game/decor.js         dungeon set dressing; everything standing in a room is a solid obstacle (FloorDecor.solidify)
 ```
 

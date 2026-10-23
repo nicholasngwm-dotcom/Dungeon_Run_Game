@@ -38,7 +38,7 @@ const App = {
       ['Sharpening the blades...', () => { buildItemSprites(); buildGraveyardSprites(); }],   // graveyard after the items: it adds to Sprites.projectiles
       ['Crowning the court...', () => { buildCastleSprites(); buildQueenSprites(); buildKingSprites(); buildRoyalSetPieces(); buildCastleDecor(); }],
       ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); buildObstacleSprites(); }],   // obstacles after the cover (they add to Sprites.cover)
-      ['Brewing potions...', () => { buildPotionSprites(); buildIconSprites(); buildRocketeerSprites(); buildBakerSprites(); }],   // the rocketeer's and baker's gear add to the weapons, items and icons
+      ['Brewing potions...', () => { buildPotionSprites(); buildIconSprites(); buildRocketeerSprites(); buildBakerSprites(); buildUpgradeSprites(); }],   // the rocketeer's and baker's gear add to the weapons, items and icons
       ['Rehearsing the battles...', () => MenuShowcase.start(0)],
     ];
     const started = performance.now();
@@ -212,12 +212,12 @@ const App = {
         ],
       });
     } else if (kind === 'enchanter') {
-      const st = run.shopState(this.game.localPlayer);
+      const n = Object.keys(this.game.localPlayer.upgradeLevels).length;
       Dialog.open({
         name: 'BRAM', frames: Sprites.npcs.enchanter,
-        text: st.bought
-          ? 'You have chosen your enchantment, adventurer. Survive this stage, and I will have new ones for you.'
-          : 'Ah, a seeker of power. I have three enchantments for you - choose one. Do not like them? A few coins and I will show you others.',
+        text: n > 1
+          ? 'Back for more power? Every enchantment I bind to you costs a little more than the last... but oh, is it worth it.'
+          : 'Ah, a seeker of power. I keep three enchantments on my table - buy as many as your purse allows. Do not like them? A few coins and I will show you others.',
         options: [
           { label: 'Show me the enchantments', fn: () => Shop.open(run, 'upgrades') },
           { label: 'Not now', fn: () => Dialog.close() },
@@ -239,7 +239,7 @@ const App = {
   },
 
   closePanel() {
-    if (this.state !== 'panel') return;
+    if (this.state !== 'panel' || Shop.locked) return;   // (the stage's free upgrade has to be chosen first)
     this.state = 'playing';
     Input.reset();
     Menus.show(null);
@@ -517,6 +517,12 @@ const App = {
       // an online game whose session is gone would read this keyboard for every hero: end it instead
       if (this.game.multiplayer) this.leaveMultiplayer('Lost the connection to the game.');
       else this.game.update(dt);
+    }
+    // entering a stage: this screen's hero gets to choose a free upgrade (once the stage's banner has had a moment)
+    const run = this.game?.run;
+    if (this.state === 'playing' && run && run.stageTime > 0.8 && !this.game.localPlayer.dead && run.needsPick(this.game.localPlayer)) {
+      this.openPanel();
+      Shop.open(run, 'pick');
     }
     Shop.refresh();
     Menus.updateReadyPanel(this);

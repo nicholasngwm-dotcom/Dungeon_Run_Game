@@ -177,11 +177,13 @@ class Rogue extends Player {
     if (this.stormReady) {
       this.stormReady = false;
       this.storm = { t: 0, next: 0 };
+      this.mimic('storm', world);
       Sound.play('daggerFan');
       return;
     }
     this.cooldowns.primary = c.cooldown;
-    if (!this.spend(c.cost, world)) return;
+    // Throwing Stamina: the dagger fan costs no energy
+    if (!Upgrades.has(this, 'throwingStamina') && !this.spend(c.cost, world)) return;
     this.throwAnim = 0.1;
     const spread = c.spreadDegrees * DEG;
     for (let i = 0; i < c.count; i++) {
@@ -219,6 +221,7 @@ class Rogue extends Player {
     this.iframes = Math.max(this.iframes, c.invulnerability);
     this.facing = Math.cos(angle) >= 0 ? 1 : -1;
     Sound.play('swiftStrike');
+    this.mimic('strike', world);
     world.effects.burst(this.x, this.y, { count: 10, colors: ROGUE_FX.smoke, speed: [40, 100], life: [0.2, 0.4] });
     world.effects.smoke(this.x, this.y - 6, { count: 5, radius: 11, life: 0.5, rise: 10, colors: ROGUE_FX.cloud });
     // a red slash streak along the dash path
@@ -269,10 +272,11 @@ class Rogue extends Player {
 
   // ---------- E: parry ----------
 
-  abilityE() {
+  abilityE(world) {
     const c = this.cfg.parry;
     this.cooldowns.e = c.cooldown;
     this.parryTime = c.window;
+    this.mimic('parry', world);
     Sound.play('parryReady');
   }
 
@@ -304,7 +308,15 @@ class Rogue extends Player {
   abilityCost(slot) {
     const c = this.cfg;
     const ready = this.stormReady || this.storm;
-    return { primary: ready ? 0 : c.dagger.cost, secondary: c.strike.cost, f: ready ? 0 : c.storm.cost }[slot] || 0;
+    return { primary: ready || Upgrades.has(this, 'throwingStamina') ? 0 : c.dagger.cost, secondary: c.strike.cost, f: ready ? 0 : c.storm.cost }[slot] || 0;
+  }
+
+  /** Mimicking Clones: every clone out copies the ability she just used (at 40% of its damage). */
+  mimic(kind, world) {
+    if (!Upgrades.has(this, 'mimicClones')) return;
+    const clones = world.clones.filter((c) => c.owner === this && !c.dead && c.mimic);
+    for (const c of clones) c.mimic(kind, world);
+    if (clones.length) Upgrades.state(this).flash.mimicClones = world.time;
   }
 
   // ---------- F: dagger storm ----------
@@ -417,15 +429,26 @@ class Rogue extends Player {
  * side (`slot` angle) and throwing weaker daggers. Enemies may target it; it
  * takes extra damage and explodes into daggers when it dies or its time runs out.
  */
+// Mimicking Clones: a clone's copy of an ability does this share of its damage (60% less)
+const MIMIC_DAMAGE = 0.4;
+
 class RogueClone extends Entity {
   constructor(owner, x, y, slot = 0) {
     super(x, y);
     this.owner = owner;
     this.cfg = owner.cfg.ult;
-    this.maxHp = this.cfg.cloneHp;
+    // the shop's follower upgrades: Stronger Buddies (more hp, bigger), Total Loyalty (faster attacks, fights up close)
+    this.buddy = Upgrades.has(owner, 'strongerBuddies');
+    this.loyal = Upgrades.has(owner, 'totalLoyalty');
+    this.maxHp = this.cfg.cloneHp * (this.buddy ? 1.6 : 1);
     this.hp = this.maxHp;
     this.life = this.cfg.cloneLife;
-    this.radius = 12;
+    this.size = this.buddy ? 1.25 : 1;
+    this.radius = 12 * this.size;
+    this.dash = null;          // Mimicking Clones: a copied swift strike in progress { t, angle, hit }
+    this.storm = 0;            // ...seconds left of a copied dagger storm
+    this.stormNext = 0;
+    this.parryTime = 0;        // ...a copied parry window
     this.hw = 9;
     this.hh = 6;
     this.frames = owner.frames;
@@ -443,18 +466,22 @@ class RogueClone extends Entity {
     this.life -= dt;
     if (this.life <= 0) return this.die(world);
     this.updateKnockback(dt, world);
+    this.parryTime -= dt;
+    if (this.dash) return this.updateMimicDash(dt, world);
+    if (this.storm > 0) this.updateMimicStorm(dt, world);
 
     // hunt the nearest enemy: move to this clone's side of it, at throwing range
     const o = this.owner;
     const target = nearestTarget(world, this.x, this.hy, 900);
     this.moving = false;
     if (target) {
-      const tx = target.x + Math.cos(this.slot) * this.cfg.cloneRange;
-      const ty = target.y + Math.sin(this.slot) * this.cfg.cloneRange * 0.7;
+      const range = this.cfg.cloneRange * (this.loyal ? 0.6 : 1);   // loyal clones get right in
+      const tx = target.x + Math.cos(this.slot) * range;
+      const ty = target.y + Math.sin(this.slot) * range * 0.7;
       if (dist(this.x, this.y, tx, ty) > 12) {
         this.moving = true;
         const a = angleTo(this.x, this.y, tx, ty);
-        const s = o.speed * 0.95 * dt;
+        const s = o.speed * (this.loyal ? 1.15 : 0.95) * dt;
         world.dungeon.move(this, Math.cos(a) * s, Math.sin(a) * s);
         this.facing = Math.cos(a) >= 0 ? 1 : -1;
       }
@@ -465,7 +492,7 @@ class RogueClone extends Entity {
     }
     this.fireTimer -= dt;
     if (target && this.fireTimer <= 0 && dist(this.x, this.hy, target.hx, target.hy) < 320) {
-      this.fireTimer = this.cfg.cloneFireInterval;
+      this.fireTimer = this.cfg.cloneFireInterval / (this.loyal ? 1.5 : 1);
       const d = o.cfg.dagger;
       const spread = d.spreadDegrees * DEG;
       for (let i = 0; i < d.count; i++) {
@@ -485,6 +512,15 @@ class RogueClone extends Entity {
 
   hurt(amount, world, fromX, fromY) {
     if (this.dead || this.invulnerable > 0) return false;
+    if (this.parryTime > 0) {
+      // a copied parry: the blow glances off
+      this.parryTime = 0;
+      this.invulnerable = 0.3;
+      world.effects.text(this.hx, this.hy - 30, 'PARRY!', { color: '#f0c040', size: 7 });
+      world.effects.burst(this.hx, this.hy - 10, { count: 10, colors: ['#ffffff', '#f0c040'], speed: [80, 200], life: [0.15, 0.35] });
+      Sound.play('parry', 0.1);
+      return true;
+    }
     const dmg = Math.round(amount * this.cfg.cloneDamageTaken);
     this.hp -= dmg;
     this.invulnerable = 0.3;
@@ -493,6 +529,54 @@ class RogueClone extends Entity {
     if (fromX !== undefined) this.knockback(angleTo(fromX, fromY, this.x, this.y), 140);
     if (this.hp <= 0) this.die(world);
     return true;
+  }
+
+  /**
+   * Mimicking Clones: the clone copies one of its rogue's abilities at MIMIC_DAMAGE of its damage.
+   * 'strike': a swift strike dash at its target; 'storm': a short dagger storm; 'parry': a parry window.
+   */
+  mimic(kind, world) {
+    const o = this.owner.cfg;
+    if (kind === 'parry') { this.parryTime = o.parry.window; return; }
+    if (kind === 'storm') { this.storm = o.storm.duration * 0.6; this.stormNext = 0; return; }
+    const target = nearestTarget(world, this.x, this.hy, 400);
+    const angle = target ? angleTo(this.x, this.hy, target.hx, target.hy) : this.aim;
+    this.dash = { t: 0, angle, hit: new Set() };
+    this.facing = Math.cos(angle) >= 0 ? 1 : -1;
+    smokeBomb(world, this.x, this.hy + 6, 0.6);
+  }
+
+  updateMimicDash(dt, world) {
+    const d = this.dash;
+    const c = this.owner.cfg.strike;
+    d.t += dt;
+    const speed = c.distance / c.duration;
+    world.dungeon.move(this, Math.cos(d.angle) * speed * dt, Math.sin(d.angle) * speed * dt);
+    for (const t of world.getTargets()) {
+      if (d.hit.has(t) || dist(this.hx, this.hy, t.hx, t.hy) > this.radius + t.radius + 10) continue;
+      d.hit.add(t);
+      world.damageTarget(t, c.damage * MIMIC_DAMAGE, { angle: d.angle, knockback: 140, fromUlt: true });
+      crossCut(world, t.hx, t.hy, d.angle);
+    }
+    if (vrand(0, 1) < 0.5) world.effects.burst(this.x, this.y - 10, { count: 1, colors: ROGUE_FX.slash, speed: [5, 20], life: [0.15, 0.3] });
+    if (d.t >= c.duration) this.dash = null;
+  }
+
+  updateMimicStorm(dt, world) {
+    const c = this.owner.cfg.storm;
+    const d = this.owner.cfg.dagger;
+    this.storm -= dt;
+    this.stormNext -= dt;
+    while (this.stormNext <= 0) {
+      this.stormNext += c.interval * 1.5;
+      const a = this.aim + rand(-0.5, 0.5) * c.spreadDegrees * DEG;
+      world.playerProjectiles.push(new Projectile({
+        x: this.x + Math.cos(a) * 12, y: this.hy + 2 + Math.sin(a) * 12,
+        vx: Math.cos(a) * d.speed, vy: Math.sin(a) * d.speed,
+        radius: 5, damage: c.damage * MIMIC_DAMAGE, life: 0.9, knockback: 40,
+        sprite: Sprites.weapons.dagger.img, fromUlt: true, aura: daggerStreak(['#a07a24', '#f0c040', '#fff2a0'], 18),
+      }));
+    }
   }
 
   /** Bursts into a ring of piercing daggers; each stuns the first enemy it hits. */
@@ -538,6 +622,18 @@ class RogueClone extends Entity {
     if (this.dead) return;
     const frame = heroFrame(this.frames, this.moving, this.animTime);
     const fade = Math.min(1, this.life * 2);
+    // Stronger Buddies: drawn bigger round its feet
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.scale(this.size, this.size);
+    ctx.translate(-this.x, -this.y);
+    if (this.loyal) {
+      // Total Loyalty: a gold ring turning round its feet
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.ring(ctx, this.x, this.y + 6, 14, 6, 'rgba(255, 184, 74, 0.6)', 2, { dash: [2, 2], spin: this.animTime * 3 });
+      ctx.restore();
+    }
     this.drawFrame(ctx, frame, HERO_ANCHOR, 0.7 * fade);
     // shadowy red sheen (red silhouettes are made once per frame and kept)
     frame.redSheen ??= PixelArt.silhouette(frame.img, ROGUE_FX.red);
@@ -545,9 +641,10 @@ class RogueClone extends Entity {
     ctx.globalCompositeOperation = 'lighter';
     drawSprite(ctx, frame.redSheen, this.x, this.y, HERO_ANCHOR.x, HERO_ANCHOR.y, this.facing < 0, 0.25 * fade);
     ctx.restore();
+    ctx.restore();
     const w = 24;
     const x = Math.round(this.x - w / 2);
-    const y = Math.round(this.y - 50);
+    const y = Math.round(this.y - 50 * this.size);
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(x - 1, y - 1, w + 2, 4);
     ctx.fillStyle = '#c43a44';

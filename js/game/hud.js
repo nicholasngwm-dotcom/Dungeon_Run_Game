@@ -1,5 +1,8 @@
 // Heads-up display, drawn in screen space on top of the world.
 
+// spacing of the upgrade icon tiles on the scoreboard (px)
+const UPGRADE_TILE = 24;
+
 const HUD = {
   text(ctx, str, x, y, { size = 8, color = '#f4ead7', align = 'left', baseline = 'top', shadow = true } = {}) {
     ctx.font = uiFont(size);
@@ -205,7 +208,8 @@ const HUD = {
       // a slot glows while its ability is held (the knight's raised shield), or when an extra is armed
       const armed = s.slot && p.slotHeld(s.slot) ? 'held' : !!s.armed;
       const short = s.slot && !p.canAfford(s.slot) ? p.resource.name : null;
-      this.abilitySlot(ctx, s.x, s.y, s.key, s.name, cd, max, icon, s.slot ? p.slotCharges?.[s.slot] : null, armed, s.slot || s.name, short);
+      const charges = s.slot === 'dodge' ? Upgrades.dodgeCharges(p) : s.slot ? p.slotCharges?.[s.slot] : null;   // (Burst Dodging: two dodges)
+      this.abilitySlot(ctx, s.x, s.y, s.key, s.name, cd, max, icon, charges, armed, s.slot || s.name, short);
     }
     this.drawInventory(ctx, p);
   },
@@ -300,6 +304,68 @@ const HUD = {
     const pot = POTIONS[best.id];
     const name = best.count > 1 ? `${pot.name} x${best.count}` : pot.name;
     this.tooltip(ctx, best.x - cam.x, best.y - cam.y - 30, name, POTION_COLORS[pot.family][1]);
+  },
+
+  // ---------- upgrades (shown per hero on the scoreboard) ----------
+
+  /**
+   * A hero's upgrades as a row of icon tiles from (x, y), UPGRADE_TILE px apart, wrapping
+   * every perRow: hero upgrades framed in gold; a cooldown darkens the tile from the top
+   * with the time left; stacks and counters in the corner; a pulsing rim in the upgrade's
+   * colour while it's active; a white flash whenever it goes off. Returns the tile under
+   * the mouse ({ u, x, y, s, cd }) or null.
+   */
+  drawUpgradeTiles(ctx, p, x0, y0, perRow) {
+    const owned = SHOP_UPGRADES.filter((u) => p.upgradeLevels[u.id]);
+    const now = p.lastWorld?.time ?? 0;
+    const flash = p.upg?.flash || {};
+    const m = Input._mouse;
+    const s = 22;
+    let hover = null;
+    owned.forEach((u, i) => {
+      const x = x0 + (i % perRow) * UPGRADE_TILE;
+      const y = y0 + Math.floor(i / perRow) * UPGRADE_TILE;
+      const info = u.hud ? u.hud(p) : {};
+      this.panel(ctx, x, y, s, s);
+      if (u.hero) {
+        ctx.fillStyle = '#ffd34a';
+        ctx.fillRect(x - 1, y - 1, s + 2, 1);
+        ctx.fillRect(x - 1, y + s, s + 2, 1);
+        ctx.fillRect(x - 1, y, 1, s);
+        ctx.fillRect(x + s, y, 1, s);
+      }
+      ctx.drawImage(Sprites.upgrades[u.id], x + 1, y + 1);
+      const cd = info.cd || 0;
+      if (cd > 0) {
+        const r = clamp(cd / (info.max || 1), 0, 1);
+        ctx.fillStyle = 'rgba(10, 6, 18, 0.7)';
+        ctx.fillRect(x, y, s, Math.ceil(s * r));
+        this.text(ctx, cd >= 60 ? `${Math.ceil(cd / 60)}m` : `${Math.ceil(cd)}`, x + s / 2, y + 7, { size: 5, align: 'center', color: '#ffffff' });
+      } else if (info.active) {
+        ctx.save();
+        ctx.globalAlpha = 0.55 + Math.sin(performance.now() / 120) * 0.35;
+        ctx.strokeStyle = u.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, y + 1, s - 2, s - 2);
+        ctx.restore();
+      }
+      if (info.count) this.text(ctx, `${info.count}`, x + s - 1, y + s - 7, { size: 5, align: 'right', color: '#ffe680' });
+      const since = now - (flash[u.id] ?? -99);
+      if (since >= 0 && since < 0.5) {
+        ctx.fillStyle = `rgba(255, 255, 240, ${0.8 * (1 - since / 0.5)})`;
+        ctx.fillRect(x, y, s, s);
+      }
+      if (m.x >= x && m.x < x + s && m.y >= y && m.y < y + s) hover = { u, x, y, s, cd };
+    });
+    return hover;
+  },
+
+  /** What an upgrade tile under the mouse does (and its cooldown). */
+  upgradeTooltip(ctx, hover) {
+    const { u, cd } = hover;
+    const who = u.hero ? ` (${CONFIG.classes[u.hero].name.toUpperCase()})` : '';
+    const cdText = u.cooldown ? (cd > 0 ? ` Recharging: ${Math.ceil(cd)}s.` : ` Cooldown ${u.cooldown >= 60 ? `${u.cooldown / 60} min` : `${u.cooldown}s`}: ready.`) : '';
+    this.tooltip(ctx, hover.x + hover.s / 2, hover.y - 4, u.name + who, u.color, u.desc + cdText);
   },
 
   // ---------- the bag (bottom left) ----------
@@ -716,9 +782,12 @@ const HUD = {
   drawScoreboard(ctx, game) {
     const cols = [['KILLS', 'kills', '#ff8a6a'], ['DAMAGE', 'damage', '#ffd34a'], ['HEALING', 'healing', '#8cff9a'], ['TAKEN', 'taken', '#ff6a7a'], ['DEATHS', 'deaths', '#c8b8ff']];
     const players = game.players;
-    const rowH = 30;
     const w = 600;
-    const h = 74 + players.length * rowH;
+    const perRow = Math.floor((w - 60) / UPGRADE_TILE);
+    // every hero's row: name and stats, then their upgrades underneath (one or more strips)
+    const strips = (p) => Math.max(1, Math.ceil(Object.keys(p.upgradeLevels).length / perRow));
+    const rowH = (p) => 30 + strips(p) * UPGRADE_TILE + 4;
+    const h = 74 + players.reduce((a, p) => a + rowH(p), 0);
     const x = 480 - w / 2;
     const y = Math.max(40, 250 - h / 2);
     ctx.fillStyle = 'rgba(8, 4, 14, 0.55)';
@@ -733,12 +802,13 @@ const HUD = {
     ctx.fillStyle = 'rgba(220, 180, 76, 0.35)';
     ctx.fillRect(x + 10, y + 52, w - 20, 1);
     const best = cols.map(([, key]) => Math.max(...players.map((p) => Game.statsOf(p)[key])));
-    players.forEach((p, r) => {
-      const ry = y + 58 + r * rowH;
+    let ry = y + 58;
+    let hover = null;
+    players.forEach((p) => {
       const me = p === game.localPlayer;
       if (me) {
         ctx.fillStyle = 'rgba(255, 220, 120, 0.1)';
-        ctx.fillRect(x + 8, ry - 2, w - 16, rowH - 2);
+        ctx.fillRect(x + 8, ry - 2, w - 16, rowH(p) - 2);
       }
       // the hero's face, their name and class
       const icon = Sprites.heroes[p.classId].idle[0].img;
@@ -757,8 +827,13 @@ const HUD = {
         this.text(ctx, v >= 10000 ? `${(v / 1000).toFixed(1)}K` : `${v}`, colX(i), ry + 6, { size: 8, align: 'center', color: top ? color : '#f4ead7' });
         if (top) PFX.star(ctx, colX(i) + 26, ry + 10, 2, '#ffd34a', '#ffffff');
       });
+      // their upgrades
+      if (Object.keys(p.upgradeLevels).length) hover = this.drawUpgradeTiles(ctx, p, x + 48, ry + 30, perRow) || hover;
+      else this.text(ctx, 'NO UPGRADES YET', x + 48, ry + 36, { size: 5, color: '#6a5a7e' });
+      ry += rowH(p);
     });
     this.text(ctx, `HOLD ${Settings.label('scoreboard')}`, x + w / 2, y + h - 12, { size: 5, align: 'center', color: '#8a7660' });
+    if (hover) this.upgradeTooltip(ctx, hover);
   },
 
   // ---------- a boss's entrance ----------

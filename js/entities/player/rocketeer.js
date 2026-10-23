@@ -139,6 +139,13 @@ class Rocketeer extends Player {
     Sound.play(opts.big ? 'ibfrBoom' : 'rocketBoom', 0.05);
   }
 
+  /** Incendiary: a rocket's blast leaves a small patch of burning ground. */
+  incendiary(world, x, y) {
+    if (!Upgrades.has(this, 'incendiary')) return;
+    heroFireZone(world, this, x, y, { r: 40, life: 2.5, dps: 14, burnDps: 6, burnTime: 2 });
+    Upgrades.state(this).flash.incendiary = world.time;
+  }
+
   // ---------- LMB: rocket launcher ----------
 
   primary(world) {
@@ -175,7 +182,10 @@ class Rocketeer extends Player {
         if (vrand(0, 1) < dt * 26) w.effects.smoke(p.x - p.vx * 0.03, p.y - p.vy * 0.03, { count: 1, radius: 4, life: 0.6, rise: 6, colors: ROCKET_FX.smoke });
       },
       // the burst: everyone round it but the one it hit square (who already took it in the direct hit)
-      onHit: (p, w, hit) => this.blast(w, p.x, p.y, c.radius, c.splash, c.knockback, { crit, exclude: hit ? new Set([hit]) : null }),
+      onHit: (p, w, hit) => {
+        this.blast(w, p.x, p.y, c.radius, c.splash, c.knockback, { crit, exclude: hit ? new Set([hit]) : null });
+        this.incendiary(w, p.x, p.y);
+      },
     }));
     world.effects.burst(x, y, { count: 8, colors: ROCKET_FX.exhaust, speed: [40, 120], life: [0.1, 0.25], angle, spread: 0.7 });
     world.effects.smoke(this.pivotX - Math.cos(angle) * 14, this.pivotY - Math.sin(angle) * 10, { count: 2, radius: 6, life: 0.5, rise: 8, colors: ROCKET_FX.smoke });
@@ -390,6 +400,7 @@ class Rocketeer extends Player {
       if (s.t < c.flightTime) continue;
       s.dead = true;
       this.blast(world, s.x1, s.y1, c.blastRadius, c.damage, 120);
+      this.incendiary(world, s.x1, s.y1);
     }
     removeDead(this.salvo);
   }

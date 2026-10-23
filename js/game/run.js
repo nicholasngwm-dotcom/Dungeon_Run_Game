@@ -110,6 +110,7 @@ class DungeonRun {
     this.themes = [];
     for (let s = 0; s < 3; s++) this.themes.push(opts.mode === 'set' ? opts.theme : this.rollTheme());
     this.time = 0;
+    this.startPicks = {};          // each stage's free upgrade: 'stage|hero key' -> the id chosen
     this.buildStage();
   }
 
@@ -162,6 +163,7 @@ class DungeonRun {
     this.hole = null;            // the glowing hole down to the secret room
     // this stage's shop: the potion shelf (shared) and each hero's upgrade store state
     this.shopSeed = Math.floor(Math.random() * 2 ** 31);
+    this.stageTime = 0;          // seconds since this stage began (the free pick waits a moment)
     this.potionStock = [];
     this.shopStates = {};
     const f = w.dungeon;
@@ -245,6 +247,7 @@ class DungeonRun {
   update(dt) {
     const w = this.world;
     this.time += dt;
+    this.stageTime += dt;
     for (const p of w.heroes) {
       const here = this.floor.roomAt(p.x, p.y);
       if (here) this.visit(here);
@@ -404,26 +407,50 @@ class DungeonRun {
     hero.coinFlash = 0.25;
   }
 
-  /** A hero's upgrade-store state at this stage's shop: { rerolls, bought (upgrade id or null) }. */
+  /** A hero's upgrade-store state at this stage's shop: { rerolls, boughtHere (ids bought since the last reroll) }. */
   shopState(hero) {
     const key = hero.netId || 'solo';
-    return this.shopStates[key] || (this.shopStates[key] = { rerolls: 0, bought: null });
+    return this.shopStates[key] || (this.shopStates[key] = { rerolls: 0, boughtHere: [] });
+  }
+
+  /** Key of a hero's free pick at this stage. */
+  pickKey(hero) { return `${this.stage}|${hero.netId || 'solo'}`; }
+
+  /** True while a hero still has this stage's free upgrade to choose (not in boss practice, and while there's any left to give). */
+  needsPick(hero) {
+    return !!hero && !this.practiceBoss && !this.startPicks[this.pickKey(hero)] && pickOffers(this, hero).length > 0;
+  }
+
+  /** A stage's free upgrade: one of the hero's three gift offers. */
+  pickUpgrade(hero, id) {
+    const u = this.needsPick(hero) && pickOffers(this, hero).find((x) => x.id === id);
+    if (u) {
+      this.startPicks[this.pickKey(hero)] = id;
+      this.grantUpgrade(hero, u);
+    }
+    this.world.events.onPurchase?.(hero, 'pick', !!u);
+  }
+
+  /** The hero owns the upgrade from now on: it takes effect, with the enchantment's flourish. */
+  grantUpgrade(hero, u) {
+    hero.upgradeLevels[u.id] = 1;
+    u.apply?.(hero);
+    this.enchantFx(hero, u);
   }
 
   // Shop actions are commands, so every machine applies them on the same tick.
 
-  /** Upgrade store: buy one of the hero's three offers (one per shop). */
+  /** Upgrade store: buy one of the hero's three offers (as many as they can pay for; each costs more). */
   buyUpgrade(hero, id) {
     const st = this.shopState(hero);
-    const u = upgradeOffers(this, hero).find((x) => x.id === id);
-    const price = u ? upgradePrice(u, this) : Infinity;
-    const ok = !!u && !st.bought && !hero.upgradeLevels[id] && hero.coins >= price;
+    const u = upgradeOffers(this, hero).find((x) => x && x.id === id);
+    const price = upgradePrice(hero);
+    const ok = !!u && !hero.upgradeLevels[id] && hero.coins >= price;
     if (ok) {
       hero.coins -= price;
-      hero.upgradeLevels[id] = 1;
-      u.apply(hero);
-      st.bought = id;
-      this.enchantFx(hero, u);
+      hero.upgradesBought = (hero.upgradesBought || 0) + 1;
+      st.boughtHere.push(id);
+      this.grantUpgrade(hero, u);
     }
     this.world.events.onPurchase?.(hero, 'upgrade', ok);
   }
@@ -476,17 +503,18 @@ class DungeonRun {
     w.effects.text(hero.hx, hero.hy - 50, u.name.toUpperCase(), { color: u.color, size: 10, life: 1.8, rise: 30 });
   }
 
-  /** Every price in this stage's shop is multiplied by this (shops cost more deeper in). */
+  /** Every potion price in this stage's shop is multiplied by this (shops cost more deeper in). */
   get priceScale() { return this.byStage(CONFIG.run.shop.stagePrice); }
 
   /** Upgrade store: pay to swap the three offers for three new ones. */
   rerollUpgrades(hero) {
     const st = this.shopState(hero);
-    const price = rerollPrice(st.rerolls, this);
-    const ok = !st.bought && hero.coins >= price;
+    const price = rerollPrice(st.rerolls);
+    const ok = hero.coins >= price;
     if (ok) {
       hero.coins -= price;
       st.rerolls++;
+      st.boughtHere = [];
     }
     this.world.events.onPurchase?.(hero, 'reroll', ok);
   }
@@ -520,6 +548,7 @@ class DungeonRun {
    */
   onEnemyKilled(e) {
     this.releaseSoul(e);
+    Upgrades.onKill(this, e);
     const c = CONFIG.run.coins;
     if (e.exploded || e.cfg.coins === 0) return;
     let n;
@@ -1033,7 +1062,7 @@ class DungeonRun {
       const w = pad.size * T;
       for (const a of this.world.allies) {
         if (a.flying || pad.hits.has(a)) continue;   // the bird flies over
-        if (a.x > pad.x && a.x < pad.x + w && a.y > pad.y && a.y < pad.y + w && a.hurt(CONFIG.run.spikes.damage, this.world, a.x, a.y + 10)) pad.hits.add(a);
+        if (a.x > pad.x && a.x < pad.x + w && a.y > pad.y && a.y < pad.y + w && a.hurt(CONFIG.run.spikes.damage, this.world, a.x, a.y + 10, { trap: true })) pad.hits.add(a);
       }
     }
   }
@@ -1199,6 +1228,7 @@ class DungeonRun {
       // 5 coins for every hero in the party
       this.spawnCoins(pr.x, pr.y - 12, CONFIG.run.coins.roomChest * w.players.length);
       w.effects.text(pr.x, pr.y - 40, `+${CONFIG.run.coins.roomChest} COINS`, { color: '#ffd34a', size: 9, life: 1.2 });
+      Upgrades.onChest(this, pr.x, pr.y);
     });
   }
 
@@ -1280,7 +1310,8 @@ class DungeonRun {
 
   /**
    * Wishing well: one coin per toss. Each coin may grant the wish (sure to by
-   * the pity-th); the wish is 2-6 of one random potion. One wish per hero.
+   * the pity-th); the wish is 2-6 of one random potion, or (upgradeChance of the
+   * time) a random upgrade the hero doesn't have yet. One wish per hero.
    */
   wish(pr, hero) {
     const w = this.world;
@@ -1306,6 +1337,15 @@ class DungeonRun {
       return;
     }
     st.granted = true;
+    const gifts = shopStock(hero).filter((u) => !hero.upgradeLevels[u.id]);
+    if (gifts.length && Math.random() < c.upgradeChance) {
+      const u = choose(gifts);
+      w.pickups.push(new UpgradePickup(pr.x, pr.y + 30, u.id, hero));
+      w.effects.burst(pr.x, pr.y - 20, { count: 60, colors: [u.color, '#ffffff', '#ffe680'], speed: [60, 220], life: [0.5, 1], up: 90 });
+      w.effects.text(pr.x, pr.y - 50, `WISH GRANTED: ${u.name.toUpperCase()}!`, { color: u.color, size: 9, life: 2.2 });
+      Sound.play('magic');
+      return;
+    }
     const id = choose(Object.keys(POTIONS));
     const n = randInt(c.potions[0], c.potions[1]);
     this.spawnPotions(pr.x, pr.y + 30, n, () => id);

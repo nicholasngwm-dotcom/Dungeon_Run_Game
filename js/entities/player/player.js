@@ -84,23 +84,29 @@ class Player extends Entity {
   get speedMultiplier() {
     return (this.slowTime > 0 ? CONFIG.golem.slowAmount : 1) * (this.chillTime > 0 ? this.chillAmount : 1)
       * (this.buffs.speed > 0 ? CONFIG.buffs.speed.multiplier : 1) * this.moveMultiplier * (1 + this.brew('speed'))
-      * (this.tuneSpeed > 0 ? 1 + this.tuneSpeedAmount : 1) * (this.buffs.sugar > 0 ? CONFIG.buffs.sugar.speed : 1);
+      * (this.tuneSpeed > 0 ? 1 + this.tuneSpeedAmount : 1) * this.sugarScale('speed') * Upgrades.speedScale(this);
+  }
+
+  /** The sugar rush's boost to `stat` (speed or attackSpeed): stacked sugar rushes (Premium Baking Goods) add up. */
+  sugarScale(stat) {
+    return this.buffs.sugar > 0 ? 1 + (CONFIG.buffs.sugar[stat] - 1) * (this.sugarStacks || 1) : 1;
   }
 
   /** The value of a running potion effect (0 when none). */
   brew(family) { return this.brews[family] ? this.brews[family].v : 0; }
 
-  /** Crit chance: the hero's base rate (CONFIG.classes[id].crit, or the shared one) plus Focus potions. */
-  get critChance() { return (this.cfg.crit?.chance ?? CONFIG.player.critChance) + this.brew('focus'); }
+  /** Crit chance: the hero's base rate (CONFIG.classes[id].crit, or the shared one) plus Focus potions (doubled standing still with Deadly Precision). */
+  get critChance() { return ((this.cfg.crit?.chance ?? CONFIG.player.critChance) + this.brew('focus')) * Upgrades.critScale(this); }
 
-  /** Crit damage: this hero's own (CONFIG.classes[id].crit), or the shared one. */
-  get critMultiplier() { return this.cfg.crit?.multiplier ?? CONFIG.player.critMultiplier; }
+  /** Crit damage: this hero's own (CONFIG.classes[id].crit), or the shared one (doubled standing still with Deadly Precision). */
+  get critMultiplier() { return (this.cfg.crit?.multiplier ?? CONFIG.player.critMultiplier) * Upgrades.critScale(this); }
 
   /** How much further this hero's hits knock enemies back (Bulldose potions). */
   get knockbackMultiplier() { return 1 + this.brew('bulldose'); }
 
   /** Ghost auras: slowed to `amount` speed while inside one (refreshed every frame). */
   chill(amount, time = 0.2) {
+    if (Upgrades.blocksChill(this, this.lastWorld)) return;
     if (!(this.chillTime > 0) || amount < this.chillAmount) this.chillAmount = amount;
     this.chillTime = Math.max(this.chillTime || 0, time);
   }
@@ -124,6 +130,7 @@ class Player extends Entity {
 
   update(dt, world) {
     this.animTime += dt;
+    this.lastWorld = world;   // for hooks called without the world (chill)
     this.flashTime -= dt;
     this.invulnerable -= dt;
     this.iframes -= dt;
@@ -148,10 +155,11 @@ class Player extends Entity {
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
     for (const k of Object.keys(this.cooldowns)) {
       const rate = k === 'primary' ? this.attackSpeed * (1 + this.brew('rage')) * (this.inspired > 0 ? 1 + CONFIG.classes.bard.morale.attackSpeed : 1)
-        * (this.buffs.sugar > 0 ? CONFIG.buffs.sugar.attackSpeed : 1)
+        * this.sugarScale('attackSpeed')
         : k === 'dodge' ? 1 : this.abilityHaste;
       this.cooldowns[k] -= dt * rate;
     }
+    Upgrades.update(this, dt, world);
     if (this.resource) {
       const regen = this.resource.regen * (1 + this.brew('manaRegen'));
       this.resource.value = Math.min(this.resource.max, this.resource.value + regen * dt);
@@ -348,7 +356,7 @@ class Player extends Entity {
     const c = CONFIG.player.dodge;
     const moving = this.moveDir.x !== 0 || this.moveDir.y !== 0;
     const angle = moving ? Math.atan2(this.moveDir.y, this.moveDir.x) : this.aim;
-    this.cooldowns.dodge = this.dodgeCooldown;
+    this.cooldowns.dodge = Upgrades.dodgeCooldown(this);
     this.dodge = { t: 0, angle, ghost: 0 };
     this.busy = c.duration;
     this.iframes = Math.max(this.iframes, c.invulnerability);
@@ -429,7 +437,7 @@ class Player extends Entity {
   }
 
   /** Set alight (flaming catapults): burnDps hp per second for `duration`s. Blocked hits don't burn. */
-  burn(dps, duration, world) { this.ailment('burn', dps, duration, world, 'BURNING', '#ff8a3a'); }
+  burn(dps, duration, world) { if (!Upgrades.blocksBurn(this, world)) this.ailment('burn', dps, duration, world, 'BURNING', '#ff8a3a'); }
 
   /** Cut open (the jester's daggers): bleeds dps hp per second for `duration`s. */
   bleed(dps, duration, world) { this.ailment('bleed', dps, duration, world, 'BLEEDING', '#ff5a6a'); }
@@ -555,6 +563,10 @@ class Player extends Entity {
     this.lastBlocked = true;            // set false below once the hit really lands
     amount *= world.weakenScale ?? 1;   // hits from a Bard-weakened enemy
     if (this.guard > 0) return true;
+    // shop upgrades: trap immunity, less contact damage, the static shield, the last defence
+    amount = Upgrades.incoming(this, amount, world, fromX, fromY, opts);
+    if (amount < 0) { this.lastBlocked = false; return false; }
+    if (amount <= 0) return true;
     amount = this.absorbAegis(amount, world);
     amount = this.absorb(amount, world, fromX, fromY, opts);
     if (amount <= 0) {
@@ -922,7 +934,7 @@ class Player extends Entity {
         fire.tick = 0.5;
         for (const t of world.getTargets()) {
           if (dist(this.x, this.y - 10, t.hx, t.hy) > INFERNO_RADIUS + t.radius) continue;
-          world.damageTarget(t, fire.v * 0.5, { source: this, sound: null, color: '#ff8a2a', fromUlt: true, noCrit: true });
+          world.damageTarget(t, fire.v * 0.5, { source: this, sound: null, color: '#ff8a2a', fromUlt: true, noCrit: true, fire: true });
           if (!t.dead) world.addDot(t, 8, 3, '#ff8a2a');
         }
       }
@@ -969,7 +981,7 @@ class Player extends Entity {
     for (const t of world.getTargets()) {
       if (opts.exclude && opts.exclude.has(t)) continue;
       if (dist(x, y, t.hx, t.hy) > r + t.radius) continue;
-      world.damageTarget(t, damage, { angle: angleTo(x, y, t.hx, t.hy), knockback: opts.knockback ?? 120, sound: opts.sound, fromUlt: opts.fromUlt, crit: opts.crit ?? null });
+      world.damageTarget(t, damage, { angle: angleTo(x, y, t.hx, t.hy), knockback: opts.knockback ?? 120, sound: opts.sound, fromUlt: opts.fromUlt, crit: opts.crit ?? null, fire: opts.fire });
       if (opts.stun) t.stun?.(opts.stun);
       hit.push(t);
     }
@@ -984,7 +996,7 @@ class Player extends Entity {
     for (const t of world.getTargets()) {
       if (opts.exclude && opts.exclude.has(t)) continue;
       if (pointSegmentDistance(t.hx, t.hy, x1, y1, x2, y2) > width / 2 + t.radius) continue;
-      world.damageTarget(t, damage, { angle, knockback: opts.knockback ?? 120, sound: opts.sound, fromUlt: opts.fromUlt });
+      world.damageTarget(t, damage, { angle, knockback: opts.knockback ?? 120, sound: opts.sound, fromUlt: opts.fromUlt, fire: opts.fire });
       if (opts.exclude) opts.exclude.add(t);
       hit.push(t);
     }
@@ -1011,6 +1023,7 @@ class Player extends Entity {
   drawGround(ctx) {
     if (!this.seat) drawShadow(ctx, this.x, this.y + 9, 13, 5);
     this.drawGroundExtras(ctx);
+    Upgrades.drawGround(this, ctx, this.animTime);
     if (this.isLocal) this.drawAbilityPreview(ctx);
   }
 
@@ -1106,6 +1119,7 @@ class Player extends Entity {
     this.drawBrews(ctx);
     this.drawPassive(ctx);
     this.drawAegis(ctx);
+    Upgrades.drawOver(this, ctx, this.animTime);
     this.drawStatus(ctx);
   }
 }
@@ -1131,7 +1145,7 @@ function heroFireZone(world, owner, x, y, { r, life, dps, burnDps, burnTime }) {
     world.setActor(owner);
     for (const t of world.getTargets()) {
       if (Math.hypot(t.x - x, (t.y - y) / 0.55) > r + t.radius) continue;
-      world.damageTarget(t, dps * 0.5, { sound: null, noCrit: true, color: '#ffb02e', fromUlt: true, source: owner });
+      world.damageTarget(t, dps * 0.5, { sound: null, noCrit: true, color: '#ffb02e', fromUlt: true, source: owner, fire: true });
       if (t.dead) continue;
       const burning = world.dots.find((d) => d.target === t && d.kind === 'burn' && d.source === owner);
       if (burning) burning.t = Math.max(burning.t, burnTime);

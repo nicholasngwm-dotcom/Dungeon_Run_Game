@@ -67,18 +67,21 @@ class Warrior extends Player {
     const py = this.pivotY;
     const aim = this.aim;
     const dir = this.swingDir;
+    const range = c.range * Upgrades.reach(this);   // Longer Reach
+    const damage = c.damage * Upgrades.meleeScale(this);   // Beatdown stacks
     let hits = 0;
     for (const t of world.getTargets()) {
       const d = dist(px, py, t.hx, t.hy);
-      if (d > c.range + t.radius) continue;
+      if (d > range + t.radius) continue;
       const a = angleTo(px, py, t.hx, t.hy);
       if (d > t.radius && Math.abs(angleDiff(aim, a)) > arc / 2) continue;
-      if (world.damageTarget(t, c.damage, { angle: aim, knockback: c.knockback })) {
+      if (world.damageTarget(t, damage, { angle: aim, knockback: c.knockback })) {
         hits++;
         Warrior.cutFx(world, t.hx, t.hy, a + (Math.PI / 2) * dir);
       }
     }
-    world.effects.add(SLASH_FX_LIFE, (ctx, t) => Warrior.drawSlashFx(ctx, px, py, aim, arc, c.range, dir, t));
+    world.effects.add(SLASH_FX_LIFE, (ctx, t) => Warrior.drawSlashFx(ctx, px, py, aim, arc, range, dir, t));
+    if (hits) Upgrades.meleeHit(this, world);
     if (hits && this === world.localPlayer) world.shake(1.5 + hits * 0.5, 0.08);
     Sound.play('swordSwing');
   }
@@ -191,7 +194,7 @@ class Warrior extends Player {
     for (const t of world.getTargets()) {
       if (b.hit.has(t)) continue;
       const d = dist(this.x, this.hy, t.hx, t.hy);
-      if (d > c.reach + t.radius) continue;
+      if (d > c.reach * Upgrades.reach(this) + t.radius) continue;
       if (d > t.radius && Math.abs(angleDiff(b.angle, angleTo(this.x, this.hy, t.hx, t.hy))) > arc) continue;
       b.hit.add(t);
       world.damageTarget(t, c.damage, { angle: b.angle, knockback: c.knockback, sound: 'impact' });
@@ -370,7 +373,7 @@ class Warrior extends Player {
   updateChargeCharges(dt) {
     const c = this.cfg.charge;
     if (this.chargeCharges < c.charges) {
-      this.chargeRecharge -= dt;
+      this.chargeRecharge -= dt * this.abilityHaste;
       if (this.chargeRecharge <= 0) {
         this.chargeCharges++;
         this.chargeRecharge = this.chargeCharges < c.charges ? c.cooldown : 0;
@@ -391,12 +394,22 @@ class Warrior extends Player {
     if (this.spin) this.updateSpin(dt, world);
     if (this.charge) this.updateCharge(dt, world);
     if (this.cleave) this.updateCleave(dt, world);
-    this.bashCooldown -= dt;
+    this.bashCooldown -= dt * this.abilityHaste;
+    this.fieldFlash = (this.fieldFlash || 0) - dt;
     if (this.bash) this.updateBash(dt, world);
     this.updateShield(world);
   }
 
   drawGroundExtras(ctx) {
+    if (this.barrier.raised && Upgrades.has(this, 'barrierField')) {
+      // Barrier Force Field: a faint dome of force around him while the shield is up (it flares when it soaks a blow)
+      const a = this.fieldFlash > 0 ? 0.9 : 0.35 + Math.sin(this.animTime * 6) * 0.1;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.ring(ctx, this.x, this.y - 2, 30, 16, `rgba(138, 184, 255, ${a})`, 2, { dash: [5, 3], spin: this.animTime * 1.5 });
+      if (this.fieldFlash > 0) PFX.disc(ctx, this.x, this.y - 2, 30, 16, 'rgba(138, 184, 255, 0.18)', 2);
+      ctx.restore();
+    }
     if (this.spin) {
       // the spin's reach: a dashed steel ring turning with the blade
       PFX.ring(ctx, this.x, this.y, this.cfg.spin.radius, this.cfg.spin.radius, 'rgba(228, 231, 238, 0.45)', 2, { dash: [4, 3], spin: this.spin.t * 3 });
@@ -428,6 +441,12 @@ class Warrior extends Player {
       this.barrier.absorb(amount, world, this.barrier.x, this.barrier.hy);
       world.effects.text(this.barrier.x, this.barrier.hy - 30, 'BLOCKED', { color: '#e4e7ee', size: 7 });
       return 0;
+    }
+    // Barrier Force Field: melee (anything but shots, shockwaves and traps) is halved behind the raised shield
+    if (this.barrier.raised && Upgrades.has(this, 'barrierField') && !opts.projectile && !opts.shockwave && !opts.trap) {
+      amount *= 0.5;
+      Upgrades.state(this).flash.barrierField = world.time;
+      this.fieldFlash = 0.25;
     }
     return opts.contact ? amount * (1 - this.cfg.passive.contactReduction) : amount;
   }

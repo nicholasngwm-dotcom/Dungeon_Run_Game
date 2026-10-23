@@ -248,6 +248,7 @@ const Menus = {
       case 'buy': Shop.buy(arg); break;
       case 'buyPotion': Shop.buyPotion(arg); break;
       case 'reroll': Shop.reroll(); break;
+      case 'pick': Shop.pick(arg); break;
       case 'settings': this.openSettings(); break;
       case 'closeSettings': this.requestCloseSettings(); break;
       case 'saveSettings': this.saveSettings(); break;
@@ -365,15 +366,14 @@ const Menus = {
       </div>
       <div class="pause-sub">UPGRADES</div>
       <div class="pause-upgrades">${owned.length ? owned.map((u, i) => `
-        <div class="pause-upgrade"><canvas data-u="${i}" width="32" height="32"></canvas><div><b style="color:${u.color}">${u.name}</b><span>${u.desc}</span></div></div>`).join('')
-        : '<p class="pause-none">None yet. Buy one at a shop room in a dungeon run.</p>'}
+        <div class="pause-upgrade${u.hero ? ' hero-only' : ''}"><canvas data-u="${i}"></canvas><div><b style="color:${u.color}">${u.name}${u.hero ? ` <i class="hero-tag">${CONFIG.classes[u.hero].name.toUpperCase()}</i>` : ''}</b><span>${u.desc}${u.cooldown ? ` (${u.cooldown >= 60 ? `${u.cooldown / 60} min` : `${u.cooldown}s`} cooldown)` : ''}</span></div></div>`).join('')
+        : '<p class="pause-none">None yet. Buy them from Bram at a dungeon run\'s shop room.</p>'}
       </div>`;
     const portrait = document.getElementById('pause-portrait').getContext('2d');
     portrait.imageSmoothingEnabled = false;
     portrait.drawImage(p.frames.idle[0].img, 0, 0);
     for (const c of box.querySelectorAll('canvas[data-u]')) {
-      const u = owned[Number(c.dataset.u)];
-      drawUpgradeIcon(c.getContext('2d'), u.id, u.color);
+      drawUpgradeIcon(c, owned[Number(c.dataset.u)].id);
     }
   },
 

@@ -41,7 +41,9 @@ class Enemy extends Entity {
     if (this.frozenTime > 0) this.frozenFx(dt, world);
     this.frozenTime -= dt;
     this.weakened = this.weakenUntil > world.time;   // (for drawing)
-    if (this.asleep && !(this.stunTime > dt)) this.asleep = false;
+    if (this.asleep && !(this.stunTime > dt)) { this.asleep = false; this.wokeUp(world, 0); }
+    this.iced = (this.iced || 0) - dt;       // coated in the Baker's icing (Bigger Cakes): slowed
+    this.groggy = (this.groggy || 0) - dt;   // still drowsy after a lullaby (Groggy): slowed
     this.waking = (this.waking || 0) - dt;
     this.hasted = (this.hasted || 0) - dt;   // a minstrel's war song (see Minstrel)
     this.rallied = (this.rallied || 0) - dt; // a general's call to charge (see General)
@@ -119,7 +121,8 @@ class Enemy extends Entity {
 
   /** Movement speed multiplier: rallied by a general, it runs faster; stuck in the Baker's icing, slower. */
   get speedBoost() {
-    return (this.rallied > 0 ? this.rallySpeed || 1 : 1) * (this.sticky > 0 ? 1 - CONFIG.classes.baker.passive.slow : 1);
+    return (this.rallied > 0 ? this.rallySpeed || 1 : 1) * (this.sticky > 0 ? 1 - CONFIG.classes.baker.passive.slow : 1)
+      * (this.iced > 0 ? 0.6 : 1) * (this.groggy > 0 && !(this.stunTime > 0) ? 0.6 : 1);
   }
 
   moveAngle(world, a, speed, dt) {
@@ -133,6 +136,19 @@ class Enemy extends Entity {
 
   knockback(angle, force) {
     super.knockback(angle, force * (1 - this.knockbackResist));
+  }
+
+  /**
+   * Just woken from a lullaby: if the Bard who sang it has Groggy, it stays drowsy (slowed)
+   * for 3s more once it's come round (`after`s from now).
+   */
+  wokeUp(world, after) {
+    const bard = this.sleptBy;
+    this.sleptBy = null;
+    if (!Upgrades.has(bard, 'groggy')) return;
+    this.groggy = after + 3;
+    world.effects.text(this.hx, this.hy - 40, 'GROGGY', { color: '#c8b8ff', size: 7 });
+    Upgrades.state(bard).flash.groggy = world.time;
   }
 
   /** Lulled by the Bard's lullaby: a long stun that a hit breaks (it then takes a moment to come round). */
@@ -151,6 +167,7 @@ class Enemy extends Entity {
       this.stunTime = this.waking;
       this.sleepMeter = 0;
       world.effects.text(this.hx, this.hy - 30, 'WOKE UP', { color: '#c8b8ff', size: 7 });
+      this.wokeUp(world, this.waking);
     }
     // a general's rallying shield soaks up hits first
     if (this.shieldHp > 0) {

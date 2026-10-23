@@ -32,6 +32,8 @@ class Projectile {
       hitSound: 'hit',
       fromUlt: false,      // damage from an ultimate doesn't charge the ultimate
       crit: null,          // true / false: this shot's crit is already decided (null: roll on each hit)
+      fire: false,         // a fire attack (Blazeborn makes these hit harder)
+      arrow: false,        // an arrow (Razor Sharp Arrows make crit arrows cut)
       owner: Projectile.actor, // hero who fired it (null for enemy shots)
     }, opts);
     if (!this.friendly) this.damage *= Projectile.enemyScale;
@@ -89,7 +91,9 @@ class Projectile {
       if (this.damage > 0) {
         world.damageTarget(t, this.damage, {
           angle: Math.atan2(this.vy, this.vx), knockback: this.knockback, sound: this.hitSound, fromUlt: this.fromUlt, crit: this.crit,
+          fire: this.fire, arrow: this.arrow,
         });
+        Upgrades.critPierce(this, world);   // Piercing Crit: a crit carries on through
       }
       if (this.onStrike) this.onStrike(this, world, t);
       if (this.pierce-- <= 0) return this.destroy(world, t);

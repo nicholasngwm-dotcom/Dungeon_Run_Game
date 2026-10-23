@@ -93,7 +93,10 @@ class Mage extends Player {
   primary(world) {
     const c = this.cfg.bolt;
     this.cooldowns.primary = c.cooldown;
+    // Empowered Mana Surge: cast with over 150 mana, the missile is bigger and hits 30% harder
+    const empowered = Upgrades.has(this, 'empoweredSurge') && this.resource.value > 150;
     if (!this.spend(c.cost, world)) return;
+    if (empowered) Upgrades.state(this).flash.empoweredSurge = world.time;
     this.recoil = 0.08;
     const m = world.mouseWorld;
     const spread = rand(-0.12, 0.12);
@@ -101,8 +104,8 @@ class Mage extends Player {
       x: this.tipX, y: this.tipY,
       vx: Math.cos(this.aim + spread) * c.speed,
       vy: Math.sin(this.aim + spread) * c.speed,
-      radius: 6, damage: c.damage, life: c.life, knockback: 60,
-      sprite: Sprites.projectiles.bolt, spin: 10, glow: MAGE_FX.glow, trail: ['#3fc2a8', '#9cf0d8'],
+      radius: 6, damage: c.damage * (empowered ? 1.3 : 1), life: c.life, knockback: 60, scale: empowered ? 1.5 : 1,
+      sprite: Sprites.projectiles.bolt, spin: 10, glow: empowered ? '156, 255, 240' : MAGE_FX.glow, trail: ['#3fc2a8', '#9cf0d8'],
       // two motes circling the missile, and twinkles left hanging in its wake
       aura: (ctx, p) => {
         ctx.save();
@@ -185,7 +188,7 @@ class Mage extends Player {
 
   explode(world, x, y) {
     const c = this.cfg.fireball;
-    this.hitCircle(world, x, y, c.radius, c.damage, { knockback: 260, sound: 'hit' });
+    this.hitCircle(world, x, y, c.radius, c.damage, { knockback: 260, sound: 'hit', fire: true });
     world.effects.burst(x, y, { count: 30, colors: ['#1f7a72', '#3fc2a8', '#9cf0d8', '#2a2129'], speed: [80, 260], life: [0.3, 0.7], size: [3, 6] });
     // frostfire: a crown of ghost flames, shards of teal ice and a dark smoke cloud
     world.effects.flames(x, y + 8, { count: 7, spread: c.radius * 0.55, height: 42, width: 16, life: 0.7, colors: MAGE_FX.flame });
@@ -366,6 +369,7 @@ class Mage extends Player {
     const b = this.bird;
     // F again lands early (ignoring the frame it started)
     if ((b.t > 0 && Input.pressed('f')) || b.t >= this.cfg.bird.duration) return this.endBird(world);
+    Upgrades.birdTrail(this, world);   // Birdie Trail
     b.t += dt;
     // the bird faces the way it flies (not the mouse), keeping its heading when hovering or flying straight up/down
     if (this.moving && this.moveDir.x) b.facing = this.moveDir.x > 0 ? 1 : -1;
@@ -544,6 +548,7 @@ class Mage extends Player {
     if (!this.bird) return super.drawGround(ctx);
     drawShadow(ctx, this.x, this.y + 9, 6, 2, 0.3);
     this.drawGroundExtras(ctx);
+    Upgrades.drawGround(this, ctx, this.animTime);
   }
 
   draw(ctx) {

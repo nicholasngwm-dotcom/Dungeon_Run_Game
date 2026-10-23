@@ -94,7 +94,9 @@ class Priestess extends Player {
     this.cooldowns.primary = c.cooldown;
     this.recoil = 0.12;
     const pt = this.aimPoint(world, c.maxRange);
-    this.rays.push({ x: pt.x, y: pt.y, t: 0 });
+    // Blinding Light: every 4th ray stuns what it hits
+    const blind = Upgrades.has(this, 'blindingLight') && ++Upgrades.state(this).rays % 4 === 0;
+    this.rays.push({ x: pt.x, y: pt.y, t: 0, blind });
     Sound.play('holyChime');
   }
 
@@ -104,8 +106,21 @@ class Priestess extends Player {
       r.t += dt;
       if (r.t < c.delay) continue;
       r.dead = true;
-      this.hitCircle(world, r.x, r.y, c.radius, c.damage, { knockback: 60 });
+      const hit = this.hitCircle(world, r.x, r.y, c.radius, c.damage, { knockback: 60, stun: r.blind ? 1 : 0 });
       const { x, y } = r;
+      if (r.blind) {
+        Upgrades.proc(this, world, 'blindingLight', hit.length ? 'BLINDING LIGHT!' : null);
+        for (const t of hit) world.effects.text(t.hx, t.hy - 34, 'BLINDED', { color: '#fff6c8', size: 7 });
+        // a white flash ringing out over the whole pool
+        world.effects.add(0.45, (ctx, t) => {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 1 - t;
+          PFX.disc(ctx, x, y, c.radius * 1.2, c.radius * 0.66, 'rgba(255, 255, 240, 0.5)', 2);
+          PFX.ring(ctx, x, y, c.radius * (1 + t), c.radius * 0.55 * (1 + t), '#ffffff', 2, { thick: 2 });
+          ctx.restore();
+        });
+      }
       world.effects.add(0.3, (ctx, t) => {
         // a pixel pillar of light falling from above onto a glowing pool
         ctx.save();

@@ -36,7 +36,7 @@ const CONFIG = {
       // passive: every `hits` hits the next one is blocked, and enemy bodies do `contactReduction` less damage
       passive: { name: 'Tanker', hits: 4, contactReduction: 0.5 },
       name: 'Knight',
-      hp: 450,
+      hp: 400,
       speed: 200,
       crit: { chance: 0.1, multiplier: 1.5 },   // crit rate and crit damage (heroes without one use CONFIG.player's)
       // LMB: sword swings, sweeping left to right then back
@@ -280,14 +280,14 @@ const CONFIG = {
       hp: 60, speed: 62, radius: 13, damage: 16,
       attackRange: 70, windup: 0.7, recovery: 0.6, cooldown: 1.6,
       waveRadius: 110, waveSpeed: 260, waveWidth: 14,
-      heartChance: 0.25,   // overrides drops.heartChance
+      heartChance: 0.12,   // overrides drops.heartChance
     },
     // stationary: raises a zombie or skeleton every spawnInterval (up to maxAlive at once),
     // and releases 1-3 ghosts when destroyed
     gravestone: {
       hp: 220, speed: 0, radius: 18, damage: 0, contactDamage: 0,
       firstSpawn: 1.5, spawnInterval: 2, maxAlive: 3, summonTotal: 8, spawnTypes: ['zombie', 'skeleton'],
-      ghosts: [1, 3], heartChance: 0.35,
+      ghosts: [1, 3], heartChance: 0.18,
     },
     // only comes out of broken gravestones: slow, contact damage only,
     // with a chilling aura that slows heroes inside it
@@ -303,7 +303,7 @@ const CONFIG = {
       hopDistance: 46, hopTime: 0.32, hopRest: 0.55,
       aggroRange: 160, leashRange: 230,
       windup: 0.42, aimLockAt: 0.15, lungeDistance: 150, lungeTime: 0.2, recovery: 0.45,
-      knockbackResist: 0.85, stunResist: 0.5, buffChance: 0.8, heartChance: 0.3,
+      knockbackResist: 0.85, stunResist: 0.5, buffChance: 0.8, heartChance: 0.15,
     },
   },
 
@@ -411,14 +411,14 @@ const CONFIG = {
     catapult: {
       hp: 300, speed: 0, radius: 20, damage: 40, contactDamage: 0,
       range: 560, windup: 1.0, flight: 1.1, cooldown: 3.0, blastRadius: 62,
-      knockbackResist: 1, stunResist: 0.5, heartChance: 0.3,
+      knockbackResist: 1, stunResist: 0.5, heartChance: 0.15,
     },
     // stage 2+: Flaming catapult: tougher; its burning boulders hit harder and leave fire that burns (burnDps for burnTime)
     flamingCatapult: {
       hp: 480, speed: 0, radius: 20, damage: 52, contactDamage: 0,
       range: 580, windup: 1.0, flight: 1.1, cooldown: 3.2, blastRadius: 66,
       fireRadius: 64, fireTime: 4, burnDps: 9, burnTime: 3,
-      knockbackResist: 1, stunResist: 0.5, heartChance: 0.35,
+      knockbackResist: 1, stunResist: 0.5, heartChance: 0.18,
     },
     // stage 3: Cluster catapult: a plain catapult's hp, but it hurls a whole volley: boulders[0]-boulders[1]
     // burning boulders raining down within `spread` px of you, `stagger` s apart, each like the flaming catapult's
@@ -427,7 +427,7 @@ const CONFIG = {
       range: 600, windup: 1.3, flight: 1.1, cooldown: 4.5, blastRadius: 66,
       boulders: [5, 6], spread: 130, stagger: 0.12,
       fireRadius: 64, fireTime: 4, burnDps: 9, burnTime: 3,
-      knockbackResist: 1, stunResist: 0.5, heartChance: 0.35,
+      knockbackResist: 1, stunResist: 0.5, heartChance: 0.18,
     },
     // stage 3: Army general: once, he raises the empire's banner and calls the charge: every enemy within
     // rallyRadius moves rallySpeed faster for rallyTime s and gets a rallyShield hp shield. Then he runs you
@@ -623,12 +623,13 @@ const CONFIG = {
     // time, potions[0]-potions[1] healing potions, mostly the small ones (healTierWeights: tier 1, 2, 3)
     treasure: { coins: [5, 35], potions: [2, 5], potionChance: 0.5, healTierWeights: [6, 3, 1] },
     // wishing well: each coin tossed in has `chance` to grant a wish (guaranteed on the pity-th coin);
-    // a wish is one random kind of potion, potions[0]-potions[1] of it. One wish per hero per well
-    well: { chance: 0.15, pity: 12, potions: [2, 6] },
-    // shop: every price (upgrades, potions, rerolls) is multiplied by stagePrice[stage - 1], so shops
-    // further into the dungeon cost more. Upgrades: one pick of three per shop, each owned at most once
-    // per run; rerolling the three costs reroll.base, + reroll.step more each time at the same shop
-    shop: { stagePrice: [1, 1.4, 1.8], reroll: { base: 6, step: 4 } },
+    // a wish is one random kind of potion, potions[0]-potions[1] of it (or, upgradeChance of the time, a random upgrade). One wish per hero per well
+    well: { chance: 0.15, pity: 12, potions: [2, 6], upgradeChance: 0.15 },
+    // shop: potion prices are multiplied by stagePrice[stage - 1], so shops further in cost more.
+    // Upgrades: three on offer at a time, buy as many as you can; the first costs upgrade.base and each
+    // one bought adds upgrade.step for the rest of the run. Rerolling the three costs reroll.base, + reroll.step
+    // more each time, back to reroll.base at the next stage's shop. (Stage 1 also starts with a free pick of three.)
+    shop: { stagePrice: [1, 1.4, 1.8], upgrade: { base: 30, step: 10 }, reroll: { base: 10, step: 5 } },
     survival: { duration: [30, 40, 50], spawnEvery: [1.3, 1.2, 1.1], perSpawn: 2, maxAlive: [12, 13, 14] },
     // the rooms whose obstacles are laid out in a pattern (DungeonRun.addLayout); they block heroes, enemies and shots alike
     cover: { rooms: ['combat', 'survival'] },
@@ -676,7 +677,7 @@ const CONFIG = {
   },
 
   // mana orbs only drop for mana users; picking one up triggers the Mage's Mana Surge passive
-  drops: { heartChance: 0.1, heartHeal: 45, manaChance: 0.45, manaRestore: 15, coinMagnet: 220 },   // coinMagnet: how far coins fly to you from (px)
+  drops: { heartChance: 0.05, heartHeal: 45, manaChance: 0.45, manaRestore: 15, coinMagnet: 220 },   // coinMagnet: how far coins fly to you from (px)
 
   // buff orbs dropped by mimics (one random type each); picking one up again refreshes it
   buffs: {

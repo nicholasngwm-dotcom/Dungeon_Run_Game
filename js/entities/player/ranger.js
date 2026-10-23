@@ -21,6 +21,9 @@ function arrowStreak(ctx, p, len, width, colors, alpha) {
   ctx.restore();
 }
 
+// Cloud of Confusion upgrade: how far the camo's green smoke spreads (px)
+const CLOUD_RADIUS = 80;
+
 class Ranger extends Player {
   constructor(x, y) {
     super('ranger', x, y);
@@ -35,6 +38,7 @@ class Ranger extends Player {
     this.choosingArrow = false; // RMB pressed: LMB fire arrow, RMB ice arrow
     this.targetPos = { x, y };
     this.volleys = [];
+    this.clouds = [];           // Cloud of Confusion smoke: { x, y, t, tick }
     this.rapidArrows = 0;
     this.camo = 0;
     this.recoil = 0;
@@ -90,6 +94,7 @@ class Ranger extends Player {
       damage: c.damage * (rapid ? 1 + r.damageBonus : 1),
       pierce: rapid ? Math.ceil(c.pierce * (1 + r.pierceBonus)) : c.pierce,
       life: 1.5, knockback: 140,
+      arrow: true,
       sprite: Sprites.projectiles.arrow,
       glow: rapid ? ARCHER_FX.rapidGlow : null,
       trail: rapid ? ['#a8cc6a', '#e0d2aa'] : ['#e0d2aa'],
@@ -114,6 +119,11 @@ class Ranger extends Player {
     world.effects.burst(this.hx, this.hy, { count: 24, colors: ARCHER_FX.leaves, speed: [60, 160], life: [0.3, 0.6] });
     world.effects.smoke(this.hx, this.hy + 4, { count: 9, radius: 18, life: 0.7, colors: ARCHER_FX.leafSmoke });
     world.effects.text(this.hx, this.hy - 30, 'CAMO', { color: '#a8cc6a', size: 8 });
+    // Cloud of Confusion: a cloud of green smoke left where she vanished
+    if (Upgrades.has(this, 'confusionCloud')) {
+      this.clouds.push({ x: this.x, y: this.y, t: 0, tick: 0 });
+      Upgrades.proc(this, world, 'confusionCloud');
+    }
     Sound.play('camo');
   }
 
@@ -149,7 +159,7 @@ class Ranger extends Player {
       y: this.pivotY + Math.sin(this.aim) * 14,
       vx: Math.cos(this.aim) * c.speed,
       vy: Math.sin(this.aim) * c.speed,
-      radius: 6, damage: c.damage, life: 1.4, knockback: 160,
+      radius: 6, damage: c.damage, life: 1.4, knockback: 160, arrow: true,
       ...opts,
     }));
     Sound.play('bowShotHeavy');
@@ -159,7 +169,7 @@ class Ranger extends Player {
   fireArrow(world) {
     const c = this.cfg.elemental.fire;
     this.shootElemental(world, c, {
-      sprite: Sprites.projectiles.fireArrow,
+      sprite: Sprites.projectiles.fireArrow, fire: true,
       pierce: c.pierce, glow: '255, 130, 40', trail: ['#ff8a1e', '#ffd34a', '#e0461e'],
       // a flickering comet tail of fire
       aura: (ctx, p) => {
@@ -239,9 +249,10 @@ class Ranger extends Player {
     const c = this.cfg.elemental.ice;
     const hit = this.hitCircle(world, x, y, c.radius, c.damage, { knockback: 0, sound: 'hit' });
     for (const t of hit) {
-      if (t.freeze) t.freeze(c.freeze);
-      else if (world.isBossTarget(t)) world.freezeBoss(c.freeze);   // a boss is frozen as a whole (its fists too)
-      else t.stun?.(c.freeze);
+      const freeze = c.freeze * Upgrades.freezeScale(this);   // Heart of Frost: longer freezes
+      if (t.freeze) t.freeze(freeze);
+      else if (world.isBossTarget(t)) world.freezeBoss(freeze);   // a boss is frozen as a whole (its fists too)
+      else t.stun?.(freeze);
     }
     world.effects.burst(x, y, { count: 28, colors: ['#ffffff', '#9ad0ff', '#4a8aff'], speed: [80, 240], life: [0.3, 0.6], size: [2, 4] });
     world.effects.shards(x, y, { count: 18, speed: [160, 320], life: 0.55, len: [9, 16], width: 6 });
@@ -341,6 +352,7 @@ class Ranger extends Player {
     this.recoil -= dt;
     this.camo -= dt;
     if (this.camo > 0) { this.slowTime = 0; this.chillTime = 0; }
+    this.updateClouds(dt, world);
 
     const c = this.cfg.ult;
     const m = world.mouseWorld;
@@ -371,7 +383,41 @@ class Ranger extends Player {
     removeDead(this.volleys);
   }
 
+  /**
+   * Cloud of Confusion: the green smoke hangs for 3.5s; every enemy inside it (CLOUD_RADIUS)
+   * is confused for 2.5s, staggering about instead of attacking.
+   */
+  updateClouds(dt, world) {
+    for (const c of this.clouds) {
+      c.t += dt;
+      c.tick -= dt;
+      if (c.t >= 3.5) { c.dead = true; continue; }
+      if (vrand(0, 1) < dt * 14) {
+        const a = vrand(0, TAU);
+        const r = vrand(0, 1) * CLOUD_RADIUS;
+        world.effects.smoke(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r * 0.6 - 8, { count: 1, radius: vrand(10, 18), life: 0.9, rise: 10, colors: ['#2e5a24', '#4a8a32', '#7ae05a'] });
+      }
+      if (c.tick > 0) continue;
+      c.tick = 0.25;
+      for (const e of world.enemies) {
+        if (Math.hypot(e.x - c.x, (e.y - c.y) / 0.6) > CLOUD_RADIUS + e.radius) continue;
+        if (!(e.confused > 0)) Upgrades.state(this).flash.confusionCloud = world.time;
+        e.confuse?.(2.5, world);
+      }
+    }
+    removeDead(this.clouds);
+  }
+
   drawGroundExtras(ctx) {
+    for (const c of this.clouds) {
+      const k = Math.min(1, c.t * 4, (3.5 - c.t) * 2);
+      ctx.save();
+      ctx.globalAlpha = 0.3 * k;
+      PFX.disc(ctx, c.x, c.y, CLOUD_RADIUS, CLOUD_RADIUS * 0.6, '#3a7a2a', 3);
+      ctx.globalAlpha = 0.7 * k;
+      PFX.ring(ctx, c.x, c.y, CLOUD_RADIUS, CLOUD_RADIUS * 0.6, '#7ae05a', 2, { dash: [4, 4], spin: c.t });
+      ctx.restore();
+    }
     const c = this.cfg.ult;
     if (this.camo > 0 && this.isLocal) this.drawDetectRing(ctx);
     if (this.choosingArrow && this.isLocal) {

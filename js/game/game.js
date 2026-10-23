@@ -159,13 +159,15 @@ class Game {
    * charge and kill credit. sound: null for silent ticks. fromUlt: damage from
    * an ultimate doesn't charge the ultimate. Returns the damage dealt (0 if none).
    */
-  damageTarget(target, amount, { angle = 0, knockback = 0, sound = 'hit', noCrit = false, crit: forced = null, color = '#ffffff', fromUlt = false, source = null } = {}) {
+  damageTarget(target, amount, { angle = 0, knockback = 0, sound = 'hit', noCrit = false, crit: forced = null, color = '#ffffff', fromUlt = false, source = null, fire = false, arrow = false } = {}) {
     const src = source || this.actor || this.players[0];
     // crit: true / false decides it up front (one roll shared by a whole attack, e.g. a rocket and its blast)
-    const crit = forced ?? (!noCrit && Math.random() < (src.critChance ?? CONFIG.player.critChance));
+    let crit = forced ?? (!noCrit && Math.random() < (src.critChance ?? CONFIG.player.critChance));
+    crit = Upgrades.forceCrit(src, target, crit, noCrit);   // First Encounter
+    this.lastCrit = crit;   // (Piercing Crit reads it straight after)
     // a Bard-weakened target takes extra damage
     const weak = target.weakenUntil > this.time ? 1 + CONFIG.classes.bard.ult.weakenTaken : 1;
-    const dmg = Math.max(1, Math.round(amount * weak * (crit ? src.critMultiplier ?? CONFIG.player.critMultiplier : 1) * src.damageMultiplier * src.buffDamage * src.upgradeDamage));
+    const dmg = Math.max(1, Math.round(amount * weak * (crit ? src.critMultiplier ?? CONFIG.player.critMultiplier : 1) * src.damageMultiplier * src.buffDamage * src.upgradeDamage * (fire ? Upgrades.fireScale(src) : 1)));
     if (!target.takeDamage(dmg, this)) return 0;
     // a sleeping boss is jolted awake: it takes a moment to come round
     if (this.boss && this.boss.sleepUntil > this.time + CONFIG.classes.bard.lullaby.wake && this.boss.getTargets().includes(target)) {
@@ -190,6 +192,7 @@ class Game {
     if (this.players.includes(src)) Game.statsOf(src).damage += dmg;
     if (!fromUlt && !src.dead) src.gainUlt(dmg);
     src.onDamageDealt(target, dmg, this);
+    Upgrades.onDealt(src, target, dmg, { crit, fire, arrow }, this);
     if (this.practice) {
       this.practice.log.push({ t: this.time, dmg });
       this.practice.total += dmg;
@@ -233,7 +236,7 @@ class Game {
       this.dotFx(d, dt);
       if (d.tick <= 0) {
         d.tick += 0.5;
-        this.damageTarget(d.target, d.dps * 0.5, { sound: null, noCrit: true, color: d.color, source: d.source });
+        this.damageTarget(d.target, d.dps * 0.5, { sound: null, noCrit: true, color: d.color, source: d.source, fire: d.kind === 'burn' });
         const colors = d.kind === 'burn' ? ['#ffd34a', '#ff8a1e', '#e0461e'] : [d.color, '#7a1010'];
         this.effects.burst(d.target.hx, d.target.hy, { count: d.kind === 'burn' ? 5 : 2, colors, speed: [10, 40], life: [0.2, 0.4], up: d.kind === 'burn' ? 40 : 0 });
       }
@@ -628,6 +631,9 @@ class Game {
         return;
       case 'reroll':
         if (this.run && hero) this.run.rerollUpgrades(hero);
+        return;
+      case 'pickUpgrade':
+        if (this.run && hero) this.run.pickUpgrade(hero, cmd.upgrade);
         return;
       case 'buyPotion':
         if (this.run && hero) this.run.buyPotion(hero, cmd.id);
@@ -1210,6 +1216,7 @@ class Game {
     ctx.translate(-x, -y);
     e.draw(ctx);
     ctx.restore();
+    Upgrades.drawEnemy(ctx, e);
   }
 
   static buildVignette() {

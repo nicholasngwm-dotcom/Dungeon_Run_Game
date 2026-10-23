@@ -5,6 +5,9 @@
 //
 // States: rest -> hop -> rest ... | windup -> lunge -> recover -> windup ...
 
+// the buffs a mimic can drop (not the Baker's sugar rush, which only comes from her pastries)
+const MIMIC_BUFFS = ['regen', 'speed', 'damage'];
+
 class Mimic extends Enemy {
   constructor(x, y) {
     super('mimic', x, y);
@@ -119,11 +122,11 @@ class Mimic extends Enemy {
     world.maybeDropMana(this.x, this.y);
     if (this.secret) {
       // a secret-room chest mimic: every buff, each lasting a full minute
-      Object.keys(CONFIG.buffs).forEach((type, i, all) => {
+      MIMIC_BUFFS.forEach((type, i, all) => {
         const a = (i / all.length) * TAU;
         world.pickups.push(new BuffPickup(this.x + Math.cos(a) * 20, this.y + Math.sin(a) * 12, type, CONFIG.run.secret.mimicBuffTime));
       });
-    } else if (Math.random() < this.cfg.buffChance) world.pickups.push(new BuffPickup(this.x + 12, this.y, choose(Object.keys(CONFIG.buffs))));
+    } else if (Math.random() < this.cfg.buffChance) world.pickups.push(new BuffPickup(this.x + 12, this.y, choose(MIMIC_BUFFS)));
   }
 
   drawTelegraph(ctx) {

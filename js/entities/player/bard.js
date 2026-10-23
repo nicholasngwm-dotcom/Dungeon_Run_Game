@@ -206,7 +206,7 @@ class Bard extends Player {
       t.sleepMeter = (t.sleepMeter || 0) + dt;
       if (t.sleepMeter < c.exposure) continue;
       t.sleepMeter = 0;
-      if (t.sleep) t.sleep(c.sleep);
+      if (t.sleep) { t.sleep(c.sleep); t.sleptBy = this; }   // (Groggy: she makes them drowsy when they wake)
       else t.stun?.(c.sleep);
       world.effects.text(t.hx, t.hy - 36, 'ASLEEP', { color: '#c8b8ff', size: 7 });
       world.effects.burst(t.hx, t.hy - 10, { count: 10, colors: ['#ffffff', '#e8e0ff', '#c8b8ff'], speed: [20, 70], life: [0.4, 0.7], up: 30 });

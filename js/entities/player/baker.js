@@ -138,7 +138,10 @@ class Baker extends Player {
     const lob = {
       x0: this.handX, y0: this.handY, x1: to.x, y1: to.y, t: 0, time: c.flightTime + d / c.speed,
       height: 30 + d * 0.3, flavour: Math.floor(Math.random() * Sprites.projectiles.cakes.length), spin: this.facing,
+      big: Upgrades.has(this, 'biggerCakes'),
     };
+    // Bigger Cakes: every 5th cake is an iced one
+    if (lob.big) lob.iced = ++Upgrades.state(this).cakes % 5 === 0;
     this.lobs.push(lob);
     // drawn over everyone while it's up in the air
     world.effects.add(lob.time, (ctx) => this.drawLob(ctx, lob));
@@ -150,7 +153,7 @@ class Baker extends Player {
       lob.t += dt;
       if (lob.t < lob.time) continue;
       lob.dead = true;
-      this.splat(world, lob.x1, lob.y1, lob.flavour);
+      this.splat(world, lob.x1, lob.y1, lob.flavour, lob);
     }
     removeDead(this.lobs);
   }
@@ -165,8 +168,14 @@ class Baker extends Player {
     const img = Sprites.projectiles.cakes[lob.flavour];
     ctx.save();
     ctx.translate(gx, gy - Math.sin(k * Math.PI) * lob.height - 6);
-    ctx.scale(c.scale, c.scale);
+    const s = c.scale * (lob.big ? 1.35 : 1);
+    ctx.scale(s, s);
     drawRotated(ctx, img, 0, 0, img.width / 2, img.height / 2, k * TAU * 0.75 * lob.spin);
+    if (lob.iced) {
+      // the iced cake: a white glow round it in flight
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, 0, 0, 10, '255, 230, 245', 0.8);
+    }
     ctx.restore();
   }
 
@@ -174,12 +183,23 @@ class Baker extends Player {
    * The cake comes down: whoever it lands right on takes the full hit, the rest of the
    * splat a little; a gooey burst of frosting and a patch of sticky icing.
    */
-  splat(world, x, y, flavour) {
+  splat(world, x, y, flavour, lob = {}) {
     const c = this.cfg.cake;
-    const direct = new Set(this.hitCircle(world, x, y - 8, c.hitRadius, c.damage, { knockback: 90, sound: null }));
-    this.hitCircle(world, x, y - 8, c.radius, c.splash, { knockback: 40, sound: null, exclude: direct });
-    cakeSplatFx(world, x, y + 4, c.radius * 0.7, Sprites.cakeSplats[flavour], this.cfg.passive.time);
-    this.icing.push({ x, y: y + 4, t: 0 });
+    const grow = lob.big ? 1.45 : 1;   // Bigger Cakes
+    const direct = new Set(this.hitCircle(world, x, y - 8, c.hitRadius * grow, c.damage, { knockback: 90, sound: null }));
+    const splashed = this.hitCircle(world, x, y - 8, c.radius * grow, c.splash, { knockback: 40, sound: null, exclude: direct });
+    cakeSplatFx(world, x, y + 4, c.radius * 0.7 * grow, Sprites.cakeSplats[flavour], this.cfg.passive.time);
+    this.icing.push({ x, y: y + 4, t: 0, grow });
+    if (lob.iced) {
+      // every 5th: everything it splashed is coated in icing (slowed for 3s)
+      for (const t of [...direct, ...splashed]) {
+        if (t.dead) continue;
+        t.iced = 3;
+        world.effects.text(t.hx, t.hy - 34, 'ICED', { color: '#ffe0f0', size: 7 });
+      }
+      Upgrades.proc(this, world, 'biggerCakes');
+      world.effects.burst(x, y - 6, { count: 20, colors: ['#ffffff', '#ffe0f0', '#ff8ad0'], speed: [60, 180], life: [0.3, 0.6], up: 50 });
+    }
     Sound.play('cakeSplat', 0.04);
   }
 
@@ -190,7 +210,7 @@ class Baker extends Player {
       s.t += dt;
       if (s.t >= c.time) { s.dead = true; continue; }
       for (const e of world.enemies) {
-        if (Math.hypot(e.x - s.x, (e.y - s.y) / 0.55) < (s.big ? this.cfg.ult.radius * 0.8 : c.radius) + e.radius * 0.5) e.sticky = 0.2;
+        if (Math.hypot(e.x - s.x, (e.y - s.y) / 0.55) < (s.big ? this.cfg.ult.radius * 0.8 : c.radius * (s.grow || 1)) + e.radius * 0.5) e.sticky = 0.2;
       }
     }
     removeDead(this.icing);
@@ -266,9 +286,14 @@ class Baker extends Player {
       const a = (i / c.count) * TAU + rand(-0.3, 0.3);
       const d = c.spread * rand(0.6, 1);   // well apart, so they're spread round the area
       const pt = world.dungeon.freePoint(at.x + Math.cos(a) * d, at.y + Math.sin(a) * d * 0.7, 6, 6);
-      world.pickups.push(new PastryPickup(this.handX, this.handY, pt.x, pt.y, kinds[i % kinds.length], { heal: c.heal, life: c.life, flightTime: c.flightTime + i * 0.06 }));
+      world.pickups.push(new PastryPickup(this.handX, this.handY, pt.x, pt.y, kinds[i % kinds.length], this.pastryOpts({ heal: c.heal, life: c.life, flightTime: c.flightTime + i * 0.06 })));
     }
     Sound.play('pastryToss');
+  }
+
+  /** Premium Baking Goods: her pastries heal 35 and their sugar rushes stack (up to 3). */
+  pastryOpts(o) {
+    return Upgrades.has(this, 'premiumBaking') ? { ...o, heal: 35, premium: true } : o;
   }
 
   // ---------- F: the oven ----------
@@ -481,7 +506,7 @@ class BakerOven {
     for (let i = 0; i < c.food; i++) {
       const a = (i / c.food) * TAU + rand(-0.4, 0.4);
       const pt = world.dungeon.freePoint(this.x + Math.cos(a) * rand(60, 110), this.y + Math.sin(a) * rand(40, 80), 6, 6);
-      world.pickups.push(new PastryPickup(this.x, this.hy, pt.x, pt.y, choose(PASTRY_KINDS), { heal: P.heal, life: P.life, flightTime: 0.6 + i * 0.08 }));
+      world.pickups.push(new PastryPickup(this.x, this.hy, pt.x, pt.y, choose(PASTRY_KINDS), this.owner.pastryOpts({ heal: P.heal, life: P.life, flightTime: 0.6 + i * 0.08 })));
     }
     for (let i = 0; i < 6; i++) {
       world.effects.burst(this.x, this.hy, { count: 3, colors: ['#4a8a7a', '#7ac0a8', '#383b48'], speed: [100, 300], life: [0.4, 0.9], up: 120, gravity: 500, size: [3, 5] });
