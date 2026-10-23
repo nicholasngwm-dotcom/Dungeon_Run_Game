@@ -1,26 +1,18 @@
-// Set dressing for a dungeon floor. Everything standing in a room is a solid obstacle
-// (see solidify): dead trees, soul-flame lamp posts, coffins, urns, a campfire in
-// the start room, barrels / crates / shelves in the shop, the castle's braziers and
-// armour... Only flat things on the floor (rugs, rune circles) and the boss rooms'
-// doors and gates in the walls aren't. Drifting mist rises around the hero.
-// Placement happens once, inside the shared simulation; the idle animation
-// (embers, mist) is visual only.
+// Set dressing for a dungeon floor: dead trees, soul-flame lamp posts, coffins, urns,
+// crows that take off when you get close, a campfire in the start room, barrels / crates /
+// shelves in the shop, the castle's braziers and armour... It's laid out in a pattern
+// (along the walls, mirrored across the room) and it's walkable floor dressing, except
+// the base of anything that gives light (lamp posts, braziers, candelabras, campfires),
+// which is a small solid post (see solidify), and the boss rooms' fixtures (her bell, her
+// desk). The rooms' real obstacles are their walls and cover (DungeonRun.addLayout).
+// Drifting mist rises around the hero. Placement happens once, inside the shared
+// simulation; the idle animation (crows, embers, mist) is visual only.
 
-// Footprints of the solid decor: [width in tiles, material (its rubble), fixed (no blast moves it)].
-// Props ('prop' items) take their width from their sprite.
-const DECOR_SOLID = {
-  campfire: [1, 'stone'], signpost: [1, 'wood'], lampPost: [1, 'metal'], deadTree: [1, 'wood'], coffin: [2, 'wood'],
-  urn: [1, 'stone'], shelf: [3, 'wood'], barrel: [1, 'wood'], crate: [1, 'wood'], bottleStand: [1, 'wood'],
-  bottleCrate: [1, 'wood'], herbBasket: [1, 'plant'], crystal: [1, 'stone'], brazier: [1, 'metal'], armor: [1, 'metal'],
-  banner: [1, 'wood'], cage: [1, 'metal'], statue: [1, 'stone'], topiary: [1, 'plant'], roseBush: [1, 'plant'],
-  gardenBell: [3, 'metal', true], studyDesk: [3, 'wood', true],
-};
-// Flat on the floor, or part of a wall or a boss's seat: kept, but not solid.
-const DECOR_FLAT = new Set(['rug', 'runeCircle', 'throneDoor', 'roseGate', 'throne']);
-// Small clutter that can't stand as an obstacle: left out.
-const DECOR_CLUTTER = new Set(['crow', 'bonePile', 'floatingBooks', 'floatingBook', 'rubble']);
-const PROP_CLUTTER = new Set(['flowers', 'goldPile', 'skullPile', 'bookStack']);
-const PROP_MATERIAL = { plant: 'plant', hayBale: 'plant', candelabra: 'metal', cauldron: 'metal', globe: 'metal', statueBust: 'stone' };
+// Lights: the half-size of the small solid post at the base of each [hw, hh] (px)
+const DECOR_POSTS = { lampPost: [6, 4], brazier: [8, 5], campfire: [12, 6] };
+const PROP_POSTS = { candelabra: [5, 4] };
+// Boss-room fixtures the fights are built round: solid across their footprint (tiles wide)
+const DECOR_FIXTURES = { gardenBell: 3, studyDesk: 3 };
 
 class FloorDecor {
   constructor(floor, run) {
@@ -34,57 +26,29 @@ class FloorDecor {
   }
 
   /**
-   * Turns everything standing in the rooms into a solid obstacle: its tiles become cover
-   * (DungeonRun.cover, so shots stop on it and big blasts knock it down) and it's lined up
-   * on them. Clutter, and anything that would block a doorway, a spike pad, a keeper or
-   * another obstacle, is left out.
+   * Lights get a small solid post at their base (heroes and enemies walk round it, not
+   * through it); the boss rooms' fixtures become solid cover tiles. Everything else stays
+   * walkable. A light whose base would block a doorway is left out.
    */
   solidify() {
     const f = this.floor;
     const T = f.T;
     const run = this.run;
-    const doors = new Set();
-    for (const r of f.rooms) {
-      for (const t of r.doors.flatMap((d) => d.tiles)) {
-        const tx = t % f.cols;
-        const ty = Math.floor(t / f.cols);
-        for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) doors.add(f.idx(tx + i, ty + j));
-      }
-    }
-    const spikes = new Set(run.spikes.map((s) => f.idx(s.tx, s.ty)));
     for (const d of this.items) {
-      if (DECOR_FLAT.has(d.kind) || (d.kind === 'prop' && d.name === 'chair')) continue;   // (the Princess sits on her chair)
-      // loose candles on the floor become a standing candelabra (still lighting the gloom)
-      if (d.kind === 'candles') Object.assign(d, { kind: 'prop', name: 'candelabra' });
-      if (DECOR_CLUTTER.has(d.kind) || (d.kind === 'prop' && PROP_CLUTTER.has(d.name))) { d.dead = true; continue; }
-      let w;
-      let material;
-      let fixed = false;
-      if (d.kind === 'prop') {
-        const pr = Sprites.props[d.name];
-        w = clamp(Math.round((pr ? pr.img.width : T) / T), 1, 3);
-        material = PROP_MATERIAL[d.name] || 'wood';
-      } else if (DECOR_SOLID[d.kind]) {
-        [w, material, fixed = false] = DECOR_SOLID[d.kind];
-      } else {
-        d.dead = true;
+      const post = d.kind === 'prop' ? PROP_POSTS[d.name] : DECOR_POSTS[d.kind];
+      if (post) {
+        const [hw, hh] = post;
+        if (f.boxHitsTiles(d.x, d.y - hh, hw + 4, hh + 4)) { d.dead = true; continue; }   // up against a wall or doorway: dropped
+        f.addPost(d.x, d.y - hh, hw, hh);
         continue;
       }
+      const w = DECOR_FIXTURES[d.kind];
+      if (!w) continue;
       const tx = Math.round(d.x / T - w / 2);
       const ty = Math.floor((d.y - 2) / T);
-      const tiles = [];
-      for (let i = 0; i < w; i++) tiles.push([tx + i, ty]);
-      const room = f.roomAt(d.x, d.y);
-      const clear = tiles.every(([x, y]) => f.baseTile(x, y) === TILE.FLOOR && !doors.has(f.idx(x, y)) && !spikes.has(f.idx(x, y)))
-        && !run.props.some((p) => p.room === room && Math.abs(p.x - (tx + w / 2) * T) < (w / 2 + 1) * T && Math.abs(p.y - (ty + 0.5) * T) < 1.5 * T);
-      if (!clear) {
-        if (fixed) continue;   // a boss fixture stays where it was put, solid or not
-        d.dead = true;
-        continue;
-      }
-      if (!fixed) d.x = (tx + w / 2) * T;   // stand it square on its tiles
-      for (const [x, y] of tiles) f.grid[y][x] = TILE.COVER;
-      run.cover.push({ kind: 'decor', item: d, tx, ty, w, h: 1, x: tx * T, y: ty * T, seed: 0, room, material, fixed });
+      if (![...Array(w).keys()].every((i) => f.baseTile(tx + i, ty) === TILE.FLOOR)) continue;
+      for (let i = 0; i < w; i++) f.grid[ty][tx + i] = TILE.COVER;
+      run.cover.push({ kind: 'decor', item: d, tx, ty, w, h: 1, x: tx * T, y: ty * T, seed: 0, room: f.roomAt(d.x, d.y), material: 'wood', fixed: true });
     }
     removeDead(this.items);
   }
@@ -117,8 +81,6 @@ class FloorDecor {
   decorate(r) {
     if (this.floor.themeId === 'castle' && CastleDecor.decorate(this, r)) return;
     const T = this.floor.T;
-    const area = (r.x1 - r.x0 + 1) * (r.y1 - r.y0 + 1);
-    const many = (n) => Math.max(1, Math.round(n * area / 250));
     switch (r.type) {
       case 'start':
         this.add('campfire', { x: r.cx - 3 * T, y: r.cy + 0.5 * T });
@@ -172,26 +134,59 @@ class FloorDecor {
         for (let i = 0; i < 2; i++) this.add('candles', this.spot(r));
         return;
       }
-      case 'boss':
-        for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-          this.add('lampPost', { x: r.cx + sx * ((r.x1 - r.x0) / 2 - 1.5) * T, y: r.cy + sy * ((r.y1 - r.y0) / 2 - 1.5) * T });
-        }
-        for (let i = 0; i < 4; i++) this.add('candles', this.spot(r));
-        for (let i = 0; i < 2; i++) this.add('bonePile', this.spot(r));
-        return;
-      default: {
-        // graveyard rooms
-        for (let i = 0; i < many(1.2); i++) this.add('deadTree', this.spot(r, { minGap: 90 }));
-        for (let i = 0; i < many(1); i++) this.add('lampPost', this.spot(r, { minGap: 120 }));
-        for (let i = 0; i < many(1.5); i++) this.add('candles', this.spot(r));
-        if (Math.random() < 0.5) this.add('coffin', this.spot(r));
-        for (let i = 0; i < many(1.2); i++) this.add(choose(['bonePile', 'urn']), this.spot(r));
-        for (let i = 0; i < randInt(1, 3); i++) {
-          const pt = this.spot(r, { minGap: 30 });
-          this.add('crow', pt, { flying: false, t: 0, vx: 0, vy: 0, facing: Math.random() < 0.5 ? 1 : -1 });
-        }
-      }
+      default:
+        // graveyard rooms (and the Phantom King's): lamp posts in the corners, trees, coffins and
+        // urns along the walls, candles, bones and the odd crow on the floor, all mirrored
+        this.dressRoom(r, {
+          light: 'lampPost',
+          wall: [['deadTree'], ['coffin'], ['urn'], ['deadTree']],
+          floor: [['bonePile'], ['candles'], ['crow', { flying: false, t: 0, vx: 0, vy: 0 }]],
+        });
     }
+  }
+
+  /**
+   * Dresses a room the same on both sides (Soul Knight style, not scattered): `light` in its
+   * four corners and halfway along its top and bottom walls, `wall` pieces lined up along the
+   * walls, and `floor` clutter in pairs out on the floor. Each entry is [kind, extra] where kind
+   * may be 'prop:name'. A pair is only placed if both of its spots are clear (of doorways,
+   * cover, spikes and each other), so the room stays symmetrical.
+   */
+  dressRoom(r, { light, wall = [], floor = [] }) {
+    const T = this.floor.T;
+    const L = (r.x0 + 0.5) * T;
+    const Rt = (r.x1 + 0.5) * T;
+    const top = (r.y0 + 1.2) * T;
+    const bottom = (r.y1 + 0.85) * T;
+    const at = (fx, fy) => ({ x: lerp(L, Rt, fx), y: lerp(top, bottom, fy) });
+    const place = (entry, fx, fy, minGap = 44) => {
+      const [kind, extra = {}] = Array.isArray(entry) ? entry : [entry];
+      const pair = [at(fx, fy), at(1 - fx, fy)];
+      if (!pair.every((pt) => this.clear(r, pt, minGap))) return;
+      pair.forEach((pt, i) => {
+        const [k, name] = kind.split(':');
+        this.add(k, pt, { ...extra, ...(name ? { name } : {}), facing: i ? -1 : 1, seed: i ? 6 : 0 });
+      });
+    };
+    for (const fy of [0, 1]) place(light, 0.02, fy, 30);
+    place(light, 0.27, 0, 30);
+    place(light, 0.27, 1, 30);
+    // along the top and bottom walls, then down the sides (clear of the doors halfway along each)
+    wall.forEach((e, i) => place(e, [0.12, 0.38][i % 2], i < 2 ? 0 : 1));
+    wall.forEach((e, i) => place(e, 0.02, [0.28, 0.72][i % 2]));
+    floor.forEach((e, i) => place(e, [0.2, 0.3, 0.16][i % 3], [0.3, 0.7, 0.5][i % 3], 30));
+  }
+
+  /** True if (x, y) in room r is clear of its doorways, cover, spike pads, keepers and other decor. */
+  clear(r, pt, minGap) {
+    const f = this.floor;
+    const T = f.T;
+    if (!pt || f.roomAt(pt.x, pt.y) !== r) return false;
+    if (r.doors.flatMap((d) => d.tiles).some((t) => dist((t % f.cols + 0.5) * T, (Math.floor(t / f.cols) + 0.5) * T, pt.x, pt.y) < 2.8 * T)) return false;
+    if (this.run.spikes.some((s) => Math.abs(s.x + 16 - pt.x) < 34 && Math.abs(s.y + 16 - pt.y) < 34)) return false;
+    if (this.run.props.some((p) => p.room === r && dist(p.x, p.y, pt.x, pt.y) < 80)) return false;
+    if (this.run.nearCover?.(pt.x, pt.y, 26)) return false;
+    return !this.items.some((d) => dist(d.x, d.y, pt.x, pt.y) < minGap);
   }
 
   // ---------- life ----------

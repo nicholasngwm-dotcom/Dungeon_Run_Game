@@ -88,6 +88,7 @@ class Game {
     const p = createHero(classId, x, y);
     p.netId = entry.id;
     p.name = entry.name;
+    p.isBot = !!entry.bot;   // a player who dropped out mid-run, played by the AI (BotPilot)
     return p;
   }
 
@@ -652,6 +653,18 @@ class Game {
       case 'leave':
         this.removeHero(cmd.id);
         return;
+      case 'bot': {
+        // a player dropped out mid-run: the AI plays on as their hero
+        const p = this.heroById(cmd.id);
+        if (!p || p.isBot) return;
+        p.isBot = true;
+        p.name = `${p.name} (AI)`;
+        const r = this.roster.find((e) => e.id === cmd.id);
+        if (r) r.name = p.name;
+        this.effects.text(p.hx, p.hy - 40, 'AI TAKES OVER', { color: '#8ad8ff', size: 8, life: 1.6 });
+        this.effects.burst(p.hx, p.hy, { count: 16, colors: ['#8ad8ff', '#ffffff'], speed: [30, 110], life: [0.3, 0.6], up: 40 });
+        return;
+      }
     }
   }
 

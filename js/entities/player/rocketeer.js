@@ -76,7 +76,6 @@ class Rocketeer extends Player {
   get flying() { return !!this.jump; }
   /** Nothing can touch him while he's up in the air. */
   get isInvulnerable() { return !!this.jump || super.isInvulnerable; }
-  get moveMultiplier() { return this.jumpCharge ? this.cfg.jump.moveMultiplier : 1; }
   /** Passive (Blast Rider): his blasts throw enemies further. */
   get knockbackMultiplier() { return (1 + this.brew('bulldose')) * this.cfg.passive.knockback; }
 
@@ -362,9 +361,12 @@ class Rocketeer extends Player {
     this.ammoShow = 3;
     this.reloadT = 0;
     const at = this.aimPoint(c.maxRange);
+    // spread evenly over the whole area (a sunflower spiral: any number of rockets, none stacked
+    // on another), the pattern turned a random way each time, each spot nudged only a little
+    const turn = rand(0, TAU);
     for (let i = 0; i < n; i++) {
-      const a = rand(0, TAU);
-      const d = Math.sqrt(Math.random()) * c.radius;
+      const a = turn + i * 2.39996;   // the golden angle
+      const d = c.radius * 0.85 * Math.sqrt((i + 0.5) / n) + rand(-6, 6);
       this.salvo.push({ x1: at.x + Math.cos(a) * d, y1: at.y + Math.sin(a) * d * 0.7, t: 0, delay: i * c.interval, launched: false });
     }
     world.effects.text(this.hx, this.hy - 34, `BARRAGE x${n}`, { color: '#ff9a3a', size: 8 });

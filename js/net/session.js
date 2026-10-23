@@ -65,6 +65,7 @@ class Session {
     this.nextId = 2;
     this.peers = new Map();      // transport peer -> player id
     this.clientInputs = {};      // player id -> merged input since the last bundle
+    this.botMem = {};            // player id -> the AI's memory, for players who dropped out mid-run (BotPilot)
     this.queue = [];             // commands waiting for the next bundle: { from, cmd }
     this.hashes = new Map();     // tick -> own checksum
     // client only
@@ -120,6 +121,11 @@ class Session {
       const inputs = { [this.id]: this.sampleLocal(active) };
       for (const r of this.roster) {
         if (r.id === this.id) continue;
+        // a player who dropped out mid-run: the AI plays their hero
+        if (r.bot) {
+          if (this.game) inputs[r.id] = BotPilot.drive(this.game, this.game.heroById(r.id), this.botMem[r.id] ||= {}, this.dt);
+          continue;
+        }
         const ci = this.clientInputs[r.id];
         if (!ci) continue;
         inputs[r.id] = { h: ci.h, p: [...ci.p], mx: ci.mx, my: ci.my, ml: ci.ml, mr: ci.mr, lp: ci.lp, rp: ci.rp };
@@ -234,6 +240,8 @@ class Session {
 
   /** Queues a new scene for everyone. kind: 'lobby' | 'run' | 'test'; run: dungeon run options. */
   queueScene(kind, run = null) {
+    // back in the lobby the AI stand-ins go home (their seats open up again)
+    if (kind === 'lobby') this.roster = this.roster.filter((r) => !r.bot);
     const roster = this.currentRoster();
     this.queue.push({ from: this.id, cmd: { scene: kind, seed: Math.floor(nativeRandom() * 2 ** 31), roster, run } });
   }
@@ -265,6 +273,7 @@ class Session {
     const id = this.peers.get(peer);
     switch (msg.t) {
       case 'hello': {
+        if (this.peers.has(peer)) return;   // already in (a repeated hello on the same connection)
         if (msg.build !== BUILD) {
           return this.transport.send(peer, { t: 'reject', reason: `Different game versions: the host has version ${BUILD}, you have ${msg.build || 'an older one'}. Everyone must run the same version - refresh the page (Ctrl+F5 on a computer, pull down to reload on a phone) and join again.` });
         }
@@ -310,14 +319,25 @@ class Session {
     }
   }
 
-  /** Host: a client's connection closed. */
+  /**
+   * Host: a client's connection closed. In the lobby they just leave; in the middle of a
+   * run (or the test dungeon) the AI takes over their hero so the party isn't left short.
+   */
   onPeerLeft(peer) {
     const id = this.peers.get(peer);
     if (!id) return;
     this.peers.delete(peer);
     delete this.clientInputs[id];
-    this.roster = this.roster.filter((r) => r.id !== id);
-    this.queue.push({ from: this.id, cmd: { type: 'leave', id } });
+    const entry = this.roster.find((r) => r.id === id);
+    if (this.scene !== 'lobby' && entry && this.game && this.game.heroById(id)) {
+      entry.bot = true;
+      entry.name = `${entry.name} (AI)`;
+      this.botMem[id] = {};
+      this.queue.push({ from: this.id, cmd: { type: 'bot', id } });
+    } else {
+      this.roster = this.roster.filter((r) => r.id !== id);
+      this.queue.push({ from: this.id, cmd: { type: 'leave', id } });
+    }
     this.events.onRoster?.(this.roster);
   }
 

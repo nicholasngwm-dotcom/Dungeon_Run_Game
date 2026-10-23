@@ -163,7 +163,7 @@ HERO_GUIDE.rocketeer = (c) => ({
     { key: 'RMB', icon: 'secondary', name: 'Rocket Jump', tags: [`${c.jump.damage} dmg`, `${sec(c.jump.cooldown)} cd`],
       desc: `Hold to charge, aiming with the cursor: a ring shows where you'll land and a red ring the blast at your feet. Let go to fire a rocket into the floor (hurting enemies around you) and fly up to ${c.jump.maxDistance} px, over obstacles. The longer you charge, the longer you stay up (${sec(c.jump.flightTime[0])} to ${sec(c.jump.flightTime[1])}), and nothing can hurt you in the air. You can call in a Barrage while you're up there.` },
     { key: 'E', icon: 'e', name: 'Barrage', tags: [`${c.barrage.damage} dmg each`, `${sec(c.barrage.cooldown)} cd`],
-      desc: 'Press E, then left click an area to rain rockets on it (right click or E cancels): one rocket for every rocket in your launcher (it empties it), each landing at a random spot. Works mid rocket jump.' },
+      desc: 'Press E, then left click an area to rain rockets on it (right click or E cancels): one rocket for every rocket in your launcher (it empties it), spread evenly over the area. Works mid rocket jump.' },
     { key: 'F', icon: 'f', name: 'Ammo Pack', tags: [`${c.ammoPack.charges} packs`, `${sec(c.ammoPack.cooldown)} each`],
       desc: `Drop an ammo pack at your feet that refills your launcher on the spot. You carry ${c.ammoPack.charges}; each one restocks on its own.` },
     { key: 'Q', icon: 'q', name: 'IBFR', tags: [`charge: deal ${c.ult.charge} dmg`, `${c.ult.damage} dmg`],

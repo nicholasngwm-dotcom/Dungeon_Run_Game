@@ -16,6 +16,15 @@ const Net = {
 
   get available() { return typeof Peer !== 'undefined'; },
 
+  /**
+   * Errors that only mean the matchmaking server dropped out. Once players are connected
+   * their game traffic goes straight between them, so these mustn't end the game: the
+   * peer just reconnects to the server in the background.
+   */
+  signalingError(e) {
+    return ['network', 'server-error', 'socket-error', 'socket-closed', 'disconnected'].includes(e && e.type);
+  },
+
   /** PeerJS options with our ICE servers (STUN + TURN relays). */
   async peerOptions() {
     const mp = CONFIG.multiplayer;
@@ -63,10 +72,16 @@ const Net = {
    */
   async host(h, tries = 0) {
     if (!this.available) return h.onError('Could not load the multiplayer library. Check your internet connection.');
+    if (!tries) this.close();   // never two rooms (or a room and a half-made join) at once
     const code = this.makeCode();
     const peer = new Peer(CONFIG.multiplayer.peerPrefix + code, await this.peerOptions());
     this.peer = peer;
-    peer.on('open', () => h.onOpen(code));
+    let opened = false;
+    peer.on('open', () => {
+      if (opened) return;   // (reconnecting to the matchmaking server opens it again)
+      opened = true;
+      h.onOpen(code);
+    });
     peer.on('connection', (conn) => {
       conn.on('open', () => {
         this.conns.set(conn.peer, conn);
@@ -84,6 +99,7 @@ const Net = {
         peer.destroy();
         return this.host(h, tries + 1);
       }
+      if (opened && Net.signalingError(e)) return;   // the room stays up; players stay connected
       h.onError(Net.describe(e));
     });
     peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect(); });
@@ -92,6 +108,7 @@ const Net = {
   /** Joins a room by code. h: { onOpen(), onData(peer, msg), onClose(), onError(text) }. */
   async join(code, h) {
     if (!this.available) return h.onError('Could not load the multiplayer library. Check your internet connection.');
+    this.close();   // a new attempt replaces any earlier one (clicking Join again never makes a second player)
     const peer = new Peer(await this.peerOptions());
     this.peer = peer;
     let opened = false, failed = false;
@@ -118,7 +135,11 @@ const Net = {
         else h.onError(`Couldn't reach room ${code.toUpperCase()}. Check the code and try again.`);
       }, CONFIG.multiplayer.joinTimeout * 1000);
     });
-    peer.on('error', (e) => h.onError(e.type === 'peer-unavailable' ? `No room called ${code.toUpperCase()}.` : Net.describe(e)));
+    peer.on('error', (e) => {
+      if (opened && (Net.signalingError(e) || e.type === 'peer-unavailable')) return;   // already connected to the host: carry on
+      h.onError(e.type === 'peer-unavailable' ? `No room called ${code.toUpperCase()}.` : Net.describe(e));
+    });
+    peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect(); });
   },
 
   close() {

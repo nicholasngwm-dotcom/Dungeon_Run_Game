@@ -188,9 +188,9 @@ const CONFIG = {
       // flung toward the cursor, up to lerp(minDistance, maxDistance, charge) away, flying over obstacles. The
       // charge also sets his air time (lerp of flightTime) and how high he goes (height); he can't be hurt in the air
       jump:     { cooldown: 7, chargeTime: 0.9, minDistance: 110, maxDistance: 330, flightTime: [0.4, 1.2], height: [55, 140],
-                  damage: 48, radius: 82, knockback: 260, moveMultiplier: 0.5 },
+                  damage: 48, radius: 82, knockback: 260 },
       // E: pick an area (E, then LMB fires; E again or RMB cancels; works mid rocket jump too): one rocket per rocket
-      // in the launcher (it empties it), each landing at a random spot in the area `interval`s apart
+      // in the launcher (it empties it), spread evenly over the area (a sunflower spiral), `interval`s apart
       barrage:  { cooldown: 9, radius: 130, maxRange: 380, interval: 0.11, flightTime: 0.6, damage: 44, blastRadius: 56 },
       // F: drops an ammo pack at his feet that refills the launcher on the spot. Holds `charges` packs; each restocks over `cooldown`s
       ammoPack: { cooldown: 14, charges: 2 },
@@ -540,10 +540,8 @@ const CONFIG = {
       blurb: 'Restless dead, poison and bone. Ruled by the Phantom King.',
       // the floor is gloomy: night darkness (rgb tint, 0-1) that torches, lamps and candles cut through, and drifting fog
       night: { dark: 0.34, color: '6, 12, 22' },
-      // solid cover in its fight rooms: [kind, width, height (tiles), weight]
-      cover: [['headstone', 1, 1, 5], ['tomb', 2, 1, 2]],
-      // stretches of wall standing in its fight rooms: [kind, width, height (tiles)]
-      walls: [['graveWallH', 3, 1], ['graveWallV', 1, 3]],
+      // the pieces its fight rooms' obstacle patterns are built from (Sprites.cover kinds; see ROOM_LAYOUTS)
+      layout: { small: 'headstone', pillar: 'headstone', long: 'tomb', wallH: 'graveWallH', wallV: 'graveWallV', block: 'graveBlock' },
       boss: 'phantom',
       enemies: {
         1: [['zombie', 5], ['bletcher', 2], ['skeleton', 3], ['skeletonWarrior', 3], ['bomber', 2], ['wraith', 2],
@@ -568,8 +566,7 @@ const CONFIG = {
       // a darker, colder gloom with a violet cast, and no fog or mist
       night: { dark: 0.24, color: '12, 6, 22' },
       fog: false,
-      cover: [['crates', 1, 1, 4], ['pillar', 1, 1, 3], ['statue', 2, 1, 2]],
-      walls: [['keepWallH', 3, 1], ['keepWallV', 1, 3]],
+      layout: { small: 'crates', pillar: 'pillar', long: 'statue', wallH: 'keepWallH', wallV: 'keepWallV', block: 'keepBlock' },
       // the boss of each stage: the Prince or the Princess, then the Queen, then the King
       stageBosses: { 1: ['prince', 'princess'], 2: ['queen'], 3: ['king'] },
       enemies: {
@@ -633,10 +630,8 @@ const CONFIG = {
     // per run; rerolling the three costs reroll.base, + reroll.step more each time at the same shop
     shop: { stagePrice: [1, 1.4, 1.8], reroll: { base: 6, step: 4 } },
     survival: { duration: [30, 40, 50], spawnEvery: [1.3, 1.2, 1.1], perSpawn: 2, maxAlive: [12, 13, 14] },
-    // cover (blocks heroes, enemies and shots alike): perRoom[0]-perRoom[1] pieces of the theme's cover in these rooms
-    cover: { perRoom: [3, 5], rooms: ['combat', 'survival'] },
-    // walls (the theme's): perRoom[0]-perRoom[1] short stretches in the same rooms, placed before the cover
-    walls: { perRoom: [1, 2] },
+    // the rooms whose obstacles are laid out in a pattern (DungeonRun.addLayout); they block heroes, enemies and shots alike
+    cover: { rooms: ['combat', 'survival'] },
     // spike traps (combat rooms only): pop up every `period` seconds for `up` seconds
     // they come in square pads (2x2, or 4x4 bigChance of the time), pads[0]-pads[1] per combat room;
     // a pad's spikes peek out (warn) then shoot up together

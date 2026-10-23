@@ -82,6 +82,20 @@ const CHEST_POP = 0.14;
 // puzzle rooms exist as places but don't lock (puzzles aren't designed yet)
 const LOCKING_ROOMS = ['combat', 'defend', 'survival', 'boss'];
 
+// Fight-room obstacle patterns (DungeonRun.addLayout), drawn for a 24x16 room: each piece is
+// [unit, cdx, cdy, w, h], its corner nearest the middle cdx tiles left of and cdy tiles above
+// the room's middle; it's mirrored into all four quarters. Units are the theme's pieces
+// (CONFIG.themes[id].layout): small (a stack of headstones or crates), pillar, long (a tomb or
+// statue, 2x1), wallH (3x1), wallV (1x3) and block (2x2).
+const ROOM_LAYOUTS = [
+  [['block', 3, 2, 2, 2], ['small', 8, 4, 1, 1]],                                                     // four blocks
+  [['pillar', 3, 2, 1, 1], ['pillar', 7, 2, 1, 1], ['pillar', 3, 5, 1, 1], ['pillar', 7, 5, 1, 1]],   // a grid of pillars
+  [['wallH', 3, 3, 3, 1], ['wallV', 8, 1, 1, 3]],                                                     // walls round the middle
+  [['small', 4, 2, 2, 2], ['small', 9, 4, 2, 1]],                                                     // stacks in the corners
+  [['long', 3, 2, 2, 1], ['long', 3, 5, 2, 1], ['long', 8, 3, 2, 1]],                                 // rows of tombs
+  [['block', 3, 2, 2, 2], ['wallH', 7, 5, 3, 1]],                                                     // blocks and long walls
+];
+
 class DungeonRun {
   /**
    * opts: { mode: 'set' | 'random', theme }. opts.practiceBoss: boss practice from the
@@ -152,7 +166,7 @@ class DungeonRun {
     this.shopStates = {};
     const f = w.dungeon;
     for (const r of f.rooms) {
-      if (CONFIG.run.cover.rooms.includes(r.type)) { this.addWalls(r); this.addCover(r); }
+      if (CONFIG.run.cover.rooms.includes(r.type)) this.addLayout(r);
       if (r.type === 'boss' && this.bossType === 'king') this.solidThrone(r);
       if (r.type === 'boss' && this.bossType === 'princess') this.studyCover(r);
       if (r.type === 'combat') this.addSpikes(r);
@@ -807,69 +821,50 @@ class DungeonRun {
     else this.victory();
   }
 
-  // ---------- spike traps (combat rooms) ----------
+  // ---------- room layouts ----------
 
   /**
-   * Cover for a fight room, in the theme's style (the graveyard's headstones and
-   * tombs): solid tiles (TILE.COVER) that stop heroes, enemies and shots alike,
-   * kept clear of the room's middle, its doorways, its walls and each other.
+   * Lays out a fight room's obstacles in a pattern, Soul Knight style: one of ROOM_LAYOUTS,
+   * mirrored into all four quarters of the room round its middle, built from the theme's
+   * pieces (CONFIG.themes[id].layout: headstones or crates, tombs or statues, walls, blocks).
+   * The pattern keeps off the cross through the room's middle, so every doorway has a clear
+   * run in and the middle stays open; a mirrored group that won't fit (a doorway, the edge)
+   * is left out whole, so the room stays symmetrical. Big rockets can knock any of it down.
    */
-  addCover(r) {
-    const kinds = this.theme.cover;
-    if (!kinds) return;
-    const c = CONFIG.run.cover;
+  addLayout(r) {
+    const units = this.theme.layout;
+    if (!units) return;
     const f = this.floor;
     const T = f.T;
+    const W = r.x1 - r.x0 + 1;
+    const H = r.y1 - r.y0 + 1;
+    const kx = W / 24;   // patterns are drawn for a 24x16 room and stretched to fit
+    const ky = H / 16;
+    const cx = Math.floor((r.x0 + r.x1 + 1) / 2);
+    const cy = Math.floor((r.y0 + r.y1 + 1) / 2);
     const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ tx: t % f.cols, ty: Math.floor(t / f.cols) }));
-    const total = kinds.reduce((s, k) => s + k[3], 0);
-    const pickKind = () => {
-      let roll = Math.random() * total;
-      for (const k of kinds) if ((roll -= k[3]) < 0) return k;
-      return kinds[0];
+    const fits = (tx, ty, w, h) => {
+      if (tx < r.x0 + 1 || ty < r.y0 + 2 || tx + w - 1 > r.x1 - 1 || ty + h - 1 > r.y1 - 1) return false;
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (f.grid[ty + j][tx + i] !== TILE.FLOOR) return false;
+      if (doors.some((d) => d.tx >= tx - 3 && d.tx <= tx + w + 2 && d.ty >= ty - 3 && d.ty <= ty + h + 2)) return false;
+      return !this.cover.some((o) => tx < o.tx + o.w + 1 && tx + w + 1 > o.tx && ty < o.ty + o.h + 1 && ty + h + 1 > o.ty);
     };
-    const n = randInt(c.perRoom[0], c.perRoom[1]);
-    for (let k = 0, placed = 0; k < 80 && placed < n; k++) {
-      const [kind, w, h] = pickKind();
-      const tx = randInt(r.x0 + 2, r.x1 - 1 - w);
-      const ty = randInt(r.y0 + 3, r.y1 - 1 - h);
-      const cx = (tx + w / 2) * T;
-      const cy = (ty + h / 2) * T;
-      if (Math.abs(cx - r.cx) < 4 * T && Math.abs(cy - r.cy) < 3 * T) continue;   // the middle stays open
-      if (doors.some((d) => d.tx >= tx - 4 && d.tx <= tx + w + 3 && d.ty >= ty - 4 && d.ty <= ty + h + 3)) continue;
-      if (this.cover.some((o) => tx < o.tx + o.w + 2 && tx + w + 2 > o.tx && ty < o.ty + o.h + 2 && ty + h + 2 > o.ty)) continue;
-      const piece = { kind, tx, ty, w, h, x: tx * T, y: ty * T, seed: Math.floor(Math.random() * 1000), room: r };
-      this.cover.push(piece);
-      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) f.grid[ty + j][tx + i] = TILE.COVER;
-      placed++;
-    }
-  }
-
-  /**
-   * Short stretches of wall standing in a fight room (the theme's walls: [kind, w, h]), kept
-   * like cover clear of the middle, the doorways and the other obstacles, so a room always
-   * stays open all the way round them. Big rockets can knock them down.
-   */
-  addWalls(r) {
-    const kinds = this.theme.walls;
-    if (!kinds) return;
-    const f = this.floor;
-    const T = f.T;
-    const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ tx: t % f.cols, ty: Math.floor(t / f.cols) }));
-    const n = randInt(...CONFIG.run.walls.perRoom);
-    for (let k = 0, placed = 0; k < 60 && placed < n; k++) {
-      const [kind, w, h] = choose(kinds);
-      const tx = randInt(r.x0 + 3, r.x1 - 2 - w);
-      const ty = randInt(r.y0 + 3, r.y1 - 2 - h);
-      if (tx < r.x0 + 3 || ty < r.y0 + 3) continue;
-      const cx = (tx + w / 2) * T;
-      const cy = (ty + h / 2) * T;
-      if (Math.abs(cx - r.cx) < 4.5 * T && Math.abs(cy - r.cy) < 3.5 * T) continue;
-      if (doors.some((d) => d.tx >= tx - 4 && d.tx <= tx + w + 3 && d.ty >= ty - 4 && d.ty <= ty + h + 3)) continue;
-      if (this.cover.some((o) => tx < o.tx + o.w + 2 && tx + w + 2 > o.tx && ty < o.ty + o.h + 2 && ty + h + 2 > o.ty)) continue;
-      const piece = { kind, tx, ty, w, h, x: tx * T, y: ty * T, seed: 0, room: r, material: 'stone' };
-      this.cover.push(piece);
-      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) f.grid[ty + j][tx + i] = TILE.COVER;
-      placed++;
+    for (const [unit, cdx, cdy, w, h] of choose(ROOM_LAYOUTS)) {
+      // the top-left copy (its near corner cdx, cdy tiles from the middle), mirrored to the other three
+      const tx = cx - Math.round(cdx * kx) - w;
+      const ty = cy - Math.round(cdy * ky) - h;
+      const copies = [[tx, ty], [r.x0 + r.x1 - tx - (w - 1), ty], [tx, r.y0 + r.y1 - ty - (h - 1)], [r.x0 + r.x1 - tx - (w - 1), r.y0 + r.y1 - ty - (h - 1)]];
+      if (!copies.every(([x, y]) => fits(x, y, w, h))) continue;
+      const seed = Math.floor(Math.random() * 1000);
+      for (const [x, y] of copies) {
+        // a stack of the small piece fills its area one tile at a time; anything else is one piece
+        const kind = units[unit];
+        const parts = unit === 'small' ? [...Array(w * h).keys()].map((i) => [x + (i % w), y + Math.floor(i / w), 1, 1]) : [[x, y, w, h]];
+        for (const [px, py, pw, ph] of parts) {
+          this.cover.push({ kind, tx: px, ty: py, w: pw, h: ph, x: px * T, y: py * T, seed: seed + px + py, room: r, material: this.coverMaterial(kind) });
+          for (let j = 0; j < ph; j++) for (let i = 0; i < pw; i++) f.grid[py + j][px + i] = TILE.COVER;
+        }
+      }
     }
   }
 
@@ -983,29 +978,41 @@ class DungeonRun {
     ctx.drawImage(img, bx - Math.round(img.width / 2), by - img.height);
   }
 
-  /** Square spike pads (2x2 or 4x4) around a combat room, clear of its middle, its doorways and each other. */
+  // ---------- spike traps (combat rooms) ----------
+
+  /** Square spike pads (2x2 or 4x4) in mirrored pairs round a combat room, clear of its middle, its doorways, its obstacles and each other. */
   addSpikes(r) {
     const c = CONFIG.run.spikes;
     const f = this.floor;
     const T = f.T;
     const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ tx: t % f.cols, ty: Math.floor(t / f.cols) }));
+    const ok = (tx, ty, size) => {
+      const cx = (tx + size / 2) * T;
+      const cy = (ty + size / 2) * T;
+      if (Math.abs(cx - r.cx) < (2.5 + size / 2) * T && Math.abs(cy - r.cy) < (2 + size / 2) * T) return false;
+      if (doors.some((d) => d.tx >= tx - 3 && d.tx <= tx + size + 2 && d.ty >= ty - 3 && d.ty <= ty + size + 2)) return false;
+      if (this.cover.some((o) => tx < o.tx + o.w + 1 && tx + size + 1 > o.tx && ty < o.ty + o.h + 1 && ty + size + 1 > o.ty)) return false;
+      return !this.spikePads.some((p) => tx < p.tx + p.size + 1 && tx + size + 1 > p.tx && ty < p.ty + p.size + 1 && ty + size + 1 > p.ty);
+    };
+    const addPad = (tx, ty, size, offset) => {
+      const pad = { tx, ty, size, x: tx * T, y: ty * T, offset, hits: new Set() };
+      this.spikePads.push(pad);
+      for (let j = 0; j < size; j++) {
+        for (let i = 0; i < size; i++) this.spikes.push({ tx: tx + i, ty: ty + j, x: (tx + i) * T, y: (ty + j) * T, offset, pad });
+      }
+    };
+    // pads come in mirrored pairs, one either side of the room, firing together
     const n = randInt(c.pads[0], c.pads[1]);
     for (let k = 0, placed = 0; k < 60 && placed < n; k++) {
       const size = Math.random() < c.bigChance ? 4 : 2;
-      const tx = randInt(r.x0 + 1, r.x1 - size);
+      const tx = randInt(r.x0 + 1, Math.floor((r.x0 + r.x1) / 2) - size);
       const ty = randInt(r.y0 + 1, r.y1 - size);
-      const cx = (tx + size / 2) * T;
-      const cy = (ty + size / 2) * T;
-      if (Math.abs(cx - r.cx) < (2.5 + size / 2) * T && Math.abs(cy - r.cy) < (2 + size / 2) * T) continue;
-      if (doors.some((d) => d.tx >= tx - 3 && d.tx <= tx + size + 2 && d.ty >= ty - 3 && d.ty <= ty + size + 2)) continue;
-      if (this.cover.some((o) => tx < o.tx + o.w + 1 && tx + size + 1 > o.tx && ty < o.ty + o.h + 1 && ty + size + 1 > o.ty)) continue;
-      if (this.spikePads.some((p) => tx < p.tx + p.size + 1 && tx + size + 1 > p.tx && ty < p.ty + p.size + 1 && ty + size + 1 > p.ty)) continue;
-      const pad = { tx, ty, size, x: tx * T, y: ty * T, offset: rand(0, c.period), hits: new Set() };
-      this.spikePads.push(pad);
-      for (let j = 0; j < size; j++) {
-        for (let i = 0; i < size; i++) this.spikes.push({ tx: tx + i, ty: ty + j, x: (tx + i) * T, y: (ty + j) * T, offset: pad.offset, pad });
-      }
-      placed++;
+      const mx = r.x0 + r.x1 - tx - (size - 1);
+      if (!ok(tx, ty, size) || !ok(mx, ty, size) || mx < tx + size + 1) continue;
+      const offset = rand(0, c.period);
+      addPad(tx, ty, size, offset);
+      addPad(mx, ty, size, offset);
+      placed += 2;
     }
   }
 

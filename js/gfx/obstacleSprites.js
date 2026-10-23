@@ -118,6 +118,49 @@ function buildObstacleSprites() {
     })],
   });
 
+  // square 2x2 blocks for the room layouts (DungeonRun.addLayout): its top seen from above, its south face below
+  Object.assign(Sprites.cover, {
+    // a squat mausoleum block: a slab roof with a carved cross, mossy stone walls
+    graveBlock: [make(66, 92, (p) => {
+      p.ellipse(33, 88, 32, 4, DIRT[1]);
+      p.rect(1, 6, 64, 58, GRAVE[2]);
+      p.rect(1, 6, 64, 3, GRAVE[4]);
+      p.rect(1, 9, 3, 53, GRAVE[3]);
+      p.rect(61, 9, 4, 53, GRAVE[1]);
+      p.rect(5, 12, 56, 46, GRAVE[3]);
+      p.rect(7, 14, 52, 42, GRAVE[2]);
+      p.rect(30, 20, 6, 30, GRAVE[1]);   // the carved cross on the roof
+      p.rect(20, 28, 26, 6, GRAVE[1]);
+      p.rect(31, 21, 4, 28, GRAVE[4]);
+      moss(p, 8, 54, 14);
+      blocks(p, 1, 62, 64, 24, GRAVE, 8, 16, 7);
+      p.rect(1, 62, 64, 1, GRAVE[4]);
+      p.rect(28, 66, 10, 20, GRAVE[0]);   // a sealed door
+      p.rect(29, 67, 8, 18, '#2a2834');
+      moss(p, 3, 86, 60);
+    })],
+    // a squat tower block: a crenellated top, brick walls with an arrow slit, thorns creeping up
+    keepBlock: [make(66, 92, (p) => {
+      p.rect(1, 84, 64, 6, KEEP[0]);
+      p.rect(1, 8, 64, 56, KEEP[3]);
+      for (let i = 0; i < 4; i++) {
+        for (const [x, y] of [[1 + i * 16, 4], [1 + i * 16, 56]]) {
+          p.rect(x, y, 12, 8, KEEP[2]);
+          p.rect(x, y, 12, 2, KEEP[4]);
+        }
+      }
+      for (const y of [12, 50]) for (const x of [1, 57]) { p.rect(x, y, 8, 8, KEEP[2]); p.rect(x, y, 8, 2, KEEP[4]); }
+      p.rect(12, 20, 42, 28, KEEP[1]);   // the floor of the tower top, in shade
+      p.rect(12, 20, 42, 2, KEEP[0]);
+      blocks(p, 1, 62, 64, 24, KEEP, 8, 14, 3);
+      p.rect(1, 62, 64, 1, KEEP[4]);
+      p.rect(31, 66, 4, 14, KEEP[0]);
+      p.rect(32, 67, 2, 12, '#0c0a10');
+      thorns(p, 4, 78, 26);
+      thorns(p, 40, 70, 22);
+    })],
+  });
+
   // ---------- rubble: what's left once an obstacle is blown apart (lies flat, 34x22) ----------
   const rubble = (fn) => PixelArt.make(34, 22, fn, OUTLINE, 0.4);
   const chunk = (p, x, y, w, h, R) => {

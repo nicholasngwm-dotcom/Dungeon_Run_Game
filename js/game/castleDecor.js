@@ -9,8 +9,6 @@ const CastleDecor = {
   /** Fills room r. Returns false for rooms it leaves to FloorDecor (shops, specials). */
   decorate(fd, r) {
     const T = fd.floor.T;
-    const area = (r.x1 - r.x0 + 1) * (r.y1 - r.y0 + 1);
-    const many = (n) => Math.max(1, Math.round(n * area / 250));
     const at = (kind, dx, dy, extra = {}) => fd.add(kind, { x: r.cx + dx * T, y: r.cy + dy * T }, extra);
     const scatter = (kind, n, opts = {}, extra = {}) => { for (let i = 0; i < n; i++) fd.add(kind, fd.spot(r, opts), extra); };
     switch (r.type) {
@@ -31,20 +29,15 @@ const CastleDecor = {
         else if (fd.floor.bossType === 'prince') this.trainingGrounds(fd, r);
         else if (fd.floor.bossType === 'princess') this.magicStudy(fd, r);
         return true;
-      default: {
-        // the halls of the fallen keep
-        scatter('brazier', many(0.8), { minGap: 110 });
-        scatter('armor', many(0.5), { minGap: 70 });
-        scatter('banner', many(0.5), { minGap: 70 });
-        scatter('crystal', many(0.6), { minGap: 60 });
-        scatter('rubble', many(0.9), { minGap: 40 });
-        if (Math.random() < 0.35) scatter('cage', 1, { minGap: 80 });
-        for (let i = 0; i < many(0.8); i++) {
-          fd.add('prop', fd.spot(r, { minGap: 44 }), { name: choose(['weaponRack', 'barrel', 'crate', 'candelabra', 'skullPile', 'sacks']) });
-        }
-        scatter('candles', many(0.8));
+      default:
+        // the halls of the fallen keep: braziers in the corners, armour, banners, racks and crystals
+        // lined up along the walls, rubble and candles on the floor, all mirrored across the hall
+        fd.dressRoom(r, {
+          light: 'brazier',
+          wall: [[choose(['armor', 'banner'])], ['prop:weaponRack'], [choose(['crystal', 'cage'])], [choose(['prop:barrel', 'prop:sacks', 'prop:crate'])]],
+          floor: [['rubble'], ['candles'], ['prop:skullPile']],
+        });
         return true;
-      }
     }
   },
 

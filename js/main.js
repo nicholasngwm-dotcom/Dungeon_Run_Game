@@ -65,6 +65,8 @@ const App = {
     document.addEventListener('pointerlockchange', () => {
       if (!Input.locked && !Input.freeMouse && this.state === 'playing') this.pause();
     });
+    // an online game keeps going while this tab is in the background (see backgroundTicks)
+    document.addEventListener('visibilitychange', () => this.backgroundTicks(document.hidden));
 
     this.applyDevShortcuts();
     requestAnimationFrame((t) => this.loop(t));
@@ -295,7 +297,13 @@ const App = {
         s.onPeerLeft(peer);
         if (who) Menus.toast(`${who.name.toUpperCase()} LEFT`, '#ffe680');
       },
-      onError: (text) => { Menus.mpStatus(text); Net.close(); this.mp = null; },
+      onError: (text) => {
+        // once the game is under way, end it properly (never leave a world running with no session)
+        if (this.mp === s && s.game) return this.leaveMultiplayer(text);
+        Menus.mpStatus(text);
+        Net.close();
+        if (this.mp === s) this.mp = null;
+      },
     });
   },
 
@@ -307,6 +315,8 @@ const App = {
       Menus.mpStatus(`Enter the ${CONFIG.multiplayer.codeLength}-letter room code.`);
       return;
     }
+    // already connecting: a second click mustn't start a second connection (it joined twice)
+    if (this.mp && !this.mp.isHost && !this.mp.game) { Menus.mpStatus(`Still connecting to ${code}...`); return; }
     Menus.mpStatus(`Connecting to ${code}...`);
     const s = new Session({ isHost: false, name, classId: this.classId, transport: Net.transport(), events: this.mpEvents, gameEvents: this.events });
     this.mp = s;
@@ -316,11 +326,46 @@ const App = {
       onClose: () => { if (this.mp === s) this.leaveMultiplayer('The host closed the lobby.'); },
       onError: (text) => {
         if (this.mp !== s) return;
+        if (s.game) return this.leaveMultiplayer(text);
         this.mp = null;
         Net.close();
         Menus.mpStatus(text);
       },
     });
+  },
+
+  /**
+   * Browsers stop animation frames in a background tab, and the game loop runs on them, so
+   * when a player (above all the host, who steps everyone's game) alt-tabs, the online game
+   * would stall for everybody. While the tab is hidden a tiny worker ticks ~60 times a second
+   * (workers' timers aren't paused) and keeps the session stepping, sending and receiving;
+   * nothing is drawn. The animation loop takes over again when the tab comes back.
+   */
+  backgroundTicks(hidden) {
+    if (!hidden || !this.mp) {
+      if (this.bgTicker) { this.bgTicker.stop(); this.bgTicker = null; }
+      return;
+    }
+    if (this.bgTicker) return;
+    let last = performance.now();
+    const tick = () => {
+      if (!this.mp || !document.hidden) return this.backgroundTicks(false);
+      const now = performance.now();
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      this.mp.update(dt, false);   // no input from this screen while it's hidden
+      if (this.mp && this.mp.game) this.game = this.mp.game;
+    };
+    try {
+      const url = URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 1000 / 60);'], { type: 'text/javascript' }));
+      const worker = new Worker(url);
+      worker.onmessage = tick;
+      this.bgTicker = { stop: () => { worker.terminate(); URL.revokeObjectURL(url); } };
+    } catch (e) {
+      // no workers here: a plain timer (browsers slow it down in the background, but it still ticks)
+      const id = setInterval(tick, 1000 / 60);
+      this.bgTicker = { stop: () => clearInterval(id) };
+    }
   },
 
   /** Leaves (or closes, for the host) the multiplayer game and goes back to the multiplayer screen. */
@@ -469,7 +514,9 @@ const App = {
       this.mp.update(dt, active);
       if (this.mp && this.mp.game) this.game = this.mp.game;
     } else if (this.state === 'playing') {
-      this.game.update(dt);
+      // an online game whose session is gone would read this keyboard for every hero: end it instead
+      if (this.game.multiplayer) this.leaveMultiplayer('Lost the connection to the game.');
+      else this.game.update(dt);
     }
     Shop.refresh();
     Menus.updateReadyPanel(this);

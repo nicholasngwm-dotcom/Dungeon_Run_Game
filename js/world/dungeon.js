@@ -208,8 +208,30 @@ class Dungeon {
     return FLY_OVER.has(this.tileAt(tx, ty));
   }
 
-  /** flying: obstacles a flier passes over (flyOver) don't count. */
+  /**
+   * A small solid footprint off the tile grid: the base of a lamp post, a brazier or a
+   * candelabra, which heroes and enemies bump into (fliers and shots pass over).
+   */
+  addPost(x, y, hw, hh) {
+    (this.posts ||= []).push({ x, y, hw, hh });
+  }
+
+  /** True if a hw/hh box at (x, y) overlaps any post. */
+  boxHitsPost(x, y, hw, hh) {
+    if (!this.posts) return false;
+    for (const o of this.posts) {
+      if (Math.abs(x - o.x) < hw + o.hw && Math.abs(y - o.y) < hh + o.hh) return true;
+    }
+    return false;
+  }
+
+  /** flying: obstacles a flier passes over (flyOver) and posts don't count. */
   boxHitsWall(x, y, hw, hh, flying = false) {
+    if (this.boxHitsTiles(x, y, hw, hh, flying)) return true;
+    return !flying && this.boxHitsPost(x, y, hw, hh);
+  }
+
+  boxHitsTiles(x, y, hw, hh, flying = false) {
     const T = this.T;
     const x0 = Math.floor((x - hw) / T);
     const x1 = Math.floor((x + hw) / T);
@@ -229,21 +251,28 @@ class Dungeon {
     const fly = !!e.flying;
     let hitX = false;
     let hitY = false;
+    // posts (lamp bases) aren't on the tile grid: walking into one just stops that axis
+    // (and anyone already overlapping one can always walk out of it)
+    const posted = (x, y, ox, oy) => !fly && this.posts && this.boxHitsPost(x, y, e.hw, e.hh) && !this.boxHitsPost(ox, oy, e.hw, e.hh);
     if (dx !== 0) {
+      const ox = e.x;
       e.x += dx;
-      if (this.boxHitsWall(e.x, e.y, e.hw, e.hh, fly)) {
+      if (this.boxHitsTiles(e.x, e.y, e.hw, e.hh, fly)) {
         hitX = true;
         if (dx > 0) e.x = Math.floor((e.x + e.hw) / T) * T - e.hw - 0.01;
         else e.x = (Math.floor((e.x - e.hw) / T) + 1) * T + e.hw + 0.01;
       }
+      if (posted(e.x, e.y, ox, e.y)) { hitX = true; e.x = ox; }
     }
     if (dy !== 0) {
+      const oy = e.y;
       e.y += dy;
-      if (this.boxHitsWall(e.x, e.y, e.hw, e.hh, fly)) {
+      if (this.boxHitsTiles(e.x, e.y, e.hw, e.hh, fly)) {
         hitY = true;
         if (dy > 0) e.y = Math.floor((e.y + e.hh) / T) * T - e.hh - 0.01;
         else e.y = (Math.floor((e.y - e.hh) / T) + 1) * T + e.hh + 0.01;
       }
+      if (posted(e.x, e.y, e.x, oy)) { hitY = true; e.y = oy; }
     }
     return { hitX, hitY };
   }
