@@ -367,6 +367,7 @@ class FloorMap extends Dungeon {
     const B = (x, y) => { const t = this.baseTile(x, y); return t === TILE.COVER ? TILE.FLOOR : t; };
     const grave = this.themeId === 'graveyard';
     const castle = this.themeId === 'castle';
+    const deep = grave && this.bossType === 'deathbringer';
     for (let ty = cy * CHUNK; ty < (cy + 1) * CHUNK && ty < this.rows; ty++) {
       for (let tx = cx * CHUNK; tx < (cx + 1) * CHUNK && tx < this.cols; tx++) {
         const x = tx * T;
@@ -377,7 +378,10 @@ class FloorMap extends Dungeon {
             this.castleFloor(p, tx, ty, zone, rng);
           } else if (grave && zone === ZONE.ROOM) {
             Grave.grass(p, x, y, rng);
-            if (rng() < 0.03 && B(tx, ty - 1) === TILE.FLOOR && B(tx, ty + 1) === TILE.FLOOR) Tiles.graveDecor(p, x, y, rng);
+            // the Deathbringer's room: withered, darker grass and more graves, of dark stone plated in gold
+            const dark = deep && this.roomAt(x + T / 2, y + T / 2)?.type === 'boss';
+            if (dark) { p.ctx.fillStyle = 'rgba(16, 8, 26, 0.5)'; p.ctx.fillRect(x, y, T, T); }
+            if (rng() < (dark ? 0.07 : 0.03) && B(tx, ty - 1) === TILE.FLOOR && B(tx, ty + 1) === TILE.FLOOR) Tiles.graveDecor(p, x, y, rng, dark);
             else if (rng() < 0.015) Tiles.bones(p, x, y, rng);
           } else if (grave) {
             Grave.path(p, x, y, rng);

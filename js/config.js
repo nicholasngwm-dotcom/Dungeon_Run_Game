@@ -537,12 +537,14 @@ const CONFIG = {
   themes: {
     graveyard: {
       name: 'Graveyard',
-      blurb: 'Restless dead, poison and bone. Ruled by the Phantom King.',
+      blurb: 'Restless dead, poison and bone. Ruled by the Phantom King, and something darker beneath.',
       // the floor is gloomy: night darkness (rgb tint, 0-1) that torches, lamps and candles cut through, and drifting fog
       night: { dark: 0.34, color: '6, 12, 22' },
       // the pieces its fight rooms' obstacle patterns are built from (Sprites.cover kinds; see ROOM_LAYOUTS)
       layout: { small: 'headstone', pillar: 'headstone', long: 'tomb', wallH: 'graveWallH', wallV: 'graveWallV', block: 'graveBlock' },
       boss: 'phantom',
+      // a deeper boss met once a run, in stage 2 or 3 (lateChance of the time at stage 2, otherwise stage 3)
+      lateBoss: { type: 'deathbringer', stages: [2, 3], lateChance: 0.5 },
       enemies: {
         1: [['zombie', 5], ['bletcher', 2], ['skeleton', 3], ['skeletonWarrior', 3], ['bomber', 2], ['wraith', 2],
             ['undeadKnight', 1], ['gravestone', 1], ['candlehead', 2], ['shadowalker', 1]],
@@ -914,6 +916,53 @@ const CONFIG = {
     potions: { count: 3, spread: 90, gap: 0.15 },
     // phase 2: things flying slowly across the study: one every `every` s (at most `max` at once), `damage` to touch
     flyers: { every: 2.2, max: 4, speed: [70, 100], damage: 16, radius: 18 },
+  },
+
+  // ---------------------------------------------------------
+  //  BOSS: THE DEATHBRINGER (graveyard, stage 2 or 3)
+  //  A faceless reaper of pure darkness with two scythes and eight tendrils on its back.
+  //  It rises through a dark portal in the middle of its room, and teleports to a random
+  //  spot in the room every `teleportEvery`s.
+  //  Phase 1: scythe slashes (each throws waves of darkness across the whole room) and
+  //    tendrils: two sink into the ground and two rise somewhere in the room; each slams
+  //    the ground now and then, throwing out small waves of darkness. Killing a tendril
+  //    sends it back to him; he can have all 8 out at once.
+  //  Phase 2 (phase2At): darkness covers the room (only a little light round each hero),
+  //    and his scythes become double-ended, forked at both ends, spinning in the air by
+  //    themselves. He swings them in front of him to throw shadow bombs that burst into
+  //    waves of darkness, and when a hero comes close he whirls them round himself.
+  //  Phase 3 (phase3At): he vanishes, four reapers come for the heroes, and he hunts them
+  //    down as a shade: no scythes, no tendrils, just his touch.
+  // ---------------------------------------------------------
+  deathbringer: {
+    hp: 6800,
+    phase2At: 0.5,
+    phase3At: 0.1,
+    glideSpeed: 70,          // drifting toward the hero between attacks (keeps about keepAway px off)
+    keepAway: 150,
+    contactDamage: 24,
+    contactRadius: 30,
+    attackInterval: [2.2, 1.9],
+    teleportEvery: 7,        // he blinks somewhere else in the room this often
+    teleportFade: 0.35,      // seconds fading out, and again fading back in
+    // scythe slashes: `count` alternating swings; each cuts in front of him (reach, arc) and
+    // throws a fan of `waves` big waves of darkness that fly the length of the room
+    slash: { windup: 0.55, count: 3, every: 0.42, reach: 120, arcDegrees: 150, damage: 34, knockback: 220,
+             waves: 3, waveSpreadDegrees: 34, waveSpeed: 250, waveDamage: 24, waveScale: 2.2, waveLife: 6 },
+    // tendrils: `perCast` sink in and rise round the room (up to `max` out); each has `hp` and
+    // slams every `slamEvery`s (windup first): a shockwave and `waves` small waves of darkness
+    tendrils: { perCast: 2, max: 8, hp: 420, sinkTime: 0.6, riseTime: 0.7, slamEvery: [3.6, 4.4], slamWindup: 0.7,
+                slamDamage: 28, slamRadius: 60, waves: 10, waveSpeed: 190, waveDamage: 16, waveLife: 2.6,
+                shockwave: { radius: 140, speed: 220, width: 12, damage: 18 } },
+    // phase 2: the double scythes swing in front of him and throw `count` shadow bombs near the heroes;
+    // each lands after `flight`s, swells for `fuse`s, then bursts (damage in radius + `waves` waves)
+    bombs: { windup: 0.6, count: 4, spread: 110, flight: 0.6, fuse: 1.0, radius: 64, damage: 32,
+             waves: 8, waveSpeed: 200, waveDamage: 18, waveLife: 2.4 },
+    // phase 2: with a hero within `trigger` px, the scythes whirl round him (orbit px out) for `time`s
+    orbit: { trigger: 220, windup: 0.4, time: 3.4, radius: 96, spin: 3.2, hitRadius: 30, damage: 30, followSpeed: 90 },
+    darkness: 0.94,          // phase 2 on: how dark the room gets
+    // phase 3: four reapers, and he chases the heroes as a shade
+    shade: { reapers: 4, vanish: 0.8, speed: 150, contactDamage: 34 },
   },
 
   // ---------------------------------------------------------

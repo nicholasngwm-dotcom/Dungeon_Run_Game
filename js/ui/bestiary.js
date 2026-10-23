@@ -23,6 +23,7 @@ const BESTIARY = {
     { type: 'skeletonSorcerer', name: 'Skeleton Sorcerer', role: 'summoner', desc: 'Lines of bone hands burst from the ground and stun. Also summons exploding skulls.' },
     { type: 'flyingSkull', name: 'Flying Skull', role: 'special', from: 3, note: 'SUMMONED', desc: 'Summoned by skeleton sorcerers. Flies straight at you and explodes on contact.' },
     { boss: 'phantom', name: 'Phantom King', role: 'boss', from: 1, desc: 'Sovereign of the restless dead. Dashes, laser barrages, and pulling shockwaves. Gets stronger every stage.' },
+    { boss: 'deathbringer', name: 'The Deathbringer', role: 'boss', from: 2, stage: 'STAGE 2 OR 3', desc: 'A faceless reaper of darkness rising from a portal. Its scythe slashes send waves of darkness across the room, its tendrils burst from the ground to slam it, and it blinks across the room every few seconds. At half health the room goes dark and its forked scythes spin on their own, throwing shadow bombs. Near death it vanishes, sends four reapers and hunts you as a shade.' },
   ],
   castle: [
     { type: 'squire', name: 'Squire', role: 'melee', desc: 'A young soldier of the fallen empire. Quick sword slashes behind a short red cone.' },
@@ -307,7 +308,7 @@ const Bestiary = {
     let stats;
     if (e.boss) {
       const c = CONFIG[e.boss];
-      const dmg = { phantom: c.dashDamage, queen: c.homing?.damage, king: c.sword?.damage, princeBoss: c.dash?.damage, princessBoss: c.sky?.damage }[e.boss];
+      const dmg = { phantom: c.dashDamage, deathbringer: c.slash?.damage, queen: c.homing?.damage, king: c.sword?.damage, princeBoss: c.dash?.damage, princessBoss: c.sky?.damage }[e.boss];
       stats = `HP ${c.hp} &nbsp; DMG ${dmg}`;
     } else {
       const c = CONFIG.enemies[e.type];
@@ -598,7 +599,7 @@ const Bestiary = {
         continue;
       }
       // each boss's idle loop (the King on his throne)
-      const list = { phantom: Sprites.phantom.walk || Sprites.phantom.idle, queen: Sprites.queen.idle, king: Sprites.king.sit, princeBoss: Sprites.enemies.prince.idle, princessBoss: Sprites.enemies.princess.idle }[entry.boss];
+      const list = { phantom: Sprites.phantom.walk || Sprites.phantom.idle, deathbringer: Sprites.deathbringer.body, queen: Sprites.queen.idle, king: Sprites.king.sit, princeBoss: Sprites.enemies.prince.idle, princessBoss: Sprites.enemies.princess.idle }[entry.boss];
       const frame = list[Math.floor(time * (entry.boss === 'phantom' ? 8 : 4)) % list.length].img;
       const s = Math.min(3, Math.floor(Math.min(canvas.width / frame.width, canvas.height / frame.height) * 4) / 4);
       const w = frame.width * s;

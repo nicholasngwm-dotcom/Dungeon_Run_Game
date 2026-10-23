@@ -34,7 +34,7 @@ const App = {
     // the sprites take a moment to draw: one batch per frame, so the loader's fire keeps burning
     const steps = [
       ['Forging the heroes...', buildHeroSprites],
-      ['Raising the dead...', () => { buildEnemySprites(); buildBossSprites(); buildPhantomSprites(); }],
+      ['Raising the dead...', () => { buildEnemySprites(); buildBossSprites(); buildPhantomSprites(); buildDeathbringerSprites(); }],
       ['Sharpening the blades...', () => { buildItemSprites(); buildGraveyardSprites(); }],   // graveyard after the items: it adds to Sprites.projectiles
       ['Crowning the court...', () => { buildCastleSprites(); buildQueenSprites(); buildKingSprites(); buildRoyalSetPieces(); buildCastleDecor(); }],
       ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); buildObstacleSprites(); }],   // obstacles after the cover (they add to Sprites.cover)

@@ -53,7 +53,14 @@ Each stage is a generated floor of rooms joined by hallways, with a minimap in
 the top-right. Combat, defend and survival rooms lock their doors until the
 objective is done (defeat every wave; keep the lantern alive; survive the timer).
 Combat rooms have spike traps that pop up every 4 seconds. The boss room
-(the farthest dead end) holds the Phantom King, scaled up each stage; beating it
+(the farthest dead end) holds the Phantom King, scaled up each stage, except once a run, in
+stage 2 or 3, when it's the Deathbringer's instead: a darker room of dead trees hung with
+soul lanterns and black, gold-plated graves. It rises through a portal with two scythes and
+eight tendrils: scythe slashes throw waves of darkness across the room, tendrils burst up
+around the room to slam the ground (cut them down and they go back to it), and it blinks
+to a new spot every 7 seconds. At half health the room goes dark and its forked double
+scythes spin on their own (shadow bombs, and a whirl when you're close); at 10% it vanishes,
+sends four reapers and hunts you as a shade. Beating the boss
 opens a portal to the next stage, and after stage 3 the run is won. Later stages
 make enemies tougher (more hp and damage, a little faster) rather than sending
 many more of them, and add stage-exclusive enemies (necromancer, reaper
@@ -88,7 +95,8 @@ but do nothing yet: items, food, free upgrades and gems are not in.
 
 Walk onto the practice range pad in the lobby and press E. A training dummy shows your DPS
 (top of the screen), and the panel on the right lets you switch hero, spawn
-any enemy or either boss, clear the arena, fill your ultimate, and toggle
+any graveyard or castle enemy, open a portal to any boss's room (Clay Golem, Phantom King,
+Deathbringer, Prince, Princess, Queen, King), clear the arena, fill your ultimate, and toggle
 god mode, infinite mana (also light orbs) and infinite energy. Dying respawns you.
 "Back to lobby" on the panel (or in the pause menu) returns to the lobby.
 
@@ -170,6 +178,7 @@ js/
                         graveyard.js (the Graveyard theme's new enemies)
     boss/golem.js       Clay Golem (parts, phases, attacks)
     boss/phantom.js     Phantom King (dash, eye lasers, vanish + pull shockwaves)
+    boss/deathbringer.js The Deathbringer (scythes, tendrils, darkness, the shade)
   game/                 Game world, wave director, lobby hub, dungeon run (rooms + objectives), HUD
   ui/menus.js           DOM menus + lobby panels (hero, workshop, dungeon, legend)
   ui/bestiary.js        bestiary book (entries, filters, page flips)

@@ -570,6 +570,7 @@ class Game {
 
   static createBoss(type, center) {
     if (type === 'phantom') return new PhantomKing(center.x, center.y);
+    if (type === 'deathbringer') return new Deathbringer(center.x, center.y);
     if (type === 'queen') return new Queen(center.x, center.y);
     if (type === 'king') return new King(center.x, center.y);
     if (type === 'prince') return new RoyalPrince(center.x, center.y);
@@ -718,7 +719,7 @@ class Game {
     this.practice.portal = { boss, x: pt.x, y: pt.y, t: 0, used: false };
     this.effects.burst(pt.x, pt.y - 20, { count: 30, colors: ['#b45aff', '#e0c0ff', '#ffffff'], speed: [40, 160], life: [0.3, 0.7] });
     Sound.play('phantomAppear');
-    const name = { golem: 'THE CLAY GOLEM', phantom: 'THE PHANTOM KING', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[boss] || boss.toUpperCase();
+    const name = { golem: 'THE CLAY GOLEM', phantom: 'THE PHANTOM KING', deathbringer: 'THE DEATHBRINGER', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[boss] || boss.toUpperCase();
     this.banner('A PORTAL OPENS', `Step in to face ${name}`, 2.4);
   }
 
@@ -753,7 +754,7 @@ class Game {
     }
     PFX.glow(ctx, x, y, 40 * grow, '200, 140, 255', 0.8, 2, 24 * grow);
     ctx.restore();
-    const name = { golem: 'CLAY GOLEM', phantom: 'PHANTOM KING', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[P.boss] || P.boss.toUpperCase();
+    const name = { golem: 'CLAY GOLEM', phantom: 'PHANTOM KING', deathbringer: 'DEATHBRINGER', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[P.boss] || P.boss.toUpperCase();
     HUD.text(ctx, `TO ${name}`, Math.round(x), Math.round(y - 50), { size: 7, align: 'center', color: '#e0c0ff' });
     HUD.text(ctx, 'STEP IN', Math.round(x), Math.round(y - 40), { size: 5, align: 'center', color: '#ffe680' });
   }

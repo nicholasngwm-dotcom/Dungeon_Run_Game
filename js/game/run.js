@@ -114,9 +114,21 @@ class DungeonRun {
     this.buildStage();
   }
 
-  /** The stage a boss is normally met at (the castle's Queen and King come later). */
+  /**
+   * The theme's deeper boss (the graveyard's Deathbringer), met once a run: at the first of its
+   * stages lateChance of the time, otherwise at the last. null when it isn't this stage's.
+   */
+  lateBoss() {
+    const L = this.theme.lateBoss;
+    if (!L || this.metLateBoss || !L.stages.includes(this.stage)) return null;
+    if (this.stage !== L.stages[L.stages.length - 1] && Math.random() >= L.lateChance) return null;
+    this.metLateBoss = true;
+    return L.type;
+  }
+
+  /** The stage a boss is normally met at (the castle's Queen and King come later, the Deathbringer deep in the graveyard). */
   static bossStage(type) {
-    return { queen: 2, king: 3 }[type] || 1;
+    return { queen: 2, king: 3, deathbringer: 2 }[type] || 1;
   }
 
   /** The dungeon theme whose boss room a boss fights in (the castle's royals, or the graveyard). */
@@ -148,7 +160,7 @@ class DungeonRun {
     // the stage boss: the theme's own, or (the castle) its stage's: the Prince or the Princess, the Queen, the King
     const options = this.theme.stageBosses?.[this.stage] || this.theme.bosses || [this.theme.boss];
     const fresh = options.filter((b) => b !== this.bossType);
-    this.bossType = this.practiceBoss || choose(fresh.length ? fresh : options);
+    this.bossType = this.practiceBoss || this.lateBoss() || choose(fresh.length ? fresh : options);
     w.dungeon = new FloorMap(this.stage, this.themeId, undefined, { boss: this.bossType, practice: !!this.practiceBoss });
     this.active = null;
     this.portal = null;
@@ -1886,6 +1898,7 @@ class DungeonRun {
     for (const d of this.decor.items) {
       const flick = Math.sin(t * 9 + d.seed);
       if (d.kind === 'lampPost') out.push({ x: d.x, y: d.y - 40, r: 150 + flick * 5, s: 0.95, rgb: d.warm ? '255, 200, 110' : '110, 255, 170' });
+      else if (d.kind === 'soulTree') for (const [lx, ly] of SOUL_LANTERNS) out.push({ x: d.x + lx * (d.facing || 1), y: d.y + ly, r: 110 + flick * 5, s: 0.9, rgb: '110, 220, 255' });
       else if (d.kind === 'candles') out.push({ x: d.x, y: d.y - 8, r: 74 + flick * 4, s: 0.8, rgb: '255, 190, 90' });
       else if (d.kind === 'campfire') out.push({ x: d.x, y: d.y - 10, r: 200 + flick * 10, s: 1, rgb: '255, 150, 60' });
       else if (d.kind === 'prop' && (d.name === 'candelabra' || d.name === 'cauldron')) out.push({ x: d.x, y: d.y - 24, r: 90, s: 0.85, rgb: d.name === 'cauldron' ? '140, 255, 140' : '255, 190, 90' });
@@ -1902,7 +1915,8 @@ class DungeonRun {
     if (this.totem) out.push({ x: this.totem.x, y: this.totem.y - 24, r: 180, s: 1, rgb: '106, 216, 255' });
     for (const s of this.spikes) if (this.spikeState(s) === 1) out.push({ x: s.x + 16, y: s.y + 16, r: 30, s: 0.3 });
     const w = this.world;
-    if (w.boss) out.push({ x: w.boss.x, y: w.boss.y - 40, r: 150, s: 0.6, rgb: { queen: '255, 130, 210', king: '255, 200, 120', prince: '255, 210, 150', princess: '170, 150, 255' }[this.bossType] || '200, 120, 255' });
+    if (w.boss?.addLights) w.boss.addLights(out);
+    else     if (w.boss) out.push({ x: w.boss.x, y: w.boss.y - 40, r: 150, s: 0.6, rgb: { queen: '255, 130, 210', king: '255, 200, 120', prince: '255, 210, 150', princess: '170, 150, 255' }[this.bossType] || '200, 120, 255' });
     // each hero carries a little light; spells and souls in flight glow as they go
     for (const p of w.players) if (!p.dead) out.push({ x: p.x, y: p.y - 16, r: 130, s: 0.7 });
     for (const p of w.playerProjectiles) out.push({ x: p.x, y: p.y, r: 44, s: 0.55 });
@@ -1918,8 +1932,14 @@ class DungeonRun {
   drawLighting(ctx, cam) {
     const night = this.theme.night;
     if (!night) return;
+    // the Deathbringer's room is darker still, and pitch dark once it covers it in darkness
+    let dark = night.dark;
+    const w = this.world;
+    const here = this.floor.roomAt(w.localPlayer.x, w.localPlayer.y);
+    if (this.bossType === 'deathbringer' && here && here.type === 'boss') dark = Math.max(dark, 0.6);
+    if (w.boss && w.boss.darkness) dark = Math.max(dark, w.boss.darkness);
     // the gloom is light, so the lamps' bloom is turned up to keep their warm pools
-    Lighting.draw(ctx, cam, this.lights(), { dark: night.dark, color: night.color, bloom: 0.5 });
+    Lighting.draw(ctx, cam, this.lights(), { dark, color: night.color, bloom: 0.5 });
   }
 
   /**

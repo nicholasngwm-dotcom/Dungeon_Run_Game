@@ -5,13 +5,15 @@
 // Scenes rotate with a fade (clicking the fight skips to the next), the heroes can't
 // fall and bosses never quite die, and it all runs muted.
 
-// Every hero is in exactly four scenes, so each gets the same screen time.
-// castle: the castle boss whose room the scene is fought in (its boss only if `boss` is set).
+// Every hero is in exactly five scenes, so each gets the same screen time.
+// castle: the boss whose room the scene is fought in (its boss only if `boss` is set), in that boss's theme.
 const SHOWCASE_SCENES = [
   { heroes: ['warrior', 'baker'], army: ['zombie', 'skeleton', 'zombie', 'skeletonWarrior', 'undeadKnight', 'zombie'], size: 8 },
   { heroes: ['mage', 'rocketeer'], boss: 'golem' },
   { heroes: ['ranger', 'bard'], army: ['wraith', 'ghost', 'wraith', 'skeleton', 'candlehead'], size: 8 },
   { heroes: ['rogue', 'priestess'], boss: 'phantom' },
+  // the whole party in the Deathbringer's dark room
+  { heroes: ['warrior', 'ranger', 'mage', 'rogue', 'priestess', 'bard', 'rocketeer', 'baker'], castle: 'deathbringer', boss: 'deathbringer' },
   { heroes: ['rocketeer', 'warrior', 'priestess'], castle: 'prince', army: ['squire', 'castleArcher', 'castleKnight', 'squire', 'maceSpinner', 'jester'], size: 9 },
   { heroes: ['baker', 'mage', 'ranger'], castle: 'queen', boss: 'queen' },
   { heroes: ['rogue', 'bard', 'baker'], castle: 'prince', boss: 'prince' },
@@ -43,7 +45,7 @@ const MenuShowcase = {
     const noop = () => {};
     const opts = { roster, localId: 's0', showcase: true };
     // castle scenes: a boss practice floor, just the entrance and that boss's room
-    if (s.castle) opts.run = { mode: 'set', theme: 'castle', practiceBoss: s.castle };
+    if (s.castle) opts.run = { mode: 'set', theme: DungeonRun.bossTheme(s.castle), practiceBoss: s.castle };
     const g = new Game(s.heroes[0], { onGameOver: noop, onVictory: noop, onInteract: noop, onToast: noop, onNpc: noop, onPurchase: noop, onPracticeReturn: noop },
       opts);
     g.director.update = noop;   // no waves: the scene brings its own enemies
@@ -51,6 +53,8 @@ const MenuShowcase = {
     if (g.run) for (const r of g.run.floor.rooms) { r.state = 'cleared'; r.visited = r.seen = true; }
     const arena = this.arenaFor(g, s);
     this.arena = arena;
+    // the Deathbringer teleports round its room: keep it to that room
+    if (s.boss === 'deathbringer') g.dungeon.activeRoom = g.dungeon.bossRoom;
     // the heroes can be knocked about but never fall
     g.players.forEach((p, n) => {
       const hurt = p.hurt.bind(p);

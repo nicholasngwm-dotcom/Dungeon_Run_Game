@@ -9,8 +9,10 @@
 // simulation; the idle animation (crows, embers, mist) is visual only.
 
 // Lights: the half-size of the small solid post at the base of each [hw, hh] (px)
-const DECOR_POSTS = { lampPost: [6, 4], brazier: [8, 5], campfire: [12, 6] };
+const DECOR_POSTS = { lampPost: [6, 4], brazier: [8, 5], campfire: [12, 6], soulTree: [6, 4] };
 const PROP_POSTS = { candelabra: [5, 4] };
+// the two soul lanterns hanging off a soulTree, from its foot (px; mirrored when it faces left)
+const SOUL_LANTERNS = [[-20, -40], [22, -44]];
 // Boss-room fixtures the fights are built round: solid across their footprint (tiles wide)
 const DECOR_FIXTURES = { gardenBell: 3, studyDesk: 3 };
 
@@ -134,6 +136,17 @@ class FloorDecor {
         for (let i = 0; i < 2; i++) this.add('candles', this.spot(r));
         return;
       }
+      case 'boss':
+        if (this.run.bossType === 'deathbringer') {
+          // the Deathbringer's room: dead trees hung with soul lanterns, dark gold-plated graves, bones
+          this.dressRoom(r, {
+            light: 'soulTree',
+            wall: [['darkGrave', { v: 0 }], ['darkGrave', { v: 2 }], ['soulTree'], ['darkGrave', { v: 1 }]],
+            floor: [['darkGrave', { v: 3 }], ['bonePile'], ['darkGrave', { v: 0 }]],
+          });
+          return;
+        }
+      // falls through
       default:
         // graveyard rooms (and the Phantom King's): lamp posts in the corners, trees, coffins and
         // urns along the walls, candles, bones and the odd crow on the floor, all mirrored
@@ -313,6 +326,30 @@ class FloorDecor {
         }
         break;
       }
+      case 'soulTree': {
+        // a black dead tree with two iron soul lanterns on chains, ghost-blue souls flickering in them
+        const img = Sprites.deathbringerRoom.soulTree;
+        const flip = (d.facing || 1) < 0;
+        drawShadow(ctx, x, y + 2, 18, 5);
+        drawSprite(ctx, img, x, y + 1, 28, 76, flip);
+        for (const [lx, ly] of SOUL_LANTERNS) {
+          const sx = x + lx * (flip ? -1 : 1);
+          const sy = y + ly + Math.round(Math.sin(t * 1.4 + d.seed + lx) * 1);
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          PFX.glow(ctx, sx, sy, 16 + Math.sin(t * 5 + lx) * 2, '110, 220, 255', 0.7);
+          ctx.restore();
+          const fl = Math.sin(t * 9 + d.seed + lx) > 0 ? 1 : 0;
+          R(sx - x - 2, sy - y - 3 - fl, 4, 5 + fl, '#7ae8ff');
+          R(sx - x - 1, sy - y - 2, 2, 3, '#e6fbff');
+        }
+        break;
+      }
+      case 'darkGrave':
+        drawShadow(ctx, x, y + 1, 10, 3);
+        drawSprite(ctx, Sprites.deathbringerRoom.graves[d.v || 0], x, y + 2, 12, 32, (d.facing || 1) < 0);
+        if (d.v === 0 || d.v === 2) drawGlints(ctx, [[x - 2, y - 22], [x + 3, y - 12]], t + d.seed);
+        break;
       case 'deadTree':
         drawShadow(ctx, x, y + 2, 16, 5);
         R(-4, -40, 8, 42, OUTLINE); R(-3, -40, 6, 41, '#3b2416'); R(-3, -40, 2, 41, '#5b3922');

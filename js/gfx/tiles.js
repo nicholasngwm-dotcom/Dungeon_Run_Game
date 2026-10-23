@@ -164,9 +164,14 @@ const Tiles = {
     if (rng() < 0.06) p.rect(x + 6 + Math.floor(rng() * 18), y + 8 + Math.floor(rng() * 16), 3, 2, '#6a6a5a'); // pebble
   },
 
-  /** A small grave marker painted on the floor (decor only, not solid): outlined, lit from the top-left, mossy. */
-  graveDecor(p, x, y, rng) {
+  /**
+   * A small grave marker painted on the floor (decor only, not solid): outlined, lit from the top-left, mossy.
+   * dark: the Deathbringer's room, where they're near-black stone, some of them plated in gold.
+   */
+  graveDecor(p, x, y, rng, dark = false) {
     const cross = rng() < 0.5;
+    const gold = dark && rng() < 0.5;
+    const S = dark ? ['#24222c', '#33303e', '#46424f', '#16141c'] : ['#6e6c80', '#686678', '#9492a8', '#56546a'];
     const cx = x + 10 + Math.floor(rng() * 10);
     const cy = y + 4 + Math.floor(rng() * 8);
     const O = '#1a1620';
@@ -177,21 +182,24 @@ const Tiles = {
     if (cross) {
       p.rect(cx - 1, cy - 1, 5, 17, O);
       p.rect(cx - 4, cy + 2, 11, 5, O);
-      p.rect(cx, cy, 3, 15, '#6e6c80');
-      p.rect(cx - 3, cy + 3, 9, 3, '#6e6c80');
-      p.rect(cx, cy, 1, 15, '#9492a8');
-      p.rect(cx - 3, cy + 3, 9, 1, '#9492a8');
-      p.rect(cx + 2, cy + 6, 1, 9, '#56546a');
+      p.rect(cx, cy, 3, 15, S[0]);
+      p.rect(cx - 3, cy + 3, 9, 3, S[0]);
+      p.rect(cx, cy, 1, 15, S[2]);
+      p.rect(cx - 3, cy + 3, 9, 1, S[2]);
+      p.rect(cx + 2, cy + 6, 1, 9, S[3]);
+      if (gold) { p.rect(cx, cy + 3, 3, 3, '#dcb44c'); p.rect(cx - 3, cy + 3, 9, 1, '#fbe796'); p.rect(cx, cy, 3, 1, '#dcb44c'); }
     } else {
       p.rect(cx - 4, cy - 1, 11, 17, O);
-      p.round(cx - 3, cy, 9, 15, '#686678', 3);
-      p.rect(cx - 2, cy + 1, 1, 13, '#8e8ca2');
-      p.rect(cx - 1, cy, 5, 1, '#8e8ca2');
-      p.rect(cx + 5, cy + 3, 1, 11, '#4e4c5e');
+      p.round(cx - 3, cy, 9, 15, S[1], 3);
+      p.rect(cx - 2, cy + 1, 1, 13, S[2]);
+      p.rect(cx - 1, cy, 5, 1, S[2]);
+      p.rect(cx + 5, cy + 3, 1, 11, S[3]);
+      if (gold) { p.rect(cx - 2, cy + 2, 7, 2, '#dcb44c'); p.px(cx + 1, cy + 2, '#fbe796'); p.rect(cx - 3, cy + 13, 9, 2, '#a07a24'); }
       p.rect(cx - 1, cy + 5, 5, 1, '#3e3c4c');
       p.rect(cx, cy + 7, 3, 1, '#3e3c4c');
     }
-    // moss creeping up the stone
+    // moss creeping up the stone (none on the gilded dark ones)
+    if (dark) return;
     p.rect(cx - 2, cy + 12, 3, 2, '#4e6e44');
     p.px(cx - 1, cy + 11, '#6a8e58');
   },
