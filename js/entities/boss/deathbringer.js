@@ -17,6 +17,9 @@
 // The entrance: a dark portal opens in the middle of the room, it rises up through it,
 // darkness gathers in its hands and forms its scythes, then the portal closes. Seconds from the start.
 const DB_INTRO = { open: 1.0, rise: 2.6, forge: 3.6, close: 4.1, total: 4.4 };
+// how much bigger than its sprite it's drawn (its hit box, hands and scythes scale with it)
+const DB_SCALE = 1.45;
+const DB_RISE = 130;   // how far below the floor it starts its rise through the portal (px)
 const DB_DARK = ['#000000', '#0e0814', '#1e1028', '#33195a'];   // darkness, deepest first
 
 class Deathbringer {
@@ -27,7 +30,7 @@ class Deathbringer {
     this.y = y;
     this.maxHp = c.hp;
     this.hp = c.hp;
-    this.radius = 30;
+    this.radius = 42;
     this.time = 0;
     this.phase = 1;
     this.intro = DB_INTRO.total;
@@ -68,7 +71,7 @@ class Deathbringer {
   /** Where the body sprite stands (it hovers a little off the ground). */
   get drawY() { return this.y - 6 + this.bob; }
   get hx() { return this.x; }
-  get hy() { return this.drawY - 46; }
+  get hy() { return this.drawY - 46 * DB_SCALE; }
 
   get targetable() { return this.intro <= 0 && this.dying <= 0 && !this.dead && this.alpha > 0.5; }
 
@@ -83,7 +86,7 @@ class Deathbringer {
   get bars() {
     if (this.intro > 0 || this.dying > 0 || this.dead) return [];
     const c = this.cfg;
-    const out = this.alpha > 0.3 ? [{ part: this, x: this.x, y: this.drawY - DB_SPRITE.ay - 14, w: 100, color: '#8a5aff', marker: [c.phase2At, c.phase3At] }] : [];
+    const out = this.alpha > 0.3 ? [{ part: this, x: this.x, y: this.drawY - DB_SPRITE.ay * DB_SCALE - 14, w: 110, color: '#8a5aff', marker: [c.phase2At, c.phase3At] }] : [];
     for (const td of this.tendrils) if (td.hittable) out.push({ part: td, x: td.x, y: td.y - 92, w: 30, color: '#b06aff' });
     return out;
   }
@@ -168,9 +171,9 @@ class Deathbringer {
   /** Darkness pouring out of its hood and trailing off its robe (visual only). */
   pourDarkness(world) {
     if (this.alpha < 0.2) return;
-    const face = { x: this.x, y: this.drawY + DB_POINTS.face.y };
+    const face = { x: this.x, y: this.drawY + DB_POINTS.face.y * DB_SCALE };
     if (vrand(0, 1) < 0.7) world.effects.burst(face.x + vrand(-5, 5), face.y + vrand(-4, 6), { count: 1, colors: DB_DARK, speed: [8, 26], life: [0.5, 1], up: 30, size: [2, 4] });
-    if (vrand(0, 1) < 0.35) world.effects.burst(this.x + vrand(-24, 24), this.drawY - vrand(0, 8), { count: 1, colors: DB_DARK, speed: [4, 14], life: [0.6, 1.1], up: 14, size: [2, 3] });
+    if (vrand(0, 1) < 0.35) world.effects.burst(this.x + vrand(-34, 34), this.drawY - vrand(0, 10), { count: 1, colors: DB_DARK, speed: [4, 14], life: [0.6, 1.1], up: 14, size: [2, 3] });
   }
 
   // ---------- drifting and choosing attacks ----------
@@ -466,14 +469,14 @@ class Deathbringer {
     if (!this.double) return [-1, 1].map((s) => this.hand(s));
     if (this.state === 'orbit') {
       const k = clamp(this.t / this.cfg.orbit.windup, 0, 1);
-      const r = this.cfg.orbit.radius * k + 46 * (1 - k);
-      return [0, Math.PI].map((o) => ({ x: this.x + Math.cos(this.orbitAngle + o) * r, y: y0 - 40 + Math.sin(this.orbitAngle + o) * r * 0.6 }));
+      const r = this.cfg.orbit.radius * k + 70 * (1 - k);
+      return [0, Math.PI].map((o) => ({ x: this.x + Math.cos(this.orbitAngle + o) * r, y: y0 - 58 + Math.sin(this.orbitAngle + o) * r * 0.6 }));
     }
     if (this.state === 'bombs') {
       const k = clamp(this.t / this.cfg.bombs.windup, 0, 1);
-      return [-1, 1].map((s) => ({ x: this.x + this.facing * 40 * k + s * (46 - 30 * k), y: y0 - 56 + s * 14 * k }));
+      return [-1, 1].map((s) => ({ x: this.x + this.facing * 58 * k + s * (70 - 44 * k), y: y0 - 80 + s * 20 * k }));
     }
-    return [-1, 1].map((s) => ({ x: this.x + s * 50, y: y0 - 58 + Math.sin(this.time * 2 + s) * 4 }));
+    return [-1, 1].map((s) => ({ x: this.x + s * 72, y: y0 - 84 + Math.sin(this.time * 2 + s) * 4 }));
   }
 
   // ---------- phase 3: the shade ----------
@@ -659,12 +662,12 @@ class Deathbringer {
   /** A shoulder (side -1 left, 1 right on screen) and the hand at the end of that arm, in world space. */
   shoulder(s) {
     const pt = s < 0 ? DB_POINTS.shoulderL : DB_POINTS.shoulderR;
-    return { x: this.x + pt.x, y: this.drawY + pt.y + (1 - this.risen) * 90 };
+    return { x: this.x + pt.x * DB_SCALE, y: this.drawY + pt.y * DB_SCALE + (1 - this.risen) * DB_RISE };
   }
 
   hand(s) {
     const sh = this.shoulder(s);
-    return { x: sh.x + Math.cos(this.arm[s]) * 24, y: sh.y + Math.sin(this.arm[s]) * 24 };
+    return { x: sh.x + Math.cos(this.arm[s]) * 24 * DB_SCALE, y: sh.y + Math.sin(this.arm[s]) * 24 * DB_SCALE };
   }
 
   /** Tendrils still on its back (not out in the room or diving into the ground). */
@@ -676,7 +679,7 @@ class Deathbringer {
   drawGround(ctx) {
     if (this.dead) return;
     if (this.intro > 0) this.drawPortal(ctx);
-    if (this.alpha > 0) drawShadow(ctx, this.x, this.y + 4, 28, 8, 0.4 * this.alpha);
+    if (this.alpha > 0) drawShadow(ctx, this.x, this.y + 4, 40, 11, 0.4 * this.alpha);
     if (this.sinking && this.state === 'cast') {
       // a pool of darkness at its feet where the tendrils go down
       const k = clamp(this.t / this.cfg.tendrils.sinkTime, 0, 1);
@@ -699,8 +702,8 @@ class Deathbringer {
     const e = this.introAt;
     const open = e < I.open ? 1 - (1 - e / I.open) ** 3 : e < I.close ? 1 : clamp(1 - (e - I.close) / (I.total - I.close), 0, 1);
     if (open <= 0) return;
-    const rx = 70 * open;
-    const ry = 26 * open;
+    const rx = 96 * open;
+    const ry = 36 * open;
     ctx.save();
     PFX.disc(ctx, this.x, this.y, rx + 8, ry + 4, 'rgba(60, 20, 100, 0.35)', 3);
     PFX.disc(ctx, this.x, this.y, rx, ry, '#030106', 2);
@@ -728,16 +731,20 @@ class Deathbringer {
   drawPortrait(ctx) { this.drawBody(ctx); }
 
   drawBody(ctx) {
-    const rise = (1 - this.risen) * 90;
+    const rise = (1 - this.risen) * DB_RISE;
     const x = Math.round(this.x);
     const y = Math.round(this.drawY + rise);
     ctx.save();
     if (rise > 0) {
       // rising out of the portal: nothing below the floor shows
       ctx.beginPath();
-      ctx.rect(x - 200, this.y - 600, 400, 604);
+      ctx.rect(x - 300, this.y - 800, 600, 804);
       ctx.clip();
     }
+    // everything below is drawn at sprite size, scaled up round its feet
+    ctx.translate(x, y);
+    ctx.scale(DB_SCALE, DB_SCALE);
+    ctx.translate(-x, -y);
     ctx.globalAlpha = this.alpha;
     const shade = this.phase === 3;
     // a dark aura round it
@@ -772,7 +779,7 @@ class Deathbringer {
       ctx.restore();
     }
     // arms and (phase 1) the scythes in its hands
-    if (!shade) for (const s of [-1, 1]) this.drawArm(ctx, s, rise);
+    if (!shade) for (const s of [-1, 1]) this.drawArm(ctx, s, x, y);
     ctx.restore();
   }
 
@@ -782,10 +789,11 @@ class Deathbringer {
     return order.indexOf(i) >= 8 - n;
   }
 
-  /** A ragged sleeve from the shoulder to a bony hand; in phase 1 the hand holds its scythe. */
-  drawArm(ctx, s, rise) {
-    const sh = this.shoulder(s);
-    const h = this.hand(s);
+  /** A ragged sleeve from the shoulder to a bony hand; in phase 1 the hand holds its scythe (sprite size, round its feet at x, y). */
+  drawArm(ctx, s, x, y) {
+    const pt = s < 0 ? DB_POINTS.shoulderL : DB_POINTS.shoulderR;
+    const sh = { x: x + pt.x, y: y + pt.y };
+    const h = { x: sh.x + Math.cos(this.arm[s]) * 24, y: sh.y + Math.sin(this.arm[s]) * 24 };
     fatLine(ctx, sh.x, sh.y, h.x, h.y, OUTLINE, 9);
     fatLine(ctx, sh.x, sh.y, h.x, h.y, DB_ROBE[2], 7);
     fatLine(ctx, sh.x, sh.y - 2, h.x, h.y - 2, DB_ROBE[3], 2);
@@ -814,9 +822,13 @@ class Deathbringer {
     pts.forEach((p, i) => {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      PFX.glow(ctx, p.x, p.y, 34, '120, 70, 220', 0.45, 2, 20);
+      PFX.glow(ctx, p.x, p.y, 48, '120, 70, 220', 0.45, 2, 28);
       ctx.restore();
-      drawRotated(ctx, img, p.x, p.y, img.width / 2, 22, this.spinAngle * (i ? -1 : 1) + i);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.scale(DB_SCALE, DB_SCALE);
+      drawRotated(ctx, img, 0, 0, img.width / 2, 22, this.spinAngle * (i ? -1 : 1) + i);
+      ctx.restore();
     });
     ctx.restore();
   }
@@ -850,7 +862,7 @@ class Deathbringer {
   /** Its glow, its tendrils' and its bombs' in the room's darkness (DungeonRun.lights). */
   addLights(out) {
     if (this.dead) return;
-    if (this.alpha > 0.1) out.push({ x: this.x, y: this.drawY - 50, r: 110, s: 0.45 * this.alpha, rgb: '150, 90, 255' });
+    if (this.alpha > 0.1) out.push({ x: this.x, y: this.drawY - 70, r: 150, s: 0.45 * this.alpha, rgb: '150, 90, 255' });
     for (const td of this.tendrils) out.push({ x: td.x, y: td.y - 30, r: 60, s: 0.35, rgb: '150, 90, 255' });
     for (const b of this.bombs) out.push({ x: b.x, y: b.y, r: 50, s: 0.5, rgb: '170, 110, 255' });
     if (this.double && this.phase < 3) for (const p of this.scythePoints()) out.push({ x: p.x, y: p.y, r: 60, s: 0.45, rgb: '150, 90, 255' });

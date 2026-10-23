@@ -941,13 +941,13 @@ const CONFIG = {
     glideSpeed: 70,          // drifting toward the hero between attacks (keeps about keepAway px off)
     keepAway: 150,
     contactDamage: 24,
-    contactRadius: 30,
+    contactRadius: 40,
     attackInterval: [2.2, 1.9],
     teleportEvery: 7,        // he blinks somewhere else in the room this often
     teleportFade: 0.35,      // seconds fading out, and again fading back in
     // scythe slashes: `count` alternating swings; each cuts in front of him (reach, arc) and
     // throws a fan of `waves` big waves of darkness that fly the length of the room
-    slash: { windup: 0.55, count: 3, every: 0.42, reach: 120, arcDegrees: 150, damage: 34, knockback: 220,
+    slash: { windup: 0.55, count: 3, every: 0.42, reach: 150, arcDegrees: 150, damage: 34, knockback: 220,
              waves: 3, waveSpreadDegrees: 34, waveSpeed: 250, waveDamage: 24, waveScale: 2.2, waveLife: 6 },
     // tendrils: `perCast` sink in and rise round the room (up to `max` out); each has `hp` and
     // slams every `slamEvery`s (windup first): a shockwave and `waves` small waves of darkness
@@ -959,7 +959,7 @@ const CONFIG = {
     bombs: { windup: 0.6, count: 4, spread: 110, flight: 0.6, fuse: 1.0, radius: 64, damage: 32,
              waves: 8, waveSpeed: 200, waveDamage: 18, waveLife: 2.4 },
     // phase 2: with a hero within `trigger` px, the scythes whirl round him (orbit px out) for `time`s
-    orbit: { trigger: 220, windup: 0.4, time: 3.4, radius: 96, spin: 3.2, hitRadius: 30, damage: 30, followSpeed: 90 },
+    orbit: { trigger: 240, windup: 0.4, time: 3.4, radius: 126, spin: 3.2, hitRadius: 40, damage: 30, followSpeed: 90 },
     darkness: 0.94,          // phase 2 on: how dark the room gets
     // phase 3: four reapers, and he chases the heroes as a shade
     shade: { reapers: 4, vanish: 0.8, speed: 150, contactDamage: 34 },
