@@ -385,10 +385,12 @@ class Deathbringer {
     if (!this.thrown && this.t >= c.windup) {
       this.thrown = true;
       const heroes = world.heroes;
+      // one lands on its target, the rest are thrown wide round it, evenly spaced round a big ring
+      const turn = rand(0, TAU);
       for (let i = 0; i < c.count; i++) {
         const h = heroes[i % heroes.length] || world.player;
-        const a = rand(0, TAU);
-        const d = i === 0 ? 0 : rand(30, c.spread);
+        const a = turn + (i / Math.max(1, c.count - 1)) * TAU + rand(-0.3, 0.3);
+        const d = i === 0 ? 0 : c.spread * rand(0.65, 1);
         const to = this.clampToFloor(world, h.x + Math.cos(a) * d, h.y + Math.sin(a) * d * 0.7);
         const from = this.scythePoints()[i % 2];
         this.bombs.push({ x0: from.x, y0: from.y, x: to.x, y: to.y, t: -i * 0.08 });

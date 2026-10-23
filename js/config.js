@@ -956,7 +956,7 @@ const CONFIG = {
                 shockwave: { radius: 140, speed: 220, width: 12, damage: 18 } },
     // phase 2: the double scythes swing in front of him and throw `count` shadow bombs near the heroes;
     // each lands after `flight`s, swells for `fuse`s, then bursts (damage in radius + `waves` waves)
-    bombs: { windup: 0.6, count: 4, spread: 110, flight: 0.6, fuse: 1.0, radius: 64, damage: 32,
+    bombs: { windup: 0.6, count: 5, spread: 300, flight: 0.6, fuse: 1.0, radius: 64, damage: 32,
              waves: 8, waveSpeed: 200, waveDamage: 18, waveLife: 2.4 },
     // phase 2: with a hero within `trigger` px, the scythes whirl round him (orbit px out) for `time`s
     orbit: { trigger: 240, windup: 0.4, time: 3.4, radius: 126, spin: 3.2, hitRadius: 40, damage: 30, followSpeed: 90 },
