@@ -176,7 +176,7 @@ class Player extends Entity {
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
     for (const k of Object.keys(this.cooldowns)) {
       const rate = k === 'primary' ? this.attackSpeed * (1 + this.brew('rage')) * (this.inspired > 0 ? 1 + CONFIG.classes.bard.morale.attackSpeed : 1)
-        * this.sugarScale('attackSpeed')
+        * this.sugarScale('attackSpeed') * Upgrades.rushScale(this)
         : k === 'dodge' ? 1 : this.abilityHaste;
       this.cooldowns[k] -= dt * rate;
     }
@@ -697,6 +697,7 @@ class Player extends Entity {
     // Thorns: part of the hit goes back at whoever dealt it
     if (this.brews.thorns) this.reflectDamage(amount * this.brew('thorns'), world, fromX, fromY, opts.projectile);
     this.onHitTaken(world);
+    Upgrades.adrenaline(this, world);   // a hit that got through
     // practice god mode (after absorb, so parries and blocks can still be practised)
     if (world.cheats?.god) {
       this.invulnerable = CONFIG.player.hurtInvulnerability; // so hit-counting passives tick at a normal rate

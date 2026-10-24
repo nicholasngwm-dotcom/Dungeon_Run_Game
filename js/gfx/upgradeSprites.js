@@ -231,6 +231,17 @@ function buildUpgradeSprites() {
     p.px(10, 6, '#ffffff');
   });
 
+  U.adrenalineRush = icon((p) => {
+    // a racing heart, speed lines streaming off it
+    for (const [y, w] of [[6, 4], [10, 6], [14, 3]]) p.rect(1, y, w, 1, '#ffd0d8');
+    heart(p, 11, 10, 1, '#ff4a6a', '#ffd0d8');
+    p.line(5, 11, 8, 11, '#ffffff', 1);
+    p.line(8, 11, 10, 7, '#ffffff', 1);
+    p.line(10, 7, 12, 14, '#ffffff', 1);
+    p.line(12, 14, 14, 10, '#ffffff', 1);
+    p.line(14, 10, 17, 10, '#ffffff', 1);
+  });
+
   // ---------- hero upgrades ----------
   U.barrierField = icon((p) => {
     ring(p, 10, 10, 9, '#8ab8ff', 2, 0.9);

@@ -130,6 +130,12 @@ const SHOP_UPGRADES = [
     apply(p) { p.maxHp += 25; p.hp += 25; },
     hud: (p) => ({ cd: Upgrades.cd(p, 'teslaArmour'), max: 10, active: Upgrades.cd(p, 'teslaArmour') <= 0 }),
   },
+  {
+    // attackSpeed: how much faster basic attacks come back, for `time`s after a hit lands on you (once per `cooldown`s)
+    id: 'adrenalineRush', name: 'Adrenaline Rush', color: '#ff4a6a', cooldown: 7, time: 4, attackSpeed: 0.4,
+    desc: 'Taking damage gives you 40% faster attacks for 4 seconds. 7 second cooldown.',
+    hud: (p) => ({ cd: Upgrades.cd(p, 'adrenalineRush'), max: 7, active: Upgrades.state(p).rush > 0 }),
+  },
   // ---------- hero upgrades ----------
   {
     id: 'barrierField', name: 'Barrier Force Field', color: '#8ab8ff', hero: 'warrior',
@@ -303,6 +309,21 @@ const Upgrades = {
 
   cd(p, id) { return Math.max(0, this.state(p).cd[id] || 0); },
 
+  /** Adrenaline Rush: a hit that lands sets it off (if it's off cooldown): faster attacks for a few seconds. */
+  adrenaline(p, world) {
+    if (!this.has(p, 'adrenalineRush') || this.cd(p, 'adrenalineRush') > 0) return;
+    const u = UPGRADE_BY_ID.adrenalineRush;
+    const s = this.state(p);
+    s.rush = u.time;
+    s.cd.adrenalineRush = u.cooldown;
+    this.proc(p, world, 'adrenalineRush', 'ADRENALINE!');
+    world.effects.burst(p.hx, p.hy, { count: 16, colors: ['#ff4a6a', '#ffd0d8', '#ffffff'], speed: [60, 170], life: [0.25, 0.5] });
+    Sound.play('thrustCharge', 0.1);
+  },
+
+  /** How much faster basic attacks come back right now (Adrenaline Rush). */
+  rushScale(p) { return p.upg?.rush > 0 ? 1 + UPGRADE_BY_ID.adrenalineRush.attackSpeed : 1; },
+
   /** Resurrect (Priestess): owned, and not yet used this stage. */
   canResurrect(p) { return this.has(p, 'resurrect') && !this.state(p).resurrected; },
 
@@ -390,6 +411,11 @@ const Upgrades = {
     if (!p.upgradeLevels || !Object.keys(p.upgradeLevels).length) return;
     const s = this.state(p);
     for (const k of Object.keys(s.cd)) s.cd[k] -= dt;
+    // Adrenaline Rush: the boost wearing off, red streaks coming off the hero meanwhile (visual only)
+    if (s.rush > 0) {
+      s.rush -= dt;
+      if (vrand(0, 1) < dt * 14) world.effects.burst(p.x + vrand(-8, 8), p.y - vrand(4, 26), { count: 1, colors: ['#ff4a6a', '#ffd0d8'], speed: [10, 30], life: [0.2, 0.4], up: 30, size: [1, 2] });
+    }
     // Deadly Precision: how long the hero has stood still
     s.still = p.moving || p.dodge || p.jump || p.dash ? 0 : s.still + dt;
     // Beatdown: a stack falls off every 2s without a hit
