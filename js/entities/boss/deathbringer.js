@@ -202,14 +202,16 @@ class Deathbringer {
     this.attackTimer -= dt;
     if (this.attackTimer > 0 || p.dead) return;
     this.attackTimer = c.attackInterval[this.phase - 1];
+    // tendrils only while there's room for more, and not for respawnDelay seconds after one is severed
+    const canCast = this.tendrilsOut + c.tendrils.perCast <= c.tendrils.max && !(this.tendrilsReadyAt > this.time);
     if (this.phase === 1) {
       const kind = ['slash', 'tendrils'][this.attackStep++ % 2];
-      if (kind === 'tendrils' && this.tendrilsOut + c.tendrils.perCast <= c.tendrils.max) this.startCast(world);
+      if (kind === 'tendrils' && canCast) this.startCast(world);
       else this.startSlash(world);
     } else {
       // phase 2 (the scythes circle it on their own): bombs, tendrils, bombs
       const kind = ['bombs', 'tendrils', 'bombs'][this.attackStep++ % 3];
-      if (kind === 'tendrils' && this.tendrilsOut + c.tendrils.perCast <= c.tendrils.max) this.startCast(world);
+      if (kind === 'tendrils' && canCast) this.startCast(world);
       else this.startBombs(world);
     }
   }
@@ -970,6 +972,7 @@ class DeathTendril {
     if (this.hp <= 0) {
       this.hp = 0;
       world.effects.text(this.x, this.y - 60, 'SEVERED', { color: '#c8b8ff', size: 8 });
+      this.boss.tendrilsReadyAt = this.boss.time + this.cfg.respawnDelay;   // no new ones for a while
       this.recall(world);
     }
     return true;

@@ -994,8 +994,9 @@ const CONFIG = {
     slash: { windup: 0.55, count: 1, every: 0.42, reach: 150, arcDegrees: 150, damage: 34, knockback: 220,
              waves: 3, waveSpreadDegrees: 34, waveSpeed: 250, waveDamage: 24, waveScale: 2.2, waveLife: 6 },
     // tendrils: `perCast` sink in and rise round the room (up to `max` out); each has `hp` and
-    // slams every `slamEvery`s (windup first): a shockwave and `waves` small waves of darkness
-    tendrils: { perCast: 2, max: 8, hp: 140, sinkTime: 0.6, riseTime: 0.7, slamEvery: [3.6, 4.4], slamWindup: 0.7,
+    // slams every `slamEvery`s (windup first): a shockwave and `waves` small waves of darkness.
+    // Killing one stops it sending any more out for `respawnDelay`s (it slashes / bombs instead)
+    tendrils: { perCast: 2, max: 8, hp: 140, respawnDelay: 10, sinkTime: 0.6, riseTime: 0.7, slamEvery: [3.6, 4.4], slamWindup: 0.7,
                 slamDamage: 28, slamRadius: 60, waves: 10, waveSpeed: 190, waveDamage: 16, waveLife: 2.6,
                 shockwave: { radius: 140, speed: 220, width: 12, damage: 18 } },
     // phase 2: darkness gathers in his hands and he hurls `count` shadow bombs near the heroes;
