@@ -249,6 +249,7 @@ const Menus = {
       case 'quit': app.quitToMenu(); break;
       case 'retry': app.retry(); break;
       case 'lobby': app.enterLobby(); break;
+      case 'resync': app.resyncRun(); break;
       case 'closePanel': app.closePanel(); break;
       case 'chooseHero': app.pickHero(this.heroPreview.id); break;
       case 'heroTab': this.setHeroTab(arg); break;
@@ -342,6 +343,8 @@ const Menus = {
     const lobbyBtn = document.getElementById('pause-lobby');
     lobbyBtn.classList.toggle('hidden', mp ? !host : inLobby);
     lobbyBtn.textContent = mp && inLobby ? 'Restart Lobby (resync)' : 'Return to Lobby';
+    // the host, mid-run: rebuild the stage for everyone without losing the run (see Session.resyncRun)
+    document.getElementById('pause-resync').classList.toggle('hidden', !(mp && host && !inLobby));
     document.getElementById('pause-quit').textContent = mp ? 'Leave Game' : 'Quit to Menu';
     document.querySelector('#screen-pause h2').textContent = mp ? 'Menu' : 'Paused';
     this.showPauseHero(hero);

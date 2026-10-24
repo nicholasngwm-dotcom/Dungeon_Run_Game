@@ -122,7 +122,54 @@ class DungeonRun {
     for (let s = 0; s < 3; s++) this.themes.push(opts.mode === 'set' ? opts.theme : this.rollTheme());
     this.time = 0;
     this.startPicks = {};          // each stage's free upgrade: 'stage|hero key' -> the id chosen
+    // a multiplayer resync carries the run on where it was (see snapshot / Session.resyncRun)
+    const R = opts.resume;
+    if (R) {
+      this.stage = R.stage;
+      this.themes = [...R.themes];
+      this.metLateBoss = R.metLateBoss;
+      this.startPicks = { ...R.startPicks };
+    }
     this.buildStage();
+  }
+
+  /**
+   * Everything a resync carries over to the rebuilt stage: the stage and its themes, and each
+   * hero's upgrades, coins, items, health (a share of max; the downed come back at half) and ult.
+   * Plain data, sent to every machine with the new scene.
+   */
+  snapshot() {
+    const heroes = {};
+    for (const p of this.world.players) {
+      heroes[p.netId] = {
+        upgrades: Object.keys(p.upgradeLevels),
+        coins: p.coins,
+        bought: p.upgradesBought || 0,
+        inventory: p.inventory.map((s) => s && { ...s }),
+        hp: p.dead ? 0.5 : p.hp / p.maxHp,
+        ult: p.ult,
+      };
+    }
+    return { stage: this.stage, themes: [...this.themes], metLateBoss: !!this.metLateBoss, startPicks: { ...this.startPicks }, heroes };
+  }
+
+  /** The heroes of a resynced run take back what they had (their upgrades re-applied, without the fanfare). */
+  restoreHeroes(R) {
+    for (const p of this.world.players) {
+      const h = R.heroes[p.netId];
+      if (!h) continue;
+      for (const id of h.upgrades) {
+        const u = UPGRADE_BY_ID[id];
+        if (!u || p.upgradeLevels[id]) continue;
+        p.upgradeLevels[id] = 1;
+        u.apply?.(p);
+      }
+      p.coins = h.coins;
+      p.upgradesBought = h.bought;
+      p.inventory = h.inventory.map((s) => s && { ...s });
+      p.hp = Math.max(1, Math.round(p.maxHp * h.hp));
+      p.ult = h.ult;
+    }
   }
 
   /**
@@ -195,6 +242,8 @@ class DungeonRun {
       if (r.type === 'boss' && this.bossType === 'king') this.solidThrone(r);
       if (r.type === 'boss' && this.bossType === 'princess') this.studyCover(r);
       if (r.type === 'boss' && this.bossType === 'phantom') this.manorStairs(r);
+      if (r.type === 'boss' && this.bossType === 'deathbringer') this.cryptTombs(r);
+      if (r.type === 'boss' && this.bossType === 'king') this.throneHallPillars(r);
       if (r.type === 'combat') this.addSpikes(r);
       this.addProps(r);
     }
@@ -610,7 +659,7 @@ class DungeonRun {
     let hero = null;
     let best = Infinity;
     for (const a of w.allies) {
-      if (a === this.totem) continue;
+      if (a === this.totem || a.prop) continue;
       const d = dist(enemy.x, enemy.y, a.x, a.y);
       if (a.invisible && d > (a.detectRange ?? CONFIG.player.invisibleDetectRange)) continue;
       if (d < best) { best = d; hero = a; }
@@ -1115,6 +1164,49 @@ class DungeonRun {
       this.cover.push({ kind: 'study', prop, tx, ty, w, h, x: tx * T, y: ty * T, seed: 0, room: r });
       for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) f.grid[ty + j][tx + i] = TILE.COVER;
     }
+  }
+
+  /**
+   * Solid cover pieces: each [kind, first column from the middle, row from the room's middle row,
+   * width, height] in tiles (kind a Sprites.cover set; seed picks the variant). Skips any that
+   * would land on a doorway's approach or off the floor.
+   */
+  bossCover(r, pieces) {
+    const f = this.floor;
+    const T = f.T;
+    const mid = Math.round((r.x0 + r.x1 + 1) / 2);
+    const midY = Math.floor((r.y0 + r.y1 + 1) / 2);
+    const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ tx: t % f.cols, ty: Math.floor(t / f.cols) }));
+    pieces.forEach(([kind, dx, dy, w, h], i) => {
+      const tx = mid + dx;
+      const ty = midY + dy;
+      if (tx < r.x0 + 1 || tx + w > r.x1 || ty < r.y0 + 2 || ty + h > r.y1) return;
+      if (doors.some((d) => d.tx >= tx - 3 && d.tx <= tx + w + 2 && d.ty >= ty - 3 && d.ty <= ty + h + 2)) return;
+      this.cover.push({ kind, tx, ty, w, h, x: tx * T, y: ty * T, seed: i, room: r, material: 'stone' });
+      for (let j = 0; j < h; j++) for (let k = 0; k < w; k++) f.grid[ty + j][tx + k] = TILE.COVER;
+    });
+  }
+
+  /**
+   * The Deathbringer's room: four obsidian sarcophagi in a ring round the middle, where its portal
+   * opens. They stand in the way of its waves of darkness (cover to duck behind); it floats over them.
+   */
+  cryptTombs(r) {
+    this.bossCover(r, [
+      ['darkTomb', -8, -3, 2, 1], ['darkTomb', 6, -3, 2, 1],
+      ['darkTomb', -8, 4, 2, 1], ['darkTomb', 6, 4, 2, 1],
+    ]);
+  }
+
+  /**
+   * The King's throne room: two rows of great pillars down the hall either side of the carpet (well
+   * clear of it and of the braziers lining it): something to lead him round once he waddles after
+   * you in phase 2, and to break up the hall his guards march down.
+   */
+  throneHallPillars(r) {
+    const pieces = [];
+    for (const dy of [-2, 2, 6]) for (const dx of [-9, 8]) pieces.push(['pillar', dx, dy, 1, 1]);
+    this.bossCover(r, pieces);
   }
 
   /** True if (x, y) is within `pad` px of any piece of cover. */
@@ -1767,8 +1859,12 @@ class DungeonRun {
   /** Extra things hero attacks can hit: the barrels still standing. */
   targets() { return Barrels.alive(this); }
 
-  /** Extra things enemies attack (the defend totem). */
-  allies() { return this.totem && !this.totem.dead ? [this.totem] : []; }
+  /** Extra things enemy attacks hit: the defend totem, and the barrels (so enemies can set them off too). */
+  allies() {
+    const out = Barrels.alive(this);
+    if (this.totem && !this.totem.dead) out.push(this.totem);
+    return out;
+  }
 
   getDrawables() {
     // holes are flat on the floor, so they always sort under the characters;
@@ -2494,6 +2590,8 @@ class DungeonRun {
     if (this.totem) out.push({ x: this.totem.x, y: this.totem.y - 24, r: 180, s: 1, rgb: '106, 216, 255' });
     for (const s of this.spikes) if (this.spikeState(s) === 1) out.push({ x: s.x + 16, y: s.y + 16, r: 30, s: 0.3 });
     // a faint glow off each barrel, so they read in the dark (the fuse's spark, the ooze, the frost)
+    // the Deathbringer's tombs: their runes glow faintly, so they can still be made out in its darkness
+    for (const o of this.cover) if (o.kind === 'darkTomb') out.push({ x: o.x + o.w * this.floor.T / 2, y: o.y + 6, r: 70, s: 0.5, rgb: '154, 106, 255' });
     for (const b of this.barrels) if (!b.dead) out.push({ x: b.x, y: b.y - 14, r: 48, s: 0.45, rgb: { explosive: '255, 170, 80', poison: '140, 240, 100', frost: '150, 200, 255' }[b.kind] });
     const w = this.world;
     if (w.boss?.addLights) w.boss.addLights(out);

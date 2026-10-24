@@ -78,7 +78,12 @@ class Game {
       for (const t of this.lobby.targets) this.dummies.push(new TrainingTarget(t.x, t.y));
       if (opts.welcome) this.banner('THE LOBBY', 'Pick a hero, then head through the gate', 2.6);
     }
-    if (this.run) this.run.start();
+    if (this.run) {
+      const resume = opts.run.resume;   // a multiplayer resync: the heroes take back what they had
+      if (resume) this.run.restoreHeroes(resume);
+      this.run.start();
+      if (resume) this.banner('BACK IN SYNC', `Stage ${this.run.stage} starts again - upgrades, coins and items kept`, 3);
+    }
     this.camera.follow(this.player.x, this.player.y, 0, this.dungeon.width, this.dungeon.height, true);
     this.vignette = Game.buildVignette();
   }
@@ -297,6 +302,7 @@ class Game {
     }
     if (best) return best;
     for (const a of allies) {
+      if (a.prop) continue;   // barrels get hit, never hunted
       const d = dist(enemy.x, enemy.y, a.x, a.y);
       if (a.invisible && d > (a.detectRange ?? CONFIG.player.invisibleDetectRange)) continue;
       if (d < bestD) { bestD = d; best = a; }

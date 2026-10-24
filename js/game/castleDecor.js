@@ -74,7 +74,14 @@ const CastleDecor = {
     for (const dx of [-9, -6, 6, 9]) fd.add('prop', { x: r.cx + dx * T, y: top + 1.6 * T }, { name: 'weaponRack', seed: 0 });
     for (const s of [-1, 1]) {
       fd.add('banner', { x: r.cx + s * 3 * T, y: top + 1.2 * T });
-      for (const [dy, name] of [[-3, 'dummy'], [0, 'pell'], [3, 'dummy']]) fd.add('prop', { x: r.cx + s * 11.5 * T, y: r.cy + dy * T }, { name, seed: s > 0 ? 6 : 0 });
+      // the training dummies and pell down each side stand solid
+      for (const [dy, name] of [[-3, 'dummy'], [0, 'pell'], [3, 'dummy']]) fd.add('prop', { x: r.cx + s * 11.5 * T, y: r.cy + dy * T }, { name, seed: s > 0 ? 6 : 0, solid: name === 'pell' ? [6, 4] : [8, 4] });
+      // stacked hay bales just outside the sparring ring, between the braziers (solid): something to put
+      // between you and his dashes
+      for (const [dx, dy] of [[8.2, -1.6], [8.2, 3.4]]) {
+        fd.add('prop', { x: r.cx + s * dx * T - 11, y: r.cy + dy * T }, { name: 'hayBale', seed: 2, solid: [26, 7] });
+        fd.add('prop', { x: r.cx + s * dx * T + 11, y: r.cy + dy * T + 1 }, { name: 'hayBale', seed: 5 });
+      }
       fd.add('prop', { x: r.cx + s * 13 * T, y: r.y1 * T - 0.6 * T }, { name: 'hayBale', seed: 0 });
       fd.add('prop', { x: r.cx + s * 12.2 * T, y: r.y1 * T - 0.4 * T }, { name: 'hayBale', seed: 6 });
       fd.add('brazier', { x: r.cx + s * 8.5 * T, y: r.cy - 4.5 * T });

@@ -10,8 +10,11 @@
 //  Phase 2 (half health): darkness covers the room; its scythes become double-ended and
 //    forked, and circle it on their own, spinning as they go (faster when you're close).
 //    Every few seconds one of them, taking turns, looses a big wave of darkness at you.
-//    Darkness gathers in its hands and it hurls shadow bombs that burst into waves.
-//  Phase 3 (10%): it vanishes, four reapers come, and it hunts you as a shade: just its touch.
+//    Darkness gathers in its hands and it hurls shadow bombs that explode over an area.
+//    It chases you between attacks (faster in phase 2), and after a tendril is cut down it
+//    sends no more out for a while.
+//  Phase 3 (10%): it vanishes and comes back as a shade, its scythes whirling round it extremely
+//    fast, and hunts you down, faster still.
 //  (x, y) is the ground under it; it floats a little above it.
 // =============================================================
 
@@ -194,7 +197,8 @@ class Deathbringer {
       // glide toward the hero, keeping about keepAway off
       const dir = d > c.keepAway + 40 ? 1 : d < c.keepAway - 40 ? -0.6 : 0;
       const a = angleTo(this.x, this.y, p.x, p.y);
-      const to = this.clampToFloor(world, this.x + Math.cos(a) * c.glideSpeed * dir * dt, this.y + Math.sin(a) * c.glideSpeed * dir * dt);
+      const speed = c.glideSpeed[Math.min(this.phase, 2) - 1];
+      const to = this.clampToFloor(world, this.x + Math.cos(a) * speed * dir * dt, this.y + Math.sin(a) * speed * dir * dt);
       this.x = to.x;
       this.y = to.y;
     }
@@ -440,23 +444,30 @@ class Deathbringer {
       b.t += dt;
       if (b.t < c.flight + c.fuse) continue;
       b.dead = true;
+      // it explodes where it lies: everyone in its area is hit (no waves)
       for (const h of world.allies) if (dist(h.x, h.y, b.x, b.y) < c.radius + (h.radius || 10) * 0.5) h.hurt(c.damage, world, b.x, b.y);
-      const turn = rand(0, TAU);
-      for (let i = 0; i < c.waves; i++) {
-        const a = turn + (i / c.waves) * TAU;
-        this.darkWave(world, b.x + Math.cos(a) * 12, b.y - 8 + Math.sin(a) * 8, a, { speed: c.waveSpeed, damage: c.waveDamage, life: c.waveLife, radius: 14, scale: 0.8 });
-      }
       const { x, y } = b;
-      world.effects.add(0.4, (ctx, t) => {
+      const r = c.radius;
+      // a dome of darkness bursting out to the edge of the area, a violet shockwave racing to its rim
+      world.effects.add(0.5, (ctx, t) => {
+        const e = 1 - (1 - t) ** 3;
         ctx.save();
-        ctx.globalAlpha = 1 - t;
-        PFX.disc(ctx, x, y, c.radius * (0.5 + t), c.radius * 0.6 * (0.5 + t), 'rgba(6, 2, 12, 0.7)', 2);
+        ctx.globalAlpha = 0.85 * (1 - t);
+        PFX.disc(ctx, x, y, r * (0.4 + e * 0.6), r * 0.6 * (0.4 + e * 0.6), 'rgba(6, 2, 12, 0.8)', 2);
         ctx.globalCompositeOperation = 'lighter';
-        PFX.ring(ctx, x, y, c.radius * (0.4 + t * 0.9), c.radius * 0.6 * (0.4 + t * 0.9), '#9a6aff', 2, { thick: t < 0.4 ? 3 : 1 });
+        PFX.glow(ctx, x, y - 14, r * (0.5 + e * 0.5), '120, 60, 220', 0.9 * (1 - t), 2, r * 0.55);
+        PFX.ring(ctx, x, y, r * e, r * 0.6 * e, '#9a6aff', 2, { thick: t < 0.4 ? 3 : 1 });
         ctx.restore();
       });
-      world.effects.burst(x, y - 8, { count: 24, colors: DB_DARK.concat(['#6a3aa0', '#c8b8ff']), speed: [60, 200], life: [0.3, 0.7], up: 30, size: [2, 4] });
-      world.shake(4, 0.2);
+      world.effects.add(1.2, (ctx, t) => {
+        ctx.save();
+        ctx.globalAlpha = 0.5 * (1 - t);
+        PFX.disc(ctx, x, y, r * 0.8, r * 0.45, '#0a0412');
+        ctx.restore();
+      }, true);
+      world.effects.burst(x, y - 10, { count: 40, colors: DB_DARK.concat(['#6a3aa0', '#c8b8ff']), speed: [80, 260], life: [0.3, 0.8], up: 50, size: [2, 5] });
+      world.effects.smoke(x, y - 12, { count: 8, radius: r * 0.45, life: 0.9, rise: 26, colors: ['#0e0814', '#1e1028', '#33195a'] });
+      world.shake(6, 0.25);
       Sound.play('explosion', 0.1);
     }
     removeDead(this.bombs);
@@ -472,13 +483,15 @@ class Deathbringer {
     const c = this.cfg.orbit;
     const close = this.dying <= 0 && world.heroes.some((h) => !h.dead && dist(h.x, h.y, this.x, this.y) < c.trigger);
     this.near += ((close ? 1 : 0) - this.near) * Math.min(1, dt * 3);
-    this.orbitSpin = lerp(c.spin, c.fastSpin, this.near);
+    // phase 3: they whirl round him extremely fast all the time (the rate still eases up to it)
+    const goal = this.phase === 3 ? c.shadeSpin : lerp(c.spin, c.fastSpin, this.near);
+    this.orbitSpin += (goal - this.orbitSpin) * Math.min(1, dt * 2);
     this.orbitAngle += dt * this.orbitSpin;
     this.orbitR += (c.radius - this.orbitR) * Math.min(1, dt * 3);
     const turnSound = Math.floor(this.orbitAngle / Math.PI);
-    if (this.near > 0.5 && turnSound !== this.orbitSound) Sound.play('whirlwindSpin', 0.2);
+    if ((this.near > 0.5 || this.phase === 3) && turnSound !== this.orbitSound) Sound.play('whirlwindSpin', 0.2);
     this.orbitSound = turnSound;
-    if (this.dying > 0 || this.phase === 3 || this.alpha < 0.6) return;
+    if (this.dying > 0 || this.alpha < 0.6) return;
     for (const s of this.scythePoints()) {
       for (const h of world.allies) if (dist(h.x, h.hy ?? h.y, s.x, s.y) < c.hitRadius + (h.radius || 10)) h.hurt(c.damage, world, s.x, s.y);
     }
@@ -572,18 +585,17 @@ class Deathbringer {
       this.setState('transform');
       return;
     }
-    // phase 3: everything goes back to it, it vanishes, and its reapers come
-    world.banner('THE DEATHBRINGER VANISHES', 'Its reapers hunt you');
+    // phase 3: everything goes back to it, it vanishes and comes back as a shade, its scythes whirling round it
+    world.banner('THE DEATHBRINGER VANISHES', 'Its scythes whirl as it hunts you');
     for (const td of this.tendrils) td.recall(world);
     this.bombs = [];
-    this.setState('vanish');
-    const b = world.dungeon.floorBounds;
-    const n = this.cfg.shade.reapers;
-    const corners = [[0.15, 0.25], [0.85, 0.25], [0.15, 0.85], [0.85, 0.85]];
-    for (let i = 0; i < n; i++) {
-      const [fx, fy] = corners[i % corners.length];
-      world.spawnEnemy('reaper', lerp(b.left, b.right, fx), lerp(b.top, b.bottom, fy), (e) => { e.summonedBy = this; });
+    if (!this.double) {
+      // (knocked straight from phase 1 to 3: the scythes take flight now)
+      this.double = true;
+      this.orbitAngle = 0;
+      this.orbitR = 60;
     }
+    this.setState('vanish');
   }
 
   /** Phase 2 begins: the scythes leave its hands, reform double-bladed and start circling it. */
@@ -614,13 +626,6 @@ class Deathbringer {
     for (const td of this.tendrils) td.recall(world);
     this.bombs = [];
     this.darknessGoal = 0;
-    // its reapers fade with it
-    for (const e of world.enemies) {
-      if (e.summonedBy !== this || e.dead) continue;
-      e.dead = true;
-      e.exploded = true;
-      world.effects.burst(e.x, e.y - 20, { count: 20, colors: DB_DARK.concat('#6a3aa0'), speed: [40, 140], life: [0.4, 0.8], up: 30 });
-    }
     Sound.play('bossRoar');
     world.banner('THE DEATHBRINGER IS UNMADE!', '');
   }
@@ -763,7 +768,7 @@ class Deathbringer {
     if (this.alpha > 0 && this.risen > 0) out.push({ y: this.y, draw: (ctx) => this.drawBody(ctx) });
     const c = this.cfg.bombs;
     for (const b of this.bombs) out.push({ y: b.t < c.flight ? this.y + 1000 : b.y, draw: (ctx) => this.drawBomb(ctx, b) });
-    if (this.double && this.phase < 3 && this.alpha > 0) {
+    if (this.double && this.alpha > 0) {
       // each scythe sorts by where it is on its circle (in front of it on the near side, behind on the far)
       this.scythePoints().forEach((p, i) => out.push({ y: this.y + Math.sin(this.orbitAngle + i * Math.PI) * 30, draw: (ctx) => this.drawFloatingScythe(ctx, p, i) }));
     }
@@ -876,6 +881,20 @@ class Deathbringer {
   drawFloatingScythe(ctx, p, i) {
     const img = Sprites.deathbringer.doubleScythe;
     const charge = i === this.waveTurn ? this.waveCharge : 0;
+    // whirling fast (phase 3): fading afterimages trail it round its circle
+    const blur = clamp((this.orbitSpin - 5) / 6, 0, 1);
+    if (blur > 0) {
+      const y0 = this.drawY - 58;   // (the circle's centre, as scythePoints)
+      for (let k = 1; k <= 3; k++) {
+        const a = this.orbitAngle + i * Math.PI - k * 0.32;
+        ctx.save();
+        ctx.globalAlpha = this.alpha * blur * (0.35 - k * 0.09);
+        ctx.translate(this.x + Math.cos(a) * this.orbitR, y0 + Math.sin(a) * this.orbitR * 0.6);
+        ctx.scale(DB_SCALE, DB_SCALE);
+        drawRotated(ctx, img, 0, 0, img.width / 2, 22, this.spinAngle * (i ? -1 : 1) + i - k * 0.5);
+        ctx.restore();
+      }
+    }
     ctx.save();
     ctx.globalAlpha = this.alpha;
     drawShadow(ctx, p.x, this.y + (p.y - this.drawY + 58), 22, 6, 0.25 * this.alpha);
@@ -929,7 +948,7 @@ class Deathbringer {
     if (this.alpha > 0.1) out.push({ x: this.x, y: this.drawY - 70, r: 150, s: 0.45 * this.alpha, rgb: '150, 90, 255' });
     for (const td of this.tendrils) out.push({ x: td.x, y: td.y - 30, r: 60, s: 0.35, rgb: '150, 90, 255' });
     for (const b of this.bombs) out.push({ x: b.x, y: b.y, r: 50, s: 0.5, rgb: '170, 110, 255' });
-    if (this.double && this.phase < 3) for (const p of this.scythePoints()) out.push({ x: p.x, y: p.y, r: 60, s: 0.45, rgb: '150, 90, 255' });
+    if (this.double) for (const p of this.scythePoints()) out.push({ x: p.x, y: p.y, r: 60, s: 0.45, rgb: '150, 90, 255' });
   }
 
   drawOverlay() {}

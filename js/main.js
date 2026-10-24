@@ -51,11 +51,13 @@ const App = {
     }
     this.loading('Ready!', 1);
     await document.fonts?.ready;
+    this.showLogo();
     await new Promise((r) => setTimeout(r, Math.max(0, 900 - (performance.now() - started))));
 
     Input.init(this.canvas);
     Menus.init(this);
     Cheats.init(this);
+    Chat.init(this);
 
     // Browsers only allow audio after a user gesture.
     const unlock = () => {
@@ -76,6 +78,22 @@ const App = {
     const loader = document.getElementById('loader');
     loader.classList.add('done');
     setTimeout(() => loader.remove(), 700);
+  },
+
+  /**
+   * The logo (built now the Alagard font is in, it's lettered with it): it takes the main menu's
+   * title, and its icon goes on the browser tab. The title's text stays as the image's alt text.
+   */
+  showLogo() {
+    buildLogo();
+    const h1 = document.querySelector('#screen-menu .title');
+    const img = new Image();
+    img.src = Sprites.logo.toDataURL();
+    img.alt = 'Dungeon Run';
+    img.className = 'logo';
+    h1.replaceChildren(img);
+    const link = document.querySelector('link[rel="icon"]') || document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'icon' }));
+    link.href = Sprites.logoIcon.toDataURL();
   },
 
   /** Startup progress: the loader's label and bar (0-1). */
@@ -154,6 +172,13 @@ const App = {
   },
 
   // ---------- lobby ----------
+
+  /** Host, mid-run: rebuild the stage for everyone (back in sync), keeping the run's progress. */
+  resyncRun() {
+    if (!this.mp?.resyncRun()) return;
+    Menus.toast('RESYNCING - PROGRESS KEPT', '#8cff9a');
+    this.resume();
+  },
 
   /** The hub between runs: walk around as the chosen hero and use the stations. */
   enterLobby(welcome = false) {
@@ -301,9 +326,11 @@ const App = {
         Menus.show(null);
         Music.stop();
         Music.play(kind === 'lobby' ? 'lobby' : 'battle');
+        Chat.hint();
       },
       onRejected: (reason) => this.leaveMultiplayer(reason),
       onDesync: () => Sound.play('uiClick'),   // the notice itself stays on screen (drawNetStatus)
+      onChat: (msg) => Chat.receive(msg),
     };
   },
 
@@ -398,6 +425,7 @@ const App = {
   leaveMultiplayer(reason = '') {
     const s = this.mp;
     this.mp = null;
+    Chat.reset();
     if (s) s.close();
     Net.close();
     this.state = 'menu';
@@ -494,7 +522,25 @@ const App = {
     Music.play('menu');
   },
 
+  /**
+   * One frame, always followed by the next: an error in a frame is reported (console, and a
+   * notice on screen now and then) instead of stopping the loop and freezing the game for good.
+   */
   loop(now) {
+    try {
+      this.frame(now);
+    } catch (e) {
+      console.error('Frame error:', e);
+      Input.endFrame();
+      if (!(this.errorShownAt > now - 8000)) {
+        this.errorShownAt = now;
+        Menus.toast('SOMETHING WENT WRONG - THE GAME KEPT GOING (DETAILS IN THE CONSOLE)', '#ff6a6a');
+      }
+      requestAnimationFrame((t) => this.loop(t));
+    }
+  },
+
+  frame(now) {
     const dt = Math.min((now - this.lastTime) / 1000 || 0, 1 / 30);
     this.ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
     this.lastTime = now;
@@ -581,7 +627,13 @@ const App = {
     if (s.desync) {
       lines.push({ text: s.isHost ? `OUT OF SYNC WITH ${s.desync.who.toUpperCase()}` : 'YOUR GAME IS OUT OF SYNC WITH THE HOST', color: '#ff6a6a', size: 8 });
       lines.push({ text: 'The games drifted apart - a game problem, not your connection.', color: '#f4ead7', size: 6 });
-      lines.push({ text: s.isHost ? 'Fix: Esc > Return to Lobby to resync everyone.' : 'Fix: ask the host to return to the lobby to resync.', color: '#ffe680', size: 6 });
+      const inRun = s.scene === 'run';
+      lines.push({
+        text: s.isHost
+          ? (inRun ? 'Fix: Esc > Resync (keeps everyone\'s progress).' : 'Fix: Esc > Restart Lobby to resync everyone.')
+          : (inRun ? 'Fix: ask the host to Resync (Esc menu) - progress is kept.' : 'Fix: ask the host to restart the lobby to resync.'),
+        color: '#ffe680', size: 6,
+      });
     }
     for (const w of s.netWarnings()) lines.push({ text: w, color: '#ffd34a', size: 7 });
     if (!lines.length) return;

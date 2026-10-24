@@ -118,6 +118,59 @@ function buildObstacleSprites() {
     })],
   });
 
+  // the Deathbringer's room (DungeonRun.cryptTombs): obsidian sarcophagi bound in tarnished gold, a hooded
+  // reaper inlaid on the front and violet runes along the lid; one sealed, one with its lid cracked and the dark
+  // seeping out (2x1 tiles, like the graveyard's tomb)
+  const OBS = ['#0c0812', '#171021', '#241a33', '#36294a', '#4c3a66'];
+  const GOLD = ['#5a3c10', '#a07a24', '#dcb44c', '#fbe796'];
+  const RUNE = ['#4a2a8a', '#9a6aff', '#d8c0ff'];
+  const darkTomb = (cracked) => make(68, 46, (p) => {
+    p.ellipse(34, 42, 32, 4, '#0a0610');
+    // the box: its front face between squat stone corner pillars (a coffin's shape, not a chest's), on a dark plinth
+    p.rect(5, 20, 58, 20, OBS[1]);
+    p.rect(5, 20, 58, 2, OBS[2]);
+    for (const x of [5, 57]) { p.rect(x, 20, 6, 20, OBS[3]); p.rect(x, 20, 1, 20, OBS[4]); p.rect(x + 5, 20, 1, 20, OBS[0]); }
+    p.rect(3, 38, 62, 3, OBS[0]);
+    p.rect(3, 38, 62, 1, OBS[2]);
+    // the lid: wider than the box, a lit top edge and a thin tarnished-gold rim
+    p.rect(2, 8, 64, 13, OBS[2]);
+    p.rect(2, 8, 64, 3, OBS[4]);
+    p.rect(4, 11, 60, 2, OBS[3]);
+    p.rect(2, 20, 64, 1, GOLD[1]);
+    // runes carved along the lid, glowing violet
+    for (let x = 9; x < 60; x += 7) {
+      p.rect(x, 14, 1, 3, RUNE[1]);
+      p.rect(x + 1, 13 + (x % 3), 2, 1, RUNE[1]);
+      if (x % 2) p.px(x, 14, RUNE[2]);
+    }
+    // the reaper inlaid in gold on the front: a hood, a dark face, a scythe across it
+    p.round(29, 23, 10, 13, GOLD[1], 4);
+    p.round(30, 24, 8, 11, GOLD[2], 3);
+    p.round(31, 26, 6, 6, OBS[0], 2);
+    p.px(32, 28, RUNE[1]);
+    p.px(35, 28, RUNE[1]);
+    p.line(22, 34, 45, 24, GOLD[1], 1);
+    p.line(42, 22, 47, 25, GOLD[2], 1);
+    // engraved side panels
+    for (const x of [14, 48]) { p.rect(x, 24, 6, 12, OBS[0]); p.rect(x + 1, 25, 4, 10, OBS[2]); }
+    if (cracked) {
+      // the lid split across, the dark and a violet light seeping out of the crack
+      p.line(40, 8, 34, 15, OBS[0], 2);
+      p.line(34, 15, 37, 20, OBS[0], 2);
+      p.line(41, 9, 35, 15, RUNE[1], 1);
+      p.px(36, 16, RUNE[2]);
+      p.rect(33, 4, 3, 4, '#1e1028');
+      p.rect(37, 2, 2, 5, '#1e1028');
+      p.px(34, 3, RUNE[0]);
+    } else {
+      // a gold skull-clasp sealing the lid
+      p.round(31, 15, 6, 5, GOLD[2], 2);
+      p.px(32, 16, OBS[0]);
+      p.px(35, 16, OBS[0]);
+    }
+  });
+  Sprites.cover.darkTomb = [darkTomb(false), darkTomb(true)];
+
   // square 2x2 blocks for the room layouts (DungeonRun.addLayout): its top seen from above, its south face below
   Object.assign(Sprites.cover, {
     // a squat mausoleum block: a slab roof with a carved cross, mossy stone walls

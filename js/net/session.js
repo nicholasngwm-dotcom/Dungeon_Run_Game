@@ -169,7 +169,13 @@ class Session {
       else if (this.game) this.withRng(() => this.game.applyCommand(cmd, from));
     }
     if (!this.game) return;
-    this.withRng(() => this.game.update(this.dt, bundle.i));
+    // an error part-way through a step mustn't stop the steps counting on (that would stall or
+    // repeat ticks); this machine may be out of step after it, which the checksums will catch
+    try {
+      this.withRng(() => this.game.update(this.dt, bundle.i));
+    } catch (e) {
+      console.error(`Simulation error at tick ${bundle.k}:`, e);
+    }
     this.tick = bundle.k + 1;
     if (this.tick % CONFIG.multiplayer.checksumEvery === 0) {
       const h = this.checksum();
@@ -197,6 +203,17 @@ class Session {
     const before = this.game ? this.game.players.map((p) => p.netId) : [];
     const firstLobby = cmd.scene === 'lobby' && !this.welcomed;
     if (cmd.scene === 'lobby') this.welcomed = true;
+    // a run left part-way (the host took everyone back to the lobby, say to fix a desync) still pays
+    // gems for how far it got, as a wipe does (each machine banks its own player's share)
+    const old = this.game;
+    if (cmd.scene === 'lobby' && old?.run && !old.finished && !old.run.practiceBoss) {
+      const more = old.run.gemsForProgress() - (old.gemsEarned || 0);
+      if (more > 0) {
+        this.gameEvents.onGems?.(more);
+        this.gameEvents.onToast?.(`+${more} GEMS FOR YOUR PROGRESS`);
+      }
+    }
+    if (cmd.scene === 'run') this.runOpts = cmd.run;   // (resyncRun rebuilds it)
     this.scene = cmd.scene;
     this.roster = cmd.roster;
     this.rng = seededRng(cmd.seed);
@@ -248,6 +265,50 @@ class Session {
 
   startRun(run) { if (this.isHost) this.queueScene(run ? 'run' : 'test', run); }
   returnToLobby() { if (this.isHost) this.queueScene('lobby'); }
+
+  /**
+   * Host, mid-run (e.g. out of sync): everyone rebuilds the current stage from a fresh seed, which
+   * puts every machine back in step, carrying over the run's progress as the host's game has it
+   * (the stage, themes, each hero's upgrades, coins, items, health and ult). Nobody goes to the lobby.
+   */
+  resyncRun() {
+    if (!this.isHost || this.scene !== 'run' || !this.game?.run) return false;
+    this.queueScene('run', { ...this.runOpts, resume: this.game.run.snapshot() });
+    return true;
+  }
+
+  // ---------- chat (outside the simulation: just messages, relayed by the host) ----------
+
+  /** This player says something: to everyone, or (toId, a roster id) as a whisper. */
+  sendChat(text, toId = null) {
+    const msg = { t: 'chat', text: String(text).slice(0, 160), to: toId };
+    if (this.isHost) this.relayChat(this.id, msg);
+    else this.transport.send('host', msg);
+  }
+
+  /** Host: passes a chat message on, to everyone or, for a whisper, only to the two of them. */
+  relayChat(fromId, msg) {
+    const from = this.roster.find((r) => r.id === fromId);
+    const text = String(msg.text || '').slice(0, 160).trim();
+    if (!from || !text) return;
+    const out = { t: 'chat', from: from.name, fromId, text };
+    if (msg.to) {
+      const to = this.roster.find((r) => r.id === msg.to && !r.bot);
+      if (!to) return;
+      Object.assign(out, { whisper: true, toName: to.name, toId: to.id });
+      this.deliverChat(to.id, out);
+      if (to.id !== fromId) this.deliverChat(fromId, out);
+      return;
+    }
+    this.transport.broadcast(out);
+    this.events.onChat?.(out);
+  }
+
+  /** Host: one chat message to one player (the host's own screen, or a client's connection). */
+  deliverChat(id, out) {
+    if (id === this.id) return this.events.onChat?.(out);
+    for (const [peer, pid] of this.peers) if (pid === id) this.transport.send(peer, out);
+  }
 
   /** A gameplay command from this screen's player. */
   command(cmd) {
@@ -302,6 +363,9 @@ class Session {
       }
       case 'cmd':
         if (id && !msg.c.scene) this.queue.push({ from: id, cmd: msg.c });
+        return;
+      case 'chat':
+        if (id) this.relayChat(id, msg);
         return;
       case 'sum': {
         const mine = this.hashes.get(msg.k);
@@ -372,6 +436,9 @@ class Session {
           this.desync = { who: msg.who, tick: msg.k };
           this.events.onDesync?.(msg.who);
         }
+        return;
+      case 'chat':
+        this.events.onChat?.(msg);
         return;
     }
   }

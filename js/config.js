@@ -973,16 +973,18 @@ const CONFIG = {
   //    sends it back to him; he can have all 8 out at once.
   //  Phase 2 (phase2At): darkness covers the room (only a little light round each hero),
   //    and his scythes become double-ended, forked at both ends, spinning in the air by
-  //    themselves. He swings them in front of him to throw shadow bombs that burst into
-  //    waves of darkness, and when a hero comes close he whirls them round himself.
-  //  Phase 3 (phase3At): he vanishes, four reapers come for the heroes, and he hunts them
-  //    down as a shade: no scythes, no tendrils, just his touch.
+  //    themselves. He hurls shadow bombs that explode over an area, and when a hero comes
+  //    close he whirls the scythes round himself.
+  //  He chases the heroes between attacks (glideSpeed, faster in phase 2), and a severed
+  //    tendril stops him sending more out for tendrils.respawnDelay seconds.
+  //  Phase 3 (phase3At): he vanishes and comes back as a shade, his scythes whirling round
+  //    him extremely fast (orbit.shadeSpin), and hunts the heroes down faster still.
   // ---------------------------------------------------------
   deathbringer: {
     hp: 6800,
     phase2At: 0.5,
     phase3At: 0.1,
-    glideSpeed: 70,          // drifting toward the hero between attacks (keeps about keepAway px off)
+    glideSpeed: [115, 145],  // chasing the hero between attacks, phase 1 / 2 (keeps about keepAway px off)
     keepAway: 150,
     contactDamage: 24,
     contactRadius: 40,
@@ -996,22 +998,22 @@ const CONFIG = {
     // tendrils: `perCast` sink in and rise round the room (up to `max` out); each has `hp` and
     // slams every `slamEvery`s (windup first): a shockwave and `waves` small waves of darkness.
     // Killing one stops it sending any more out for `respawnDelay`s (it slashes / bombs instead)
-    tendrils: { perCast: 2, max: 8, hp: 140, respawnDelay: 10, sinkTime: 0.6, riseTime: 0.7, slamEvery: [3.6, 4.4], slamWindup: 0.7,
+    tendrils: { perCast: 2, max: 8, hp: 140, respawnDelay: 15, sinkTime: 0.6, riseTime: 0.7, slamEvery: [3.6, 4.4], slamWindup: 0.7,
                 slamDamage: 28, slamRadius: 60, waves: 10, waveSpeed: 190, waveDamage: 16, waveLife: 2.6,
                 shockwave: { radius: 140, speed: 220, width: 12, damage: 18 } },
     // phase 2: darkness gathers in his hands and he hurls `count` shadow bombs near the heroes;
-    // each lands after `flight`s, swells for `fuse`s, then bursts (damage in radius + `waves` waves)
-    bombs: { windup: 0.7, count: 5, spread: 300, flight: 0.6, fuse: 1.0, radius: 64, damage: 32,
-             waves: 8, waveSpeed: 200, waveDamage: 18, waveLife: 2.4 },
+    // each lands after `flight`s, swells for `fuse`s (its blast area marked), then explodes: damage in `radius`
+    bombs: { windup: 0.7, count: 5, spread: 300, flight: 0.6, fuse: 1.0, radius: 90, damage: 42 },
     // phase 2: the double scythes circle him all the time (radius px out, spinning as they go), turning
     // `spin` rad/s, or `fastSpin` while a hero is within `trigger` px (closer than he likes to keep, see
     // keepAway); touching one hurts
-    orbit: { trigger: 150, radius: 100, spin: 1.4, fastSpin: 4.2, hitRadius: 28, damage: 26 },
+    // phase 3 (shadeSpin): they whirl round him extremely fast all the time
+    orbit: { trigger: 150, radius: 100, spin: 1.4, fastSpin: 4.2, shadeSpin: 13, hitRadius: 28, damage: 26 },
     // phase 2: every `every`s one of the scythes (taking turns) glows for `charge`s and looses a big wave of darkness at the hero
     scytheWave: { every: 5, charge: 0.6, speed: 230, damage: 30, scale: 3.2, radius: 36, life: 6 },
     darkness: 0.94,          // phase 2 on: how dark the room gets
-    // phase 3: four reapers, and he chases the heroes as a shade
-    shade: { reapers: 4, vanish: 0.8, speed: 150, contactDamage: 34 },
+    // phase 3: he vanishes and comes back as a shade, his scythes whirling round him, and chases the heroes down
+    shade: { vanish: 0.8, speed: 235, contactDamage: 34 },
   },
 
   // ---------------------------------------------------------

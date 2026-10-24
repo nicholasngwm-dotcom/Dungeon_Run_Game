@@ -25,6 +25,7 @@ class Gravestone extends Enemy {
 
     // solid: push heroes and clones out of the stone
     for (const a of world.allies) {
+      if (a.prop) continue;   // (a barrel stays where it stands)
       const d = dist(a.x, a.y, this.x, this.y);
       const min = this.radius + a.hw;
       if (d >= min || d === 0) continue;

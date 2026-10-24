@@ -50,8 +50,8 @@ const SHOP_UPGRADES = [
   },
   {
     id: 'fightingSpirit', name: 'Fighting Spirit', color: '#ff7a3a',
-    desc: '+25 max HP, +10% attack speed and +10% move speed.',
-    apply(p) { p.maxHp += 25; p.hp += 25; p.attackSpeed *= 1.1; p.speed *= 1.1; },
+    desc: '+10% attack speed and +10% move speed.',
+    apply(p) { p.attackSpeed *= 1.1; p.speed *= 1.1; },
   },
   {
     id: 'beatdown', name: 'Beatdown', color: '#ff5a3a', needs: (p) => MELEE_HEROES.includes(p.classId),
@@ -417,7 +417,15 @@ const Upgrades = {
       if (vrand(0, 1) < dt * 14) world.effects.burst(p.x + vrand(-8, 8), p.y - vrand(4, 26), { count: 1, colors: ['#ff4a6a', '#ffd0d8'], speed: [10, 30], life: [0.2, 0.4], up: 30, size: [1, 2] });
     }
     // Deadly Precision: how long the hero has stood still
+    const steadyBefore = this.still(p);
     s.still = p.moving || p.dodge || p.jump || p.dash ? 0 : s.still + dt;
+    // Deadly Precision locking on: called out, a click and a flash of sparks (the sights take over from there)
+    if (!steadyBefore && this.still(p) && !p.dead) {
+      this.proc(p, world, 'deadlyPrecision', 'STEADY AIM - x2 CRIT');
+      world.effects.burst(p.hx, p.hy, { count: 14, colors: ['#ff9a2a', '#ffd34a', '#ffffff'], speed: [40, 120], life: [0.2, 0.45] });
+      if (p === world.localPlayer) Sound.play('aim', 0.2);
+    }
+    if (this.has(p, 'deadlyPrecision')) s.steady = clamp((s.steady || 0) + (this.still(p) ? dt : -dt) * 4, 0, 1);   // eases the sights in and out
     // Beatdown: a stack falls off every 2s without a hit
     if (s.stacks > 0) {
       s.idle += dt;
@@ -811,10 +819,7 @@ const Upgrades = {
         PFX.star(ctx, p.x + Math.cos(a) * 76, p.y + 2 + Math.sin(a) * 42, 1, '#3fc2a8', '#f0fff8', 2);
       }
     }
-    if (this.still(p) && !p.dead) {
-      const pulse = 0.6 + Math.sin(time * 8) * 0.2;
-      PFX.ring(ctx, p.x, p.y + 6, 18, 8, `rgba(255, 154, 42, ${pulse})`, 2, { dash: [4, 3], spin: time * 2 });
-    }
+    if (s.steady > 0 && !p.dead) this.drawSights(p, ctx, time, s);
     // the bird's glowing trail, fading at its old end
     const pts = s.trail;
     for (let i = 1; i < pts.length; i++) {
@@ -852,8 +857,64 @@ const Upgrades = {
   },
 
   /** Over the hero: the Last Defence's shield, Tesla Armour's crackle, Beatdown's stacks. */
+  /**
+   * Deadly Precision's sights on the floor round a hero standing still: a scope reticle that snaps
+   * in tight as it locks on (s.steady eases 0..1), four sight ticks closing on the hero, a turning
+   * outer ring and an orange glow underfoot.
+   */
+  drawSights(p, ctx, time, s) {
+    const k = s.steady;
+    const e = 1 - (1 - k) ** 3;
+    const R = 46 - e * 16;   // snapping in from wide to tight
+    const pulse = 0.75 + Math.sin(time * 8) * 0.25;
+    ctx.save();
+    ctx.globalAlpha = k;
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, p.x, p.y + 4, 44, '255, 140, 40', 0.35 * pulse, 2, 22);
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = k;
+    PFX.ring(ctx, p.x, p.y + 4, R + 10, (R + 10) * 0.5, `rgba(255, 154, 42, ${0.45 * pulse})`, 1, { dash: [6, 4], spin: time * 1.5 });
+    PFX.ring(ctx, p.x, p.y + 4, R, R * 0.5, '#ff9a2a', 2, { thick: 2 });
+    // the four sight ticks, pointing in at the hero
+    for (let i = 0; i < 4; i++) {
+      const a = (i * TAU) / 4;
+      const x0 = p.x + Math.cos(a) * (R + 2);
+      const y0 = p.y + 4 + Math.sin(a) * (R + 2) * 0.5;
+      const x1 = p.x + Math.cos(a) * (R - 9);
+      const y1 = p.y + 4 + Math.sin(a) * (R - 9) * 0.5;
+      PFX.line(ctx, x0, y0, x1, y1, OUTLINE, 4);
+      PFX.line(ctx, x0, y0, x1, y1, '#ffd34a', 2);
+    }
+    ctx.restore();
+  },
+
   drawOver(p, ctx, time) {
     if (!p.upg || p.dead) return;
+    // Deadly Precision: a crosshair out along the aim, and "x2 CRIT" over the hero, while it's steady
+    const st = p.upg.steady || 0;
+    if (st > 0) {
+      const a = p.aim ?? 0;
+      const cx = Math.round(p.x + Math.cos(a) * 64);
+      const cy = Math.round(p.hy + Math.sin(a) * 64);
+      const r = 9 - st * 3 + Math.sin(time * 10) * 1;
+      ctx.save();
+      ctx.globalAlpha = st;
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, cx, cy, 16, '255, 154, 42', 0.5, 2);
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = st;
+      PFX.ring(ctx, cx, cy, r, r, '#ff9a2a', 2);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        PFX.line(ctx, cx + dx * (r + 1), cy + dy * (r + 1), cx + dx * (r + 6), cy + dy * (r + 6), OUTLINE, 3);
+        PFX.line(ctx, cx + dx * (r + 1), cy + dy * (r + 1), cx + dx * (r + 6), cy + dy * (r + 6), '#ffd34a', 1);
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx, cy, 1, 1);
+      ctx.restore();
+      if (st >= 1) HUD.text(ctx, 'x2 CRIT', Math.round(p.x), Math.round(p.y - 66), { size: 6, align: 'center', color: '#ffb05a' });
+    }
     const sh = p.lastShield;
     if (sh) {
       ctx.save();

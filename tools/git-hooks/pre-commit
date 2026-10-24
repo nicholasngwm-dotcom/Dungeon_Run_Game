@@ -1,0 +1,18 @@
+#!/bin/sh
+# Stamps a fresh build version into index.html on every commit that changes the game's files.
+#
+# Every script / stylesheet in index.html loads as ?v=<build>. A new value makes every browser
+# fetch the new files instead of mixing cached old scripts with the new page (which crashes or
+# desyncs the game), and multiplayer only lets players with the same <build> play together.
+# Forgetting to bump it by hand is what let mixed versions in, so it's done here.
+#
+# Turned on for this clone with:  git config core.hooksPath tools/git-hooks
+
+changed=$(git diff --cached --name-only -- 'js/*' 'css/*' index.html)
+[ -z "$changed" ] && exit 0
+
+# <date>-<6 characters of the staged tree's hash>: unique to exactly what's being committed
+build="$(date +%Y%m%d)-$(git write-tree | cut -c1-6)"
+sed -i -E "s/\?v=[0-9A-Za-z-]+\"/?v=${build}\"/g" index.html || exit 1
+git add index.html
+echo "pre-commit: build version ${build}"

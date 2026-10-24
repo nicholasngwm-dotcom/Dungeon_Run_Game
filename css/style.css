@@ -96,6 +96,8 @@ html, body {
   animation: menu-in 0.9s ease-out both;
 }
 .menu-side .title { font-size: 34px; text-align: left; }
+/* the logo (Sprites.logo, drawn small and scaled up with sharp pixels) in place of the title text */
+.title img.logo { display: block; width: 281px; height: auto; image-rendering: pixelated; margin-left: -18px; }
 .menu-side .title span { font-size: 60px; }
 .menu-ornament {
   position: relative;
@@ -520,6 +522,54 @@ h2 {
   transition: opacity 0.3s;
 }
 .toast.fade { opacity: 0; }
+
+/* multiplayer chat: above the bag, bottom left (Enter to talk) */
+.chat {
+  position: absolute;
+  left: 14px;
+  bottom: 62px;
+  width: 340px;
+  z-index: 30;
+  pointer-events: none;
+}
+.chat-log {
+  max-height: 128px;
+  overflow: hidden;
+  font-size: 8px;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.chat-log div {
+  padding: 2px 6px;
+  background: rgba(20, 12, 8, 0.6);
+  color: var(--text);
+  text-shadow: 1px 1px 0 #000;
+  overflow-wrap: anywhere;
+  transition: opacity 0.6s;
+}
+.chat-log div b { color: #f2a541; font-weight: normal; }
+.chat-log div.mine b { color: #8ac8ff; }
+.chat-log div.whisper { color: #e0c0ff; }
+.chat-log div.whisper b { color: #c08aff; }
+.chat-log div.system { color: #ffe680; font-style: italic; }
+.chat:not(.open) .chat-log div.old { opacity: 0; }
+.chat.open { pointer-events: auto; }
+.chat.open .chat-log { max-height: 180px; overflow-y: auto; background: rgba(20, 12, 8, 0.35); }
+.chat-input { display: none; }
+.chat.open .chat-input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 7px;
+  color: var(--text);
+  background: rgba(26, 16, 32, 0.92);
+  border: 2px solid var(--accent);
+  outline: none;
+}
 
 /* cheat console (` to open) */
 .cheat-console {

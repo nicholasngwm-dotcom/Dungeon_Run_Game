@@ -20,7 +20,8 @@ class Barrel extends Entity {
     this.hp = this.maxHp;
     this.radius = 13;
     this.hitOffY = 12;
-    this.prop = true;       // not an enemy: auto-aim and the AI skip it
+    this.prop = true;       // not a fighter: auto-aim, the AI and enemies choosing whom to chase all skip it
+    this.contactImmune = true;   // enemies bumping into it don't set it off (it's in world.allies for their attacks)
     this.wobble = 0;
     this.seed = Math.floor(Math.random() * 1000);
     this.post = null;       // its solid footprint on the floor
@@ -33,6 +34,16 @@ class Barrel extends Entity {
     this.wobble = 1;
     if (this.hp <= 0) Barrels.burst(world, this, 0.05);   // a moment, so the hit that burst it is credited
     return true;
+  }
+
+  /**
+   * An enemy's attack catching it: barrels stand among world.allies, so every enemy and boss attack
+   * that hits whatever's in its way (swings, shots, blasts, shockwaves) bursts them too. Nobody's credited.
+   */
+  hurt(amount, world) {
+    if (this.dead) return false;
+    this.lastHitBy = null;
+    return this.takeDamage(amount, world);
   }
 
   knockback() { this.wobble = 1; }
@@ -111,7 +122,7 @@ const Barrels = {
   /** Everything a burst at (x, y) catches: heroes (and clones, the lantern) and the enemy side's targets. */
   caught(world, x, y, r) {
     return {
-      allies: world.allies.filter((a) => !a.dead && dist(a.x, a.y, x, y) < r + (a.radius || 0)),
+      allies: world.allies.filter((a) => !a.dead && !a.prop && dist(a.x, a.y, x, y) < r + (a.radius || 0)),   // (other barrels: see burst)
       foes: world.getTargets().filter((t) => !t.prop && !t.dead && dist(t.x, t.y, x, y) < r + (t.radius || 0)),
     };
   },
@@ -245,7 +256,7 @@ const Barrels = {
       x, y, r: ice, life: c.iceTime, every: 0.1,
       tick: (w) => {
         const now = new Set();
-        for (const a of w.allies) if (!a.dead && !a.flying && onIce(a)) now.add(a);
+        for (const a of w.allies) if (!a.dead && !a.prop && !a.flying && onIce(a)) now.add(a);
         for (const e of w.enemies) if (!e.dead && onIce(e)) now.add(e);
         for (const e of now) {
           if (inside.has(e)) continue;   // still standing where they were
@@ -299,7 +310,8 @@ const Barrels = {
 
   /** A barrel (bottom centre at its x, y): wobbling when hit, a fuse fizzing, ooze bubbling, frost breathing off it. */
   draw(ctx, b, time) {
-    const spr = Sprites.barrels[b.kind];
+    const spr = Sprites.barrels?.[b.kind];
+    if (!spr) return;
     const x = Math.round(b.x);
     const y = Math.round(b.y);
     drawShadow(ctx, x, y - 1, 12, 4, 0.4);

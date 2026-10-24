@@ -37,7 +37,8 @@ class FloorDecor {
     const T = f.T;
     const run = this.run;
     for (const d of this.items) {
-      const post = d.kind === 'prop' ? PROP_POSTS[d.name] : DECOR_POSTS[d.kind];
+      // (a piece placed with `solid: [hw, hh]` is solid wherever it stands, like the boss rooms' furniture)
+      const post = d.solid || (d.kind === 'prop' ? PROP_POSTS[d.name] : DECOR_POSTS[d.kind]);
       if (post) {
         const [hw, hh] = post;
         if (f.boxHitsTiles(d.x, d.y - hh, hw + 4, hh + 4)) { d.dead = true; continue; }   // up against a wall or doorway: dropped

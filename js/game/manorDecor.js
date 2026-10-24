@@ -1,7 +1,7 @@
 // The Phantom King's room (see FloorDecor): the entrance hall of a haunted manor. The grand
 // staircase against the back wall (solid, see DungeonRun.manorStairs), a chandelier hanging
-// over the hall, moonlit windows and portraits along the back wall, grandfather clocks stopped
-// at midnight, candelabras, furniture under dust sheets, urns and cobwebs, and the phantoms of
+// in its stairwell, moonlit windows and portraits along the back wall, grandfather clocks stopped
+// at midnight, candelabras, solid furniture under dust sheets, urns and cobwebs, and the phantoms of
 // the old household drifting about. The phantoms are decor only: they don't fight, can't be
 // hit and pass through everything; they drift on fixed looping paths (visual only).
 
@@ -11,7 +11,9 @@ const ManorDecor = {
     const T = fd.floor.T;
     const top = r.y0 * T;
     fd.add('manorStairs', { x: r.cx, y: (r.y0 + 4) * T }, { pad: 240 });
-    fd.add('chandelier', { x: r.cx, y: r.cy + 1 * T }, { pad: 220 });
+    // the chandelier hangs in the stairwell over the landing (out of the fight: hung over the middle
+    // of the hall it hid the Phantom King, being drawn over everyone)
+    fd.add('chandelier', { x: r.cx, y: (r.y0 + 5) * T }, { pad: 220 });
     // along the back wall either side of the stairs: portraits and tall windows
     for (const s of [-1, 1]) {
       fd.add('portrait', { x: r.cx + s * 6.6 * T, y: top - 8 }, { who: s < 0 ? 0 : 1 });
@@ -26,8 +28,11 @@ const ManorDecor = {
       at('prop', s * 13.4, -1, { name: 'candelabra' });
       at('prop', s * 13.4, 6, { name: 'candelabra' });
       fd.add('manorClock', { x: r.cx + s * 13.6 * T, y: top + 1.4 * T });
-      at('sheeted', s * 10.4, -2.4, { name: 'sheetChair', facing: s });
-      at('sheeted', s * 11.2, 2.4, { name: 'sheetSofa', facing: s });
+      // dust-sheeted furniture stands about the hall, solid: things to weave round as he hunts you (shots fly over)
+      at('sheeted', s * 10.4, -2.4, { name: 'sheetChair', facing: s, solid: [13, 6] });
+      at('sheeted', s * 11.2, 2.4, { name: 'sheetSofa', facing: s, solid: [26, 6] });
+      at('sheeted', s * 5.6, 3.6, { name: 'sheetSofa', facing: -s, solid: [26, 6] });
+      at('sheeted', s * 6.4, -1.2, { name: 'sheetChair', facing: -s, solid: [13, 6] });
       at('urn', s * 8.6, -4.8);
       at('urn', s * 12.6, 8.4);
       at('candles', s * 9.4, 8.6);
