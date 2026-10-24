@@ -967,6 +967,20 @@ const SFX = {
   defeat: (s) => {
     [392, 330, 262, 196].forEach((f, i) => s.tone({ type: 'triangle', freq: f, dur: 0.35, vol: 0.18, delay: i * 0.22 }));
   },
+
+  // --- Puzzle room (Simon's stone) ---
+  // each colour's note (red, blue, green, yellow): a chime of an A major chord
+  simon0: (s) => s.ring({ freq: 440, dur: 0.5, vol: 0.09, wet: 0.3, metal: false }),
+  simon1: (s) => s.ring({ freq: 554, dur: 0.5, vol: 0.09, wet: 0.3, metal: false }),
+  simon2: (s) => s.ring({ freq: 659, dur: 0.5, vol: 0.09, wet: 0.3, metal: false }),
+  simon3: (s) => s.ring({ freq: 880, dur: 0.5, vol: 0.09, wet: 0.3, metal: false }),
+  simonRight: (s) => [659, 880, 1109, 1319].forEach((f, i) => s.tone({ type: 'triangle', freq: f, dur: 0.16, vol: 0.1, delay: i * 0.08 })),
+  simonWrong: (s) => {
+    s.tone({ type: 'sawtooth', freq: 160, to: 90, dur: 0.45, vol: 0.12 });
+    s.tone({ type: 'square', freq: 170, to: 95, dur: 0.45, vol: 0.06 });
+  },
+  // the fuse: a shrill beep, quicker and quicker
+  simonFuse: (s) => s.tone({ type: 'square', freq: 1760, dur: 0.06, vol: 0.07 }),
 };
 
 // ---------------------------------------------------------------

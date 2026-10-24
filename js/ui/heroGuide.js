@@ -237,26 +237,41 @@ function heroGuide(id) {
   return HERO_GUIDE[id](CONFIG.classes[id]);
 }
 
-/** Stats shown in the hero panel: label, value text, and a 0-1 bar (null = no bar). */
-function heroStats(id) {
+/**
+ * Stats shown in the hero panel, with the first `enhancements` of CONFIG.enhancements taken on
+ * (the same sums as applyEnhancements): key, label, value text, and a 0-1 bar (null = no bar).
+ * The bars are scaled against the toughest base hero, so an enhanced one can run past it a little.
+ */
+function heroStats(id, enhancements = 0) {
   const c = CONFIG.classes[id];
   const all = Object.values(CONFIG.classes);
   const maxHp = Math.max(...all.map((k) => k.hp));
   const maxSpeed = Math.max(...all.map((k) => k.speed));
-  const dodge = c.passive.dodgeCooldown || CONFIG.player.dodge.cooldown;
-  const critRate = c.crit?.chance ?? CONFIG.player.critChance;
+  let hp = c.hp;
+  let speed = c.speed;
+  let dodge = c.passive.dodgeCooldown || CONFIG.player.dodge.cooldown;
+  let critRate = c.crit?.chance ?? CONFIG.player.critChance;
+  let cooldowns = 1;   // ability cooldowns, as a share of their normal length
+  for (const t of CONFIG.enhancements.slice(0, enhancements)) {
+    if (t.hp) hp += t.hp;
+    if (t.speed) speed += t.speed;
+    if (t.crit) critRate += t.crit;
+    if (t.dodge) dodge = Math.max(0.3, dodge - t.dodge);
+    if (t.cooldowns) cooldowns *= 1 - t.cooldowns;
+  }
   const critDamage = c.crit?.multiplier ?? CONFIG.player.critMultiplier;
   const stats = [
-    { label: 'HEALTH', value: `${c.hp}`, bar: c.hp / maxHp, color: '#e84a4a' },
-    { label: 'SPEED', value: `${c.speed}`, bar: c.speed / maxSpeed, color: '#6cff7a' },
-    { label: 'CRIT RATE', value: pct(critRate), bar: critRate / 0.3, color: '#ffd34a' },
-    { label: 'CRIT DAMAGE', value: `x${critDamage}`, bar: (critDamage - 1) / 1.5, color: '#ff9a2a' },
-    { label: 'DODGE', value: `${sec(dodge)} cd`, bar: CONFIG.player.dodge.cooldown / dodge / 1.6, color: '#8ad8ff' },
+    { key: 'hp', label: 'HEALTH', value: `${hp}`, bar: hp / maxHp, color: '#e84a4a' },
+    { key: 'speed', label: 'SPEED', value: `${speed}`, bar: speed / maxSpeed, color: '#6cff7a' },
+    { key: 'crit', label: 'CRIT RATE', value: pct(critRate), bar: critRate / 0.3, color: '#ffd34a' },
+    { key: 'critDamage', label: 'CRIT DAMAGE', value: `x${critDamage}`, bar: (critDamage - 1) / 1.5, color: '#ff9a2a' },
+    { key: 'dodge', label: 'DODGE', value: `${sec(Math.round(dodge * 100) / 100)} cd`, bar: CONFIG.player.dodge.cooldown / dodge / 1.6, color: '#8ad8ff' },
+    { key: 'cooldowns', label: 'ABILITY CD', value: pct(cooldowns), bar: null, color: '#c8a0ff' },
   ];
   if (c.resource) {
     const regen = c.resource.reload ? `1 per ${sec(c.resource.reload)}` : c.resource.regen ? `+${c.resource.regen}/s` : 'no regen';
-    stats.push({ label: c.resource.name, value: `${c.resource.max} (${regen})`, bar: null, color: c.resource.color });
+    stats.push({ key: 'resource', label: c.resource.name, value: `${c.resource.max} (${regen})`, bar: null, color: c.resource.color });
   }
-  stats.push({ label: 'ULTIMATE', value: `deal ${c.ult.charge} dmg`, bar: null, color: '#c08aff' });
+  stats.push({ key: 'ult', label: 'ULTIMATE', value: `deal ${c.ult.charge} dmg`, bar: null, color: '#c08aff' });
   return stats;
 }

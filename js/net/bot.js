@@ -89,7 +89,7 @@ const BotPilot = {
     let best = null;
     let bestD = Infinity;
     for (const e of game.getTargets()) {
-      if (e.dead || (e.age !== undefined && e.age < 0.3)) continue;
+      if (e.dead || e.prop || (e.age !== undefined && e.age < 0.3)) continue;   // (barrels aren't foes)
       const d = dist(x, y, e.x, e.y);
       if (d < bestD) { bestD = d; best = e; }
     }

@@ -137,6 +137,13 @@ const SHOP_UPGRADES = [
     hud: (p) => ({ active: !!p.shielding }),
   },
   {
+    // pins: how many the shield carries; smash: the hit for slamming them into a wall (bosses take bossScale of it);
+    // stun: how long they stay dazed after the smash
+    id: 'pinningCharge', name: 'Pinning Charge', color: '#e0a83a', hero: 'warrior', pins: 3, smash: 240, bossScale: 0.6, stun: 1.5,
+    desc: 'Charge pins up to 3 enemies to your shield, stunned the whole way. Smash them into a wall for massive damage (bosses can be pinned too, but take 40% less).',
+    hud: (p) => ({ active: !!p.charge?.pinned?.length }),
+  },
+  {
     id: 'razorArrows', name: 'Razor Sharp Arrows', color: '#ff4a5a', hero: 'ranger',
     desc: 'Critical arrows make enemies bleed.',
   },
@@ -173,12 +180,28 @@ const SHOP_UPGRADES = [
     hud: (p) => ({ count: Upgrades.state(p).rays % 4, active: Upgrades.state(p).rays % 4 === 3 }),
   },
   {
+    // only offered in multiplayer (there's nobody to raise alone); hp: what the ally comes back with
+    id: 'resurrect', name: 'Resurrect', color: '#fff2a0', hero: 'priestess', hp: 0.5, needs: (p) => !!p.netId,
+    desc: 'Press interact by a downed ally to resurrect them instantly, at half health. Once per stage.',
+    hud: (p) => ({ active: Upgrades.canResurrect(p) }),
+  },
+  {
     id: 'groggy', name: 'Groggy', color: '#c8b8ff', hero: 'bard',
     desc: 'Enemies waking from your lullaby are slowed by 40% for 3 seconds.',
   },
   {
+    // shield: hp each ally gets; time: how long it lasts if nothing breaks it
+    id: 'warSong', name: 'War Song', color: '#ff9a5a', hero: 'bard', shield: 25, time: 8,
+    desc: 'Inspire also gives every ally in range a 25 HP shield.',
+  },
+  {
     id: 'incendiary', name: 'Incendiary', color: '#ff6a1e', hero: 'rocketeer',
     desc: 'Rockets leave a small patch of fire that burns enemies.',
+  },
+  {
+    id: 'rapidReload', name: 'Rapid Rocket Reload', color: '#ffb84a', hero: 'rocketeer', reload: 0.5,
+    desc: 'Every enemy you kill instantly reloads half a rocket.',
+    hud: (p) => ({ active: p.ammo < p.resource.max }),
   },
   {
     id: 'premiumBaking', name: 'Premium Baking Goods', color: '#ff8ad0', hero: 'baker',
@@ -279,6 +302,72 @@ const Upgrades = {
   },
 
   cd(p, id) { return Math.max(0, this.state(p).cd[id] || 0); },
+
+  /** Resurrect (Priestess): owned, and not yet used this stage. */
+  canResurrect(p) { return this.has(p, 'resurrect') && !this.state(p).resurrected; },
+
+  /** Resurrect: the downed ally is back on their feet at once, in a burst of holy light. */
+  resurrect(p, body, world) {
+    const u = UPGRADE_BY_ID.resurrect;
+    this.state(p).resurrected = true;
+    body.revive(u.hp, world);
+    this.proc(p, world, 'resurrect', 'RESURRECT!', 9);
+    world.effects.burst(body.hx, body.hy - 10, { count: 50, colors: ['#ffffff', '#fff6c8', '#fff2a0', '#ffd34a'], speed: [60, 220], life: [0.5, 1], up: 90 });
+    // a pillar of light falling on the body
+    const { x, y } = body;
+    world.effects.add(0.8, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1 - t;
+      PFX.beam(ctx, x, y + 6, -Math.PI / 2, 140, 30 * (1 - t * 0.4), ['#a07a24', '#ffe680', '#ffffff'], 2, false);
+      PFX.ring(ctx, x, y + 6, 10 + t * 40, (10 + t * 40) * 0.45, '#fff2a0', 2);
+      ctx.restore();
+    });
+    Sound.play('magic');
+  },
+
+  /** War Song (Bard): Inspire wraps an ally in a shield of song. */
+  warSong(bard, a, world) {
+    if (!this.has(bard, 'warSong')) return;
+    const u = UPGRADE_BY_ID.warSong;
+    a.songShield = { hp: u.shield, maxHp: u.shield, t: u.time, flash: 0 };
+    this.state(bard).flash.warSong = world.time;
+    world.effects.text(a.hx, a.hy - 46, `+${u.shield} SHIELD`, { color: u.color, size: 7 });
+  },
+
+  /** A War Song shield soaks a hit first; returns what gets through. */
+  absorbSongShield(p, amount, world) {
+    const s = p.songShield;
+    if (!s || amount <= 0) return amount;
+    const soaked = Math.min(s.hp, amount);
+    s.hp -= soaked;
+    s.flash = 0.12;
+    world.effects.burst(p.hx, p.hy - 6, { count: 6, colors: ['#ffd0a0', '#ff9a5a', '#ffffff'], speed: [50, 140], life: [0.15, 0.3] });
+    if (s.hp <= 0) {
+      p.songShield = null;
+      world.effects.text(p.hx, p.hy - 36, 'SHIELD BROKEN', { color: '#ff9a5a', size: 7 });
+      world.effects.burst(p.hx, p.hy - 6, { count: 18, colors: ['#ffd0a0', '#ff9a5a', '#ffffff'], speed: [70, 200], life: [0.3, 0.6] });
+      Sound.play('barrierBreak', 0.05);
+    }
+    return amount - soaked;
+  },
+
+  /** Rapid Rocket Reload: the Rocketeer's kill slides half a rocket into the launcher. */
+  rapidReload(p, world) {
+    if (!this.has(p, 'rapidReload')) return;
+    const r = p.resource;
+    if (r.value >= r.max) return;
+    const before = p.ammo;
+    r.value = Math.min(r.max, r.value + UPGRADE_BY_ID.rapidReload.reload);
+    p.ammoShow = 3;
+    this.state(p).flash.rapidReload = world.time;
+    if (p.ammo > before) {
+      // a whole rocket's in: it clicks home
+      const b = p.tubeBack();
+      world.effects.burst(b.x, b.y, { count: 8, colors: ['#ffe680', '#e0c47a', '#ffffff'], speed: [30, 80], life: [0.15, 0.3] });
+      Sound.play('rocketReload', 0.05);
+    }
+  },
 
   /** An upgrade going off: its HUD icon flashes and (optionally) its name pops up over the hero. */
   proc(p, world, id, text = null, size = 8) {
@@ -504,6 +593,7 @@ const Upgrades = {
     let attacker = null;
     let best = reach;
     for (const t of targets) {
+      if (t.prop) continue;   // a barrel never hit anyone
       const d = dist(ox, oy, t.x, t.y);
       if (d < best) { best = d; attacker = t; }
     }

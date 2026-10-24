@@ -77,6 +77,7 @@ const HUD = {
     // always this screen's hero (game.player is the boss's target while a boss updates)
     this.drawPlayer(ctx, game.localPlayer);
     if (game.run) this.drawCoins(ctx, game.localPlayer);
+    else if (game.lobby && Profiles.current) this.drawGems(ctx, Profiles.gems);
     if (game.multiplayer) this.drawParty(ctx, game);
     this.drawWave(ctx, game);
     if (game.boss && !game.boss.dead && game.boss.intro <= 0 && !game.practice) {
@@ -148,6 +149,17 @@ const HUD = {
         this.text(ctx, game.run ? `${how} (or you get up at the next stage)` : how, 480, 120, { size: 7, align: 'center', color: '#d8c8a0' });
       }
     }
+  },
+
+  /** The profile's gems (in the lobby, where they're spent on enhancements at the hero statues). */
+  drawGems(ctx, gems) {
+    const x = 244;
+    const y = 14;
+    const img = Sprites.vault.gemIcon;
+    const w = 26 + `${gems}`.length * 7;
+    this.panel(ctx, x, y - 1, w, 16);
+    ctx.drawImage(img, x + 2, y);
+    this.text(ctx, `${gems}`, x + w - 4, y + 3, { size: 8, align: 'right', color: '#8ac8ff' });
   },
 
   /** The local hero's purse (coins are per hero). */

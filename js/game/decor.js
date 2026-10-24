@@ -1,6 +1,6 @@
 // Set dressing for a dungeon floor: dead trees, soul-flame lamp posts, coffins, urns,
 // crows that take off when you get close, a campfire in the start room, barrels / crates /
-// shelves in the shop, the castle's braziers and armour... It's laid out in a pattern
+// shelves in the shop, the castle's braziers and armour, the Phantom King's haunted manor... It's laid out in a pattern
 // (along the walls, mirrored across the room) and it's walkable floor dressing, except
 // the base of anything that gives light (lamp posts, braziers, candelabras, campfires),
 // which is a small solid post (see solidify), and the boss rooms' fixtures (her bell, her
@@ -81,6 +81,15 @@ class FloorDecor {
   }
 
   decorate(r) {
+    if (r.type === 'vault') {
+      // the gem vault (any theme): crystal clusters and heaps of gold round the walls, warm lamps
+      this.dressRoom(r, {
+        light: ['lampPost', { warm: true }],
+        wall: [['gemCluster', { v: 0 }], ['prop:goldPile'], ['gemCluster', { v: 2 }], ['gemCluster', { v: 1 }]],
+        floor: [['gemCluster', { v: 3 }], ['prop:goldPile'], ['gemCluster', { v: 0 }]],
+      });
+      return;
+    }
     if (this.floor.themeId === 'castle' && CastleDecor.decorate(this, r)) return;
     const T = this.floor.T;
     switch (r.type) {
@@ -137,6 +146,11 @@ class FloorDecor {
         return;
       }
       case 'boss':
+        if (this.run.bossType === 'phantom') {
+          // the Phantom King's room: the entrance hall of a haunted manor
+          ManorDecor.decorate(this, r);
+          return;
+        }
         if (this.run.bossType === 'deathbringer') {
           // the Deathbringer's room: dead trees hung with soul lanterns, dark gold-plated graves, bones
           this.dressRoom(r, {
@@ -148,7 +162,7 @@ class FloorDecor {
         }
       // falls through
       default:
-        // graveyard rooms (and the Phantom King's): lamp posts in the corners, trees, coffins and
+        // graveyard rooms: lamp posts in the corners, trees, coffins and
         // urns along the walls, candles, bones and the odd crow on the floor, all mirrored
         this.dressRoom(r, {
           light: 'lampPost',
@@ -250,6 +264,7 @@ class FloorDecor {
   // ---------- drawing ----------
 
   visible(d, cam, pad = 90) {
+    pad = Math.max(pad, d.pad || 0);   // big pieces (the manor's stairs, its chandelier) reach far from their anchor
     return d.x > cam.x - pad && d.x < cam.x + cam.width + pad && d.y > cam.y - pad && d.y < cam.y + cam.height + pad * 2;
   }
 
@@ -258,6 +273,7 @@ class FloorDecor {
     for (const d of this.items) {
       if (!this.visible(d, cam, 200)) continue;
       if (this.floor.themeId === 'castle') CastleDecor.drawGround(this, ctx, d);
+      else if (ManorDecor.draws(d.kind)) ManorDecor.drawGround(this, ctx, d);
       if (d.kind === 'rug') this.drawRug(ctx, d);
       if (d.kind === 'runeCircle') this.drawRuneCircle(ctx, d);
       if (d.kind === 'lampPost' || d.kind === 'campfire') {
@@ -279,7 +295,15 @@ class FloorDecor {
   getDrawables(cam) {
     return this.items
       .filter((d) => d.kind !== 'rug' && d.kind !== 'runeCircle' && this.visible(d, cam))
-      .map((d) => ({ y: d.kind === 'crow' && d.flying ? d.y + 400 : CastleDecor.sortY(d), draw: (ctx) => (d.levitate ? this.drawFloating(ctx, d) : this.drawItem(ctx, d)) }));
+      .map((d) => ({ y: this.sortY(d), draw: (ctx) => (d.levitate ? this.drawFloating(ctx, d) : this.drawItem(ctx, d)) }));
+  }
+
+  /** Where an item sorts among the characters (crows in flight over everything, the manor's phantoms where they've drifted to). */
+  sortY(d) {
+    if (d.kind === 'crow' && d.flying) return d.y + 400;
+    if (d.kind === 'manorPhantom') return ManorDecor.phantomAt(d, this.time).y;
+    if (ManorDecor.draws(d.kind)) return ManorDecor.sortY(d);
+    return CastleDecor.sortY(d);
   }
 
   /**
@@ -305,6 +329,7 @@ class FloorDecor {
 
   drawItem(ctx, d) {
     if (CastleDecor.draws(d.kind)) return CastleDecor.drawItem(this, ctx, d);
+    if (ManorDecor.draws(d.kind)) return ManorDecor.drawItem(this, ctx, d);
     const x = Math.round(d.x);
     const y = Math.round(d.y);
     const R = (rx, ry, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x + rx, y + ry, w, h); };
@@ -343,6 +368,16 @@ class FloorDecor {
           R(sx - x - 2, sy - y - 3 - fl, 4, 5 + fl, '#7ae8ff');
           R(sx - x - 1, sy - y - 2, 2, 3, '#e6fbff');
         }
+        break;
+      }
+      case 'gemCluster': {
+        // crystals growing out of a rock, glowing in their own colour, a glint running over them
+        const img = Sprites.vault.clusters[d.v || 0];
+        const rgb = hexToRgb(GEM_RAMPS[d.v || 0][2]).join(', ');
+        drawShadow(ctx, x, y + 1, 14, 4, 0.3);
+        drawGlow(ctx, x, y - 16, 30, rgb, 0.25 + Math.sin(t * 2 + d.seed) * 0.06);
+        drawSprite(ctx, img, x, y + 2, 16, 34, (d.facing || 1) < 0);
+        drawGlints(ctx, [[x - 4, y - 24], [x + 6, y - 14]], t + d.seed);
         break;
       }
       case 'darkGrave':

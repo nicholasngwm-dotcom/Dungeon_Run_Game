@@ -584,7 +584,7 @@ function nearestTarget(world, x, y, maxRange) {
   let best = null;
   let bestD = maxRange;
   for (const t of world.getTargets()) {
-    if (t.immune) continue;
+    if (t.immune || t.prop) continue;   // (homing and auto-aim never go for a barrel)
     const d = dist(x, y, t.hx, t.hy);
     if (d < bestD) { bestD = d; best = t; }
   }

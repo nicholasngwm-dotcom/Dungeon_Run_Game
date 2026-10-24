@@ -1,7 +1,7 @@
 // A dungeon run: three stages, each a generated FloorMap. Walking into a
 // combat / defend / survival / boss room locks its doors until the
-// room's objective is done. Shops, special, puzzle and secret rooms are places
-// to find but don't do anything yet (items, upgrades and coins aren't in).
+// room's objective is done. Shops, special, puzzle and secret rooms don't lock:
+// the puzzle room's Simon stone is played whenever the heroes like.
 //
 //   mode 'set':    one theme for all three stages
 //   mode 'random': a theme rolled per stage (repeats are very unlikely)
@@ -12,11 +12,12 @@ const ROOM_INFO = {
   combat: { name: 'Combat', color: '#e84a4a', desc: 'Doors lock. Defeat every wave of enemies to leave. Watch for spike traps.' },
   defend: { name: 'Defend', color: '#6ad8ff', desc: 'Doors lock. Keep the lantern alive until the timer runs out. The souls of slain enemies mend it. If it breaks, the defense starts over.' },
   survival: { name: 'Survival', color: '#ff8a1e', desc: 'Doors lock. Enemies keep coming: stay alive until the timer runs out.' },
-  puzzle: { name: 'Puzzle', color: '#b67aff', desc: 'Puzzles are coming soon.' },
+  puzzle: { name: 'Puzzle', color: '#b67aff', desc: 'Touch the rune stone and it lights a pattern of colours: step on the matching floor plates in the same order. Get it right three times and every hero gets a free upgrade. Three mistakes and the stone blinks red, then blows up the whole room and sets it ablaze. Run!' },
   shop: { name: 'Shop', color: '#ffd34a', desc: 'Two stores: pick an upgrade (or reroll) at the enchanter, buy potions from Mira.' },
   special: { name: 'Special', color: '#c08aff', desc: 'Something unusual: a blacksmith, restaurant, wishing well, trader, treasure... The wishing well grants a wish for coins; the rest are coming soon.' },
   secret: { name: 'Secret', color: '#fff6c8', desc: 'Not connected to anything. Look for a glowing hole in a combat room floor and jump in. Three chests, open two: one is a mimic.' },
   boss: { name: 'Boss', color: '#ff3b30', desc: 'The theme\'s boss. Beat it to open the portal to the next stage.' },
+  vault: { name: 'Gem Vault', color: '#7ac8ff', desc: 'Beat the last boss of a run and its blue portal leads here. Open the chest for your gems, then leave the dungeon.' },
 };
 
 // 8x8 minimap icon per room type: X = the room's colour, w = highlight, k = dark
@@ -30,6 +31,7 @@ const ROOM_ICONS = {
   special: ['...XX...', '...XX...', 'XXXwwXXX', '.XXwwXX.', '..XXXX..', '.XX..XX.', 'XX....XX', '........'],  // star
   secret: ['.XXX....', 'X.w.X...', 'X...X...', '.XXXXXXX', '.....X.X', '.....X.X', '........', '........'],   // key
   boss: ['.XXXXXX.', 'XXXXXXXX', 'XkkXXkkX', 'XkkXXkkX', 'XXXXXXXX', '.XXkkXX.', '.XXXXXX.', '.X.XX.X.'],     // red skull
+  vault: ['........', '..XXXX..', '.XwwXXX.', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '........'],   // gem
 };
 
 /** Draws a room's icon with its top-left at (x, y), each icon pixel s screen pixels. */
@@ -79,8 +81,17 @@ const SPECIAL_INFO = {
 // seconds a chest rattles before its lid bursts open (and the loot flies out)
 const CHEST_POP = 0.14;
 
-// puzzle rooms exist as places but don't lock (puzzles aren't designed yet)
+// the rooms that lock their doors until their objective is done
 const LOCKING_ROOMS = ['combat', 'defend', 'survival', 'boss'];
+
+// the puzzle room's Simon stone: its four colours, in the order its runes and floor plates sit (left to right)
+const SIMON_COLORS = [
+  { color: '#ff5a4a', dark: '#8a2420', rgb: '255, 90, 74' },     // red
+  { color: '#5aa8ff', dark: '#1e4a8a', rgb: '90, 168, 255' },    // blue
+  { color: '#6ce07a', dark: '#24703a', rgb: '108, 224, 122' },   // green
+  { color: '#ffd34a', dark: '#8a6a14', rgb: '255, 211, 74' },    // yellow
+];
+const SIMON_PLATE = 56;   // a floor plate's width (px)
 
 // Fight-room obstacle patterns (DungeonRun.addLayout), drawn for a 24x16 room: each piece is
 // [unit, cdx, cdy, w, h], its corner nearest the middle cdx tiles left of and cdy tiles above
@@ -161,7 +172,7 @@ class DungeonRun {
     const options = this.theme.stageBosses?.[this.stage] || this.theme.bosses || [this.theme.boss];
     const fresh = options.filter((b) => b !== this.bossType);
     this.bossType = this.practiceBoss || this.lateBoss() || choose(fresh.length ? fresh : options);
-    w.dungeon = new FloorMap(this.stage, this.themeId, undefined, { boss: this.bossType, practice: !!this.practiceBoss });
+    w.dungeon = new FloorMap(this.stage, this.themeId, undefined, { boss: this.bossType, practice: !!this.practiceBoss, vault: this.stage === 3 });
     this.active = null;
     this.portal = null;
     this.totem = null;
@@ -183,6 +194,7 @@ class DungeonRun {
       if (CONFIG.run.cover.rooms.includes(r.type)) this.addLayout(r);
       if (r.type === 'boss' && this.bossType === 'king') this.solidThrone(r);
       if (r.type === 'boss' && this.bossType === 'princess') this.studyCover(r);
+      if (r.type === 'boss' && this.bossType === 'phantom') this.manorStairs(r);
       if (r.type === 'combat') this.addSpikes(r);
       this.addProps(r);
     }
@@ -196,6 +208,7 @@ class DungeonRun {
       ? { reach: 72, height: 70, edge: 8, style: 'iron', sounds: { open: 'gateCreak', shut: 'gateShut', slam: 'gateClang' } }
       : { reach: 72, height: 64, edge: 10 });
     this.decor = new FloorDecor(f, this);
+    this.barrels = Barrels.place(this);   // explosive, poison and frost barrels in the fight rooms (after the decor, clear of it)
     this.fog = this.theme.night && this.theme.fog !== false ? this.placeFog(f) : [];
     const s = f.startRoom;
     s.state = 'cleared';
@@ -226,6 +239,7 @@ class DungeonRun {
     this.stage++;
     // fallen teammates get back up for the new stage, at half health
     for (const p of w.players) if (p.dead) p.revive(0.5);
+    for (const p of w.players) Upgrades.state(p).resurrected = false;   // the Priestess's Resurrect is back
     w.enemies = [];
     w.enemyProjectiles = [];
     w.playerProjectiles = [];
@@ -272,6 +286,8 @@ class DungeonRun {
     this.updateSleepers(dt);
     this.updateSpikes(dt);
     this.updateProps(dt);
+    for (const pr of this.props) if (pr.kind === 'puzzle') this.updateStone(pr, dt);
+    Barrels.update(this, dt);
     this.decor.update(dt, w);
     this.doors.update(dt, w);
     if (this.totem) this.totem.update(dt, w);
@@ -640,9 +656,11 @@ class DungeonRun {
         if (r.bossDown && !w.boss) {
           this.finish(r);
           const spot = this.portalSpot(r);
-          const label = this.practiceBoss ? 'RETURN TO RANGE' : this.stage < 3 ? 'ENTER PORTAL' : 'ESCAPE';
-          this.portal = { kind: 'portal', x: spot.x, y: spot.y, label };
-          w.banner(`${r.bossName} DEFEATED`, this.practiceBoss ? 'Enter the portal to go back to the practice range' : this.stage < 3 ? 'Enter the portal to go deeper' : 'Enter the portal to escape', 3);
+          // after the run's last boss a blue portal opens to the gem vault
+          const vault = !this.practiceBoss && !!this.floor.vaultRoom;
+          const label = this.practiceBoss ? 'RETURN TO RANGE' : vault ? 'ENTER THE GEM VAULT' : this.stage < 3 ? 'ENTER PORTAL' : 'ESCAPE';
+          this.portal = { kind: 'portal', x: spot.x, y: spot.y, label, vault };
+          w.banner(`${r.bossName} DEFEATED`, this.practiceBoss ? 'Enter the portal to go back to the practice range' : vault ? 'A blue portal opens to the gem vault' : this.stage < 3 ? 'Enter the portal to go deeper' : 'Enter the portal to escape', 3);
         }
         break;
     }
@@ -822,7 +840,7 @@ class DungeonRun {
     const b = w.boss;
     b.maxHp = Math.round(b.maxHp * s.hp * w.playerScale.hp);   // stage x party size
     b.hp = b.maxHp;
-    b.cfg = scaleBossDamage(b.cfg, s.damage);
+    b.cfg = scaleBossDamage(b.cfg, s.damage * CONFIG.enemyDamage);
     r.bossName = b.name;
     r.bossDown = false;
     Music.play('boss');
@@ -856,10 +874,97 @@ class DungeonRun {
 
   /** Someone used the portal: the whole party goes on to the next stage (or out, after the last). */
   enterPortal() {
+    const portal = this.portal;
     this.portal = null;
     if (this.practiceBoss) this.world.events.onPracticeReturn?.();   // boss practice: back to the range
-    else if (this.stage < 3) this.nextStage();
-    else this.victory();
+    else if (portal.vault) this.enterVault();
+    else if (portal.exit || this.stage >= 3) this.victory();
+    else this.nextStage();
+  }
+
+  // ---------- gems ----------
+
+  /** The last boss's blue portal: the whole party (bodies too) goes through to the gem vault. */
+  enterVault() {
+    const w = this.world;
+    const r = this.floor.vaultRoom;
+    const T = this.floor.T;
+    this.visit(r);
+    w.players.forEach((p, i) => {
+      const off = Game.spawnOffset(i);
+      this.travel(p, r.cx + off.x, r.cy + 3 * T + off.y);
+    });
+    w.banner('THE GEM VAULT', 'Open the chest to claim your gems', 3);
+    Sound.play('phantomAppear');
+  }
+
+  /**
+   * The vault's chest: it bursts open in blue light and a fountain of gems pours out to every
+   * hero; every player gets CONFIG.gems.win on their profile (events.onGems, on each machine
+   * for its own player). Then the portal out of the dungeon opens.
+   */
+  openGemChest(pr) {
+    const w = this.world;
+    const n = CONFIG.gems.win;
+    this.chestPop(pr, () => {
+      w.gemsEarned = n;
+      w.events.onGems?.(n);
+      this.gemFountain(pr.x, pr.y - 16, 36);
+      w.effects.text(pr.x, pr.y - 52, `+${n} GEMS`, { color: '#8ac8ff', size: 12, life: 2.4 });
+      w.banner('GEMS CLAIMED', 'Step into the portal to leave the dungeon', 3);
+      w.after(1.2, () => {
+        const r = pr.room;
+        this.portal = { kind: 'portal', x: r.cx, y: r.cy + 2.6 * this.floor.T, label: 'LEAVE THE DUNGEON', exit: true };
+        Sound.play('phantomAppear');
+      });
+    }, ['#3a8aff', '#8ac8ff', '#ffffff']);
+  }
+
+  /** Gems spray up out of (x, y), tumble, then each streams into one of the heroes (visual only). */
+  gemFountain(x, y, count) {
+    const w = this.world;
+    const heroes = w.players;
+    for (let i = 0; i < count; i++) {
+      const img = Sprites.vault.gems[i % Sprites.vault.gems.length];
+      const hero = heroes[i % heroes.length];
+      const a = -Math.PI / 2 + vrand(-1.1, 1.1);
+      const v = vrand(90, 190);
+      const delay = i * 0.03;
+      const life = 1.4 + delay;
+      w.effects.add(life, (ctx, t) => {
+        const s = t * life - delay;
+        if (s < 0) return;
+        // flung out under gravity for 0.6s, then pulled into the hero
+        const fx = x + Math.cos(a) * v * Math.min(s, 0.6);
+        const fy = y + Math.sin(a) * v * Math.min(s, 0.6) + 260 * Math.min(s, 0.6) ** 2;
+        const k = clamp((s - 0.6) / 0.6, 0, 1) ** 2;
+        const gx = lerp(fx, hero.x, k);
+        const gy = lerp(fy, hero.y - 20, k);
+        if (k >= 1) return;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        PFX.glow(ctx, gx, gy, 10, '120, 190, 255', 0.5);
+        ctx.restore();
+        ctx.drawImage(img, Math.round(gx - img.width / 2), Math.round(gy - img.height / 2));
+      });
+    }
+    for (let i = 0; i < 8; i++) w.after(0.9 + i * 0.08, () => Sound.play('coin', 0.3));
+  }
+
+  /**
+   * Gems for a run that ended in a wipe: deathShare of a win's gems, times how much of the run
+   * was done (each stage a third: its fight rooms roomShare of that, its boss the rest).
+   * Nothing for boss practice.
+   */
+  gemsForProgress() {
+    if (this.practiceBoss) return 0;
+    const G = CONFIG.gems;
+    const rooms = this.floor.rooms.filter((r) => LOCKING_ROOMS.includes(r.type) && r.type !== 'boss');
+    const cleared = rooms.filter((r) => r.state === 'cleared').length;
+    const bossDown = this.floor.bossRoom?.bossDown ? 1 : 0;
+    const stage = (rooms.length ? cleared / rooms.length : 1) * G.roomShare + bossDown * (1 - G.roomShare);
+    const done = clamp((this.stage - 1 + stage) / 3, 0, 1);
+    return Math.floor(G.win * G.deathShare * done);
   }
 
   // ---------- room layouts ----------
@@ -968,6 +1073,23 @@ class DungeonRun {
     for (let ty = r.y0; ty <= r.y0 + 3; ty++) for (let tx = mid - 2; tx < mid + 2; tx++) f.grid[ty][tx] = TILE.COVER;
     // (no art of its own: the throne decor draws it; fixed, so no blast knocks it down)
     this.cover.push({ kind: 'throne', tx: mid - 2, ty: r.y0, w: 4, h: 4, x: (mid - 2) * f.T, y: r.y0 * f.T, seed: 0, room: r, fixed: true, item: null, hidden: true });
+  }
+
+  /**
+   * The manor's grand staircase is solid: its landing the width of the stairs along the top
+   * wall, and the main flight down from it to the hall floor (see MANOR_STAIRS; ManorDecor draws it).
+   */
+  manorStairs(r) {
+    const f = this.floor;
+    const mid = Math.round((r.x0 + r.x1 + 1) / 2);
+    const solid = (tx, ty, w, h) => {
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) f.grid[ty + j][tx + i] = TILE.COVER;
+      this.cover.push({ kind: 'stairs', tx, ty, w, h, x: tx * f.T, y: ty * f.T, seed: 0, room: r, fixed: true, item: null, hidden: true });
+    };
+    const L = MANOR_STAIRS.landingTiles;
+    const F = MANOR_STAIRS.flightTiles;
+    solid(mid - L / 2, r.y0, L, 1);
+    solid(mid - F / 2, r.y0 + 1, F, 3);
   }
 
   /**
@@ -1094,7 +1216,16 @@ class DungeonRun {
       if (r.special === 'treasure') for (const dx of [-3, 0, 3]) add('chest', dx, 0, 'TREASURE CHEST', info.color);
       else add(r.special, 0, -0.5, info.name, info.color);
     } else if (r.type === 'puzzle') {
-      add('puzzle', 0, -0.5, 'PUZZLE ROOM', ROOM_INFO.puzzle.color);
+      // Simon's stone, and a row of its four coloured floor plates in front of it
+      add('puzzle', 0, -1.5, 'RUNE STONE', ROOM_INFO.puzzle.color);
+      const stone = this.props[this.props.length - 1];
+      Object.assign(stone, { state: 'idle', wins: 0, strikes: 0, seq: [], step: 0, timer: 0, wrong: 0, nextBeep: 0, plates: [] });
+      SIMON_COLORS.forEach((c, i) => {
+        add('simonPlate', (i - 1.5) * 2.75, 2.5, '', c.color);
+        const pl = this.props[this.props.length - 1];
+        Object.assign(pl, { ground: true, i, lit: 0, on: false });
+        stone.plates.push(pl);
+      });
     } else if (r.type === 'secret') {
       // three chests, one of them a mimic; the party may open only `picks` of them
       const c = CONFIG.run.secret;
@@ -1105,6 +1236,8 @@ class DungeonRun {
         this.props[this.props.length - 1].mimic = i === mimic;
       }
       add('holeExit', 0, -1.5, 'CLIMB UP', '#fff6c8');   // the way back up to the hole
+    } else if (r.type === 'vault') {
+      add('gemChest', 0, -0.6, 'GEM CHEST', '#7ac8ff');
     }
   }
 
@@ -1172,7 +1305,8 @@ class DungeonRun {
     // the portal out of a beaten boss room waits for someone to step up and use it
     if (this.portal && dist(p.x, p.y, this.portal.x, this.portal.y) < 48) p.nearProp = this.portal;
     else for (const pr of this.props) {
-      if (pr.opened) continue;
+      if (pr.opened || pr.ground) continue;
+      if (pr.kind === 'puzzle' && pr.state !== 'idle') continue;   // busy with a pattern
       if (pr.kind === 'hole' && (pr.reveal || 0) < 1) continue;   // still under its trapdoor
       const reach = pr.kind === 'hole' || pr.kind === 'holeExit' ? dist(p.x, p.y, pr.x, pr.y) < 40 : dist(p.x, p.y, pr.x, pr.y + 10) < 44;
       if (reach) { p.nearProp = pr; break; }
@@ -1183,8 +1317,10 @@ class DungeonRun {
     if (pr.kind === 'portal') return this.enterPortal();
     if (pr.kind === 'rewardChest') return this.openChest(pr);
     if (pr.kind === 'secretChest') return this.openSecretChest(pr);
+    if (pr.kind === 'gemChest') return this.openGemChest(pr);
     if (pr.kind === 'chest') return this.openTreasureChest(pr);
     if (pr.kind === 'wishingWell') return this.wish(pr, p);
+    if (pr.kind === 'puzzle') return this.startPattern(pr);
     if (pr.kind === 'hole') return this.descend(p);
     if (pr.kind === 'holeExit') return this.ascend(p);
     if (pr.kind === 'shopkeeper' || pr.kind === 'chef' || pr.kind === 'enchanter') return w.events.onNpc?.(pr.kind, this, p);
@@ -1366,10 +1502,192 @@ class DungeonRun {
     Sound.play('chestOpen');
   }
 
+  // ---------- the puzzle room: Simon's stone ----------
+  //
+  // idle -> (E) show: the stone lights its pattern, one colour at a time -> input: the heroes step
+  // on the floor plates in that order. Right: next (a pause) -> a longer pattern, until `wins` right
+  // answers solve it (a free upgrade each). Wrong: a strike, back to idle; `strikes` of them and
+  // it's fuse (blinking red) -> blown: the whole room goes up in flames.
+
+  /** Touching the stone: a fresh pattern, as long as this round's. */
+  startPattern(s) {
+    const c = CONFIG.run.puzzle;
+    s.seq = Array.from({ length: c.lengths[Math.min(s.wins, c.lengths.length - 1)] }, () => randInt(0, SIMON_COLORS.length - 1));
+    s.state = 'show';
+    s.step = 0;
+    s.timer = -0.6;   // a breath before the first colour
+    s.lit = -1;
+    Sound.play('uiClick');
+    this.world.effects.burst(s.x, s.y - 24, { count: 16, colors: ['#e0c0ff', '#b67aff', '#ffffff'], speed: [30, 90], life: [0.3, 0.6], up: 30 });
+  }
+
+  updateStone(s, dt) {
+    const w = this.world;
+    const c = CONFIG.run.puzzle;
+    s.timer += dt;
+    s.wrong = Math.max(0, s.wrong - dt);
+    // a plate is pressed by stepping onto it (standing on it doesn't press it again)
+    for (const pl of s.plates) {
+      pl.lit = Math.max(0, pl.lit - dt);
+      const half = SIMON_PLATE / 2;
+      const on = w.heroes.some((p) => Math.abs(p.x - pl.x) < half && Math.abs(p.y - pl.y) < half);
+      if (on && !pl.on && s.state === 'input') this.pressPlate(s, pl);
+      pl.on = on;
+    }
+    switch (s.state) {
+      case 'show': {
+        if (s.timer < 0) break;
+        const per = c.show + c.gap;
+        const k = Math.floor(s.timer / per);
+        if (k >= s.seq.length) {
+          s.state = 'input';
+          s.lit = -1;
+          w.effects.text(s.x, s.y - 66, 'YOUR TURN', { color: '#e0c0ff', size: 8, life: 1 });
+          break;
+        }
+        const lit = s.timer - k * per < c.show ? s.seq[k] : -1;
+        if (lit >= 0 && (s.lit !== lit || s.litStep !== k)) {
+          s.plates[lit].lit = c.show;
+          Sound.play(`simon${lit}`);
+        }
+        s.lit = lit;
+        s.litStep = k;
+        break;
+      }
+      case 'input':
+        // everyone walked off: the round is called off (no strike), touch the stone to start again
+        if (!w.heroes.some((p) => this.floor.roomAt(p.x, p.y) === s.room)) s.state = 'idle';
+        break;
+      case 'next':
+        if (s.timer >= 1.4) this.startPattern(s);
+        break;
+      case 'fuse': {
+        // beeping faster and faster as it blinks red
+        if (s.timer >= s.nextBeep) {
+          Sound.play('simonFuse');
+          s.nextBeep = s.timer + lerp(0.4, 0.08, Math.min(1, s.timer / c.fuse));
+        }
+        if (s.timer >= c.fuse) this.blowStone(s);
+        break;
+      }
+    }
+  }
+
+  /** A hero stepped on a plate while the stone waits for the pattern back. */
+  pressPlate(s, pl) {
+    const w = this.world;
+    const c = CONFIG.run.puzzle;
+    pl.lit = 0.35;
+    Sound.play(`simon${pl.i}`);
+    w.effects.burst(pl.x, pl.y, { count: 10, colors: [SIMON_COLORS[pl.i].color, '#ffffff'], speed: [30, 90], life: [0.2, 0.5], up: 30 });
+    if (pl.i !== s.seq[s.step]) return this.strike(s);
+    if (++s.step < s.seq.length) return;
+    // the whole pattern, right
+    s.wins++;
+    Sound.play('simonRight');
+    w.effects.burst(s.x, s.y - 30, { count: 30, colors: ['#ffe680', '#e0c0ff', '#ffffff'], speed: [50, 160], life: [0.4, 0.8], up: 60 });
+    if (s.wins >= c.wins) return this.solveStone(s);
+    w.effects.text(s.x, s.y - 66, `CORRECT!  ${s.wins}/${c.wins}`, { color: '#ffe680', size: 9, life: 1.3 });
+    s.state = 'next';
+    s.timer = 0;
+  }
+
+  /** A wrong plate: a strike. The last one lights the fuse. */
+  strike(s) {
+    const w = this.world;
+    const c = CONFIG.run.puzzle;
+    s.strikes++;
+    s.wrong = 0.6;
+    s.timer = 0;
+    Sound.play('simonWrong');
+    w.shake(4, 0.25);
+    w.effects.burst(s.x, s.y - 24, { count: 22, colors: ['#ff5a4a', '#8a2420', '#6e6c80'], speed: [50, 150], life: [0.3, 0.6], up: 40 });
+    if (s.strikes < c.strikes) {
+      s.state = 'idle';
+      w.effects.text(s.x, s.y - 66, `WRONG!  MISTAKES ${s.strikes}/${c.strikes}`, { color: '#ff5a4a', size: 9, life: 1.6 });
+      return;
+    }
+    s.state = 'fuse';
+    s.opened = true;   // nothing more to touch
+    s.nextBeep = 0;
+    w.banner('RUN!', 'The stone is about to blow', 1.6);
+    Sound.play('windup');
+  }
+
+  /** Every pattern right: each hero gets a random upgrade they don't have yet. */
+  solveStone(s) {
+    const w = this.world;
+    s.state = 'solved';
+    s.opened = true;
+    const heroes = w.players.filter((p) => shopStock(p).some((u) => !p.upgradeLevels[u.id]));
+    heroes.forEach((p, i) => {
+      const u = choose(shopStock(p).filter((x) => !p.upgradeLevels[x.id]));
+      const pt = w.dungeon.freePoint(s.x + (i - (heroes.length - 1) / 2) * 30, s.y + 34, 6, 6);
+      w.pickups.push(new UpgradePickup(pt.x, pt.y, u.id, p));
+    });
+    w.banner('PUZZLE SOLVED', heroes.length > 1 ? 'A free upgrade for every hero' : 'A free upgrade', 2);
+    w.effects.burst(s.x, s.y - 30, { count: 70, colors: ['#ffe680', '#b67aff', '#ffffff'], speed: [60, 240], life: [0.5, 1.1], up: 100 });
+    Sound.play('magic');
+    Sound.play('chestOpen');
+  }
+
+  /**
+   * The fuse runs out: the stone bursts, the blast hurts everyone in the room
+   * (it's a trap) and the whole floor is left burning, the fire racing out from the stone.
+   */
+  blowStone(s) {
+    const w = this.world;
+    const c = CONFIG.run.puzzle;
+    const r = s.room;
+    s.state = 'blown';
+    s.timer = 0;
+    Sound.play('ovenBoom');
+    Sound.play('explosion');
+    w.shake(14, 0.8);
+    w.effects.burst(s.x, s.y - 20, { count: 90, colors: ['#ffffff', '#ffd34a', '#ff8a1e', '#e0461e', '#6e6c80'], speed: [100, 420], life: [0.4, 1.1], up: 80, size: [1, 4] });
+    w.effects.burst(s.x, s.y - 20, { count: 40, colors: ['#6e6c80', '#9492a8', '#3e3c4c'], speed: [120, 320], life: [0.6, 1.2], up: 140, size: [2, 4] });   // stone shards
+    w.effects.smoke(s.x, s.y - 16, { count: 16, radius: 40, life: 1.6, rise: 30 });
+    const b = this.floor.roomBounds(r);
+    const reach = Math.hypot(b.right - b.left, b.bottom - b.top);
+    // the shockwave: a white-hot ring sweeping out across the room
+    w.effects.add(0.6, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1 - t;
+      const rr = 20 + t * reach * 0.6;
+      PFX.glow(ctx, s.x, s.y - 10, rr + 40, '255, 160, 60', 0.8, 2, (rr + 40) * 0.55);
+      PFX.ring(ctx, s.x, s.y, rr, rr * 0.55, '#fff2a0', 3, { thick: 3 });
+      ctx.restore();
+    });
+    for (const a of w.allies) {
+      if (this.floor.roomAt(a.x, a.y) !== r) continue;
+      if (a.hurt(c.blastDamage, w, s.x, s.y, { trap: true })) a.burn?.(c.fire.burnDps, c.fire.burnTime, w);
+    }
+    // fire all over the floor, spreading outwards from the stone
+    const F = c.fire;
+    const step = F.radius * 1.5;
+    const fire = { cfg: { fireRadius: F.radius, fireTime: F.life, burnDps: F.burnDps, burnTime: F.burnTime } };
+    for (let y = b.top + step / 2; y < b.bottom; y += step) {
+      for (let x = b.left + step / 2; x < b.right; x += step) {
+        const at = { x: x + rand(-10, 10), y: y + rand(-8, 8) };
+        w.after(dist(at.x, at.y, s.x, s.y) / 700, () => FlamingCatapult.prototype.ignite.call(fire, w, at, 1));
+      }
+    }
+  }
+
+  /** The HUD's line for the puzzle room the local hero is in (none once it's done). */
+  stoneText(s) {
+    const c = CONFIG.run.puzzle;
+    if (s.state === 'fuse') return 'RUN! THE STONE IS ABOUT TO BLOW';
+    if (s.state === 'solved' || s.state === 'blown') return '';
+    const goal = s.state === 'input' ? 'STEP ON THE PLATES IN ORDER' : s.state === 'show' ? 'WATCH THE PATTERN' : 'TOUCH THE STONE';
+    return `${goal}  ${s.wins}/${c.wins}  MISTAKES ${s.strikes}/${c.strikes}`;
+  }
+
   // ---------- world hooks ----------
 
-  /** Extra things hero attacks can hit (none right now). */
-  targets() { return []; }
+  /** Extra things hero attacks can hit: the barrels still standing. */
+  targets() { return Barrels.alive(this); }
 
   /** Extra things enemies attack (the defend totem). */
   allies() { return this.totem && !this.totem.dead ? [this.totem] : []; }
@@ -1379,6 +1697,7 @@ class DungeonRun {
     // special rooms are whole little scenes (Scenes) with their label on top
     const items = [];
     for (const pr of this.props) {
+      if (pr.ground) continue;   // floor plates are drawn with the ground
       if (Scenes[pr.kind]) {
         items.push(...Scenes.drawables(pr.kind, pr.x, pr.y, this.time));
         items.push({ y: pr.y + 80, draw: (ctx) => this.drawPropLabel(ctx, pr) });
@@ -1398,6 +1717,10 @@ class DungeonRun {
     for (const e of this.sleepers) {
       if (e.x < cam.x - 80 || e.x > cam.x + cam.width + 80 || e.y < cam.y - 40 || e.y > cam.y + cam.height + 120) continue;
       items.push({ y: e.y, draw: (ctx) => Game.drawEnemy(ctx, e) });
+    }
+    for (const b of this.barrels) {
+      if (b.dead || b.x < cam.x - 40 || b.x > cam.x + cam.width + 40 || b.y < cam.y - 20 || b.y > cam.y + cam.height + 60) continue;
+      items.push({ y: b.y, draw: (ctx) => Barrels.draw(ctx, b, this.time) });
     }
     items.push(...this.doors.drawables(this.world.camera));
     return items;
@@ -1469,30 +1792,209 @@ class DungeonRun {
         }
       }
     }
+    for (const pr of this.props) if (pr.kind === 'simonPlate') this.drawSimonPlate(ctx, pr);
     if (this.portal) this.drawPortal(ctx);
   }
 
+  /**
+   * A puzzle-room floor plate: a bevelled flagstone, lit from the top left, with a
+   * cut rune gem of its colour set in it that blazes up when the stone shows it or a hero steps on it.
+   */
+  drawSimonPlate(ctx, pl) {
+    const c = SIMON_COLORS[pl.i];
+    const S = SIMON_PLATE;
+    const sink = pl.on ? 1 : 0;   // it gives a little underfoot
+    const x = Math.round(pl.x - S / 2);
+    const y = Math.round(pl.y - S / 2) + sink;
+    const glow = Math.min(1, pl.lit / 0.2);
+    drawShadow(ctx, pl.x, pl.y + S / 2 - 2, S / 2 + 2, 5, 0.25);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 1, y - 1, S + 2, S + 2 - sink);
+    ctx.fillStyle = '#6e6c80';
+    ctx.fillRect(x, y, S, S - sink);
+    ctx.fillStyle = '#9492a8';   // lit rim, top and left
+    ctx.fillRect(x, y, S, 2);
+    ctx.fillRect(x, y, 2, S - sink);
+    ctx.fillStyle = '#4a4858';   // shaded rim, bottom and right
+    ctx.fillRect(x, y + S - 3 - sink, S, 3);
+    ctx.fillRect(x + S - 2, y + 2, 2, S - 4);
+    // a thin groove round the inset
+    ctx.fillStyle = '#56546a';
+    ctx.fillRect(x + 7, y + 7, S - 14, 1);
+    ctx.fillRect(x + 7, y + S - 9 - sink, S - 14, 1);
+    ctx.fillRect(x + 7, y + 7, 1, S - 16 - sink);
+    ctx.fillRect(x + S - 8, y + 7, 1, S - 16 - sink);
+    // moss in one corner
+    ctx.fillStyle = '#4e6e44';
+    ctx.fillRect(x + 2, y + S - 7 - sink, 6, 4);
+    ctx.fillStyle = '#6a8e58';
+    ctx.fillRect(x + 3, y + S - 8 - sink, 2, 1);
+    // the rune gem: a diamond, dim until it lights
+    const gx = x + S / 2;
+    const gy = y + S / 2 - 1;
+    const R = 12;
+    const fill = (rr, color) => {
+      ctx.fillStyle = color;
+      for (let k = -rr; k <= rr; k++) {
+        const wdt = rr - Math.abs(k);
+        ctx.fillRect(gx - wdt, gy + k, wdt * 2 + 1, 1);
+      }
+    };
+    fill(R + 1, OUTLINE);
+    fill(R, glow > 0 ? c.color : c.dark);
+    fill(Math.round(R * 0.55), glow > 0 ? '#ffffff' : c.color);
+    ctx.globalAlpha = glow > 0 ? 1 : 0.5;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(gx - 4, gy - 5, 2, 2);   // glint, top left
+    ctx.globalAlpha = 1;
+    if (glow > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, gx, gy, 40, c.rgb, 0.7 * glow, 2, 24);
+      ctx.globalAlpha = 0.35 * glow;
+      ctx.fillStyle = c.color;
+      ctx.fillRect(x, y, S, S - sink);
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Simon's stone (bottom centre at x, y): a weathered rune stone with an arched top and moss at
+   * its foot, its four colour runes in a row (the plates' order) lighting as it shows its pattern,
+   * a gold pip on its crown for each right answer and a crack for each mistake. Its fuse lit, it
+   * shudders and blinks red; blown, only a scorched stump is left.
+   */
+  drawStone(ctx, s, x, y) {
+    const c = CONFIG.run.puzzle;
+    if (s.state === 'blown') {
+      // a jagged, blackened stump in a ring of scorched rubble
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      PFX.disc(ctx, x, y, 46, 22, '#1a0e0a');
+      ctx.restore();
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x - 18, y - 12, 36, 14);
+      ctx.fillRect(x - 12, y - 17, 8, 5);
+      ctx.fillRect(x + 4, y - 15, 9, 3);
+      ctx.fillStyle = '#4a4858';
+      ctx.fillRect(x - 17, y - 11, 34, 12);
+      ctx.fillRect(x - 11, y - 16, 6, 5);
+      ctx.fillRect(x + 5, y - 14, 7, 3);
+      ctx.fillStyle = '#6e6c80';
+      ctx.fillRect(x - 17, y - 11, 1, 10);
+      ctx.fillRect(x - 11, y - 16, 6, 1);
+      ctx.fillStyle = '#2a2430';
+      ctx.fillRect(x - 17, y - 2, 34, 3);
+      for (const [dx, dy, w] of [[-30, -2, 5], [26, 0, 4], [-22, 6, 3], [18, -8, 3], [34, 6, 3]]) {
+        ctx.fillStyle = OUTLINE; ctx.fillRect(x + dx - 1, y + dy - 1, w + 2, w + 1);
+        ctx.fillStyle = '#56546a'; ctx.fillRect(x + dx, y + dy, w, w - 1);
+      }
+      return;
+    }
+    const fuse = s.state === 'fuse';
+    const red = fuse ? this.stoneBlink(s) : s.wrong > 0;
+    const k = fuse ? Math.min(1, s.timer / c.fuse) : 0;
+    const jx = fuse ? Math.round(vrand(-1, 1) * (1 + k * 2)) : 0;   // shuddering harder as the fuse runs down
+    x += jx;
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 19, y - 38, 38, 40);
+    ctx.fillRect(x - 15, y - 42, 30, 4);
+    ctx.fillRect(x - 10, y - 45, 20, 3);
+    ctx.fillStyle = '#6e6c80';
+    ctx.fillRect(x - 18, y - 37, 36, 38);
+    ctx.fillRect(x - 14, y - 41, 28, 4);
+    ctx.fillRect(x - 9, y - 44, 18, 3);
+    ctx.fillStyle = '#9492a8';   // lit from the top left
+    ctx.fillRect(x - 9, y - 44, 18, 1);
+    ctx.fillRect(x - 14, y - 41, 5, 1);
+    ctx.fillRect(x - 18, y - 37, 1, 36);
+    ctx.fillStyle = '#56546a';
+    ctx.fillRect(x + 15, y - 37, 3, 38);
+    ctx.fillRect(x - 18, y - 1, 36, 2);
+    // a carved band the runes sit in
+    ctx.fillStyle = '#4a4858';
+    ctx.fillRect(x - 15, y - 29, 30, 14);
+    ctx.fillStyle = '#86849a';
+    ctx.fillRect(x - 15, y - 15, 30, 1);
+    // cracks, one more for each mistake
+    ctx.fillStyle = '#2a2430';
+    const cracks = [[[8, -36], [9, -32], [7, -29]], [[-12, -14], [-10, -10], [-13, -6], [-11, -3]], [[3, -12], [5, -8], [2, -5], [4, -2]]];
+    for (let i = 0; i < Math.min(s.strikes, cracks.length); i++) for (const [dx, dy] of cracks[i]) ctx.fillRect(x + dx, y + dy, 1, 4);
+    // moss at its foot
+    ctx.fillStyle = '#4e6e44';
+    ctx.fillRect(x - 18, y - 4, 9, 4);
+    ctx.fillRect(x + 9, y - 3, 9, 3);
+    ctx.fillStyle = '#6a8e58';
+    ctx.fillRect(x - 17, y - 5, 4, 1);
+    ctx.fillRect(x + 11, y - 4, 3, 1);
+    // the four runes: lit while the stone shows that colour, all glowing gold once it's solved
+    SIMON_COLORS.forEach((col, i) => {
+      const rx = x - 12 + i * 7;
+      const on = s.state === 'show' && s.lit === i;
+      const gold = s.state === 'solved';
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(rx - 1, y - 27, 5, 10);
+      ctx.fillStyle = on ? '#ffffff' : gold ? '#ffe680' : red ? '#ff5a4a' : col.dark;
+      ctx.fillRect(rx, y - 26, 3, 8);
+      ctx.fillStyle = on ? col.color : gold ? '#ffd34a' : red ? '#8a2420' : col.color;
+      ctx.fillRect(rx, y - 22 + (i % 2) * 2, 3, 2);
+      if (on || gold) drawGlow(ctx, rx + 1, y - 22, on ? 22 : 12, on ? col.rgb : '255, 220, 120', on ? 0.6 : 0.3);
+    });
+    // a pip on its crown for each right answer
+    for (let i = 0; i < c.wins; i++) {
+      const px = x - 7 + i * 6;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(px - 1, y - 37, 4, 4);
+      ctx.fillStyle = i < s.wins ? '#ffd34a' : '#3e3c4c';
+      ctx.fillRect(px, y - 36, 2, 2);
+      if (i < s.wins) drawGlow(ctx, px + 1, y - 35, 8, '255, 210, 90', 0.4);
+    }
+    // blinking red: a hot flush over the whole stone and a glow round it
+    if (red) {
+      ctx.save();
+      ctx.globalAlpha = fuse ? 0.45 + k * 0.25 : 0.4 * (s.wrong / 0.6);
+      ctx.fillStyle = '#ff3a26';
+      ctx.fillRect(x - 18, y - 37, 36, 38);
+      ctx.fillRect(x - 14, y - 41, 28, 4);
+      ctx.fillRect(x - 9, y - 44, 18, 3);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1;
+      PFX.glow(ctx, x, y - 22, 46 + k * 30, '255, 40, 30', fuse ? 0.7 : 0.4, 2, 26);
+      ctx.restore();
+    }
+  }
+
+  /** On or off, as the stone blinks red (faster and faster while its fuse burns). */
+  stoneBlink(s) {
+    const k = Math.min(1, s.timer / CONFIG.run.puzzle.fuse);
+    return Math.sin(s.timer * lerp(9, 40, k * k)) > -0.2;
+  }
+
+  /** The portal out of a beaten boss room: violet, or blue to the gem vault and out of the vault. */
   drawPortal(ctx) {
-    const { x, y } = this.portal;
+    const P = this.portal;
+    const { x, y } = P;
+    const blue = P.vault || P.exit;
+    const [ring, core, edge] = blue ? ['90, 170, 255', '200, 230, 255', '30, 90, 220'] : ['180, 90, 255', '230, 190, 255', '120, 40, 200'];
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 4; i++) {
       const r = ((this.time * 30 + i * 12) % 48);
-      ctx.strokeStyle = `rgba(180, 90, 255, ${0.8 * (1 - r / 48)})`;
+      ctx.strokeStyle = `rgba(${ring}, ${0.8 * (1 - r / 48)})`;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.ellipse(x, y, r, r * 0.55, 0, 0, TAU);
       ctx.stroke();
     }
     const g = ctx.createRadialGradient(x, y, 2, x, y, 40);
-    g.addColorStop(0, 'rgba(230, 190, 255, 0.7)');
-    g.addColorStop(1, 'rgba(120, 40, 200, 0)');
+    g.addColorStop(0, `rgba(${core}, 0.7)`);
+    g.addColorStop(1, `rgba(${edge}, 0)`);
     ctx.fillStyle = g;
     ctx.fillRect(x - 40, y - 40, 80, 80);
     ctx.restore();
-    const near = this.world.localPlayer.nearProp === this.portal;
-    if (near) HUD.text(ctx, `[${Settings.label('interact')}] ${this.portal.label}`, x, y - 50, { size: 8, align: 'center', color: '#ffe680' });
-    else HUD.text(ctx, this.practiceBoss ? 'PRACTICE RANGE' : this.stage < 3 ? 'NEXT STAGE' : 'EXIT', x, y - 46, { size: 7, align: 'center', color: '#e0c0ff' });
+    const near = this.world.localPlayer.nearProp === P;
+    if (near) HUD.text(ctx, `[${Settings.label('interact')}] ${P.label}`, x, y - 50, { size: 8, align: 'center', color: '#ffe680' });
+    else HUD.text(ctx, this.practiceBoss ? 'PRACTICE RANGE' : P.vault ? 'GEM VAULT' : this.stage < 3 && !P.exit ? 'NEXT STAGE' : 'EXIT', x, y - 46, { size: 7, align: 'center', color: blue ? '#bfe0ff' : '#e0c0ff' });
   }
 
   /** Placeholder props: a simple stand per kind, with a label. */
@@ -1564,11 +2066,25 @@ class DungeonRun {
       }
       case 'chest':          // treasure room chests
       case 'rewardChest':
-      case 'secretChest': {
+      case 'secretChest':
+      case 'gemChest': {
         if (pr.gone) return;   // it was a mimic
         if ((pr.kind === 'secretChest' || pr.kind === 'chest') && !pr.opened) drawGlints(ctx, [[x - 10, y - 22], [x + 11, y - 14], [x + 3, y - 26]], this.time + x * 0.01);
         if (pr.sealed) ctx.globalAlpha = 0.55;
-        this.drawChest(ctx, pr, x, y);
+        if (pr.kind === 'gemChest') {
+          // the vault's chest is bigger, glowing blue, gems glinting on its lid until it's opened
+          drawShadow(ctx, x, y + 1, 28, 7, 0.35);
+          if (!pr.opened) {
+            drawGlow(ctx, x, y - 20, 44, '110, 180, 255', 0.3 + Math.sin(this.time * 3) * 0.08);
+            drawGlints(ctx, [[x - 14, y - 34], [x + 15, y - 26], [x + 4, y - 40]], this.time + 3);
+          }
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(1.5, 1.5);
+          ctx.translate(-x, -y);
+          this.drawChest(ctx, pr, x, y);
+          ctx.restore();
+        } else this.drawChest(ctx, pr, x, y);
         ctx.globalAlpha = 1;
         if (pr.sealed) {
           // chained shut
@@ -1583,36 +2099,7 @@ class DungeonRun {
         }
         break;
       }
-      case 'puzzle': {
-        // a weathered rune stone with an arched top, moss at its foot and runes glowing in turn
-        ctx.fillStyle = OUTLINE;
-        ctx.fillRect(x - 14, y - 32, 28, 34);
-        ctx.fillRect(x - 11, y - 36, 22, 4);
-        ctx.fillStyle = '#6e6c80';
-        ctx.fillRect(x - 13, y - 31, 26, 32);
-        ctx.fillRect(x - 10, y - 35, 20, 4);
-        ctx.fillStyle = '#9492a8';
-        ctx.fillRect(x - 10, y - 35, 20, 1);
-        ctx.fillRect(x - 13, y - 31, 1, 30);
-        ctx.fillStyle = '#56546a';
-        ctx.fillRect(x + 11, y - 31, 2, 32);
-        ctx.fillRect(x - 13, y - 1, 26, 2);
-        ctx.fillStyle = '#3e3c4c';
-        ctx.fillRect(x + 4, y - 30, 1, 6);
-        ctx.fillRect(x + 5, y - 24, 1, 4);
-        ctx.fillStyle = '#4e6e44';
-        ctx.fillRect(x - 13, y - 4, 8, 4);
-        ctx.fillRect(x + 6, y - 3, 7, 3);
-        ctx.fillStyle = '#6a8e58';
-        ctx.fillRect(x - 12, y - 5, 3, 1);
-        for (let i = 0; i < 3; i++) {
-          const on = Math.floor(this.time * 1.5) % 3 === i;
-          ctx.fillStyle = on ? '#e0c0ff' : '#9a6ae0';
-          ctx.fillRect(x - 7 + i * 6, y - 26 + (i % 2) * 6, 3, 8);
-          if (on) drawGlow(ctx, x - 6 + i * 6, y - 22 + (i % 2) * 6, 14, '190, 130, 255', 0.35);
-        }
-        break;
-      }
+      case 'puzzle': this.drawStone(ctx, pr, x, y); break;
       default: {
         // a stall: counter + striped awning in the prop's colour
         box(40, 16, '#9c6c3e', '#5b3922');
@@ -1636,11 +2123,12 @@ class DungeonRun {
    * A chest (bottom centre at x, y) and its opening: a quick rattle, then the lid
    * flies open with an overshoot as the box squashes and springs back, light pours
    * out of it in rays, sparkles drift up, and the mouth glows gold before going
-   * dark. Reward chests are oak with gold bands, secret chests violet with silver.
+   * dark. Reward chests are oak with gold bands, secret chests violet with silver, the gem vault's sapphire with gold.
    */
   drawChest(ctx, pr, x, y) {
     const secret = pr.kind === 'secretChest';
-    const wood = secret ? ['#2e2440', '#4a3a5e', '#5c4a74'] : ['#5b3922', '#7d532f', '#9c6c3e'];
+    const gem = pr.kind === 'gemChest';   // the gem vault's: sapphire-lacquered, bound in gold
+    const wood = secret ? ['#2e2440', '#4a3a5e', '#5c4a74'] : gem ? ['#122a6a', '#1e4ab0', '#3a6ad8'] : ['#5b3922', '#7d532f', '#9c6c3e'];
     const trim = secret ? '#cfc7e8' : '#dcb44c';
     const trimD = secret ? '#8a82a8' : '#a07a24';
     const t = pr.opened && !pr.sealed ? pr.t : -1;
@@ -1665,7 +2153,7 @@ class DungeonRun {
     if (glow > 0) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const rgb = secret ? '210, 190, 255' : '255, 225, 130';
+      const rgb = secret ? '210, 190, 255' : gem ? '140, 200, 255' : '255, 225, 130';
       for (let i = 0; i < 7; i++) {
         const a = -Math.PI / 2 + (i - 3) * 0.26 + Math.sin(this.time * 2 + i) * 0.04;
         const len = (40 + (i % 3) * 14) * Math.min(1, (t - P) * 6) * (0.4 + glow * 0.6);
@@ -1693,7 +2181,7 @@ class DungeonRun {
       R(-15, -16 - h, 30, h + 1, OUTLINE);
       R(-14, -15 - h, 28, h - 1, wood[0]);
       R(-14, -15 - h, 28, 2, trimD);
-      R(-12, -12 - h, 24, h - 4, secret ? '#3a2e4c' : '#4a2e1c');
+      R(-12, -12 - h, 24, h - 4, secret ? '#3a2e4c' : gem ? '#0c1a44' : '#4a2e1c');
     }
     // the box: planks, gold bands at the corners, a lock plate
     R(-15, -16, 30, 17, OUTLINE);
@@ -1708,8 +2196,8 @@ class DungeonRun {
     R(11, -15, 1, 15, trim);
     // the open mouth: glowing gold at first, then the dark, empty inside
     if (k > 0.05) {
-      R(-13, -18, 26, 4, glow > 0 ? (secret ? '#e8dcff' : '#fff2a0') : '#1e140e');
-      if (glow > 0) R(-13, -15, 26, 1, secret ? '#b8a8e8' : '#ffd34a');
+      R(-13, -18, 26, 4, glow > 0 ? (secret ? '#e8dcff' : gem ? '#d8f0ff' : '#fff2a0') : '#1e140e');
+      if (glow > 0) R(-13, -15, 26, 1, secret ? '#b8a8e8' : gem ? '#8ac8ff' : '#ffd34a');
     }
     // the lid while shut (or just starting to lift): a rounded front with a band and the lock
     if (ok < 0.5) {
@@ -1717,7 +2205,7 @@ class DungeonRun {
       const lidY = Math.round(-26 - ok * 9);
       R(-15, lidY, 30, lidH + 1, OUTLINE);
       R(-14, lidY + 1, 28, lidH - 1, wood[2]);
-      R(-14, lidY + 1, 28, 2, secret ? '#7a6898' : '#b8844c');
+      R(-14, lidY + 1, 28, 2, secret ? '#7a6898' : gem ? '#6a9aff' : '#b8844c');
       R(-14, lidY + lidH - 3, 28, 2, trim);
       R(-2, lidY + lidH - 5, 4, 6, trim);
       R(-1, lidY + lidH - 3, 2, 2, OUTLINE);
@@ -1743,12 +2231,16 @@ class DungeonRun {
     if (pr.opened) return;
     const near = this.world.localPlayer.nearProp === pr;
     const npc = ['shopkeeper', 'chef', 'enchanter', 'restaurant5'].includes(pr.kind);
-    const labelY = npc || Scenes[pr.kind] ? y - 86 : pr.kind === 'rewardChest' || pr.kind === 'secretChest' || pr.kind === 'chest' ? y - 36 : y - 62;
+    const labelY = npc || Scenes[pr.kind] ? y - 86 : pr.kind === 'rewardChest' || pr.kind === 'secretChest' || pr.kind === 'chest' || pr.kind === 'gemChest' ? y - 36 : y - 62;
     let label = near && npc ? 'TALK' : pr.label;
     if (pr.kind === 'wishingWell') {
       const st = pr.wishes?.[this.world.localPlayer.netId || 'solo'];
       if (st?.granted) label = 'WISH GRANTED';
       else if (near) label = 'TOSS A COIN';
+    }
+    if (pr.kind === 'puzzle') {
+      if (pr.state !== 'idle') return;
+      if (near) label = pr.wins || pr.strikes ? 'TRY A NEW PATTERN' : 'SHOW THE PATTERN';
     }
     if (pr.kind === 'rewardChest' && !near) return;
     HUD.text(ctx, near ? `[${Settings.label('interact')}] ${label}` : label, x, labelY, { size: near ? 7 : 6, align: 'center', color: near ? '#ffe680' : pr.color });
@@ -1899,21 +2391,32 @@ class DungeonRun {
       const flick = Math.sin(t * 9 + d.seed);
       if (d.kind === 'lampPost') out.push({ x: d.x, y: d.y - 40, r: 150 + flick * 5, s: 0.95, rgb: d.warm ? '255, 200, 110' : '110, 255, 170' });
       else if (d.kind === 'soulTree') for (const [lx, ly] of SOUL_LANTERNS) out.push({ x: d.x + lx * (d.facing || 1), y: d.y + ly, r: 110 + flick * 5, s: 0.9, rgb: '110, 220, 255' });
+      else if (d.kind === 'gemCluster') out.push({ x: d.x, y: d.y - 16, r: 80, s: 0.6, rgb: hexToRgb(GEM_RAMPS[d.v || 0][2]).join(', ') });
       else if (d.kind === 'candles') out.push({ x: d.x, y: d.y - 8, r: 74 + flick * 4, s: 0.8, rgb: '255, 190, 90' });
       else if (d.kind === 'campfire') out.push({ x: d.x, y: d.y - 10, r: 200 + flick * 10, s: 1, rgb: '255, 150, 60' });
       else if (d.kind === 'prop' && (d.name === 'candelabra' || d.name === 'cauldron')) out.push({ x: d.x, y: d.y - 24, r: 90, s: 0.85, rgb: d.name === 'cauldron' ? '140, 255, 140' : '255, 190, 90' });
     }
     if (this.themeId === 'castle') CastleDecor.lights(this.decor, out, t);
+    if (this.bossType === 'phantom') ManorDecor.lights(this.decor, out, t);
     this.extraLights = this.extraLights.filter((l) => l.until > this.world.time);
     out.push(...this.extraLights);
     for (const pr of this.props) {
       if (pr.kind === 'hole' || pr.kind === 'holeExit') { if (pr.kind === 'holeExit' || pr.reveal > 0) out.push({ x: pr.x, y: pr.y, r: 110 * (pr.kind === 'hole' ? pr.reveal : 1), s: 0.85, rgb: '255, 220, 140' }); }
+      else if (pr.kind === 'gemChest') out.push({ x: pr.x, y: pr.y - 14, r: 150, s: 0.9, rgb: '110, 180, 255' });
+      else if (pr.kind === 'simonPlate') { if (pr.lit > 0 || pr.on) out.push({ x: pr.x, y: pr.y, r: 90, s: pr.lit > 0 ? 0.9 : 0.4, rgb: SIMON_COLORS[pr.i].rgb }); }
+      else if (pr.kind === 'puzzle') {
+        if (pr.state === 'blown') continue;
+        const red = pr.state === 'fuse' ? this.stoneBlink(pr) : pr.wrong > 0;
+        out.push({ x: pr.x, y: pr.y - 30, r: red ? 190 : 150, s: red ? 1 : 0.85, rgb: red ? '255, 50, 40' : pr.state === 'solved' ? '255, 220, 120' : '190, 130, 255' });
+      }
       else if (pr.kind === 'rewardChest' || pr.kind === 'secretChest' || pr.kind === 'chest') out.push({ x: pr.x, y: pr.y - 10, r: 70, s: 0.6, rgb: '255, 210, 120' });
       else if (!pr.opened) out.push({ x: pr.x, y: pr.y - 30, r: 150, s: 0.85, rgb: '255, 200, 120' });   // shops, special rooms
     }
-    if (this.portal) out.push({ x: this.portal.x, y: this.portal.y, r: 190, s: 1, rgb: '180, 90, 255' });
+    if (this.portal) out.push({ x: this.portal.x, y: this.portal.y, r: 190, s: 1, rgb: this.portal.vault || this.portal.exit ? '90, 170, 255' : '180, 90, 255' });
     if (this.totem) out.push({ x: this.totem.x, y: this.totem.y - 24, r: 180, s: 1, rgb: '106, 216, 255' });
     for (const s of this.spikes) if (this.spikeState(s) === 1) out.push({ x: s.x + 16, y: s.y + 16, r: 30, s: 0.3 });
+    // a faint glow off each barrel, so they read in the dark (the fuse's spark, the ooze, the frost)
+    for (const b of this.barrels) if (!b.dead) out.push({ x: b.x, y: b.y - 14, r: 48, s: 0.45, rgb: { explosive: '255, 170, 80', poison: '140, 240, 100', frost: '150, 200, 255' }[b.kind] });
     const w = this.world;
     if (w.boss?.addLights) w.boss.addLights(out);
     else     if (w.boss) out.push({ x: w.boss.x, y: w.boss.y - 40, r: 150, s: 0.6, rgb: { queen: '255, 130, 210', king: '255, 200, 120', prince: '255, 210, 150', princess: '170, 150, 255' }[this.bossType] || '200, 120, 255' });
@@ -1937,6 +2440,7 @@ class DungeonRun {
     const w = this.world;
     const here = this.floor.roomAt(w.localPlayer.x, w.localPlayer.y);
     if (this.bossType === 'deathbringer' && here && here.type === 'boss') dark = Math.max(dark, 0.6);
+    if (this.bossType === 'phantom' && here && here.type === 'boss') dark = Math.max(dark, 0.5);   // the manor's hall: candlelight and moonlight
     if (w.boss && w.boss.darkness) dark = Math.max(dark, w.boss.darkness);
     // the gloom is light, so the lamps' bloom is turned up to keep their warm pools
     Lighting.draw(ctx, cam, this.lights(), { dark, color: night.color, bloom: 0.5 });
@@ -2014,8 +2518,14 @@ class DungeonRun {
   objectiveText() {
     const r = this.active;
     const w = this.world;
-    if (this.portal) return 'ENTER THE PORTAL';
-    if (!r) return '';
+    if (this.portal) return this.portal.exit ? 'LEAVE THE DUNGEON' : 'ENTER THE PORTAL';
+    if (this.props.some((pr) => pr.kind === 'gemChest' && !pr.opened)) return 'OPEN THE GEM CHEST';
+    if (!r) {
+      const me = w.localPlayer;
+      const here = me && this.floor.roomAt(me.x, me.y);
+      const stone = here?.type === 'puzzle' && this.props.find((pr) => pr.kind === 'puzzle' && pr.room === here);
+      return stone ? this.stoneText(stone) : '';
+    }
     switch (r.type) {
       case 'combat': return `DEFEAT ALL ENEMIES  WAVE ${r.wave}/${r.waves}`;
       case 'defend': return r.retry > 0 ? 'THE DEFENSE STARTS OVER...' : `DEFEND THE LANTERN  ${Math.ceil(r.timeLeft)}s`;

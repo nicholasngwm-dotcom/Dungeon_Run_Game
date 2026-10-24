@@ -249,7 +249,7 @@ class Warrior extends Player {
     this.chargeCharges--;
     if (this.chargeRecharge <= 0) this.chargeRecharge = c.cooldown;
     this.cooldowns.f = this.chargeCharges > 0 ? 0 : this.chargeRecharge;
-    this.charge = { t: 0, angle: this.aim, dashing: false, hit: new Set() };
+    this.charge = { t: 0, angle: this.aim, dashing: false, hit: new Set(), pinned: [] };
     this.busy = c.windup + c.time;
     Sound.play('chargeWindup');
   }
@@ -271,18 +271,131 @@ class Warrior extends Player {
       return;
     }
     const speed = c.distance / c.time;
-    world.dungeon.move(this, Math.cos(ch.angle) * speed * dt, Math.sin(ch.angle) * speed * dt);
+    const blocked = this.blockedAhead(world.dungeon.move(this, Math.cos(ch.angle) * speed * dt, Math.sin(ch.angle) * speed * dt), ch.angle);
+    const pin = Upgrades.has(this, 'pinningCharge') ? UPGRADE_BY_ID.pinningCharge : null;
     for (const t of world.getTargets()) {
       if (ch.hit.has(t)) continue;
       if (dist(this.hx, this.hy, t.hx, t.hy) > c.width / 2 + t.radius) continue;
       ch.hit.add(t);
+      // Pinning Charge: caught on the shield and carried along
+      const held = pin && ch.pinned.length < pin.pins && this.pinnable(t, world);
+      if (held) {
+        world.damageTarget(t, c.damage, { angle: ch.angle });
+        ch.pinned.push(held);
+        world.effects.text(t.hx, t.hy - 30, 'PINNED', { color: pin.color, size: 7 });
+        Sound.play('shieldBash', 0.05);
+        continue;
+      }
       // shove enemies to the side of the charge
       const side = angleDiff(ch.angle, angleTo(this.x, this.y, t.hx, t.hy)) >= 0 ? 1 : -1;
       world.damageTarget(t, c.damage, { angle: ch.angle + side * 1.1, knockback: c.knockback });
       t.stun?.(c.stun);
     }
+    if (ch.pinned.length && this.carryPinned(world, blocked)) return;   // smashed into a wall: the charge stops dead
     this.afterimage(world, 0.2, 0.4);
-    if (ch.t >= c.windup + c.time) this.charge = null;
+    if (ch.t >= c.windup + c.time) {
+      this.releasePinned(world);
+      this.charge = null;
+    }
+  }
+
+  // ---------- Pinning Charge (upgrade) ----------
+
+  /** True if a move's collision stopped it going the way it was headed (not just sliding along a wall). */
+  blockedAhead(hit, angle) {
+    return (hit.hitX && Math.abs(Math.cos(angle)) > 0.3) || (hit.hitY && Math.abs(Math.sin(angle)) > 0.3);
+  }
+
+  /**
+   * What the charge would carry for target t: { e, target, boss } (e is what's moved), or null.
+   * Enemies that walk (not rooted ones like gravestones) and bosses whole, though not the golem
+   * (far too heavy) or a boss's other parts (the Deathbringer's tendrils...).
+   */
+  pinnable(t, world) {
+    if (t.dead) return null;
+    if (world.isBossTarget(t)) {
+      const b = world.boss;
+      if (t !== b || b instanceof Golem || b.intro > 0 || b.dying > 0) return null;
+      return { e: b, target: t, boss: true };
+    }
+    if (!(t instanceof Enemy) || t.cfg.speed === 0) return null;
+    return { e: t, target: t, boss: false };
+  }
+
+  /**
+   * The pinned ride on the front of the shield, side by side, held helpless. Returns true if
+   * the knight or any of them hit a wall head on, which smashes them.
+   */
+  carryPinned(world, blocked) {
+    const ch = this.charge;
+    const a = ch.angle;
+    ch.pinned = ch.pinned.filter((p) => !p.target.dead && !(p.e.dying > 0));
+    const n = ch.pinned.length;
+    let wall = blocked;
+    ch.pinned.forEach((p, i) => {
+      const e = p.e;
+      const reach = 16 + (p.target.radius || 12);
+      const side = (i - (n - 1) / 2) * 20;
+      const tx = this.x + Math.cos(a) * reach - Math.sin(a) * side;
+      const ty = this.y + Math.sin(a) * reach + Math.cos(a) * side;
+      // moved as a box of its size (some bosses have no collision box of their own)
+      const box = { x: e.x, y: e.y, hw: e.hw ?? 12, hh: e.hh ?? 8, flying: e.flying };
+      if (this.blockedAhead(world.dungeon.move(box, tx - e.x, ty - e.y), a)) wall = true;
+      e.x = box.x;
+      e.y = box.y;
+      e.kbx = 0;
+      e.kby = 0;
+      if (p.boss) e.pinnedUntil = world.time + 0.15;
+      else e.stunTime = Math.max(e.stunTime || 0, 0.15);   // stunned the whole ride (past any stun resist)
+    });
+    if (!n || !wall) return false;
+    this.smashPinned(world);
+    return true;
+  }
+
+  /** Slammed into the wall: a massive hit for each of them (less for a boss), and they're left dazed. */
+  smashPinned(world) {
+    const ch = this.charge;
+    const u = UPGRADE_BY_ID.pinningCharge;
+    for (const p of ch.pinned) {
+      const t = p.target;
+      world.damageTarget(t, u.smash * (p.boss ? u.bossScale : 1), { angle: ch.angle, sound: null, color: u.color });
+      if (!p.boss && !t.dead) t.stunTime = Math.max(t.stunTime || 0, u.stun);
+      world.effects.burst(t.hx, t.hy, { count: 26, colors: ['#ffffff', '#ffe680', '#e0a83a', '#8a7a6a'], speed: [80, 260], life: [0.3, 0.7], up: 40, size: [1, 4] });
+      world.effects.smoke(t.x, t.y - 6, { count: 6, radius: 14, life: 0.6, rise: 10, colors: ['#3a3028', '#6a5a48', '#9a8a72'] });
+    }
+    // the impact: a flash and a shockwave ring at the shield's face, stone dust flying off the wall
+    const fx = this.x + Math.cos(ch.angle) * 26;
+    const fy = this.y + Math.sin(ch.angle) * 26;
+    world.effects.add(0.35, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1 - t;
+      PFX.glow(ctx, fx, fy - 10, 40 + t * 30, '255, 220, 140', 0.8, 2, (40 + t * 30) * 0.7);
+      PFX.ring(ctx, fx, fy, 12 + t * 50, (12 + t * 50) * 0.55, '#fff2a0', 2, { thick: t < 0.3 ? 3 : 2 });
+      ctx.restore();
+    });
+    world.effects.text(fx, fy - 50, 'SMASHED!', { color: u.color, size: 10, life: 1.2 });
+    Upgrades.proc(this, world, 'pinningCharge');
+    world.shake(9, 0.35);
+    Sound.play('shieldBash');
+    Sound.play('explosion', 0.05);
+    ch.pinned = [];
+    this.charge = null;
+    this.busy = 0;
+    this.knockback?.(ch.angle + Math.PI, 120);   // the knight rebounds off the impact
+  }
+
+  /** The charge ran its course without meeting a wall: the pinned tumble off the shield, dazed. */
+  releasePinned(world) {
+    const ch = this.charge;
+    for (const p of ch.pinned) {
+      if (p.target.dead) continue;
+      if (p.boss) continue;   // the boss simply gets back to it once its pin runs out
+      p.target.stunTime = Math.max(p.target.stunTime || 0, this.cfg.charge.stun);
+      p.target.knockback?.(ch.angle, this.cfg.charge.knockback * 0.6);
+    }
+    ch.pinned = [];
   }
 
   // ---------- Q: world-cutting slash ----------

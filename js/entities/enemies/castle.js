@@ -1188,11 +1188,11 @@ class CastleSorcerer extends Enemy {
 
   draw(ctx) {
     this.drawFrame(ctx, this.currentFrame(), this.anchor, this.spawnAlpha);
-    // a crystal staff, glowing while it casts
+    // its corrupted iron staff (its own, not the mage's), the shard glowing while it casts
     const f = this.facing;
     const casting = this.state === 'cast' || this.state === 'spiral';
     ctx.globalAlpha = this.spawnAlpha;
-    holdWeapon(ctx, this, Sprites.weapons.staff, casting ? -Math.PI / 2 + f * 0.2 : (f > 0 ? -1.1 : Math.PI + 1.1), 8, casting ? 0 : 6);
+    holdWeapon(ctx, this, Sprites.weapons.sorcererStaff, casting ? -Math.PI / 2 + f * 0.2 : (f > 0 ? -1.1 : Math.PI + 1.1), 8, casting ? 0 : 6);
     ctx.globalAlpha = 1;
     if (casting) {
       ctx.save();

@@ -19,7 +19,7 @@ class Game {
    * opts.roster: [{ id, name, classId }] for multiplayer; opts.localId: which one is this screen.
    */
   constructor(classId, events, opts = {}) {
-    this.events = events;          // { onGameOver(stats), onVictory(stats), onInteract(station, hero), onToast(text), onNpc(kind, run, hero) }
+    this.events = events;          // { onGameOver(stats), onVictory(stats), onInteract(station, hero), onToast(text), onNpc(kind, run, hero), onGems(n) }
     this.camera = new Camera(CONFIG.screen.width, CONFIG.screen.height);
     this.effects = new Effects();
     this.timers = [];
@@ -27,6 +27,11 @@ class Game {
     this.localId = opts.localId || this.roster[0].id;
     this.multiplayer = !!opts.roster;
     this.showcase = !!opts.showcase;   // the main menu's backdrop fights (no HUD or name tags)
+    // each player's gem enhancements, { id: { classId: count } }: from their roster entry in
+    // multiplayer, from the profile playing on this machine in single player
+    this.enh = {};
+    for (const r of this.roster) this.enh[r.id] = { ...(r.enh || {}) };
+    if (!this.multiplayer && !this.showcase) this.enh[this.roster[0].id] = { ...(Profiles.current?.enhancements || {}) };
     this.players = [];
     // a run builds its own floors (FloorMap) and sets this.dungeon
     this.run = opts.run ? new DungeonRun(this, opts.run) : null;
@@ -85,7 +90,7 @@ class Game {
 
   /** A hero for a roster entry, tagged with its network id and name. */
   makeHero(entry, classId, x, y) {
-    const p = createHero(classId, x, y);
+    const p = createHero(classId, x, y, this.enhancementsOf(entry.id, classId));
     p.netId = entry.id;
     p.name = entry.name;
     p.isBot = !!entry.bot;   // a player who dropped out mid-run, played by the AI (BotPilot)
@@ -108,6 +113,9 @@ class Game {
    */
   get player() { return this.bossFocus || this.localPlayer; }
   set player(p) { this.replaceHero(this.localPlayer, p); }
+
+  /** How many gem enhancements player `id` has for hero `classId`. */
+  enhancementsOf(id, classId) { return (this.enh[id] && this.enh[id][classId]) || 0; }
 
   replaceHero(old, p) {
     p.netId = old.netId;
@@ -303,8 +311,12 @@ class Game {
     this.enemies.push(enemy);
   }
 
-  /** Stage / wave and party-size toughness for a new enemy (addEnemy; the run's waiting first waves). */
+  /**
+   * Stage / wave and party-size toughness for a new enemy (addEnemy; the run's waiting first waves).
+   * Every one of its damage numbers is first raised by CONFIG.enemyDamage.
+   */
   scaleEnemy(enemy) {
+    if (CONFIG.enemyDamage !== 1) enemy.cfg = scaleBossDamage(enemy.cfg, CONFIG.enemyDamage);
     const s = this.enemyScale;
     if (s.hp !== 1 || s.damage !== 1) {
       const cfg = enemy.cfg;
@@ -508,6 +520,7 @@ class Game {
     Music.play('boss');
     for (const p of this.heroes) p.heal(p.maxHp * CONFIG.bossHealPercent, this);
     this.boss = Game.createBoss(type, this.dungeon.center);
+    this.boss.cfg = scaleBossDamage(this.boss.cfg, CONFIG.enemyDamage);
     this.boss.maxHp = Math.round(this.boss.maxHp * this.playerScale.hp);
     this.boss.hp = this.boss.maxHp;
     this.beginBossIntro();
@@ -627,6 +640,14 @@ class Game {
         this.swapHero(cmd.classId, hero);
         return;
       }
+      case 'enhance': {
+        // a player bought an enhancement with their gems (in the lobby): they take it on now
+        if (!this.lobby || !hero || !CONFIG.classes[cmd.classId]) return;
+        const max = CONFIG.enhancements.filter((t) => !t.locked).length;
+        this.enh[fromId] = { ...(this.enh[fromId] || {}), [cmd.classId]: clamp(Math.floor(cmd.count) || 0, 0, max) };
+        if (hero.classId === cmd.classId) this.swapHero(cmd.classId, hero);
+        return;
+      }
       case 'buy':
         if (this.run && hero) this.run.buyUpgrade(hero, cmd.upgrade);
         return;
@@ -644,6 +665,9 @@ class Game {
         return;
       case 'dropItem':
         if (hero) hero.dropItem(cmd.slot, this);
+        return;
+      case 'cheat':
+        if (hero) Cheats.apply(this, cmd, hero);
         return;
       case 'readyCheck':
         if (this.lobby && fromId === this.roster[0].id && !this.readyCheck) {
@@ -696,7 +720,7 @@ class Game {
 
   /** Lobby: a hero becomes another hero on the spot. */
   swapHero(classId, old = this.localPlayer) {
-    const p = createHero(classId, old.x, old.y);
+    const p = createHero(classId, old.x, old.y, this.enhancementsOf(old.netId, classId));
     this.replaceHero(old, p);
     this.clones = this.clones.filter((c) => c.owner !== old);
     this.barriers = this.barriers.filter((b) => b.owner !== old);
@@ -811,7 +835,7 @@ class Game {
       pr.respawn -= dt;
       if (pr.respawn <= 0) {
         const s = this.dungeon.playerStart;
-        this.player = createHero(p.classId, s.x, s.y);
+        this.player = createHero(p.classId, s.x, s.y, this.enhancementsOf(p.netId, p.classId));
         this.clones = [];
         this.barriers = [];
       }
@@ -824,6 +848,7 @@ class Game {
     return {
       time: `${m}:${s}`, kills: this.kills, wave: this.director.waveNumber, defeatText: this.defeatText,
       stage: this.run ? this.run.stage : null, theme: this.run ? this.run.theme.name : null,
+      gems: this.gemsEarned || 0, dungeon: !!this.run && !this.run.practiceBoss,
     };
   }
 
@@ -889,7 +914,8 @@ class Game {
         }
       }
       if (this.cutscene) this.updateCutscene(dt);
-      else if (!(this.boss.sleepUntil > this.time) && !frozen) this.boss.update(dt, this);
+      // pinned to a Knight's shield (Pinning Charge), it's held there, helpless
+      else if (!(this.boss.sleepUntil > this.time) && !frozen && !(this.boss.pinnedUntil > this.time)) this.boss.update(dt, this);
       this.weakenScale = Projectile.enemyScale = 1;
       this.bossFocus = null;
       if (this.boss.dead) this.boss = null;
@@ -919,7 +945,7 @@ class Game {
     for (const e of dead) if (this.players.includes(e.lastHitBy) && !e.exploded) Game.statsOf(e.lastHitBy).kills++;
     for (const e of dead) {
       const killer = this.players.includes(e.lastHitBy) ? e.lastHitBy : this.players[0];
-      killer.onKill(this);
+      killer.onKill(this, e);
     }
     // scoreboard: a hero going down counts as a death
     for (const p of this.players) {
@@ -952,9 +978,18 @@ class Game {
 
     if (!this.finished && !this.practice && this.players.every((p) => p.dead)) {
       this.finished = true;
+      this.wiped = true;   // the revive cheat can undo this
+      // a wiped dungeon run still pays gems for how far it got (each machine banks them on its own player's profile);
+      // wiped again after a revive cheat, it only pays for the progress since
+      if (this.run) {
+        const earned = this.run.gemsForProgress();
+        const more = earned - (this.gemsEarned || 0);
+        this.gemsEarned = Math.max(earned, this.gemsEarned || 0);
+        if (more > 0) this.events.onGems?.(more);
+      }
       Music.stop();
       Sound.play('defeat');
-      this.after(1.8, () => this.events.onGameOver(this.stats));
+      this.after(1.8, () => { if (this.wiped) this.events.onGameOver(this.stats); });
     }
   }
 
@@ -977,6 +1012,12 @@ class Game {
     }
     p.reviveTarget = body;   // for the prompt over the body
     if (!body) return;
+    // the Priestess's Resurrect: one press and they're up (once a stage)
+    if (Input.pressed('interact') && Upgrades.canResurrect(p)) {
+      Input.consume('interact');
+      Upgrades.resurrect(p, body, this);
+      return;
+    }
     if (Input.pressed('interact')) Input.consume('interact');
     if (!Input.down('interact') || (body.revivedBy && body.revivedBy !== p)) return;
     body.revivedBy = p;
@@ -1188,7 +1229,8 @@ class Game {
     const body = !me.dead && me.reviveTarget;
     if (body) {
       const helping = body.reviveProgress > 0;
-      const text = helping ? `REVIVING ${body.name.toUpperCase()}... ${Math.floor((body.reviveProgress / CONFIG.multiplayer.revive.time) * 100)}%` : `HOLD [${Settings.label('interact')}] TO REVIVE`;
+      const text = helping ? `REVIVING ${body.name.toUpperCase()}... ${Math.floor((body.reviveProgress / CONFIG.multiplayer.revive.time) * 100)}%`
+        : Upgrades.canResurrect(me) ? `[${Settings.label('interact')}] RESURRECT` : `HOLD [${Settings.label('interact')}] TO REVIVE`;
       HUD.text(ctx, text, Math.round(body.x), Math.round(body.y + 14), { size: 7, align: 'center', color: '#8cff9a' });
     }
     for (const p of this.players) {

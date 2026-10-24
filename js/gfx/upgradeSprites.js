@@ -236,6 +236,16 @@ function buildUpgradeSprites() {
     ring(p, 10, 10, 9, '#8ab8ff', 2, 0.9);
     kite(p, 4, 3, R[3], S[3], S[5]);
   });
+  U.pinningCharge = icon((p) => {
+    // the shield driving into a wall, impact lines and a dazed star off it
+    p.rect(16, 1, 3, 18, S[1]);
+    for (const y of [4, 9, 14]) p.rect(16, y, 3, 1, S[0]);
+    kite(p, 3, 3, R[3], S[3], S[5]);
+    for (const [x0, y0, x1, y1] of [[15, 2, 13, 0], [15, 17, 13, 19]]) p.line(x0, y0, x1, y1, G[3], 1);
+    p.line(1, 9, 3, 9, '#e0a83a', 1);
+    p.line(0, 13, 3, 12, '#e0a83a', 1);
+    star(p, 4, 2, 2, G[3], '#ffffff');
+  });
   U.razorArrows = icon((p) => {
     p.line(2, 18, 11, 9, L[4], 2);
     p.poly([[9, 5], [16, 2], [14, 7], [17, 8], [12, 12], [12, 9]], S[4]);
@@ -294,6 +304,19 @@ function buildUpgradeSprites() {
     p.circle(10, 10, 3, '#fff6c8');
     p.rect(9, 9, 2, 2, '#ffffff');
   });
+  U.resurrect = icon((p) => {
+    // a soul rising in a shaft of light, a halo over it
+    p.poly([[5, 19], [7, 4], [13, 4], [15, 19]], G[1]);
+    p.ellipse(10, 4, 5, 2, '#ffe680');
+    p.ellipse(10, 4, 3, 1, '#a07a24');
+    p.circle(10, 9, 3, '#fff6c8');
+    p.poly([[6, 18], [7.5, 12], [12.5, 12], [14, 18]], '#fff6c8');
+    p.line(7, 13, 3, 10, '#ffffff', 1);
+    p.line(13, 13, 17, 10, '#ffffff', 1);
+    p.rect(9, 8, 1, 1, '#a07a24');
+    p.rect(11, 8, 1, 1, '#a07a24');
+    star(p, 16, 4, 2, '#ffffff', '#ffe680');
+  });
   U.groggy = icon((p) => {
     // a sleepy crescent moon (a circle with a bite taken out) and its z's
     p.circle(7, 12, 6, '#e0d8ff');
@@ -306,6 +329,24 @@ function buildUpgradeSprites() {
     p.rect(14, 10, 4, 1, VIOLET[3]);
     p.line(17, 11, 14, 13, VIOLET[3], 1);
     p.rect(14, 13, 4, 1, VIOLET[3]);
+  });
+  U.warSong = icon((p) => {
+    // a bold music note inside a ring of shield
+    ring(p, 10, 10, 9, '#ff9a5a', 2, 0.9);
+    p.circle(7, 14, 3, '#ffb07a');
+    p.circle(13, 12, 3, '#ffb07a');
+    p.rect(9, 4, 2, 10, '#ffb07a');
+    p.rect(15, 2, 2, 10, '#ffb07a');
+    p.poly([[9, 4], [17, 2], [17, 5], [9, 7]], '#ff9a5a');
+    p.rect(6, 13, 1, 1, '#ffffff');
+    p.rect(12, 11, 1, 1, '#ffffff');
+  });
+  U.rapidReload = icon((p) => {
+    // a rocket with a reload arrow curling round it
+    for (let a = 0.4; a < TAU - 1.2; a += 0.35) p.rect(10 + Math.cos(a) * 8, 10 + Math.sin(a) * 8, 2, 2, '#ffb84a');
+    p.poly([[14, 1], [19, 3], [15, 6]], '#ffb84a');
+    rocket(p, 8, 4, '#c8342a');
+    star(p, 4, 15, 2, G[3], '#ffffff');
   });
   U.incendiary = icon((p) => {
     flame(p, 8, 19, 5, 9);

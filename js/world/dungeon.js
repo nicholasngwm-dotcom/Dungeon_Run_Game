@@ -213,7 +213,14 @@ class Dungeon {
    * candelabra, which heroes and enemies bump into (fliers and shots pass over).
    */
   addPost(x, y, hw, hh) {
-    (this.posts ||= []).push({ x, y, hw, hh });
+    const post = { x, y, hw, hh };
+    (this.posts ||= []).push(post);
+    return post;
+  }
+
+  /** Takes a post away again (a barrel that burst). */
+  removePost(post) {
+    if (this.posts) this.posts = this.posts.filter((o) => o !== post);
   }
 
   /** True if a hw/hh box at (x, y) overlaps any post. */

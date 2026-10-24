@@ -51,6 +51,10 @@ class Player extends Entity {
     this.abilityHaste = 1;        // RMB / E / F cooldowns recover this much faster
     this.upgradeDamage = 1;       // all damage dealt
     this.bonusRegen = 0;          // hp per second, always on (even while taking hits)
+    // gem enhancements from the player's profile (see applyEnhancements)
+    this.enhancements = 0;        // how many this hero has
+    this.bonusCrit = 0;           // added to crit chance
+    this.dodgeCut = 0;            // seconds off the dodge's cooldown
     // dungeon runs: each hero has their own purse and shop upgrades
     this.coins = 0;
     this.coinFlash = 0;
@@ -95,8 +99,11 @@ class Player extends Entity {
   /** The value of a running potion effect (0 when none). */
   brew(family) { return this.brews[family] ? this.brews[family].v : 0; }
 
-  /** Crit chance: the hero's base rate (CONFIG.classes[id].crit, or the shared one) plus Focus potions (doubled standing still with Deadly Precision). */
-  get critChance() { return ((this.cfg.crit?.chance ?? CONFIG.player.critChance) + this.brew('focus')) * Upgrades.critScale(this); }
+  /**
+   * Crit chance: the hero's base rate (CONFIG.classes[id].crit, or the shared one) plus their
+   * enhancement and Focus potions (doubled standing still with Deadly Precision).
+   */
+  get critChance() { return ((this.cfg.crit?.chance ?? CONFIG.player.critChance) + this.bonusCrit + this.brew('focus')) * Upgrades.critScale(this); }
 
   /** Crit damage: this hero's own (CONFIG.classes[id].crit), or the shared one (doubled standing still with Deadly Precision). */
   get critMultiplier() { return (this.cfg.crit?.multiplier ?? CONFIG.player.critMultiplier) * Upgrades.critScale(this); }
@@ -142,12 +149,26 @@ class Player extends Entity {
     this.updatePoison(dt, world);
     this.updateAilments(dt, world);
     this.stunTime -= dt;
+    if (this.frozenTime > 0) {
+      this.frozenTime -= dt;
+      if (this.frozenTime <= 0 || this.stunTime <= 0) {
+        // the ice shatters off them
+        this.frozenTime = 0;
+        world.effects.shards(this.x, this.y - 16, { count: 14, speed: [80, 200], life: 0.45, len: [6, 12], width: 5 });
+        Sound.play('glass', 0.05);
+      }
+    }
     this.tuneSpeed -= dt;
     this.inspired -= dt;
     if (this.aegis) {
       this.aegis.t -= dt;
       this.aegis.flash -= dt;
       if (this.aegis.t <= 0) this.aegis = null;
+    }
+    if (this.songShield) {
+      this.songShield.t -= dt;
+      this.songShield.flash -= dt;
+      if (this.songShield.t <= 0) this.songShield = null;
     }
     for (let i = 0; i < this.inventory.length; i++) if (Input.pressed(`item${i + 1}`)) this.useItem(i, world);
     this.busy -= dt;
@@ -486,8 +507,65 @@ class Player extends Entity {
     this.busy = Math.max(this.busy, duration);
   }
 
-  /** Spinning stars over a stunned hero. */
+  /**
+   * Frozen solid (a frost barrel, its ice): can't move or act for `duration`s, locked in a
+   * block of ice. Returns false if it didn't take (dodging, guarded, Heart of Frost...).
+   */
+  freeze(duration, world) {
+    if (this.dead || this.guard > 0 || this.iframes > 0 || this.brews.purity) return false;
+    if (Upgrades.blocksChill(this, world)) return false;
+    world?.effects.text(this.hx, this.hy - 36, 'FROZEN', { color: '#9ad0ff', size: 8 });
+    this.stunTime = Math.max(this.stunTime, duration);
+    this.busy = Math.max(this.busy, duration);
+    this.frozenTime = Math.max(this.frozenTime || 0, duration);
+    this.dodge = null;
+    this.kbx = this.kby = 0;
+    Sound.play('iceBurst', 0.1);
+    return true;
+  }
+
+  /** A frozen hero: a jagged block of ice round them, lit facets, frost at their feet; it cracks as it thaws. */
+  drawIceBlock(ctx) {
+    const x = Math.round(this.x);
+    const y = Math.round(this.y);
+    const k = clamp(this.frozenTime / 0.4, 0, 1);   // fading the last moment before it shatters
+    ctx.save();
+    ctx.globalAlpha = 0.5 + 0.25 * k;
+    const top = y - 40;
+    ctx.fillStyle = OUTLINE;
+    ctx.beginPath();
+    ctx.moveTo(x - 15, y + 3); ctx.lineTo(x - 16, top + 10); ctx.lineTo(x - 8, top); ctx.lineTo(x - 1, top + 6);
+    ctx.lineTo(x + 7, top - 2); ctx.lineTo(x + 16, top + 9); ctx.lineTo(x + 15, y + 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#9ad0ff';
+    ctx.beginPath();
+    ctx.moveTo(x - 14, y + 2); ctx.lineTo(x - 15, top + 11); ctx.lineTo(x - 8, top + 2); ctx.lineTo(x - 1, top + 8);
+    ctx.lineTo(x + 7, top); ctx.lineTo(x + 15, top + 10); ctx.lineTo(x + 14, y + 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 0.7 * k + 0.2;
+    ctx.fillStyle = '#e6f6ff';   // lit facet, top left
+    ctx.fillRect(x - 13, top + 12, 3, 22);
+    ctx.fillRect(x - 9, top + 5, 2, 8);
+    ctx.fillStyle = '#5a9ad0';   // shaded side
+    ctx.fillRect(x + 10, top + 12, 3, 26);
+    // a glint sweeping across
+    const gx = x - 12 + ((this.animTime * 30) % 28);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(Math.round(gx), top + 14, 2, 2);
+    ctx.fillRect(Math.round(gx) + 1, top + 18, 1, 3);
+    ctx.restore();
+    // frost on the floor round the block
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    PFX.disc(ctx, x, y + 2, 18, 6, '#e6f6ff');
+    ctx.restore();
+  }
+
+  /** Spinning stars over a stunned hero (a block of ice if frozen). */
   drawStatus(ctx) {
+    if (this.frozenTime > 0) return this.drawIceBlock(ctx);
     if (!(this.stunTime > 0)) return;
     const y = this.y - 50;
     for (let i = 0; i < 3; i++) {
@@ -525,6 +603,44 @@ class Player extends Entity {
       Sound.play('partBreak');
     }
     return amount - soaked;
+  }
+
+  /**
+   * War Song shield (the Bard's): a warm amber shimmer round the hero with music notes
+   * circling it, and a small hp bar (under the aegis's, if they have both).
+   */
+  drawSongShield(ctx) {
+    const s = this.songShield;
+    if (!s) return;
+    const fade = Math.min(1, s.t * 2);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = fade;
+    PFX.disc(ctx, this.x, this.y - 16, 19, 25, s.flash > 0 ? 'rgba(255, 220, 180, 0.35)' : 'rgba(255, 150, 90, 0.1)', 2);
+    PFX.ring(ctx, this.x, this.y - 16, 19, 25, `rgba(255, 170, 100, ${0.55 + Math.sin(this.animTime * 8) * 0.2})`, 2, { dash: [4, 3], spin: this.animTime * 1.5 });
+    ctx.restore();
+    // two little notes riding round the shield
+    ctx.globalAlpha = fade;
+    for (let i = 0; i < 2; i++) {
+      const a = this.animTime * 2 + i * Math.PI;
+      const nx = Math.round(this.x + Math.cos(a) * 20);
+      const ny = Math.round(this.y - 16 + Math.sin(a) * 25);
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(nx - 2, ny - 1, 4, 4);
+      ctx.fillRect(nx + 1, ny - 6, 2, 6);
+      ctx.fillStyle = '#ffb07a';
+      ctx.fillRect(nx - 1, ny, 2, 2);
+      ctx.fillRect(nx + 1, ny - 5, 1, 5);
+      ctx.fillRect(nx + 2, ny - 5, 1, 1);
+    }
+    ctx.globalAlpha = 1;
+    const w = 30;
+    const bx = Math.round(this.x - w / 2);
+    const by = Math.round(this.y - (this.aegis ? 45 : 50));
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(bx - 1, by - 1, w + 2, 5);
+    ctx.fillStyle = '#ff9a5a';
+    ctx.fillRect(bx, by, Math.round(w * clamp(s.hp / s.maxHp, 0, 1)), 3);
   }
 
   /** Golden bubble around the hero with a small hp bar. */
@@ -568,6 +684,7 @@ class Player extends Entity {
     if (amount < 0) { this.lastBlocked = false; return false; }
     if (amount <= 0) return true;
     amount = this.absorbAegis(amount, world);
+    amount = Upgrades.absorbSongShield(this, amount, world);   // the Bard's War Song
     amount = this.absorb(amount, world, fromX, fromY, opts);
     if (amount <= 0) {
       this.guard = this.absorbGuardTime;
@@ -693,7 +810,7 @@ class Player extends Entity {
   drawPassive() {}
 
   /** Shorter for the Archer (Agility). */
-  get dodgeCooldown() { return this.cfg.passive?.dodgeCooldown ?? CONFIG.player.dodge.cooldown; }
+  get dodgeCooldown() { return Math.max(0.3, (this.cfg.passive?.dodgeCooldown ?? CONFIG.player.dodge.cooldown) - (this.dodgeCut || 0)); }
 
   /** True while passive regen is ticking. */
   get regenerating() {
@@ -1119,15 +1236,30 @@ class Player extends Entity {
     this.drawBrews(ctx);
     this.drawPassive(ctx);
     this.drawAegis(ctx);
+    this.drawSongShield(ctx);
     Upgrades.drawOver(this, ctx, this.animTime);
     this.drawStatus(ctx);
   }
 }
 
-/** Factory used by the game to create the chosen hero. */
-function createHero(classId, x, y) {
+/** Factory used by the game to create the chosen hero, with the first `enhancements` of CONFIG.enhancements. */
+function createHero(classId, x, y, enhancements = 0) {
   const classes = { warrior: Warrior, ranger: Ranger, mage: Mage, rogue: Rogue, priestess: Priestess, bard: Bard, rocketeer: Rocketeer, baker: Baker };
-  return new classes[classId](x, y);
+  const p = new classes[classId](x, y);
+  applyEnhancements(p, enhancements);
+  return p;
+}
+
+/** A new hero takes its gem enhancements: the first n of CONFIG.enhancements (the locked ability tree does nothing yet). */
+function applyEnhancements(p, n) {
+  p.enhancements = n;
+  for (const t of CONFIG.enhancements.slice(0, n)) {
+    if (t.hp) { p.maxHp += t.hp; p.hp = p.maxHp; }
+    if (t.speed) p.speed += t.speed;
+    if (t.crit) p.bonusCrit += t.crit;
+    if (t.dodge) { p.dodgeCut += t.dodge; p.maxCooldowns.dodge = p.dodgeCooldown; }
+    if (t.cooldowns) p.abilityHaste /= 1 - t.cooldowns;   // 25% shorter = recovering 1/0.75 as fast
+  }
 }
 
 /**

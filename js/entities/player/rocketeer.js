@@ -217,6 +217,11 @@ class Rocketeer extends Player {
     return r.value < r.max && this.sinceShot >= r.reloadDelay && !this.jumpCharge && !this.jump && !this.dead;
   }
 
+  /** His own kills feed the launcher (Rapid Rocket Reload). */
+  onKill(world, e) {
+    if (e?.lastHitBy === this) Upgrades.rapidReload(this, world);
+  }
+
   /** The open back end of the launcher tube, where rockets slide in (follows the drawn weapon). */
   tubeBack() {
     const a = this.weaponAngle();

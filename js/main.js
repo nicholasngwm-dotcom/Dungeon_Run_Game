@@ -9,9 +9,11 @@
 //   ?run=graveyard       start a set-dungeon run (?run=castle, or ?run=random for random mode; &stage=2 or 3 to skip ahead)
 //   ?run=graveyard&visit=special&special=blacksmith   start inside a room type (shop, special, boss...),
 //                        optionally forcing which special room it is
+//
+// In game, ` opens the cheat console (gems, coins, revive, kill, upgrades): see js/game/cheats.js
 
 const App = {
-  state: 'menu',     // menu | playing (lobby or run) | panel (lobby station open) | paused | ended
+  state: 'menu',     // menu | playing (lobby or run) | panel (lobby station open) | paused | ended | cheats (the cheat console is open)
   game: null,
   classId: 'warrior',   // hero used in the lobby and runs (picked at a lobby statue)
   lastTime: 0,
@@ -34,10 +36,10 @@ const App = {
     // the sprites take a moment to draw: one batch per frame, so the loader's fire keeps burning
     const steps = [
       ['Forging the heroes...', buildHeroSprites],
-      ['Raising the dead...', () => { buildEnemySprites(); buildBossSprites(); buildPhantomSprites(); buildDeathbringerSprites(); }],
+      ['Raising the dead...', () => { buildEnemySprites(); buildBossSprites(); buildPhantomSprites(); buildDeathbringerSprites(); buildManorSprites(); buildVaultSprites(); }],
       ['Sharpening the blades...', () => { buildItemSprites(); buildGraveyardSprites(); }],   // graveyard after the items: it adds to Sprites.projectiles
       ['Crowning the court...', () => { buildCastleSprites(); buildQueenSprites(); buildKingSprites(); buildRoyalSetPieces(); buildCastleDecor(); }],
-      ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); buildObstacleSprites(); }],   // obstacles after the cover (they add to Sprites.cover)
+      ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); buildObstacleSprites(); buildBarrelSprites(); }],   // obstacles after the cover (they add to Sprites.cover)
       ['Brewing potions...', () => { buildPotionSprites(); buildIconSprites(); buildRocketeerSprites(); buildBakerSprites(); buildUpgradeSprites(); }],   // the rocketeer's and baker's gear add to the weapons, items and icons
       ['Rehearsing the battles...', () => MenuShowcase.start(0)],
     ];
@@ -53,6 +55,7 @@ const App = {
 
     Input.init(this.canvas);
     Menus.init(this);
+    Cheats.init(this);
 
     // Browsers only allow audio after a user gesture.
     const unlock = () => {
@@ -123,9 +126,16 @@ const App = {
   get events() {
     return {
       onGameOver: (stats) => this.endGame(false, stats),
+      // the revive cheat undid a party wipe: back into the game from the end screen
+      onRevived: () => {
+        if (this.state !== 'ended') return;
+        this.state = Cheats.isOpen ? 'cheats' : 'playing';
+        Menus.show(null);
+      },
       onVictory: (stats) => this.endGame(true, stats),
       onInteract: (station, hero) => this.interact(station, hero),
       onToast: (text) => Menus.toast(text, '#ffe680'),
+      onGems: (n) => Profiles.addGems(n),   // banked on this machine's profile (in multiplayer every machine gets the event)
       onNpc: (kind, run, hero) => this.talkTo(kind, run, hero),
       onPurchase: (hero, what, ok) => Shop.onPurchase(hero, what, ok),
       onBossArena: (boss) => this.startBossPractice(boss),
@@ -251,10 +261,26 @@ const App = {
     this.closePanel();
   },
 
+  /**
+   * Hero panel: buys hero `classId`'s next gem enhancement with this profile's gems. Every
+   * machine is told (a command), so whoever is that hero right now takes it on straight away.
+   */
+  buyEnhancement(classId) {
+    const t = Profiles.buyEnhancement(classId);
+    if (!t) {
+      Menus.toast('NOT ENOUGH GEMS', '#e04545');
+      return;
+    }
+    Sound.play('pickup');
+    Menus.toast(`${CONFIG.classes[classId].name.toUpperCase()}: ${t.name.toUpperCase()}`, '#8ac8ff');
+    this.command({ type: 'enhance', classId, count: Profiles.enhancementCount(classId) });
+    Menus.showEnhanced(classId);   // the stats it raised, before and after
+  },
+
   // ---------- multiplayer ----------
 
   openMultiplayer() {
-    Menus.showMultiplayer(Settings.data.name || '');
+    Menus.showMultiplayer(Profiles.current?.name || Settings.data.name || '');
   },
 
   /** Name from the multiplayer screen (saved for next time). */

@@ -293,6 +293,35 @@ function buildCastleWeapons() {
       p.line(72, 6, 83, 6, CK.steel[5]);
       p.poly([[60, 5], [70, 5], [66, 1], [56, 0]], CK.crimson[3]);  // pennon
     }),
+    // the castle sorcerer's staff (not the mage's wood and brass): a shaft of blackened iron
+    // wound with thorns and a crimson grip, its head an iron claw clutching a jagged violet
+    // shard of the keep's corruption
+    sorcererStaff: weapon(50, 18, 10, 9, (p) => {
+      p.rect(0, 8, 34, 3, CK.steel[1]);
+      p.rect(0, 8, 34, 1, CK.steel[3]);
+      p.rect(8, 7, 6, 5, CK.crimson[2]);                     // the grip
+      p.rect(8, 7, 6, 1, CK.crimson[3]);
+      for (const x of [18, 24, 30]) {                        // thorns along the shaft
+        p.px(x, 7, CK.steel[2]);
+        p.px(x + 1, 6, CK.steel[3]);
+        p.px(x + 2, 11, CK.steel[2]);
+        p.px(x + 3, 12, CK.steel[3]);
+      }
+      p.poly([[0, 7], [3, 9.5], [0, 12]], CK.steel[2]);      // a spiked iron butt
+      // the claw: three iron talons curling round the shard
+      p.rect(33, 7, 3, 5, CK.steel[2]);
+      p.poly([[35, 7], [40, 1], [42, 2], [38, 8]], CK.steel[2]);
+      p.poly([[35, 11], [40, 17], [42, 16], [38, 10]], CK.steel[2]);
+      p.poly([[36, 9], [46, 8], [46, 10]], CK.steel[1]);
+      // the shard: a jagged violet crystal, lit on its upper face
+      p.poly([[38, 9], [41, 3], [45, 5], [49, 9], [44, 14], [40, 13]], CK.violet[3]);
+      p.poly([[38, 9], [41, 3], [45, 5], [43, 9]], CK.violet[4]);
+      p.poly([[43, 9], [49, 9], [44, 14]], CK.violet[2]);
+      p.px(41, 5, '#ffffff');
+      p.px(42, 6, '#e0c8ff');
+      p.rect(40, 1, 2, 1, CK.steel[4]);                      // talon tips
+      p.rect(40, 17, 2, 1, CK.steel[4]);
+    }),
     // the bishop's crosier: a tall staff with a gilded crook
     crosier: weapon(52, 16, 10, 8, (p) => {
       p.rect(0, 7, 40, 3, G[2]);

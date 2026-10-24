@@ -116,6 +116,7 @@ class Bard extends Player {
     for (const a of world.heroes) {
       if (dist(a.x, a.y, this.x, this.y) > r) continue;
       a.inspired = c.duration;
+      Upgrades.warSong(this, a, world);
       world.effects.text(a.hx, a.hy - 36, 'INSPIRED!', { color: '#ffd34a', size: 8 });
       world.effects.burst(a.hx, a.hy, { count: 14, colors: ['#ffffff', '#fff2a0', '#ffd34a'], speed: [50, 150], life: [0.3, 0.6], up: 50 });
       // a column of golden light rising over each hero as the inspiration lands

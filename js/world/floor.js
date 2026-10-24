@@ -15,7 +15,7 @@ const ZONE = { WALL: 0, ROOM: 1, HALL: 2 };
 
 // floor size (tiles) per room type: [w, h] or [[wMin, wMax], [hMin, hMax]]
 const ROOM_SIZES = {
-  start: [16, 12], boss: [30, 21], shop: [21, 13], special: [16, 12], secret: [15, 11], puzzle: [18, 14],
+  start: [16, 12], boss: [30, 21], shop: [21, 13], special: [16, 12], secret: [15, 11], puzzle: [18, 14], vault: [18, 13],
   combat: [[23, 28], [16, 19]], defend: [[27, 30], [19, 21]], survival: [[28, 30], [19, 21]],
 };
 const MAX_CHUNKS = 48;            // painted chunks kept around (the least recently drawn go first)
@@ -24,6 +24,8 @@ class FloorMap extends Dungeon {
   /**
    * opts.boss: the stage boss (the castle paints its boss room as her garden or his throne room).
    * opts.practice: a boss practice floor (from the practice range): only the start room and the boss room.
+   * opts.vault: the run's last floor: it also has the gem vault, sealed off like the secret room (the
+   *   last boss's blue portal is the way in).
    */
   constructor(stage, themeId, seed = Math.floor(Math.random() * 1e9), opts = {}) {
     super({ custom: true });
@@ -32,6 +34,7 @@ class FloorMap extends Dungeon {
     this.themeId = themeId;
     this.bossType = opts.boss || null;
     this.practice = !!opts.practice;   // boss practice: just a small entrance room and the boss's room
+    this.hasVault = !!opts.vault && !this.practice;
     this.seed = seed;
     this.T = CONFIG.tileSize;
     this.cols = g.cols * g.cellW + 2;
@@ -118,8 +121,9 @@ class FloorMap extends Dungeon {
     start.type = 'start';
     const depth = this.bfs(start);
     const leaves = this.rooms.filter((r) => r !== start && r.links.length === 1).sort((a, b) => depth[b.id] - depth[a.id]);
-    // the throne room and the study are entered from the side or from below, never through the wall behind the throne (or her desk)
-    const fits = (r) => !['king', 'princess', 'prince'].includes(this.bossType) || !r.links.some((id) => this.rooms[id].gy < r.gy);
+    // the throne room, the study and the manor's hall are entered from the side or from below, never
+    // through the wall behind the throne (or her desk, or the grand staircase)
+    const fits = (r) => !['king', 'princess', 'prince', 'phantom'].includes(this.bossType) || !r.links.some((id) => this.rooms[id].gy < r.gy);
     const boss = leaves.find(fits) || this.rooms.filter((r) => r !== start && fits(r)).sort((a, b) => depth[b.id] - depth[a.id])[0];
     if (!boss) return false;
     if (leaves.includes(boss)) leaves.splice(leaves.indexOf(boss), 1);
@@ -159,6 +163,13 @@ class FloorMap extends Dungeon {
     if (empty.length && this.rooms.some((r) => r.type === 'combat')) {
       const [cx, cy] = choose(empty);
       addRoom(cx, cy).type = 'secret';
+    }
+    // the gem vault (last floor only): another room on its own, reached by the last boss's portal
+    if (this.hasVault) {
+      const free = empty.filter(([cx, cy]) => !cells.has(key(cx, cy)));
+      if (!free.length) return false;
+      const [cx, cy] = choose(free);
+      addRoom(cx, cy).type = 'vault';
     }
     return true;
   }
@@ -271,7 +282,7 @@ class FloorMap extends Dungeon {
   placeTorches() {
     const T = this.T;
     for (const r of this.rooms) {
-      if (this.themeId === 'castle' && r.type === 'boss') continue;   // the garden and the throne room have their own lights
+      if (r.type === 'boss' && (this.themeId === 'castle' || this.manor)) continue;   // the garden, the throne room and the manor have their own lights
       for (let tx = r.x0 + 2; tx <= r.x1 - 2; tx += 5) {
         if (this.grid[r.y0 - 1][tx] !== TILE.WALL || this.grid[r.y0 - 2][tx] !== TILE.WALL) continue;
         this.torches.push({ tx, ty: r.y0 - 2, x: tx * T + 16, y: (r.y0 - 2) * T + 8, seed: Math.random() * 10 });
@@ -374,8 +385,12 @@ class FloorMap extends Dungeon {
         const y = ty * T;
         if (B(tx, ty) === TILE.FLOOR) {
           const zone = this.zone[this.idx(tx, ty)];
-          if (castle) {
+          if (zone === ZONE.ROOM && this.hasVault && this.nearRoom(this.vaultRoom, tx, ty)) {
+            VaultTiles.floor(p, x, y, rng, tx, ty);
+          } else if (castle) {
             this.castleFloor(p, tx, ty, zone, rng);
+          } else if (this.manor && this.nearRoom(this.bossRoom, tx, ty)) {
+            this.manorFloor(p, tx, ty, rng);
           } else if (grave && zone === ZONE.ROOM) {
             Grave.grass(p, x, y, rng);
             // the Deathbringer's room: withered, darker grass and more graves, of dark stone plated in gold
@@ -403,6 +418,9 @@ class FloorMap extends Dungeon {
         const edges = { left: B(tx - 1, ty) === TILE.FLOOR, right: B(tx + 1, ty) === TILE.FLOOR, up: B(tx, ty - 1) === TILE.FLOOR, down: false };
         if (castle) {
           this.castleWall(p, tx, ty, below1 ? 1 : below2 ? 0 : -1, edges, rng);
+        } else if (this.manor && this.nearRoom(this.bossRoom, tx, ty, 1, 1)) {
+          if (below1 || below2) ManorTiles.wallFace(p, x, y, below1 ? 1 : 0, rng, tx);
+          else ManorTiles.wallTop(p, x, y, rng, edges);
         } else if (grave && (below1 || below2)) {
           Grave.wallFace(p, x, y, below1 ? 1 : 0, rng);
         } else if (grave) {
@@ -430,6 +448,19 @@ class FloorMap extends Dungeon {
   // ---------- the castle's look (see CastleTiles) ----------
 
   get bossRoom() { return this.rooms.find((r) => r.type === 'boss'); }
+  get vaultRoom() { return this.rooms.find((r) => r.type === 'vault'); }
+
+  /** True if the boss room is the Phantom King's haunted manor hall (see ManorTiles, ManorDecor). */
+  get manor() { return this.themeId === 'graveyard' && this.bossType === 'phantom'; }
+
+  /** The manor's hall: dark old floorboards, with the runner from the doors up to the stairs. */
+  manorFloor(p, tx, ty, rng) {
+    const T = this.T;
+    const boss = this.bossRoom;
+    const off = tx + 0.5 - (boss.x0 + boss.x1 + 1) / 2;   // the tile's centre from the room's centre line, in tiles
+    if (Math.abs(off) < 2 && ty >= boss.y0 + 4) ManorTiles.runner(p, tx * T, ty * T, rng, off);
+    else ManorTiles.floor(p, tx * T, ty * T, rng, tx, ty);
+  }
 
   /** True if tile (tx, ty) is inside room r grown by `pad` tiles (and `top` more above, for the tall back wall). */
   nearRoom(r, tx, ty, pad = 0, top = 0) {

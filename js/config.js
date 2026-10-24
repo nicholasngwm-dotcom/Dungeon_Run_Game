@@ -26,6 +26,30 @@ const CONFIG = {
     regen: { delay: 4, hpPerSecond: 0.2 },
   },
 
+  // Every enemy and boss hits this much harder (all their damage numbers), to make up for the
+  // heroes' enhancements. Stacks with the stage's own damage scaling.
+  enemyDamage: 1.3,
+
+  // ---------------------------------------------------------
+  //  GEMS & HERO ENHANCEMENTS (saved on the player's profile)
+  // ---------------------------------------------------------
+  gems: {
+    win: 400,          // the gem vault's chest after the last boss of a run
+    // a run that ends in a wipe pays for how far it got: deathShare of `win`, times the share of
+    // the run done (each stage a third; within a stage its rooms are roomShare, its boss the rest)
+    deathShare: 0.75,
+    roomShare: 0.75,
+  },
+  // bought in order, each hero on their own track, with gems from beating dungeons
+  enhancements: [
+    { id: 'hp', name: 'Vitality', desc: '+50 max health', cost: 100, hp: 50 },
+    { id: 'speed', name: 'Swiftness', desc: '+20 movement speed', cost: 500, speed: 20 },
+    { id: 'crit', name: 'Keen Eye', desc: '+5% critical hit chance', cost: 1000, crit: 0.05 },
+    { id: 'dodge', name: 'Light Step', desc: 'Dodge recharges 0.2 seconds faster', cost: 2000, dodge: 0.2 },
+    { id: 'cooldowns', name: 'Mastery', desc: 'Ability cooldowns 25% shorter', cost: 3500, cooldowns: 0.25 },
+    { id: 'tree', name: 'Ability Tree', desc: 'Shape how this hero\'s abilities work', cost: 5000, locked: true },
+  ],
+
   // ---------------------------------------------------------
   //  HERO CLASSES
   //  ult.charge = damage the hero must deal to fill the Q ultimate
@@ -627,6 +651,13 @@ const CONFIG = {
     // wishing well: each coin tossed in has `chance` to grant a wish (guaranteed on the pity-th coin);
     // a wish is one random kind of potion, potions[0]-potions[1] of it (or, upgradeChance of the time, a random upgrade). One wish per hero per well
     well: { chance: 0.15, pity: 12, potions: [2, 6], upgradeChance: 0.15 },
+    // puzzle room (Simon's stone): it lights a pattern of its four colours, `show`s each with a `gap` between,
+    // and the heroes step on the matching floor plates in order. lengths: the pattern's length for each round;
+    // `wins` right answers give every hero a free random upgrade. `strikes` mistakes and the stone blinks red
+    // for `fuse` seconds, then blows up the whole room for blastDamage, leaving it burning (fire: each patch's
+    // radius, how long it burns, and the burn it sets on whoever stands in it)
+    puzzle: { lengths: [4, 5, 6], wins: 3, strikes: 3, show: 0.5, gap: 0.2, fuse: 3, blastDamage: 180,
+              fire: { radius: 52, life: 12, burnDps: 30, burnTime: 2 } },
     // shop: potion prices are multiplied by stagePrice[stage - 1], so shops further in cost more.
     // Upgrades: three on offer at a time, buy as many as you can; the first costs upgrade.base and each
     // one bought adds upgrade.step for the rest of the run. Rerolling the three costs reroll.base, + reroll.step
@@ -639,6 +670,19 @@ const CONFIG = {
     // they come in square pads (2x2, or 4x4 bigChance of the time), pads[0]-pads[1] per combat room;
     // a pad's spikes peek out (warn) then shoot up together
     spikes: { period: 4, up: 0.8, warn: 0.6, damage: 16, pads: [2, 4], bigChance: 0.3 },
+    // barrels (every dungeon theme): perRoom[0]-perRoom[1] of them stand about each of the `rooms`, each one of `kinds`
+    // at random. Heroes' attacks burst them (hp), and a burst sets off any other barrel within its radius.
+    //   explosive: a blast (damage to heroes, enemyDamage to enemies and bosses) that sets everyone in it on fire
+    //   poison: a cloud that hangs for cloudTime; heroes in it are poisoned for dps per second over `time` seconds,
+    //           enemies take enemyDps over the same time
+    //   frost: freezes everyone in it for `freeze` seconds and leaves an ice patch (iceRadius, lasting iceTime)
+    //          that freezes again for `refreeze` seconds whoever steps onto it
+    barrels: {
+      rooms: ['combat', 'survival', 'defend'], perRoom: [2, 4], hp: 20, kinds: ['explosive', 'poison', 'frost'],
+      explosive: { radius: 85, damage: 40, enemyDamage: 90, burnDps: 12, burnTime: 4 },
+      poison: { radius: 80, cloudTime: 4, dps: 3, time: 8, enemyDps: 15 },
+      frost: { radius: 75, damage: 10, enemyDamage: 25, freeze: 1.5, iceRadius: 70, iceTime: 25, refreeze: 1.2 },
+    },
     // special rooms (one or two per floor); not functional yet
     specials: ['blacksmith', 'wishingWell', 'heroStatue', 'restaurant5', 'mountTrader', 'darkTrader',
                'friendlyTrader', 'treasure', 'helper'],
@@ -947,19 +991,23 @@ const CONFIG = {
     teleportFade: 0.35,      // seconds fading out, and again fading back in
     // scythe slashes: `count` alternating swings; each cuts in front of him (reach, arc) and
     // throws a fan of `waves` big waves of darkness that fly the length of the room
-    slash: { windup: 0.55, count: 3, every: 0.42, reach: 150, arcDegrees: 150, damage: 34, knockback: 220,
+    slash: { windup: 0.55, count: 1, every: 0.42, reach: 150, arcDegrees: 150, damage: 34, knockback: 220,
              waves: 3, waveSpreadDegrees: 34, waveSpeed: 250, waveDamage: 24, waveScale: 2.2, waveLife: 6 },
     // tendrils: `perCast` sink in and rise round the room (up to `max` out); each has `hp` and
     // slams every `slamEvery`s (windup first): a shockwave and `waves` small waves of darkness
     tendrils: { perCast: 2, max: 8, hp: 140, sinkTime: 0.6, riseTime: 0.7, slamEvery: [3.6, 4.4], slamWindup: 0.7,
                 slamDamage: 28, slamRadius: 60, waves: 10, waveSpeed: 190, waveDamage: 16, waveLife: 2.6,
                 shockwave: { radius: 140, speed: 220, width: 12, damage: 18 } },
-    // phase 2: the double scythes swing in front of him and throw `count` shadow bombs near the heroes;
+    // phase 2: darkness gathers in his hands and he hurls `count` shadow bombs near the heroes;
     // each lands after `flight`s, swells for `fuse`s, then bursts (damage in radius + `waves` waves)
-    bombs: { windup: 0.6, count: 5, spread: 300, flight: 0.6, fuse: 1.0, radius: 64, damage: 32,
+    bombs: { windup: 0.7, count: 5, spread: 300, flight: 0.6, fuse: 1.0, radius: 64, damage: 32,
              waves: 8, waveSpeed: 200, waveDamage: 18, waveLife: 2.4 },
-    // phase 2: with a hero within `trigger` px, the scythes whirl round him (orbit px out) for `time`s
-    orbit: { trigger: 240, windup: 0.4, time: 3.4, radius: 126, spin: 3.2, hitRadius: 40, damage: 30, followSpeed: 90 },
+    // phase 2: the double scythes circle him all the time (radius px out, spinning as they go), turning
+    // `spin` rad/s, or `fastSpin` while a hero is within `trigger` px (closer than he likes to keep, see
+    // keepAway); touching one hurts
+    orbit: { trigger: 150, radius: 100, spin: 1.4, fastSpin: 4.2, hitRadius: 28, damage: 26 },
+    // phase 2: every `every`s one of the scythes (taking turns) glows for `charge`s and looses a big wave of darkness at the hero
+    scytheWave: { every: 5, charge: 0.6, speed: 230, damage: 30, scale: 3.2, radius: 36, life: 6 },
     darkness: 0.94,          // phase 2 on: how dark the room gets
     // phase 3: four reapers, and he chases the heroes as a shade
     shade: { reapers: 4, vanish: 0.8, speed: 150, contactDamage: 34 },

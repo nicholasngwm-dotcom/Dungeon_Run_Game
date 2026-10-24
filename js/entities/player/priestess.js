@@ -157,7 +157,7 @@ class Priestess extends Player {
     this.recoil = 0.2;
     // nearest enemies first, one missile each; with fewer enemies than missiles, they double up
     const targets = world.getTargets()
-      .filter((t) => !t.immune)
+      .filter((t) => !t.immune && !t.prop)
       .sort((a, b) => dist(this.x, this.y, a.hx, a.hy) - dist(this.x, this.y, b.hx, b.hy))
       .slice(0, c.count);
     for (let i = 0; i < c.count; i++) {

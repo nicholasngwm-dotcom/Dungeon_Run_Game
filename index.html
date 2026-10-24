@@ -61,6 +61,14 @@
     <!-- drawn at 2x (RENDER_SCALE) so the Alagard text stays sharp; game code works in 960x540 -->
     <canvas id="game" width="1920" height="1080"></canvas>
     <div id="toast" class="toast hidden"></div>
+    <!-- hero panel: hovering an enhancement shows exactly what it does to the stats (Menus.showEnhTip) -->
+    <div id="enh-tip" class="enh-tip hidden"></div>
+    <!-- cheat console (` to open), for testing: see js/game/cheats.js -->
+    <div id="cheat-console" class="cheat-console hidden">
+      <div class="cheat-title">CHEATS <span class="cheat-hint">Esc or ` to close</span><button id="cheat-close" class="cheat-close" type="button" title="Close">X</button></div>
+      <div id="cheat-log" class="cheat-log"></div>
+      <input id="cheat-input" class="cheat-input" type="text" autocomplete="off" spellcheck="false" placeholder="type a cheat, Enter (help for the list)">
+    </div>
 
     <!-- Main menu -->
     <!-- Main menu: titles and links down the left; MenuShowcase plays fights on the canvas behind -->
@@ -82,6 +90,23 @@
         <div id="menu-scene-dots"></div>
       </div>
       <p class="hint credit">Font: Alagard by Hewett Tsoi</p>
+    </section>
+
+    <!-- Profiles: who's playing (after the main menu, before the lobby) -->
+    <section id="screen-profiles" class="screen hidden">
+      <h2>Who's Playing?</h2>
+      <div class="mp-box profile-box">
+        <div id="profile-list" class="profile-list"></div>
+        <div class="profile-new">
+          <div class="mp-head">NEW PROFILE</div>
+          <div class="profile-new-row">
+            <input id="profile-name" maxlength="14" spellcheck="false" autocomplete="off" placeholder="Name">
+            <button class="btn small" data-action="profileCreate">Create</button>
+          </div>
+        </div>
+        <p id="profile-status" class="mp-status"></p>
+      </div>
+      <button class="btn small" data-action="back">Back</button>
     </section>
 
     <!-- Multiplayer: host or join a lobby -->
@@ -156,8 +181,18 @@
           <div id="hero-stats" class="hero-stats"></div>
           <div class="hero-sub">SUBCLASSES <span>Coming soon</span></div>
         </div>
-        <!-- what the hero does: every ability, with its key, numbers and a plain description -->
-        <div id="hero-abilities" class="hero-abilities"></div>
+        <div class="hero-right">
+          <!-- two tabs: the hero's abilities, and their gem enhancements -->
+          <div class="hero-tabs">
+            <button class="hero-tab" data-action="heroTab:abilities">Abilities</button>
+            <button class="hero-tab" data-action="heroTab:enh">Enhancements</button>
+            <span id="hero-gems" class="hero-gems"></span>
+          </div>
+          <!-- what the hero does: every ability, with its key, numbers and a plain description -->
+          <div id="hero-abilities" class="hero-abilities"></div>
+          <!-- gem enhancements, bought in order -->
+          <div id="hero-enh" class="hero-abilities hero-enh hidden"></div>
+        </div>
       </div>
       <div class="menu-buttons row">
         <button class="btn small" id="hero-choose" data-action="chooseHero">Choose</button>
@@ -461,6 +496,7 @@
     <section id="screen-end" class="screen dim hidden">
       <h2 id="end-title">You Died</h2>
       <p id="end-sub" class="hint"></p>
+      <p id="end-gems" class="end-gems hidden"></p>
       <p id="end-wait" class="hint hidden">Waiting for the host to return to the lobby...</p>
       <div class="menu-buttons">
         <button class="btn" id="end-retry" data-action="retry">Try Again</button>
@@ -479,6 +515,7 @@
   <!-- multiplayer: PeerJS for peer-to-peer connections (single player works without it) -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="js/core/utils.js?v=20261024v"></script>
+  <script src="js/core/profiles.js?v=20261024v"></script>
   <script src="js/core/input.js?v=20261024v"></script>
   <script src="js/core/audio.js?v=20261024v"></script>
   <script src="js/core/camera.js?v=20261024v"></script>
@@ -506,10 +543,13 @@
   <script src="js/gfx/royalSprites.js?v=20261024v"></script>
   <script src="js/gfx/npcSprites.js?v=20261024v"></script>
   <script src="js/gfx/propSprites.js?v=20261024v"></script>
+  <script src="js/gfx/barrelSprites.js?v=20261024v"></script>
   <script src="js/gfx/obstacleSprites.js?v=20261024v"></script>
   <script src="js/gfx/bossSprites.js?v=20261024v"></script>
   <script src="js/gfx/phantomSprites.js?v=20261024v"></script>
   <script src="js/gfx/deathbringerSprites.js?v=20261024v"></script>
+  <script src="js/gfx/manorSprites.js?v=20261024v"></script>
+  <script src="js/gfx/vaultSprites.js?v=20261024v"></script>
   <script src="js/gfx/itemSprites.js?v=20261024v"></script>
   <script src="js/gfx/iconSprites.js?v=20261024v"></script>
   <script src="js/gfx/upgradeSprites.js?v=20261024v"></script>
@@ -561,11 +601,14 @@
   <script src="js/game/lobby.js?v=20261024v"></script>
   <script src="js/game/decor.js?v=20261024v"></script>
   <script src="js/game/castleDecor.js?v=20261024v"></script>
+  <script src="js/game/manorDecor.js?v=20261024v"></script>
   <script src="js/game/scenes.js?v=20261024v"></script>
   <script src="js/game/potions.js?v=20261024v"></script>
   <script src="js/game/upgrades.js?v=20261024v"></script>
+  <script src="js/game/barrels.js?v=20261024v"></script>
   <script src="js/game/run.js?v=20261024v"></script>
   <script src="js/game/game.js?v=20261024v"></script>
+  <script src="js/game/cheats.js?v=20261024v"></script>
   <script src="js/ui/heroGuide.js?v=20261024v"></script>
   <script src="js/ui/menus.js?v=20261024v"></script>
   <script src="js/ui/bestiary.js?v=20261024v"></script>

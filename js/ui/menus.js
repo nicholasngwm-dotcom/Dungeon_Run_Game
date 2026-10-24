@@ -5,6 +5,7 @@ const Menus = {
   heroPreview: null,   // { id, ctx } for the hero panel's animated portrait
 
   init(app) {
+    this.app = app;
     for (const el of document.querySelectorAll('.screen')) {
       this.screens[el.id.replace('screen-', '')] = el;
     }
@@ -213,8 +214,26 @@ const Menus = {
   handleAction(cmd, app) {
     const [action, arg, arg2] = cmd.split(':');
     switch (action) {
-      case 'play': app.enterLobby(true); break;
-      case 'multiplayer': app.openMultiplayer(); break;
+      case 'play': this.showProfiles('play'); break;
+      case 'multiplayer': this.showProfiles('mp'); break;
+      case 'profileCreate': this.createProfile(); break;
+      case 'profileSelect': {
+        const p = Profiles.select(arg);
+        if (!p) break;
+        if (this.profileNext === 'mp') app.openMultiplayer();
+        else app.enterLobby(true);
+        break;
+      }
+      case 'profileDelete': this.profileConfirm = arg; this.renderProfiles(); break;
+      case 'profileDeleteNo': this.profileConfirm = null; this.renderProfiles(); break;
+      case 'profileDeleteYes': {
+        const p = Profiles.byId(arg);
+        Profiles.remove(arg);
+        this.profileConfirm = null;
+        if (p) this.profileStatus(`${p.name} was deleted.`);
+        this.renderProfiles();
+        break;
+      }
       case 'mpHost': app.hostMultiplayer(); break;
       case 'mpJoin': app.joinMultiplayer(); break;
       case 'readyToggle': {
@@ -232,6 +251,8 @@ const Menus = {
       case 'lobby': app.enterLobby(); break;
       case 'closePanel': app.closePanel(); break;
       case 'chooseHero': app.pickHero(this.heroPreview.id); break;
+      case 'heroTab': this.setHeroTab(arg); break;
+      case 'enhance': app.buyEnhancement(this.heroPreview.id); break;
       case 'mode':
         if (arg === 'set') this.showDungeonView('themes');
         else if (arg === 'random') app.startDungeonRun({ mode: 'random' });
@@ -308,6 +329,7 @@ const Menus = {
 
   /** Shows one screen (or none, while playing). */
   show(name) {
+    this.hideEnhTip();
     for (const [key, el] of Object.entries(this.screens)) {
       el.classList.toggle('hidden', key !== name);
     }
@@ -384,11 +406,84 @@ const Menus = {
     document.getElementById('end-sub').innerHTML = won
       ? `${stats.defeatText || "The crypt falls silent."}<br>Time ${stats.time} &nbsp; Kills ${stats.kills}`
       : `${stats.stage ? `Fell in the ${stats.theme}, stage ${stats.stage}.` : `Reached wave ${stats.wave}.`}<br>Time ${stats.time} &nbsp; Kills ${stats.kills}`;
+    // dungeon runs pay gems: the vault's chest on a win, a share for how far a wiped run got
+    const gems = document.getElementById('end-gems');
+    gems.classList.toggle('hidden', !stats.dungeon);
+    if (stats.dungeon) {
+      const saved = Profiles.current ? `${Profiles.gems} gems in total` : 'no profile picked, so they were not saved';
+      gems.innerHTML = `${this.gemImg()} <b>+${stats.gems} GEMS</b> <span>${saved}</span>`;
+    }
     document.getElementById('end-retry').classList.toggle('hidden', !!mpRole);
     document.getElementById('end-lobby').classList.toggle('hidden', mpRole === 'client');
     document.getElementById('end-wait').classList.toggle('hidden', mpRole !== 'client');
     document.getElementById('end-quit').textContent = mpRole ? 'Leave Game' : 'Main Menu';
     this.show('end');
+  },
+
+  // ---------- profiles ----------
+
+  /**
+   * The profile screen: pick who's playing, make a new profile or delete one. `next` is
+   * where picking one goes: 'play' (the lobby) or 'mp' (the multiplayer screen).
+   */
+  showProfiles(next) {
+    this.profileNext = next;
+    this.profileConfirm = null;
+    const input = document.getElementById('profile-name');
+    input.value = '';
+    if (!input.dataset.wired) {
+      input.dataset.wired = '1';
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.createProfile(); });
+    }
+    this.profileStatus(ProfileStore.ok ? '' : 'This browser is blocking saves: profiles last until the game closes.');
+    this.renderProfiles();
+    this.show('profiles');
+    if (!Profiles.list.length) input.focus();
+  },
+
+  /** One card per profile (the last one played first in line), Play and Delete on each. */
+  renderProfiles() {
+    const list = document.getElementById('profile-list');
+    const date = (t) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    if (!Profiles.list.length) {
+      list.innerHTML = '<p class="profile-empty">No profiles yet. Make one below to start.</p>';
+    } else {
+      list.innerHTML = Profiles.list.map((p) => {
+        const name = escapeHtml(p.name);
+        const last = p.id === Profiles.lastId ? ' last' : '';
+        if (this.profileConfirm === p.id) {
+          return `<div class="profile-card deleting">
+            <div class="profile-info"><b>Delete ${name}?</b><span>Everything saved on it is lost for good.</span></div>
+            <button class="btn small danger" data-action="profileDeleteYes:${p.id}">Delete</button>
+            <button class="btn small" data-action="profileDeleteNo">Keep</button>
+          </div>`;
+        }
+        return `<div class="profile-card${last}">
+          <div class="profile-badge">${escapeHtml(p.name.charAt(0).toUpperCase())}</div>
+          <div class="profile-info"><b>${name}</b><span>${p.lastPlayedAt ? `Last played ${date(p.lastPlayedAt)}` : `Made ${date(p.createdAt)}`}</span></div>
+          <button class="btn small" data-action="profileSelect:${p.id}">Play</button>
+          <button class="profile-del" data-action="profileDelete:${p.id}" title="Delete this profile">Delete</button>
+        </div>`;
+      }).join('');
+    }
+    document.querySelector('.profile-new').classList.toggle('hidden', Profiles.full);
+    if (Profiles.full && ProfileStore.ok) this.profileStatus(`All ${PROFILE_MAX} profile slots are used. Delete one to make another.`);
+  },
+
+  profileStatus(text) { document.getElementById('profile-status').textContent = text || ''; },
+
+  /** Makes a profile from the name box and plays it straight away. */
+  createProfile() {
+    const input = document.getElementById('profile-name');
+    const err = Profiles.nameError(input.value);
+    if (err) {
+      this.profileStatus(err);
+      Sound.play('uiClick');
+      return;
+    }
+    const p = Profiles.create(input.value);
+    this.toast(`PROFILE MADE: ${p.name.toUpperCase()}`, '#6cff7a');
+    this.handleAction(`profileSelect:${p.id}`, this.app);
   },
 
   // ---------- multiplayer ----------
@@ -450,12 +545,8 @@ const Menus = {
     document.getElementById('hero-blurb').textContent = guide.blurb;
     document.getElementById('hero-choose').textContent = id === currentId ? 'Playing' : 'Choose';
 
-    document.getElementById('hero-stats').innerHTML = heroStats(id).map((s) => `
-      <div class="stat">
-        <span class="stat-label">${s.label}</span>
-        <span class="stat-value" style="color:${s.color}">${s.value}</span>
-        ${s.bar === null ? '' : `<span class="stat-bar"><span style="width:${Math.round(clamp(s.bar, 0.04, 1) * 100)}%;background:${s.color}"></span></span>`}
-      </div>`).join('');
+    this.heroBought = null;   // a fresh look: no before / after showing
+    this.renderHeroStats(id);
 
     // the player's own keys for E / F / Q
     const keyLabel = (key) => ({ E: Settings.label('e'), F: Settings.label('f'), Q: Settings.label('ult') }[key] || key);
@@ -487,7 +578,204 @@ const Menus = {
     const ctx = document.getElementById('hero-portrait').getContext('2d');
     ctx.imageSmoothingEnabled = false;
     this.heroPreview = { id, ctx };
+    this.renderEnhancements(id);
+    this.setHeroTab(this.heroTab || 'abilities');
     this.show('hero');
+  },
+
+  /**
+   * The hero panel's stats, with the enhancements this profile owns for them. Every stat they've
+   * raised shows the hero's base value > the value now, with the bonus in green ("+50"), and its
+   * bar has the bonus as a bright piece on the end of the base. `before` (the stats a moment ago,
+   * just after buying one) also lights up the stats that purchase raised, tagged UP.
+   */
+  renderHeroStats(id, before = null) {
+    const count = Profiles.enhancementCount(id);
+    const base = Object.fromEntries(heroStats(id, 0).map((s) => [s.key, s]));
+    const was = before && Object.fromEntries(before.map((s) => [s.key, s]));
+    const width = (bar) => Math.round(clamp(bar, 0.04, 1) * 100);
+    const stats = heroStats(id, count);
+    const rows = stats.map((s) => {
+      const b = base[s.key];
+      const enhanced = b && b.value !== s.value;
+      const justNow = was?.[s.key] && was[s.key].value !== s.value;
+      const value = enhanced
+        ? `<span class="stat-base">${b.value}</span><span class="stat-arrow">&#9654;</span><span style="color:${s.color}">${s.value}</span>`
+        : `<span style="color:${s.color}">${s.value}</span>`;
+      const bonus = enhanced ? `<b class="stat-bonus">${this.statBonus(s.key, b, s)}</b>` : '';
+      let bar = '';
+      if (s.bar !== null) {
+        const now = width(s.bar);
+        const from = enhanced && b.bar !== null ? Math.min(now, width(b.bar)) : now;
+        bar = `<span class="stat-bar"><span style="width:${from}%;background:${s.color}"></span>${now > from ? `<span class="stat-gain${justNow ? ' pulse' : ''}" style="width:${now - from}%"></span>` : ''}</span>`;
+      }
+      return `<div class="stat${enhanced ? ' enhanced' : ''}${justNow ? ' gained' : ''}">
+        <span class="stat-label">${s.label} ${bonus}${justNow ? ' <b class="stat-up">UP</b>' : ''}</span>
+        <span class="stat-value">${value}</span>
+        ${bar}
+      </div>`;
+    });
+    const key = count ? `<div class="stat-key"><span><i class="base"></i>BASE</span><span><i class="gain"></i>FROM ENHANCEMENTS</span></div>` : '';
+    document.getElementById('hero-stats').innerHTML = key + rows.join('');
+  },
+
+  /** How much the enhancements added to a stat, as text: "+50", "+5%", "-0.2s", "-25%". */
+  statBonus(key, base, now) {
+    const num = (v) => parseFloat(String(v).replace(/[^0-9.]/g, ''));
+    const diff = Math.round((num(now.value) - num(base.value)) * 100) / 100;
+    const unit = key === 'dodge' ? 's' : String(now.value).includes('%') ? '%' : '';
+    return `${diff > 0 ? '+' : ''}${diff}${unit}`;
+  },
+
+  /** Each stat the next enhancement would change: [{ label, from, to, color }]. */
+  statChanges(id, from, to) {
+    const before = heroStats(id, from);
+    const after = heroStats(id, to);
+    return after.filter((s, i) => s.value !== before[i].value).map((s) => ({ label: s.label, from: before.find((b) => b.key === s.key).value, to: s.value, color: s.color }));
+  },
+
+  /**
+   * The enhancement hover card: its name, where it stands (owned / next / price), what it says,
+   * and for each stat it changes the value before and after (big), the difference (and how much
+   * that is, as a share of what it was), and two bars, before and after, with the gain lit.
+   * It sits beside the hovered row, in the stage's own coordinates (the stage is scaled to fit).
+   */
+  showEnhTip(id, tier, row) {
+    const tip = document.getElementById('enh-tip');
+    const t = CONFIG.enhancements[tier];
+    const count = Profiles.enhancementCount(id);
+    const owned = tier < count;
+    const status = owned ? '<span class="tip-owned">OWNED</span>'
+      : t.locked ? '<span class="tip-locked">COMING SOON</span>'
+        : tier === count ? `<span class="tip-price">${this.gemImg()} ${t.cost}${Profiles.current && Profiles.gems < t.cost ? ` &middot; need ${t.cost - Profiles.gems} more` : ''}</span>`
+          : `<span class="tip-locked">BUY THE ONES BEFORE IT FIRST</span>`;
+    const before = heroStats(id, tier);
+    const after = heroStats(id, tier + 1);
+    const width = (bar) => Math.round(clamp(bar ?? 0, 0.04, 1) * 100);
+    const num = (v) => parseFloat(String(v).replace(/[^0-9.]/g, ''));
+    const blocks = after.map((s, i) => {
+      const b = before[i];
+      if (b.value === s.value) return '';
+      const diff = this.statBonus(s.key, b, s);
+      const share = Math.round(((num(s.value) - num(b.value)) / num(b.value)) * 100);
+      const bars = s.bar === null ? '' : `
+        <div class="tip-bar-row"><span>BEFORE</span><span class="stat-bar"><span style="width:${width(b.bar)}%;background:#6a5e70"></span></span></div>
+        <div class="tip-bar-row"><span>AFTER</span><span class="stat-bar"><span style="width:${Math.min(width(b.bar), width(s.bar))}%;background:${s.color}"></span><span class="stat-gain pulse" style="width:${Math.max(0, width(s.bar) - width(b.bar))}%"></span></span></div>`;
+      return `<div class="tip-stat">
+        <div class="tip-stat-head"><span>${s.label}</span><b>${diff}${share ? ` (${share > 0 ? '+' : ''}${share}%)` : ''}</b></div>
+        <div class="tip-values"><span class="tip-from">${b.value}</span><span class="stat-arrow">&#9654;</span><span style="color:${s.color}">${s.value}</span></div>
+        ${bars}
+      </div>`;
+    }).join('');
+    tip.innerHTML = `<div class="tip-head"><span class="tip-name">${t.name}</span>${status}</div>
+      <div class="tip-desc">${t.desc}</div>
+      ${blocks || (t.locked ? '<div class="tip-desc">Lets you shape how this hero\'s abilities work, once it\'s in.</div>' : '')}`;
+    tip.classList.remove('hidden');
+    // beside the row (to its left, over the stats), kept inside the stage
+    const stage = document.getElementById('stage');
+    const sr = stage.getBoundingClientRect();
+    const k = sr.width / stage.offsetWidth;
+    const rr = row.getBoundingClientRect();
+    const x = (rr.left - sr.left) / k;
+    const y = (rr.top - sr.top) / k;
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    tip.style.left = `${Math.max(6, x - w - 10)}px`;
+    tip.style.top = `${clamp(y, 6, stage.offsetHeight - h - 6)}px`;
+  },
+
+  hideEnhTip() {
+    document.getElementById('enh-tip')?.classList.add('hidden');
+  },
+
+  /** A list of stat changes as "LABEL  old > new" rows. */
+  changeRows(changes) {
+    return changes.map((c) => `<div class="enh-change"><span class="enh-change-label">${c.label}</span>
+      <span class="stat-old">${c.from}</span><span class="stat-arrow">&#9654;</span><span style="color:${c.color}">${c.to}</span></div>`).join('');
+  },
+
+  /**
+   * Just bought hero `id`'s next enhancement: the stats panel shows what changed (old -> new), and
+   * the enhancements list opens with a card of the same before and after.
+   */
+  showEnhanced(id) {
+    const count = Profiles.enhancementCount(id);
+    this.heroBought = { id, tier: count - 1 };
+    this.renderHeroStats(id, heroStats(id, count - 1));
+    this.renderEnhancements(id);
+  },
+
+  /** The hero panel's right side: 'abilities' or 'enh' (the gem enhancements). */
+  setHeroTab(tab) {
+    this.heroTab = tab;
+    document.getElementById('hero-abilities').classList.toggle('hidden', tab !== 'abilities');
+    document.getElementById('hero-enh').classList.toggle('hidden', tab !== 'enh');
+    for (const b of document.querySelectorAll('.hero-tab')) b.classList.toggle('on', b.dataset.action === `heroTab:${tab}`);
+  },
+
+  /** A sprite as a data URL for <img> (cached per canvas). */
+  spriteUrl(img) {
+    if (!img.dataUrl) img.dataUrl = img.toDataURL();
+    return img.dataUrl;
+  },
+
+  gemImg() { return `<img class="gem-img" src="${this.spriteUrl(Sprites.vault.gemIcon)}" alt="gems">`; },
+
+  /**
+   * Hero `id`'s gem enhancements (CONFIG.enhancements, the same six for every hero, each hero
+   * on their own track): bought in order with the profile's gems. Owned ones are ticked off,
+   * the next one has its price on a buy button, the ability tree stays locked for now.
+   */
+  renderEnhancements(id) {
+    const count = Profiles.enhancementCount(id);
+    const gems = Profiles.gems;
+    const name = CONFIG.classes[id].name;
+    document.getElementById('hero-gems').innerHTML = Profiles.current ? `${this.gemImg()} ${gems}` : '';
+    const intro = Profiles.current
+      ? `Gems come from beating dungeons (and a share for getting far). Enhancements are bought in order, last for good, and only make the ${name} stronger.`
+      : 'Pick a profile from the main menu to collect gems and buy enhancements.';
+    const rows = CONFIG.enhancements.map((t, i) => {
+      const owned = i < count;
+      const next = i === count && !t.locked;
+      let state;
+      if (owned) state = '<div class="enh-state owned">OWNED</div>';
+      else if (t.locked) state = '<div class="enh-state">LOCKED &middot; COMING SOON</div>';
+      else if (next) {
+        const can = !!Profiles.current && gems >= t.cost;
+        state = `<div class="enh-state"><button class="btn small" data-action="enhance" ${can ? '' : 'disabled'}>${this.gemImg()} ${t.cost}</button></div>`;
+      } else state = `<div class="enh-state"><span class="enh-cost">${this.gemImg()} ${t.cost}</span></div>`;
+      // owned ones show what they changed; the next one on offer previews what it would
+      const preview = owned || next ? this.changeRows(this.statChanges(id, i, i + 1)) : '';
+      return `<div class="enh ${owned ? 'owned' : next ? 'next' : 'locked'}" data-tier="${i}">
+        <span class="enh-tier">${i + 1}</span>
+        <div class="ab-icon"><img src="${this.spriteUrl(Sprites.vault.icons[t.id])}" alt=""></div>
+        <div class="enh-body"><div class="enh-name">${t.name}</div><div class="enh-desc">${t.desc}</div>${preview ? `<div class="enh-preview">${preview}</div>` : ''}</div>
+        ${state}
+      </div>`;
+    });
+    // just bought one: a card with what it changed, before and after
+    const b = this.heroBought;
+    let bought = '';
+    if (b && b.id === id && b.tier < count) {
+      const t = CONFIG.enhancements[b.tier];
+      bought = `<div class="enh-bought">
+        <div class="ab-icon"><img src="${this.spriteUrl(Sprites.vault.icons[t.id])}" alt=""></div>
+        <div class="enh-body">
+          <div class="enh-name">${t.name.toUpperCase()} BOUGHT</div>
+          <div class="enh-cols"><span>BEFORE</span><span>AFTER</span></div>
+          ${this.changeRows(this.statChanges(id, b.tier, b.tier + 1))}
+        </div>
+      </div>`;
+    }
+    const list = document.getElementById('hero-enh');
+    list.innerHTML = `<p class="enh-intro">${intro}</p>${bought}${rows.join('')}`;
+    // hovering one shows exactly what it does to the stats
+    this.hideEnhTip();
+    for (const el of list.querySelectorAll('.enh[data-tier]')) {
+      el.addEventListener('mouseenter', () => this.showEnhTip(id, Number(el.dataset.tier), el));
+      el.addEventListener('mouseleave', () => this.hideEnhTip());
+    }
+    list.onscroll = () => this.hideEnhTip();
   },
 
   /** Map legend board: every room's minimap icon and what it's for, plus the map's other markings. */
