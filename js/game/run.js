@@ -1666,13 +1666,91 @@ class DungeonRun {
     // fire all over the floor, spreading outwards from the stone
     const F = c.fire;
     const step = F.radius * 1.5;
-    const fire = { cfg: { fireRadius: F.radius, fireTime: F.life, burnDps: F.burnDps, burnTime: F.burnTime } };
+    const patches = [];
     for (let y = b.top + step / 2; y < b.bottom; y += step) {
       for (let x = b.left + step / 2; x < b.right; x += step) {
-        const at = { x: x + rand(-10, 10), y: y + rand(-8, 8) };
-        w.after(dist(at.x, at.y, s.x, s.y) / 700, () => FlamingCatapult.prototype.ignite.call(fire, w, at, 1));
+        const px = x + rand(-10, 10);
+        const py = y + rand(-8, 8);
+        patches.push({ x: px, y: py, at: dist(px, py, s.x, s.y) / 700, seed: patches.length });
       }
     }
+    this.roomFire(r, patches, F);
+  }
+
+  /**
+   * The blown-up puzzle room burning: patches of fire (each catching `at` seconds in, spreading out
+   * from the stone) that set alight anyone standing in one, for F.life seconds. One effect for the
+   * whole room rather than a fire zone per patch, so a room full of fire stays cheap to draw:
+   * scorch and a ring under each patch, a few tongues of flame on each, a glow on every other one
+   * and a light on every fourth.
+   */
+  roomFire(r, patches, F) {
+    const w = this.world;
+    const stage = this.stage;
+    const t0 = w.time;
+    const lit = (pt) => w.time - t0 >= pt.at;
+    // burning: every quarter second, anyone in a patch that's caught is set alight
+    const tick = () => {
+      if (this.stage !== stage || w.time - t0 > F.life) return;
+      for (const a of w.allies) {
+        if (a.dead || this.floor.roomAt(a.x, a.y) !== r) continue;
+        if (patches.some((pt) => lit(pt) && dist(a.x, a.y, pt.x, pt.y) < F.radius + (a.radius || 0) * 0.5)) a.burn?.(F.burnDps, F.burnTime, w);
+      }
+      // a few flames leaping off random patches
+      for (let i = 0; i < 3; i++) {
+        const pt = choose(patches);
+        if (lit(pt)) w.effects.flames(pt.x + vrand(-F.radius * 0.6, F.radius * 0.6), pt.y + vrand(-F.radius * 0.3, F.radius * 0.3), { count: 1, height: vrand(16, 26), width: vrand(8, 12), life: 0.5, colors: ENEMY_FIRE_COLORS });
+      }
+      w.after(0.25, tick);
+    };
+    w.after(0.25, tick);
+    const fade = (pt) => {
+      const age = w.time - t0 - pt.at;
+      const left = F.life - (w.time - t0);
+      return age < 0 ? 0 : Math.min(1, age * 4, left / (F.life * 0.15));
+    };
+    // scorched floor and a smouldering ring under each patch
+    w.effects.add(F.life, (ctx) => {
+      ctx.save();
+      for (const pt of patches) {
+        const k = fade(pt);
+        if (k <= 0) continue;
+        ctx.globalAlpha = 0.6 * k;
+        PFX.disc(ctx, pt.x, pt.y, F.radius, F.radius * 0.55, '#2a0e06');
+        ctx.globalAlpha = 0.8 * k;
+        PFX.ring(ctx, pt.x, pt.y, F.radius * 0.9, F.radius * 0.5, '#a8200e', 2, { dash: [3, 3] });
+      }
+      ctx.restore();
+    }, true);
+    // the flames, above the gloom
+    w.effects.add(F.life, (ctx) => {
+      const secs = w.time - t0;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const pt of patches) {
+        const k = fade(pt);
+        if (k > 0 && pt.seed % 2 === 0) PFX.glow(ctx, pt.x, pt.y - 6, F.radius * 1.3, '255, 40, 30', 0.5 * k * (0.85 + Math.sin(secs * 13 + pt.seed) * 0.15), 2, F.radius * 0.75);
+      }
+      ctx.restore();
+      for (const pt of patches) {
+        const k = fade(pt);
+        if (k <= 0) continue;
+        ctx.globalAlpha = k;
+        for (let i = 0; i < 4; i++) {
+          const a = i * 1.7 + pt.seed;
+          const d = ((i + pt.seed) % 3) / 3;
+          const lick = 1 + Math.sin(secs * 7 + i * 2.3 + pt.seed) * 0.25;
+          PFX.flame(ctx, pt.x + Math.cos(a) * F.radius * 0.8 * d, pt.y + Math.sin(a) * F.radius * 0.4 * d, 13, (18 + (i % 3) * 7) * lick, secs * 9 + i * 1.7 + pt.seed, ENEMY_FIRE_COLORS);
+        }
+      }
+      ctx.globalAlpha = 1;
+    });
+    // the room glows red: a light on every fourth patch, each switching on as its fire catches
+    for (const pt of patches) {
+      if (pt.seed % 4 !== 0) continue;
+      w.after(pt.at, () => { if (this.stage === stage) this.addLight({ x: pt.x, y: pt.y, r: F.radius * 4, s: 0.95, rgb: '255, 60, 50', until: t0 + F.life }); });
+    }
+    Sound.play('fireballCast');
   }
 
   /** The HUD's line for the puzzle room the local hero is in (none once it's done). */

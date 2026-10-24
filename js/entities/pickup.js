@@ -11,6 +11,7 @@ class Pickup {
     this.pullBoost = 0;
     this.lifetime = 20;    // seconds before it vanishes (blinks for the last 3)
     this.sound = 'pickup';
+    this.soundGap = 0.02;  // the same sound can't play again within this many seconds
   }
 
   /** True while the hero can use this pickup (otherwise it just sits there). */
@@ -42,7 +43,7 @@ class Pickup {
     }
     if (d < 18) {
       this.collect(p, world);
-      Sound.play(this.sound, 0.02);
+      Sound.play(this.sound, this.soundGap);
       this.dead = true;
     }
     if (this.age > this.lifetime) this.dead = true;
@@ -222,6 +223,7 @@ class CoinPickup extends Pickup {
     this.pullBoost = 1.4;   // whooshes in faster the closer it gets
     this.lifetime = 35;
     this.sound = 'coin';
+    this.soundGap = 0.09;   // a pile hoovered up at once is a quick jingle, not dozens of clinks
     const a = rand(0, TAU);
     const sp = rand(40, 110);
     this.vx = Math.cos(a) * sp;
