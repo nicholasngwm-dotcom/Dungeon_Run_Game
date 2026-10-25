@@ -904,7 +904,7 @@ class DungeonRun {
       b.maxHp = Math.round(b.maxHp * hp);
       b.hp = b.maxHp;
     }
-    b.cfg = scaleBossDamage(b.cfg, s.damage * (s.bossDamage || 1) * CONFIG.enemyDamage);
+    b.cfg = scaleBossDamage(b.cfg, s.damage * (s.bossDamage || 1) * w.playerScale.damage * CONFIG.enemyDamage);
     r.bossName = b.name;
     r.bossDown = false;
     Music.play('boss');

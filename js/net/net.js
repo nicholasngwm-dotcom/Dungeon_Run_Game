@@ -3,9 +3,8 @@
 // directly between browsers. The host's PeerJS id is the room code plus a
 // prefix, so friends join by typing the code.
 //
-// Players on mobile data usually can't connect directly (carrier NAT), so the
-// connection falls back to a TURN relay from CONFIG.multiplayer (iceServers and
-// the optional turnCredentialsUrl).
+// Players on mobile data and many ISPs can't connect directly (carrier NAT), so
+// the connection falls back to a TURN relay from CONFIG.multiplayer.turnCredentialsUrl.
 //
 // Net.host / Net.join return a transport for Session: { send, broadcast, close }.
 
@@ -28,14 +27,20 @@ const Net = {
   /** PeerJS options with our ICE servers (STUN + TURN relays). */
   async peerOptions() {
     const mp = CONFIG.multiplayer;
-    if (mp.turnCredentialsUrl && !this.extraIce) {
+    if (mp.turnCredentialsUrl && !(this.extraIce && this.extraIce.length)) {
       try {
-        const res = await fetch(mp.turnCredentialsUrl);
+        const res = await fetch(mp.turnCredentialsUrl, { signal: AbortSignal.timeout(mp.turnFetchTimeout * 1000) });
         const list = await res.json();
         this.extraIce = Array.isArray(list) ? list : [];
-      } catch (e) { this.extraIce = []; /* relay service down: try with the rest */ }
+      } catch (e) { this.extraIce = []; /* relay service down or slow: try with the rest (and again next time) */ }
     }
     return { config: { iceServers: [...mp.iceServers, ...(this.extraIce || [])] } };
+  },
+
+  /** True once a TURN relay is available, so players behind carrier NAT can still connect. */
+  get hasRelay() {
+    return [...CONFIG.multiplayer.iceServers, ...(this.extraIce || [])]
+      .some(s => [].concat(s.urls).some(u => /^turns?:/.test(u)));
   },
 
   /** Calls onFail if a data connection's network route fails (e.g. no relay got through). */
@@ -116,7 +121,9 @@ const Net = {
     const noRoute = () => {
       if (opened || failed) return;
       failed = true;
-      h.onError(`Found room ${code.toUpperCase()} but couldn't connect to it. Mobile data and some networks block direct connections - try wifi, or ask the host about a relay server.`);
+      h.onError(Net.hasRelay
+        ? `Found room ${code.toUpperCase()} but couldn't connect to it, even through the relay server. Try again in a moment, or try another network.`
+        : `Found room ${code.toUpperCase()} but couldn't connect to it. Your network or the host's blocks direct connections (common on mobile data and some ISPs) and no relay server is set up.`);
     };
     peer.on('open', () => {
       const conn = peer.connect(CONFIG.multiplayer.peerPrefix + code.toUpperCase(), { reliable: true, serialization: 'json' });

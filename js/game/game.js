@@ -26,6 +26,10 @@ class Game {
     this.roster = opts.roster || [{ id: 'local', name: '', classId }];
     this.localId = opts.localId || this.roster[0].id;
     this.multiplayer = !!opts.roster;
+    if (this.multiplayer) {   // teammates' effects fade by the "Teammate effects" setting
+      this.effects.othersActing = () => !!this.actor && this.actor !== this.localPlayer;
+      this.effects.nearMe = (x, y) => { const me = this.localPlayer; return Math.hypot(x - me.x, y - me.y) < 48; };
+    }
     this.showcase = !!opts.showcase;   // the main menu's backdrop fights (no HUD or name tags)
     // each player's gem enhancements, { id: { classId: count } }: from their roster entry in
     // multiplayer, from the profile playing on this machine in single player
@@ -150,7 +154,7 @@ class Game {
   get playerScale() {
     const m = CONFIG.multiplayer;
     const extra = Math.max(0, this.players.length - 1);
-    return { hp: 1 + m.hpPerExtraPlayer * extra, count: 1 + m.countPerExtraPlayer * extra };
+    return { hp: 1 + m.hpPerExtraPlayer * extra, damage: 1 + m.damagePerExtraPlayer * extra, count: 1 + m.countPerExtraPlayer * extra };
   }
 
   // ---------------------------------------------------------
@@ -362,13 +366,13 @@ class Game {
 
   /** Stage / wave scaling times party size (boss minions and the practice range don't scale with waves). */
   get enemyScale() {
-    const party = this.playerScale.hp;
-    if (this.run) return { hp: this.run.scale.hp * party, damage: this.run.scale.damage, speed: this.run.scale.speed };
+    const { hp: party, damage: partyDmg } = this.playerScale;
+    if (this.run) return { hp: this.run.scale.hp * party, damage: this.run.scale.damage * partyDmg, speed: this.run.scale.speed };
     const d = this.director;
     if (this.practice) return { hp: 1, damage: 1 };
-    if (d.state === 'boss' || d.waveIndex <= 0) return { hp: party, damage: 1 };
+    if (d.state === 'boss' || d.waveIndex <= 0) return { hp: party, damage: partyDmg };
     const s = CONFIG.waveScaling;
-    return { hp: (1 + s.hp * d.waveIndex) * party, damage: 1 + s.damage * d.waveIndex };
+    return { hp: (1 + s.hp * d.waveIndex) * party, damage: (1 + s.damage * d.waveIndex) * partyDmg };
   }
 
   /** Shows a summoning circle, then spawns the enemy. setup(enemy), if given, runs once it appears. */
@@ -559,10 +563,14 @@ class Game {
     return timer;
   }
 
-  /** Camera shake. A hero's own attacks only shake their own screen; the world (bosses, blasts) shakes everyone's. */
+  /**
+   * Camera shake. A hero's own attacks only shake their own screen; the world (bosses, blasts) shakes everyone's.
+   * Scaled by the Screen shake setting (0 = off).
+   */
   shake(magnitude, duration) {
     if (this.actor && this.actor !== this.localPlayer) return;
-    this.camera.shake(magnitude, duration);
+    const k = Settings.data.screenShake;
+    if (k > 0) this.camera.shake(magnitude * k, duration);
   }
 
   banner(text, sub = '', duration = 2.4) {
@@ -574,7 +582,7 @@ class Game {
     Music.play('boss');
     for (const p of this.heroes) p.heal(p.maxHp * CONFIG.bossHealPercent, this);
     this.boss = Game.createBoss(type, this.dungeon.center);
-    this.boss.cfg = scaleBossDamage(this.boss.cfg, CONFIG.enemyDamage);
+    this.boss.cfg = scaleBossDamage(this.boss.cfg, CONFIG.enemyDamage * this.playerScale.damage);
     if (this.boss.scaleHealth) this.boss.scaleHealth(this.playerScale.hp);   // the golem's health is in its parts
     else {
       this.boss.maxHp = Math.round(this.boss.maxHp * this.playerScale.hp);

@@ -47,6 +47,8 @@ const Menus = {
     slider('set-mvol', 'musicVolume', (v) => `${Math.round(v * 100)}%`, () => Sound.applyVolumes());
     slider('set-svol', 'sfxVolume', (v) => `${Math.round(v * 100)}%`, () => { Sound.applyVolumes(); Sound.play('uiClick', 0.15); });
     slider('set-map', 'minimapSize', (v) => `${Math.round(v * 100)}%`);
+    slider('set-shake', 'screenShake', Menus.offOrPercent);
+    slider('set-ofx', 'othersFx', Menus.offOrPercent);
     slider('set-xsize', 'crosshairSize', (v) => `${Math.round(v * 100)}%`, () => this.drawCrosshairPreview());
     document.getElementById('set-xhair').innerHTML = CROSSHAIR_TYPES
       .map(([type, label]) => `<button class="toggle" data-action="crosshair:${type}">${label.toUpperCase()}</button>`)
@@ -64,6 +66,8 @@ const Menus = {
       if (this.settingsOpen) this.refreshSettings();
     };
   },
+
+  offOrPercent(v) { return v > 0 ? `${Math.round(v * 100)}%` : 'OFF'; },
 
   /** Highlights the chosen crosshair style and redraws the preview. */
   crosshairChanged() {
@@ -165,6 +169,8 @@ const Menus = {
     set('set-mvol', s.musicVolume, `${Math.round(s.musicVolume * 100)}%`);
     set('set-svol', s.sfxVolume, `${Math.round(s.sfxVolume * 100)}%`);
     set('set-map', s.minimapSize, `${Math.round(s.minimapSize * 100)}%`);
+    set('set-shake', s.screenShake, Menus.offOrPercent(s.screenShake));
+    set('set-ofx', s.othersFx, Menus.offOrPercent(s.othersFx));
     set('set-xsize', s.crosshairSize, `${Math.round(s.crosshairSize * 100)}%`);
     this.musicChanged(s.music, false);
     this.displayChanged();

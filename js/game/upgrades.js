@@ -101,7 +101,7 @@ const SHOP_UPGRADES = [
   },
   {
     id: 'radialBarrier', name: 'Radial Barrier', color: '#6ae0c8',
-    desc: 'Immune to traps. Enemies bumping into you deal 90% less damage.',
+    desc: 'Immune to traps. Enemies bumping into you deal 50% less damage.',
   },
   {
     id: 'lastDefence', name: 'The Last Defence', color: '#6aa8ff', cooldown: 180,
@@ -564,7 +564,7 @@ const Upgrades = {
       return -1;
     }
     if (opts.contact && this.has(p, 'radialBarrier')) {
-      amount *= 0.1;
+      amount *= 0.5;
       this.state(p).flash.radialBarrier = world.time;
     }
     if (this.has(p, 'teslaArmour') && this.cd(p, 'teslaArmour') <= 0 && amount > 0) {

@@ -747,13 +747,13 @@ const CONFIG = {
   //  DUNGEON RUNS: 3 stages, each a generated floor of rooms and hallways.
   // ---------------------------------------------------------
   run: {
-    // enemy + boss scaling per stage. Later stages get tougher enemies (hp, damage, a little speed)
-    // rather than many more of them; the counts below only creep up. Bosses get bossHp / bossDamage
-    // on top (by the later stages the heroes' upgrades make the fights easier)
+    // enemy + boss scaling per stage. Later stages get deadlier enemies (more damage than hp, so fights
+    // stay quick but dangerous, plus a little speed) rather than many more of them; the counts below only
+    // creep up. Bosses get bossHp / bossDamage on top (by the later stages the heroes' upgrades make the fights easier)
     stages: [
       { hp: 1, damage: 1, speed: 1 },
-      { hp: 1.5, damage: 1.35, speed: 1.06, bossHp: 1.15, bossDamage: 1.1 },
-      { hp: 2.1, damage: 1.65, speed: 1.12, bossHp: 1.3, bossDamage: 1.2 },
+      { hp: 1.35, damage: 1.45, speed: 1.06, bossHp: 1.15, bossDamage: 1.1 },
+      { hp: 1.8, damage: 1.85, speed: 1.12, bossHp: 1.3, bossDamage: 1.2 },
     ],
     // random mode: chance weight of rolling a theme already used this run (vs 1 for a new one)
     repeatThemeWeight: 0.05,
@@ -764,7 +764,7 @@ const CONFIG = {
     combat: { waves: [2, 3, 3], perWave: [4, 5, 5], perWaveRandom: 1 },
     // anyone (hero, body, clone or enemy) outside a locked room is warped back in after this many seconds
     strayReturn: 2,
-    defend: { duration: [30, 36, 42], totemHp: [650, 850, 1100], waveEvery: 6, perWave: [3, 4, 4] },
+    defend: { duration: [30, 36, 42], totemHp: [650, 850, 1100], waveEvery: 8, perWave: [3, 4, 4] },
     // a defend-room kill frees a soul that flies into the lantern, mending soulHeal of its max hp
     // scaled by how tough the enemy was (base hp / soulRefHp, clamped to soulScale); summoned
     // enemies give summonedSoul of that. soulSpeed: how fast souls home in (px/s)
@@ -827,8 +827,9 @@ const CONFIG = {
   multiplayer: {
     maxPlayers: 8,
     maxDuplicates: 2,          // at most this many of the same hero in one lobby
-    // enemies scale with the party: each extra hero adds this much enemy hp / this many more enemies
-    hpPerExtraPlayer: 0.75,   // tougher enemies rather than many more: 8 heroes = x6.25 hp but only x1.84 enemies
+    // enemies scale with the party: each extra hero adds this much enemy hp / damage / this many more enemies
+    hpPerExtraPlayer: 0.55,   // tougher enemies rather than many more: 8 heroes = x4.85 hp, x1.42 damage, only x1.84 enemies
+    damagePerExtraPlayer: 0.06,
     countPerExtraPlayer: 0.12,
     // a downed hero is picked up by a teammate holding interact by their body for `time` seconds
     revive: { time: 4, range: 40, hp: 0.35, decay: 2 },   // hp: share of max hp back; decay: progress lost per second once let go
@@ -837,22 +838,20 @@ const CONFIG = {
     peerPrefix: 'dungeonrun-v1-',   // room code -> PeerJS id (bump to keep old versions out)
     checksumEvery: 120,        // ticks between desync checks
     joinTimeout: 25,           // seconds before giving up on reaching a room (relayed connections are slower)
-    // How browsers find a route to each other. STUN works on most home wifi; mobile data
-    // (carrier NAT) usually blocks direct connections, so traffic has to go through a TURN
-    // relay. The PeerJS relay below is free but often busy or down.
+    // How browsers find a route to each other. STUN works on most home wifi; mobile data and
+    // many ISPs (carrier NAT - common in Indonesia, the Philippines, India...) block direct
+    // connections, so traffic has to go through a TURN relay. There are no free public TURN
+    // relays left (PeerJS's and Metered's Open Relay both shut down), so set turnCredentialsUrl.
     iceServers: [
       { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-      {
-        urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478',
-          'turn:eu-0.turn.peerjs.com:3478?transport=tcp', 'turn:us-0.turn.peerjs.com:3478?transport=tcp'],
-        username: 'peerjs', credential: 'peerjsp',
-      },
+      { urls: 'stun:stun.cloudflare.com:3478' },
     ],
-    // Optional: a URL that returns extra ICE servers as JSON (an array of
-    // { urls, username, credential }), e.g. a Metered TURN credentials URL:
+    // A URL that returns TURN relay servers as JSON (an array of { urls, username, credential }),
+    // e.g. a free Metered account's credentials URL (metered.ca -> TURN Server -> your app):
     //   https://<your-app>.metered.live/api/v1/turn/credentials?apiKey=<key>
-    // Fetched before connecting; leave '' to use only iceServers above.
-    turnCredentialsUrl: '',
+    // Fetched before connecting. Without it, players behind carrier NAT can't connect.
+    turnCredentialsUrl: 'https://dungeonrun.metered.live/api/v1/turn/credentials?apiKey=8910fa17010905c429c36ee1e467fcd9a2e5',
+    turnFetchTimeout: 5,       // seconds to wait for turnCredentialsUrl before connecting without it
   },
 
   // mana orbs only drop for mana users; picking one up triggers the Mage's Mana Surge passive

@@ -30,6 +30,18 @@ class Effects {
     this.texts = [];
     this.fx = [];        // drawn above entities
     this.groundFx = [];  // drawn on the floor, below entities
+    // Set by Game in multiplayer: othersActing() is true while a teammate's hero acts, and
+    // nearMe(x, y) is true at this screen's hero (a teammate's buff landing on you stays bright).
+    // Teammates' effects are thinned and faded by Settings.othersFx - looks only, never the outcome.
+    this.othersActing = null;
+    this.nearMe = null;
+    this.layer = null;   // offscreen canvas teammates' effects are drawn on, then faded in as one
+  }
+
+  /** True if an effect starting now (at x, y, if it has a spot) is a teammate's to fade. */
+  isOthers(x, y) {
+    if (!this.othersActing || Settings.data.othersFx >= 1 || !this.othersActing()) return false;
+    return x === undefined || !this.nearMe(x, y);
   }
 
   /** Spray of square pixel particles. */
@@ -38,14 +50,17 @@ class Effects {
       count = 8, colors = ['#ffffff'], speed = [40, 140], life = [0.3, 0.6],
       size = [2, 4], gravity = 0, drag = 3, angle = null, spread = TAU, up = 0,
     } = opts;
-    for (let i = 0; i < count; i++) {
+    const other = this.isOthers(x, y);
+    // a teammate's bursts get fewer sparks too (rounded at random, so small ones still show sometimes)
+    const n = other ? Math.floor(count * Settings.data.othersFx + vrand(0, 1)) : count;
+    for (let i = 0; i < n; i++) {
       const a = angle === null ? vrand(0, TAU) : angle + vrand(-spread / 2, spread / 2);
       const s = vrand(speed[0], speed[1]);
       const l = vrand(life[0], life[1]);
       this.particles.push({
         x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - up,
         life: l, maxLife: l, size: Math.round(vrand(size[0], size[1])),
-        color: vchoose(colors), gravity, drag,
+        color: vchoose(colors), gravity, drag, other,
       });
     }
   }
@@ -187,7 +202,7 @@ class Effects {
 
   /** Custom effect: draw(ctx, t) where t goes 0 -> 1 over `life` seconds. */
   add(life, draw, ground = false) {
-    (ground ? this.groundFx : this.fx).push({ life, maxLife: life, draw });
+    (ground ? this.groundFx : this.fx).push({ life, maxLife: life, draw, other: this.isOthers() });
   }
 
   update(dt) {
@@ -217,12 +232,39 @@ class Effects {
   }
 
   drawGround(ctx) {
-    for (const f of this.groundFx) f.draw(ctx, 1 - f.life / f.maxLife);
+    this.drawFaded(ctx, this.groundFx, []);
   }
 
   draw(ctx) {
-    for (const f of this.fx) f.draw(ctx, 1 - f.life / f.maxLife);
-    for (const p of this.particles) {
+    this.drawFaded(ctx, this.fx, this.particles);
+  }
+
+  /** Your own and the world's effects as they are, then teammates' faded together on one layer. */
+  drawFaded(ctx, fx, particles) {
+    this.drawList(ctx, fx, particles, false);
+    const level = Settings.data.othersFx;
+    if (!(level > 0) || !(fx.some((f) => f.other) || particles.some((p) => p.other))) return;
+    const src = ctx.canvas;
+    if (!this.layer) this.layer = document.createElement('canvas');
+    const layer = this.layer;
+    if (layer.width !== src.width || layer.height !== src.height) { layer.width = src.width; layer.height = src.height; }
+    const lc = layer.getContext('2d');
+    lc.setTransform(1, 0, 0, 1, 0, 0);
+    lc.clearRect(0, 0, layer.width, layer.height);
+    lc.setTransform(ctx.getTransform());
+    lc.imageSmoothingEnabled = ctx.imageSmoothingEnabled;
+    this.drawList(lc, fx, particles, true);
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = level;
+    ctx.drawImage(layer, 0, 0);
+    ctx.restore();
+  }
+
+  drawList(ctx, fx, particles, other) {
+    for (const f of fx) if (!!f.other === other) f.draw(ctx, 1 - f.life / f.maxLife);
+    for (const p of particles) {
+      if (!!p.other !== other) continue;
       ctx.globalAlpha = clamp(p.life / p.maxLife * 1.5, 0, 1);
       ctx.fillStyle = p.color;
       ctx.fillRect(Math.round(p.x - p.size / 2), Math.round(p.y - p.size / 2), p.size, p.size);

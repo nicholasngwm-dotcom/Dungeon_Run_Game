@@ -42,6 +42,8 @@ const Settings = {
     crosshair: 'both',   // cross | dot | circle | both (a circle with a crosshair) - see CROSSHAIR_TYPES
     crosshairSize: 1,    // crosshair scale
     display: 'default',   // default | fullscreen (see Display)
+    screenShake: 1,      // camera shake strength (0 = off)
+    othersFx: 1,         // multiplayer: how strongly teammates' effects show (0 = hidden); yours, enemies' and text stay full
     keys: {
       up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',
       e: 'KeyE', f: 'KeyF', ult: 'KeyQ', dodge: 'ShiftLeft',
