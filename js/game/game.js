@@ -675,6 +675,9 @@ class Game {
       case 'cheat':
         if (hero) Cheats.apply(this, cmd, hero);
         return;
+      case 'teleport':
+        if (this.lobby && hero && !hero.dead) this.lobby.teleport(hero, cmd.x, cmd.y);
+        return;
       case 'readyCheck':
         if (this.lobby && fromId === this.roster[0].id && !this.readyCheck) {
           this.readyCheck = { ready: {} };

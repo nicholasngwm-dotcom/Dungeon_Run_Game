@@ -1,6 +1,8 @@
 // The lobby: the party's castle keep (see CastleKeep), walked around between runs.
 // Every room has its job: the great hall holds the dungeon gate and the feast
-// tables; the hall of heroes has a statue per hero (pick a hero); the library,
+// tables; the armory racks the keep's spare weapons; the big hall of heroes (south,
+// through the quarters) has every hero busy in a nook of their own (see HeroNooks:
+// walk up to one to pick them); the library,
 // kept by Elowen the librarian, has the map legend board, the bestiary lectern
 // (with enchanted books flying round it) and the potion guide's alchemy table;
 // the workshop has the tinkerer; the quarters have beds by the hearth; outside,
@@ -16,6 +18,8 @@ const PROP_FOOTPRINT = {
   dummy: [12, 8], dummyBroken: [12, 8], dummyBurnt: [12, 8], pell: [14, 6], tree: [18, 10],
   well: [44, 22], readingTable: [56, 12], desk: [54, 14], globe: [16, 8], scrollRack: [34, 10],
   bookStack: [16, 6], lampPost: [8, 6], trough: [32, 10],
+  anvil: [28, 10], grindstone: [22, 6], pedestal: [36, 10], goldPile: [28, 8], targetClean: [26, 8],
+  anvil: [28, 10], grindstone: [22, 6], pedestal: [36, 10], goldPile: [28, 8], targetClean: [26, 8],
 };
 
 // Props that can be sat on: seat offsets along the prop (px; benches seat two) and how far the
@@ -39,13 +43,11 @@ class LobbyHub {
     const T = CONFIG.tileSize;
     const d = world.dungeon;
     this.stations = [];
-    // hall of heroes: a row of statues along the north wall
-    // (spread over the hall's width, closer together the more heroes there are)
-    const heroIds = Object.keys(CONFIG.classes);
-    const gap = Math.min(1.55, 8.1 / Math.max(1, heroIds.length - 1));
-    heroIds.forEach((id, i) => {
-      this.stations.push({ kind: 'hero', id, x: (2.95 + i * gap) * T, y: 8.6 * T, r: 34, prompt: `PICK ${CONFIG.classes[id].name.toUpperCase()}`, label: i % 2 });
-    });
+    // hall of heroes: each hero in their own nook
+    for (const id of Object.keys(CONFIG.classes)) {
+      const n = HERO_NOOKS[id];
+      if (n) this.stations.push({ kind: 'hero', id, x: n.at[0] * T, y: n.at[1] * T, r: 40, prompt: `PICK ${CONFIG.classes[id].name.toUpperCase()}` });
+    }
     this.stations.push({ kind: 'workshop', x: 36.6 * T, y: 9.6 * T, r: 56, prompt: 'WORKSHOP' });
     // out in the yard, by the path from the keep's side door
     this.stations.push({ kind: 'practice', x: 40.6 * T, y: 18.8 * T, r: 50, prompt: 'PRACTICE RANGE' });
@@ -62,8 +64,13 @@ class LobbyHub {
 
     // set dressing per room (tile coordinates of each prop's bottom centre; true = flipped)
     this.decor = [
-      // hall of heroes: weapon racks by the doorways
+      // the armory: weapon racks round the walls, banners, the anvil and grindstone, chests of spares
       ['weaponRack', 3.0, 12.7], ['weaponRack', 10.6, 12.7], ['plant', 11.4, 6.1],
+      ['weaponRack', 4.6, 6.4], ['weaponRack', 6.75, 6.4], ['weaponRack', 8.9, 6.4], ['bannerRed', 2.7, 6.6], ['bannerBlue', 10.4, 6.6],
+      ['anvil', 5.0, 9.8], ['grindstone', 8.5, 9.6], ['chest', 4.3, 11.5], ['chest', 9.2, 11.5],
+      // the hall of heroes' lounge, between the nooks: armchairs on a round rug, candles
+      ['rugRound', 21.5, 43.4], ['armchair', 19.7, 42.9], ['armchair', 23.3, 42.9, true],
+      ['candelabra', 18.2, 45.0], ['candelabra', 24.8, 45.0], ['plant', 4.6, 45.7], ['plant', 38.8, 45.7],
       // great hall: two feast tables either side of the runner, set between the side doorways (rows 12-17)
       // so nobody walks out of a doorway into a bench; benches round them,
       // candelabras flanking the gate, plants in the corners, benches by the south door
@@ -97,16 +104,18 @@ class LobbyHub {
       ['bookshelf', 19.7, 23.7], ['hearth', 25.5, 23.95], ['rugRound', 25.5, 26.5],
       ['armchair', 23.7, 26.2], ['armchair', 27.3, 26.2, true], ['plant', 29.4, 28.8], ['candelabra', 14.5, 28.8],
     ].map(([name, tx, ty, flip]) => ({ name, x: tx * T, y: ty * T, flip: !!flip }));
+    this.decor.push(...HeroNooks.decor(T));
 
     // furniture is solid, and stations stand on solid bases
     for (const o of this.decor) {
       const fp = PROP_FOOTPRINT[o.name];
       if (fp) d.addObstacle?.(o.x - fp[0] / 2, o.y - fp[1], fp[0], fp[1]);
     }
+    for (const o of HeroNooks.solids(T)) d.addObstacle?.(o.x, o.y, o.w, o.h);
     // the archery lane's targets are live (TrainingTarget, made by the game): hit them like the dummy
     this.targets = [[50.4, 18.6], [50.4, 21.8], [50.4, 25.0]].map(([tx, ty]) => ({ x: tx * T, y: ty * T }));
     for (const t of this.targets) d.addObstacle?.(t.x - 13, t.y - 8, 26, 8);
-    const base = { hero: [32, 12], bestiary: [24, 6], legend: [44, 5], potions: [48, 10], practice: [26, 6], clock: [24, 10], hourglass: [34, 10] };
+    const base = { hero: [16, 8],bestiary: [24, 6], legend: [44, 5], potions: [48, 10], practice: [26, 6], clock: [24, 10], hourglass: [34, 10] };
     for (const s of this.stations) {
       const fp = base[s.kind];
       if (fp) d.addObstacle?.(s.x - fp[0] / 2, s.y - fp[1] + 4, fp[0], fp[1]);
@@ -137,7 +146,7 @@ class LobbyHub {
     ];
     // wooden signs naming the rooms: [text, x, y (board centre), sort y]
     this.signs = [
-      ['HALL OF HEROES', 6.75, 3.75, 5], ['LIBRARY', 9.55, 14.3, 16], ['WORKSHOP', 36.6, 3.75, 5], ['QUARTERS', 16.9, 21.6, 23],
+      ['ARMORY', 6.75, 3.75, 5], ['HALL OF HEROES', 18.6, 31.75, 33],['LIBRARY', 9.55, 14.3, 16], ['WORKSHOP', 36.6, 3.75, 5], ['QUARTERS', 16.9, 21.6, 23],
     ].map(([text, tx, ty, sy]) => ({ text, x: tx * T, y: ty * T, sortY: sy * T }));
     this.signposts = [{ text: 'TRAINING GROUNDS', x: 34.6 * T, y: 19.0 * T }];
 
@@ -147,7 +156,7 @@ class LobbyHub {
       ['ginger', [[17.5, 18.4], [22, 17], [22, 24.5], [25.5, 26.4], [22, 21.5], [26.5, 18.2], [22.5, 8.5]], 6],
       ['black', [[4.2, 19.2], [7.4, 21.6], [5.2, 25.2], [9.4, 25.6], [7.2, 18.6]], 7],
       ['grey', [[36.2, 21.2], [42.5, 20.4], [46.4, 24.2], [38.6, 26.8], [45.2, 28.2]], 5],
-      ['white', [[25.5, 25.3], [21.8, 27.6], [28.4, 27.4]], 11],
+      ['white', [[25.5, 25.3], [21.8, 27.6], [21.6, 36.4], [21.5, 42.2], [17.8, 38.6], [26.4, 38.8], [21.9, 34.0], [28.4, 27.4]], 9],
       ['cream', [[45.2, 13.1], [48.2, 11.2], [47.6, 7.6], [44.6, 8.6]], 8],
     ].map(([coat, path, sit], i) => ({ coat, name: CAT_COATS[coat].name, sit, t: i * 7.3, pet: 0, path: path.map(([tx, ty]) => ({ x: tx * T, y: ty * T })) }));
     // fireflies drifting through the keep and the yard
@@ -381,6 +390,31 @@ class LobbyHub {
     });
   }
 
+  /**
+   * The teleport map (see HUD.drawTeleport): the hero vanishes in a puff of sparkles and
+   * reappears at (x, y), nudged to the nearest clear floor. Only onto the keep's floor.
+   * A shared command, so every machine moves them on the same tick.
+   */
+  teleport(hero, x, y) {
+    const d = this.world.dungeon;
+    const T = CONFIG.tileSize;
+    if (d.tileAt(Math.floor(x / T), Math.floor(y / T)) !== TILE.FLOOR) return;
+    if (hero.seat) this.standUp(hero);
+    const fx = this.world.effects;
+    const poof = (px, py) => fx.burst(px, py - 14, { count: 18, colors: ['#ffffff', '#a8d8ff', '#ffe680'], speed: [30, 110], life: [0.3, 0.6], up: 30 });
+    poof(hero.x, hero.y);
+    const pt = d.freePoint(x, y, hero.hw, hero.hh);
+    hero.x = pt.x;
+    hero.y = pt.y;
+    hero.kbx = 0;
+    hero.kby = 0;
+    poof(hero.x, hero.y);
+    if (hero === this.world.localPlayer) {
+      this.world.camera.follow(hero.x, hero.y, 0, d.width, d.height, true);
+      Sound.play('uiClick');
+    }
+  }
+
   /** Off the seat, onto the nearest clear floor beside it. */
   standUp(hero) {
     const s = hero.seat;
@@ -398,7 +432,8 @@ class LobbyHub {
     for (const s of this.stations) {
       if (s.kind === 'gate') this.drawGate(ctx, s);
       if (s.kind === 'practice') this.drawPracticePad(ctx, s);
-      if (s.kind !== 'workshop') drawShadow(ctx, s.x, s.y + 4, s.kind === 'hero' ? 18 : 26, 6);
+      if (s.kind === 'hero') this.drawNookRing(ctx, s);
+      if (s.kind !== 'workshop' && s.kind !== 'hero') drawShadow(ctx, s.x, s.y + 4, s.kind === 'hero' ? 18 : 26, 6);
     }
     // warm firelight spilling from the hearth across the quarters
     const h = this.decor.find((d) => d.name === 'hearth');
@@ -447,6 +482,8 @@ class LobbyHub {
       if (s.kind === 'gate') continue;
       // the workshop: a tinkerer welding gadgets among coils, gears and machines
       if (s.kind === 'workshop') items.push(...Scenes.drawables('workshop', s.x, s.y, this.time));
+      // a hero at home in their nook, unless someone's out playing them
+      else if (s.kind === 'hero') items.push(...HeroNooks.drawables(s.id, s.x, s.y, this.time, this.world.players.some((p) => p.classId === s.id)));
       else items.push({ y: s.y, draw: (ctx) => this.drawStation(ctx, s) });
     }
     for (const d of this.decor) {
@@ -545,8 +582,7 @@ class LobbyHub {
   }
 
   drawStation(ctx, s) {
-    if (s.kind === 'hero') this.drawStatue(ctx, s);
-    else if (s.kind === 'practice') this.drawPractice(ctx, s);
+    if (s.kind === 'practice') this.drawPractice(ctx, s);
     else if (s.kind === 'legend') this.drawLegendBoard(ctx, s);
     else if (s.kind === 'bestiary') this.drawLectern(ctx, s);
     else if (s.kind === 'potions') this.drawAlchemyTable(ctx, s);
@@ -702,8 +738,7 @@ class LobbyHub {
     for (const s of this.stations) {
       if (s.kind === 'hero') {
         const current = this.world.localPlayer.classId === s.id;
-        // names staggered on two rows so neighbours' don't run together
-        HUD.text(ctx, CONFIG.classes[s.id].name.toUpperCase(), s.x, s.y + 12 + s.label * 9, { size: 6, align: 'center', color: current ? '#ffe680' : '#d8c8a0' });
+        HUD.text(ctx, current ? `${CONFIG.classes[s.id].name.toUpperCase()} (YOU)` : CONFIG.classes[s.id].name.toUpperCase(), s.x, s.y + 14, { size: 6, align: 'center', color: current ? '#ffe680' : '#d8c8a0' });
       }
     }
     const s = this.near;
@@ -714,31 +749,20 @@ class LobbyHub {
 
   // ---------- station art ----------
 
-  /** Stone pedestal with the hero on top; the hero you're playing shows as a faint ghost. */
-  drawStatue(ctx, s) {
-    const current = this.world.localPlayer.classId === s.id;
-    const x = Math.round(s.x);
-    const y = Math.round(s.y);
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x - 17, y - 9, 34, 15);
-    ctx.fillStyle = '#5c5676';
-    ctx.fillRect(x - 16, y - 8, 32, 6);
-    ctx.fillStyle = '#46415b';
-    ctx.fillRect(x - 16, y - 2, 32, 7);
-    ctx.fillStyle = '#77699a';
-    ctx.fillRect(x - 16, y - 8, 32, 1);
-    if (current || this.near === s) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const g = ctx.createRadialGradient(x, y - 30, 2, x, y - 30, 34);
-      g.addColorStop(0, `rgba(255, 220, 120, ${current ? 0.35 : 0.22})`);
-      g.addColorStop(1, 'rgba(255, 220, 120, 0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(x - 34, y - 64, 68, 68);
-      ctx.restore();
-    }
-    const frame = heroFrame(Sprites.heroes[s.id], false, this.time + s.x * 0.01);
-    drawSprite(ctx, frame.img, x, y - 8, HERO_ANCHOR.x, HERO_ANCHOR.y, false, current ? 0.3 : 1);
+  /** A hero's nook lights up on the floor while you stand at it (gold dashes going round). */
+  drawNookRing(ctx, s) {
+    if (this.near !== s) return;
+    ctx.save();
+    ctx.strokeStyle = `rgba(255, 220, 120, ${0.55 + Math.sin(this.time * 4) * 0.15})`;
+    ctx.fillStyle = 'rgba(255, 220, 120, 0.08)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.lineDashOffset = -this.time * 10;
+    ctx.beginPath();
+    ctx.ellipse(s.x, s.y + 8, 24, 10, 0, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
   }
 
   /** Glowing green ring on the floor in front of the targets. */
@@ -1046,6 +1070,7 @@ class LobbyHub {
       else if (s.kind === 'hourglass') out.push({ x: s.x, y: s.y - 34, r: 90, s: 0.8, rgb: '170, 180, 255' });
     }
     out.push({ x: this.librarian.x, y: this.librarian.y - 10, r: 70, s: 0.7, rgb: '255, 200, 120' });
+    out.push(...HeroNooks.lights(CONFIG.tileSize, t));
     // each hero carries a little light, so nobody is lost in the dark
     for (const p of this.world.players) if (!p.dead) out.push({ x: p.x, y: p.y - 16, r: 78, s: 0.55 });
     return out;

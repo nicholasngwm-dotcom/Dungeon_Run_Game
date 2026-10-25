@@ -6,7 +6,7 @@
 //   /help                        the commands
 //
 // Recent lines sit above the bag and fade after a while; while the box is open the whole recent
-// history shows. Only in multiplayer.
+// history shows. Only in multiplayer: in single player, Enter just says so (a toast).
 
 const CHAT_FADE = 10;      // seconds a line stays up when the box is closed
 const CHAT_LINES = 50;     // lines kept
@@ -32,8 +32,10 @@ const Chat = {
       if (e.code !== 'Enter' && e.code !== 'NumpadEnter') return;
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
-      if (!this.app.mp || this.app.state !== 'playing' || Cheats.isOpen) return;
+      if (this.app.state !== 'playing' || Cheats.isOpen) return;
       e.preventDefault();
+      // single player: say so, rather than Enter quietly doing nothing
+      if (!this.app.mp) { if (!e.repeat) Menus.toast('CHAT IS ONLY IN MULTIPLAYER', '#a99bbd'); return; }
       this.open();
     }, true);
     this.input.addEventListener('keydown', (e) => {

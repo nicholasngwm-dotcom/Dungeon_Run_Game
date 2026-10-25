@@ -8,6 +8,17 @@
 
 const LOGO_W = 156;
 const LOGO_H = 104;
+// the torches' flicker, a loop of phases: [extra height, tip lean, side-lobe shift, ember [dx, dy] or null]
+const LOGO_FLICKER = [
+  [0, 0, 0, null],
+  [1, 1, 1, null],
+  [2, 1, 0, [0, 0]],
+  [1, 0, -1, [1, 2]],
+  [0, -1, 0, [1, 4]],
+  [-1, -1, 1, null],
+  [1, 0, 1, null],
+  [0, 1, -1, null],
+];
 
 function buildLogo() {
   const STONE = ['#2e2c38', '#3e3c4c', '#56546a', '#6e6c80', '#8e8ca2', '#aeacc0'];
@@ -74,15 +85,18 @@ function buildLogo() {
     return c;
   };
 
-  const flame = (p, cx, by) => {
-    p.poly([[cx - 4, by], [cx - 3, by - 6], [cx - 1, by - 5], [cx, by - 11], [cx + 2, by - 6], [cx + 4, by]], FIRE[0]);
-    p.poly([[cx - 3, by], [cx - 1, by - 5], [cx + 1, by - 8], [cx + 3, by]], FIRE[1]);
+  /** A torch flame at flicker phase `f` (see LOGO_FLICKER): taller or shorter, leaning, an ember above. */
+  const flame = (p, cx, by, f) => {
+    const [dh, lean, lobe, ember] = LOGO_FLICKER[f];
+    p.poly([[cx - 4, by], [cx - 3, by - 6 - lobe], [cx - 1, by - 5], [cx + lean, by - 11 - dh], [cx + 2, by - 6 + lobe], [cx + 4, by]], FIRE[0]);
+    p.poly([[cx - 3, by], [cx - 1, by - 5], [cx + 1 + lean, by - 8 - dh], [cx + 3, by]], FIRE[1]);
     p.ellipse(cx, by - 2, 2, 2, FIRE[2]);
-    p.px(cx, by - 3, FIRE[3]);
+    p.px(cx, by - 3 - Math.max(0, dh), FIRE[3]);
+    if (ember) p.px(cx + lean * 2 + ember[0], by - 13 - dh - ember[1], FIRE[2]);
   };
 
-  // ---------- the archway, the gate and the torches ----------
-  const back = PixelArt.bevel(PixelArt.make(LOGO_W, LOGO_H, (p) => {
+  // ---------- the archway, the gate and the torches (left flame at phase fl, right at fr) ----------
+  const back = (fl, fr) => PixelArt.bevel(PixelArt.make(LOGO_W, LOGO_H, (p) => {
     const cx = LOGO_W / 2;
     const top = 6;
     const outer = 46;   // the arch's half width
@@ -132,7 +146,7 @@ function buildLogo() {
       p.rect(tx - 1, 46, 3, 14, '#5b3922');
       p.rect(tx - 3, 44, 7, 3, '#80869a');
       p.rect(tx - 2, 58, 5, 2, '#80869a');
-      flame(p, tx, 44);
+      flame(p, tx, 44, s < 0 ? fl : fr);
     }
   }, OUTLINE));
 
@@ -140,41 +154,49 @@ function buildLogo() {
   const dungeon = letters(mask('DUNGEON', 16), PALE, '#1a1020');
   const run = letters(mask('RUN', 32), GOLD, '#5a2414');
 
-  const c = document.createElement('canvas');
-  c.width = LOGO_W;
-  c.height = LOGO_H;
-  const ctx = c.getContext('2d');
-  ctx.imageSmoothingEnabled = false;
-  // the torches' glow on the stone, under everything
-  for (const s of [-1, 1]) {
-    const g = ctx.createRadialGradient(LOGO_W / 2 + s * 59, 38, 1, LOGO_W / 2 + s * 59, 38, 22);
-    g.addColorStop(0, 'rgba(255, 170, 70, 0.35)');
-    g.addColorStop(1, 'rgba(255, 170, 70, 0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, LOGO_W, LOGO_H);
-  }
-  ctx.drawImage(back, 0, 0);
-  const dx = Math.round((LOGO_W - dungeon.width) / 2);
-  ctx.drawImage(dungeon, dx, 26);
-  const rx = Math.round((LOGO_W - run.width) / 2) + 4;
-  const ry = 50;
-  // speed streaks trailing off the left of RUN: it's dashing off to the right
-  for (const [y, len, col] of [[ry + 12, 26, FIRE[1]], [ry + 19, 34, GOLD[3]], [ry + 26, 22, FIRE[0]], [ry + 33, 14, GOLD[2]]]) {
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(rx - len - 1, y - 1, len + 4, 4);
-    ctx.fillStyle = col;
-    ctx.fillRect(rx - len, y, len + 2, 2);
-    ctx.fillStyle = '#fff6c8';
-    ctx.fillRect(rx - 4, y, 4, 1);
-  }
-  ctx.drawImage(run, rx, ry);
-  // a few glints on the gold
-  for (const [gx, gy] of [[rx + 6, ry + 4], [rx + run.width - 12, ry + 6], [rx + 26, ry + 3]]) {
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(gx, gy - 1, 1, 3);
-    ctx.fillRect(gx - 1, gy, 3, 1);
-  }
-  Sprites.logo = c;
+  /** One frame of the logo, the torches at flicker phases fl and fr. */
+  const frame = (fl, fr) => {
+    const c = document.createElement('canvas');
+    c.width = LOGO_W;
+    c.height = LOGO_H;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    // the torches' glow on the stone, under everything, swelling as the flame does
+    for (const s of [-1, 1]) {
+      const dh = LOGO_FLICKER[s < 0 ? fl : fr][0];
+      const g = ctx.createRadialGradient(LOGO_W / 2 + s * 59, 38, 1, LOGO_W / 2 + s * 59, 38, 22 + dh);
+      g.addColorStop(0, `rgba(255, 170, 70, ${0.33 + dh * 0.03})`);
+      g.addColorStop(1, 'rgba(255, 170, 70, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, LOGO_W, LOGO_H);
+    }
+    ctx.drawImage(back(fl, fr), 0, 0);
+    const dx = Math.round((LOGO_W - dungeon.width) / 2);
+    ctx.drawImage(dungeon, dx, 26);
+    const rx = Math.round((LOGO_W - run.width) / 2) + 4;
+    const ry = 50;
+    // speed streaks trailing off the left of RUN: it's dashing off to the right
+    for (const [y, len, col] of [[ry + 12, 26, FIRE[1]], [ry + 19, 34, GOLD[3]], [ry + 26, 22, FIRE[0]], [ry + 33, 14, GOLD[2]]]) {
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(rx - len - 1, y - 1, len + 4, 4);
+      ctx.fillStyle = col;
+      ctx.fillRect(rx - len, y, len + 2, 2);
+      ctx.fillStyle = '#fff6c8';
+      ctx.fillRect(rx - 4, y, 4, 1);
+    }
+    ctx.drawImage(run, rx, ry);
+    // a few glints on the gold
+    for (const [gx, gy] of [[rx + 6, ry + 4], [rx + run.width - 12, ry + 6], [rx + 26, ry + 3]]) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(gx, gy - 1, 1, 3);
+      ctx.fillRect(gx - 1, gy, 3, 1);
+    }
+    return c;
+  };
+  // the animation (the two torches out of step with each other); frame 0 doubles as the still logo
+  const n = LOGO_FLICKER.length;
+  Sprites.logoFrames = LOGO_FLICKER.map((_, i) => frame(i, (i + Math.floor(n / 2) + 1) % n));
+  Sprites.logo = Sprites.logoFrames[0];
 
   // ---------- the icon: the gate with its watching eyes, gold-rimmed (browser tab, 32x32) ----------
   Sprites.logoIcon = PixelArt.bevel(PixelArt.make(32, 32, (p) => {

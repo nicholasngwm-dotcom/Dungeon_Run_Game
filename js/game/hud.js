@@ -109,6 +109,132 @@ const HUD = {
       this.text(ctx, 'RIGHT CLICK: ICE ARROW', 486, 440, { size: 8, color: '#9ad0ff' });
     }
     this.drawAbilityTooltip(ctx, p);
+    if (game.lobby) this.drawTeleport(ctx, game);
+  },
+
+  // ---------- the lobby's teleport map ----------
+
+  teleportOpen: false,   // this screen's map of the keep is open
+
+  /** The TELEPORT button, under the lobby's title on the right (below the room code in multiplayer). */
+  teleportButtonRect(game) { return { x: 846, y: game.multiplayer ? 112 : 50, w: 100, h: 20 }; },
+
+  /**
+   * Where the keep's map is drawn when open: right of the hero panel, the gems and the chat
+   * (x < 354), left of the room code and the ready-check panel (x > 742), above the ability bar.
+   */
+  teleportMapRect(game) {
+    const d = game.dungeon;
+    const h = 330;
+    return { x: 362, y: 66, w: Math.round((h * d.width) / d.height), h, s: h / d.height };
+  },
+
+  /** The world point under a screen point on the map, if it's the keep's floor; else null. */
+  teleportSpot(game, sx, sy) {
+    const r = this.teleportMapRect(game);
+    const d = game.dungeon;
+    const x = (sx - r.x) / r.s;
+    const y = (sy - r.y) / r.s;
+    const T = CONFIG.tileSize;
+    if (x < 0 || y < 0 || x >= d.width || y >= d.height) return null;
+    return d.tileAt(Math.floor(x / T), Math.floor(y / T)) === TILE.FLOOR ? { x, y } : null;
+  },
+
+  /**
+   * Mouse on the teleport button and map, run before the hero reads its input (like the
+   * bag): the button opens and closes the map; while it's open, every click is the map's
+   * (left: teleport there, right or outside it: close), so none of them attack.
+   * game: the lobby being played on this screen, or null (closes the map).
+   */
+  handleTeleportMouse(game) {
+    if (!game || !game.lobby || game.localPlayer.dead) { this.teleportOpen = false; return; }
+    const m = Input._mouse;
+    const inside = (r) => m.x >= r.x && m.x < r.x + r.w && m.y >= r.y && m.y < r.y + r.h;
+    if (m.leftPressed && inside(this.teleportButtonRect(game))) {
+      m.left = m.leftPressed = false;
+      this.teleportOpen = !this.teleportOpen;
+      Sound.play('uiClick');
+      return;
+    }
+    if (!this.teleportOpen) return;
+    m.left = false;
+    if (m.rightPressed) {
+      m.right = m.rightPressed = false;
+      this.teleportOpen = false;
+      return;
+    }
+    if (!m.leftPressed) return;
+    m.leftPressed = false;
+    if (!inside(this.teleportMapRect(game))) { this.teleportOpen = false; return; }
+    const spot = this.teleportSpot(game, m.x, m.y);
+    if (!spot) return;
+    App.command({ type: 'teleport', x: Math.round(spot.x), y: Math.round(spot.y) });
+    this.teleportOpen = false;
+  },
+
+  /** The TELEPORT button and, while open, the map of the keep: rooms named, stations and heroes marked. */
+  drawTeleport(ctx, game) {
+    const m = Input._mouse;
+    const b = this.teleportButtonRect(game);
+    const hot = m.x >= b.x && m.x < b.x + b.w && m.y >= b.y && m.y < b.y + b.h;
+    this.panel(ctx, b.x, b.y, b.w, b.h);
+    if (hot || this.teleportOpen) {
+      ctx.fillStyle = 'rgba(255, 230, 128, 0.18)';
+      ctx.fillRect(b.x + 3, b.y + 3, b.w - 6, b.h - 6);
+    }
+    this.text(ctx, this.teleportOpen ? 'CLOSE MAP' : 'TELEPORT', b.x + b.w / 2, b.y + 6, { size: 7, align: 'center', color: hot ? '#ffffff' : '#ffe680' });
+    if (!this.teleportOpen) return;
+
+    const r = this.teleportMapRect(game);
+    const d = game.dungeon;
+    this.panel(ctx, r.x - 6, r.y - 20, r.w + 12, r.h + 26);
+    this.text(ctx, 'CLICK ANYWHERE TO TELEPORT', r.x, r.y - 15, { size: 6, color: '#ffe680' });
+    this.text(ctx, 'RIGHT CLICK: CLOSE', r.x + r.w, r.y - 15, { size: 6, align: 'right', color: '#d8c8a0' });
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(d.background, r.x, r.y, r.w, r.h);
+    ctx.restore();
+    const at = (x, y) => [Math.round(r.x + x * r.s), Math.round(r.y + y * r.s)];
+    // the stations, as little gold diamonds (the gate in violet)
+    for (const s of game.lobby.stations) {
+      const [x, y] = at(s.x, s.kind === 'gate' ? s.bottom + 8 : s.y);
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x - 3, y - 2, 6, 4);
+      ctx.fillRect(x - 2, y - 3, 4, 6);
+      ctx.fillStyle = s.kind === 'gate' ? '#c08aff' : '#ffd34a';
+      ctx.fillRect(x - 2, y - 1, 4, 2);
+      ctx.fillRect(x - 1, y - 2, 2, 4);
+    }
+    // the rooms' names
+    const T = CONFIG.tileSize;
+    const names = { hall: 'GREAT HALL', armory: 'ARMORY', heroes: 'HALL OF HEROES', library: 'LIBRARY', workshop: 'WORKSHOP', quarters: 'QUARTERS', yard: 'TRAINING GROUNDS', garden: 'GARDEN' };
+    for (const [id, room] of Object.entries(d.rooms || {})) {
+      if (!names[id]) continue;
+      const [x, y] = at(((room.x0 + room.x1 + 1) / 2) * T, (room.y0 + 0.4) * T);
+      this.text(ctx, names[id], x, y, { size: 6, align: 'center', color: '#f4ead7' });
+    }
+    // the heroes: you in blue (blinking), everyone else in white
+    for (const p of game.players) {
+      if (p.dead) continue;
+      const me = p === game.localPlayer;
+      if (me && Math.floor(performance.now() / 300) % 2) continue;
+      const [x, y] = at(p.x, p.y);
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x - 3, y - 3, 7, 7);
+      ctx.fillStyle = me ? '#6ab8ff' : '#ffffff';
+      ctx.fillRect(x - 2, y - 2, 5, 5);
+    }
+    // under the mouse: a ring where you'd land, or a red cross over walls
+    if (m.x >= r.x && m.x < r.x + r.w && m.y >= r.y && m.y < r.y + r.h) {
+      const ok = this.teleportSpot(game, m.x, m.y);
+      ctx.save();
+      if (ok) PFX.ring(ctx, m.x, m.y, 7, 4, '#8cff9a', 1);
+      else {
+        ctx.fillStyle = '#ff5a5a';
+        for (let i = -3; i <= 3; i++) { ctx.fillRect(Math.round(m.x) + i, Math.round(m.y) + i, 1, 1); ctx.fillRect(Math.round(m.x) + i, Math.round(m.y) - i, 1, 1); }
+      }
+      ctx.restore();
+    }
   },
 
   /** Coin counter next to the health bar (dungeon runs); pops when coins come in. */

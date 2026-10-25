@@ -82,16 +82,29 @@ const App = {
 
   /**
    * The logo (built now the Alagard font is in, it's lettered with it): it takes the main menu's
-   * title, and its icon goes on the browser tab. The title's text stays as the image's alt text.
+   * title, its torches flickering through Sprites.logoFrames, and its icon goes on the browser tab.
+   * The title's text stays as the canvas's accessible label.
    */
   showLogo() {
     buildLogo();
     const h1 = document.querySelector('#screen-menu .title');
-    const img = new Image();
-    img.src = Sprites.logo.toDataURL();
-    img.alt = 'Dungeon Run';
-    img.className = 'logo';
-    h1.replaceChildren(img);
+    const cv = document.createElement('canvas');
+    cv.width = Sprites.logo.width;
+    cv.height = Sprites.logo.height;
+    cv.className = 'logo';
+    cv.setAttribute('role', 'img');
+    cv.setAttribute('aria-label', 'Dungeon Run');
+    const ctx = cv.getContext('2d');
+    let f = 0;
+    const tick = () => {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(Sprites.logoFrames[f], 0, 0);
+      f = (f + 1) % Sprites.logoFrames.length;
+      // a little uneven, the way fire is
+      if (cv.isConnected) setTimeout(tick, 90 + Math.random() * 70);
+    };
+    h1.replaceChildren(cv);
+    tick();
     const link = document.querySelector('link[rel="icon"]') || document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'icon' }));
     link.href = Sprites.logoIcon.toDataURL();
   },
@@ -577,6 +590,8 @@ const App = {
 
     // the bag takes mouse clicks on its slots before the hero sees them
     HUD.handleBagMouse(this.state === 'playing' && this.game ? this.game.localPlayer : null);
+    // and in the lobby, the teleport button and its map of the keep
+    HUD.handleTeleportMouse(this.state === 'playing' && this.game ? this.game : null);
 
     if (this.mp) {
       // multiplayer: the session steps the shared world whatever menu is open here;

@@ -206,7 +206,70 @@ class Rogue extends Player {
       }
       Sound.play('daggerStorm', 0.08);
     }
+    // the whirlwind kicks up dust round her feet
+    if (Math.random() < dt * 30) {
+      const a = rand(0, TAU);
+      world.effects.burst(this.x + Math.cos(a) * 14, this.y + 8 + Math.sin(a) * 5, { count: 1, colors: ['#b8a888', '#8a7a66', '#d8d0c0'], speed: [40, 90], life: [0.2, 0.4], up: 30 });
+    }
     if (s.t >= c.duration) this.storm = null;
+  }
+
+  /**
+   * Dagger storm: she spins like a top (her sprite narrowing and turning round) inside a
+   * little tornado of wind and amber streaks, daggers whirling round in it. The far side of
+   * the tornado is drawn behind her, the near side in front.
+   */
+  drawFrame(ctx, frame, anchor, alpha = 1, flip = this.facing < 0) {
+    const s = this.storm;
+    if (!s) return super.drawFrame(ctx, frame, anchor, alpha, flip);
+    const k = clamp(Math.min(s.t / 0.15, (this.cfg.storm.duration - s.t) / 0.2), 0, 1);
+    this.drawTornado(ctx, s.t, k, false);
+    const turn = Math.cos(s.t * TAU * 3.5);
+    const sx = Math.max(0.25, Math.round(Math.abs(turn) * 4) / 4);
+    const x = Math.round(this.x);
+    ctx.save();
+    ctx.translate(x, 0);
+    ctx.scale(sx, 1);
+    ctx.translate(-x, 0);
+    super.drawFrame(ctx, frame, anchor, alpha, turn < 0);
+    ctx.restore();
+    this.drawTornado(ctx, s.t, k, true);
+  }
+
+  /** One half of the dagger storm's tornado (front: the near half), k = how far it has spun up. */
+  drawTornado(ctx, t, k, front) {
+    const x = this.x;
+    const y = this.y + 8;
+    const from = front ? 0 : Math.PI;
+    const to = front ? Math.PI : TAU;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // bands of wind, wider towards the top, each turning at its own speed and swaying
+    for (let i = 0; i < 6; i++) {
+      const h = i / 5;
+      const r = (8 + h * 20) * (0.6 + 0.4 * k);
+      const by = y - h * 46 * (0.5 + 0.5 * k) + Math.sin(t * 9 + i) * 1.5;
+      const sway = Math.sin(t * 5 + h * 3) * h * 4;
+      const col = i % 2 ? `rgba(${ROGUE_FX.amber}, ${0.55 * k})` : `rgba(225, 225, 240, ${0.55 * k})`;
+      PFX.ring(ctx, x + sway, by, r, r * 0.32, col, 2, { dash: [4, 3], spin: -t * (16 - i), from, to });
+    }
+    ctx.restore();
+    // daggers whirling round in it
+    const d = Sprites.weapons.dagger;
+    for (let i = 0; i < 4; i++) {
+      const a = -t * 11 + (i * TAU) / 4;
+      if ((Math.sin(a) > 0) !== front) continue;
+      const r = (14 + (i % 2) * 8) * k;
+      const dx = x + Math.cos(a) * r;
+      const dy = y - 14 - i * 7 + Math.sin(a) * r * 0.32;
+      ctx.globalAlpha = k;
+      drawRotated(ctx, d.img, dx, dy, d.pivotX, d.pivotY, a + Math.PI / 2, Math.cos(a) > 0);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  drawWeapon(ctx) {
+    if (!this.storm) super.drawWeapon(ctx);   // spinning: the daggers are all in the tornado
   }
 
   // ---------- RMB: swift strike ----------

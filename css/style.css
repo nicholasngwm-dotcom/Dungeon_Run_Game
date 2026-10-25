@@ -97,7 +97,7 @@ html, body {
 }
 .menu-side .title { font-size: 34px; text-align: left; }
 /* the logo (Sprites.logo, drawn small and scaled up with sharp pixels) in place of the title text */
-.title img.logo { display: block; width: 281px; height: auto; image-rendering: pixelated; margin-left: -18px; }
+.title .logo { display: block; width: 281px; height: auto; image-rendering: pixelated; margin-left: -18px; }
 .menu-side .title span { font-size: 60px; }
 .menu-ornament {
   position: relative;
@@ -523,17 +523,19 @@ h2 {
 }
 .toast.fade { opacity: 0; }
 
-/* multiplayer chat: above the bag, bottom left (Enter to talk) */
+/* multiplayer chat, bottom left (Enter to talk): its bottom edge sits at y 404, above the bag's
+   label and the potion descriptions that pop up over the bag (up to ~y 410), and closed it stays
+   below the party list (down to ~y 326 with a full party) */
 .chat {
   position: absolute;
   left: 14px;
-  bottom: 62px;
-  width: 340px;
+  bottom: 136px;
+  width: 300px;
   z-index: 30;
   pointer-events: none;
 }
 .chat-log {
-  max-height: 128px;
+  max-height: 72px;
   overflow: hidden;
   font-size: 8px;
   line-height: 1.6;
@@ -556,7 +558,7 @@ h2 {
 .chat-log div.system { color: #ffe680; font-style: italic; }
 .chat:not(.open) .chat-log div.old { opacity: 0; }
 .chat.open { pointer-events: auto; }
-.chat.open .chat-log { max-height: 180px; overflow-y: auto; background: rgba(20, 12, 8, 0.35); }
+.chat.open .chat-log { max-height: 150px; overflow-y: auto; background: rgba(20, 12, 8, 0.35); }
 .chat-input { display: none; }
 .chat.open .chat-input {
   display: block;

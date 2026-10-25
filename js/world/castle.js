@@ -1,7 +1,9 @@
 // The lobby's castle keep: the party's home between runs. A great hall with the
-// dungeon gate in its north wall, and rooms off it through doorways: the hall of
-// heroes, the library, the workshop and the sleeping quarters, with the training
-// grounds outside in the castle yard (grass, hedges and trees instead of walls).
+// dungeon gate in its north wall, and rooms off it through doorways: the armory,
+// the library, the workshop and the sleeping quarters, with the big hall of heroes
+// through the quarters to the south (every hero busy in a nook of their own, see
+// HeroNooks) and the training grounds outside in the castle yard (grass, hedges
+// and trees instead of walls).
 // Warm materials (wood floors, sandstone walls, windows, tapestries) instead of
 // dungeon stone. Same interface as Dungeon (grid, collision, background, torches),
 // plus furniture obstacles (see addObstacle) that bodies bump into.
@@ -9,7 +11,8 @@
 // Room floors in tile coordinates (inclusive). floor: flag | wood | stone | dirt | grass.
 const KEEP_ROOMS = {
   hall:     { x0: 14, y0: 5,  x1: 29, y1: 19, floor: 'flag' },
-  heroes:   { x0: 2,  y0: 5,  x1: 11, y1: 12, floor: 'flag' },
+  armory:   { x0: 2,  y0: 5,  x1: 11, y1: 12, floor: 'flag' },
+  heroes:   { x0: 4,  y0: 33, x1: 39, y1: 45, floor: 'wood' },
   library:  { x0: 2,  y0: 16, x1: 11, y1: 28, floor: 'wood' },
   workshop: { x0: 32, y0: 5,  x1: 41, y1: 12, floor: 'flag' },
   quarters: { x0: 14, y0: 23, x1: 29, y1: 28, floor: 'wood' },
@@ -20,13 +23,14 @@ const KEEP_ROOMS = {
 
 // Doorways carved through the walls between rooms: [x0, y0, x1, y1] in tiles.
 const KEEP_DOORS = [
-  [12, 9, 13, 11],    // hall of heroes <-> great hall
+  [12, 9, 13, 11],    // armory <-> great hall
   [12, 17, 13, 19],   // library <-> great hall
   [30, 9, 31, 11],    // workshop <-> great hall
   [30, 17, 31, 19],   // great hall <-> the yard (the keep's side door)
-  [6, 13, 7, 15],     // hall of heroes <-> library
+  [6, 13, 7, 15],     // armory <-> library
   [36, 13, 37, 15],   // workshop <-> the yard
   [21, 20, 22, 22],   // great hall <-> quarters
+  [21, 29, 22, 32],   // quarters <-> hall of heroes
 ];
 
 const KEEP_COLORS = {
@@ -55,7 +59,7 @@ class CastleKeep extends Dungeon {
     super({ custom: true });
     this.T = CONFIG.tileSize;
     this.cols = 54;
-    this.rows = 32;
+    this.rows = 48;
     this.lobby = true;
     this.pillars = [];
     this.width = this.cols * this.T;
@@ -90,11 +94,12 @@ class CastleKeep extends Dungeon {
 
   get floorBounds() {
     const T = this.T;
-    return { left: 2 * T, top: 5 * T, right: 52 * T, bottom: 30 * T };
+    return { left: 2 * T, top: 5 * T, right: 52 * T, bottom: 46 * T };
   }
 
-  /** Wall tiles bordering the yard are hedges and trees rather than castle stone. */
+  /** Wall tiles bordering the yard are hedges and trees rather than castle stone (the hall of heroes' walls below it are stone). */
   isOutdoorWall(tx, ty) {
+    if (ty > 30) return false;
     return tx >= 52 || (ty >= 30 && tx >= 32) || (tx >= 43 && ty <= 4);
   }
 
@@ -224,15 +229,26 @@ class CastleKeep extends Dungeon {
   }
 
   /**
-   * Baked rugs: the red runner from the quarters up to the gate, the long purple
-   * one under the hero statues, the library's blue carpet.
+   * Baked rugs: the red runner from the gate through the quarters into the hall of
+   * heroes, the long purple one in the armory, the library's blue carpet.
    */
   drawRugs(p) {
     const T = this.T;
-    // runner down the great hall, through the doorway and into the quarters
-    Castle.rug(p, 21 * T + 4, 5 * T, 2 * T - 8, 19 * T, ['#3e0f16', '#7c1f2a', '#dcb44c', '#a63036'], { runner: true });
+    // runner down the great hall, through the quarters and into the hall of heroes
+    Castle.rug(p, 21 * T + 4, 5 * T, 2 * T - 8, 36 * T, ['#3e0f16', '#7c1f2a', '#dcb44c', '#a63036'], { runner: true });
     Castle.rug(p, 2.6 * T, 7.2 * T, 8.8 * T, 2.6 * T, ['#1e1430', '#4a2a6a', '#d4ac4c', '#6a3a8a']);
     Castle.rug(p, 3.2 * T, 20.2 * T, 6.2 * T, 5.4 * T, ['#141a30', '#22305a', '#a07a24', '#2a3a6a']);
+    // a rug in each hero's colours under their nook in the hall of heroes (north row: against the
+    // wall; south row: reaching down towards the south wall)
+    for (const n of Object.values(HERO_NOOKS)) {
+      const [hx, hy] = n.at;
+      const north = hy < 40;
+      const left = hx - 2.5;
+      const right = hx + (n.rugTo ?? 2.5);
+      const top = north ? hy - 1.3 : hy - 0.8;
+      const bottom = north ? hy + 1.0 : hy + 2.7;
+      Castle.rug(p, left * T, top * T, (right - left) * T, (bottom - top) * T, n.rug);
+    }
   }
 
   /**
@@ -323,11 +339,14 @@ class CastleKeep extends Dungeon {
     }
     // tapestries in the great hall flanking the gate
     for (const tx of [18.5, 25]) Castle.tapestry(p, tx * T, 3 * T + 2, tx < 22 ? ['#5a1a22', '#87262a', '#d4ac4c'] : ['#1e2c4e', '#2c4270', '#d4ac4c']);
+    // the hall of heroes: each north-row hero's colours hung above their nook
+    for (const n of Object.values(HERO_NOOKS)) if (n.tapestry) Castle.tapestry(p, n.at[0] * T, 31 * T + 2, n.tapestry);
     this.drawYardWear(p);
     // wall sconces (their flames and glow are drawn live by drawTorches)
     const sconces = [[5.1, 3], [8.4, 3], [14.8, 3], [20.6, 3], [23.4, 3], [29.2, 3], [36.5, 3], [41.4, 3],
       [3.6, 14], [10.4, 14], [33.6, 14], [40.4, 14],
-      [19.4, 21], [23.9, 21], [27.1, 21]];
+      [19.4, 21], [23.9, 21], [27.1, 21],
+      [5.6, 31], [11.2, 31], [16.1, 31], [26.2, 31], [32.2, 31], [38.4, 31]];
     for (const [tx, ty] of sconces) {
       Tiles.torchBracket(p, tx * T - 16, ty * T);
       this.torches.push({ x: tx * T, y: ty * T + 8, seed: (tx * 7.3 + ty) % 10 });
