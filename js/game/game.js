@@ -180,8 +180,10 @@ class Game {
     this.lastCrit = crit;   // (Piercing Crit reads it straight after)
     // a Bard-weakened target takes extra damage
     const weak = target.weakenUntil > this.time ? 1 + CONFIG.classes.bard.ult.weakenTaken : 1;
-    const dmg = Math.max(1, Math.round(amount * weak * (crit ? src.critMultiplier ?? CONFIG.player.critMultiplier : 1) * src.damageMultiplier * src.buffDamage * src.upgradeDamage * (fire ? Upgrades.fireScale(src) : 1)));
+    let dmg = Math.max(1, Math.round(amount * weak * (crit ? src.critMultiplier ?? CONFIG.player.critMultiplier : 1) * src.damageMultiplier * src.buffDamage * src.upgradeDamage * (fire ? Upgrades.fireScale(src) : 1)));
     if (!target.takeDamage(dmg, this)) return 0;
+    // a magic pillar's ward caps what actually landed (see MagicPillar): show and count that
+    if (target.appliedDamage !== undefined) { dmg = target.appliedDamage; target.appliedDamage = undefined; }
     // a sleeping boss is jolted awake: it takes a moment to come round
     if (this.boss && this.boss.sleepUntil > this.time + CONFIG.classes.bard.lullaby.wake && this.boss.getTargets().includes(target)) {
       this.boss.sleepUntil = this.time + CONFIG.classes.bard.lullaby.wake;
@@ -377,9 +379,31 @@ class Game {
       this.pendingSpawns = Math.max(0, this.pendingSpawns - 1);
       const enemy = createEnemy(type, x, y);
       this.addEnemy(enemy);
+      this.addCompanions(enemy);
       if (setup) setup(enemy);
       this.effects.burst(x, y - 10, { count: 12, colors: ['#b45aff', '#6a28c8', '#e0c0ff'], speed: [30, 100], up: 60 });
     }).spawn = true;
+  }
+
+  /**
+   * An enemy that never comes alone (CONFIG.enemies[type].companions: [[type, n]]): the clay slimes come
+   * in threes, the ancient light with its totem. They appear round it, and it's told of each (adopt).
+   * sleeper(c): instead of joining the fight now, each is handed over (the run's first waves, waiting).
+   */
+  addCompanions(enemy, sleeper = null) {
+    const list = enemy.cfg.companions;
+    if (!list || enemy.isCompanion) return;
+    let i = 0;
+    for (const [type, n] of list) {
+      for (let k = 0; k < n; k++, i++) {
+        const a = (i / 3) * TAU + 0.6;
+        const pt = this.dungeon.freePoint(enemy.x + Math.cos(a) * 34, enemy.y + Math.sin(a) * 22, 10, 8);
+        const c = createEnemy(type, pt.x, pt.y);
+        c.isCompanion = true;
+        enemy.adopt?.(c);
+        if (sleeper) { this.scaleEnemy(c); sleeper(c); } else this.addEnemy(c);
+      }
+    }
   }
 
   /**

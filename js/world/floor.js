@@ -378,6 +378,7 @@ class FloorMap extends Dungeon {
     const B = (x, y) => { const t = this.baseTile(x, y); return t === TILE.COVER ? TILE.FLOOR : t; };
     const grave = this.themeId === 'graveyard';
     const castle = this.themeId === 'castle';
+    const ruins = this.themeId === 'ruins';
     const deep = grave && this.bossType === 'deathbringer';
     for (let ty = cy * CHUNK; ty < (cy + 1) * CHUNK && ty < this.rows; ty++) {
       for (let tx = cx * CHUNK; tx < (cx + 1) * CHUNK && tx < this.cols; tx++) {
@@ -387,6 +388,8 @@ class FloorMap extends Dungeon {
           const zone = this.zone[this.idx(tx, ty)];
           if (zone === ZONE.ROOM && this.hasVault && this.nearRoom(this.vaultRoom, tx, ty)) {
             VaultTiles.floor(p, x, y, rng, tx, ty);
+          } else if (ruins) {
+            this.ruinsFloor(p, tx, ty, zone, rng);
           } else if (castle) {
             this.castleFloor(p, tx, ty, zone, rng);
           } else if (this.manor && this.nearRoom(this.bossRoom, tx, ty)) {
@@ -416,7 +419,10 @@ class FloorMap extends Dungeon {
         const below1 = B(tx, ty + 1) === TILE.FLOOR;
         const below2 = B(tx, ty + 1) !== TILE.FLOOR && B(tx, ty + 2) === TILE.FLOOR;
         const edges = { left: B(tx - 1, ty) === TILE.FLOOR, right: B(tx + 1, ty) === TILE.FLOOR, up: B(tx, ty - 1) === TILE.FLOOR, down: false };
-        if (castle) {
+        if (ruins) {
+          if (below1 || below2) RuinsTiles.wallFace(p, x, y, below1 ? 1 : 0, rng);
+          else RuinsTiles.wallTop(p, x, y, rng, edges);
+        } else if (castle) {
           this.castleWall(p, tx, ty, below1 ? 1 : below2 ? 0 : -1, edges, rng);
         } else if (this.manor && this.nearRoom(this.bossRoom, tx, ty, 1, 1)) {
           if (below1 || below2) ManorTiles.wallFace(p, x, y, below1 ? 1 : 0, rng, tx);
@@ -434,6 +440,11 @@ class FloorMap extends Dungeon {
       }
     }
     // things hung on the walls span two tiles, so they go on after every tile (including the row above the chunk)
+    if (ruins) {
+      for (let ty = cy * CHUNK - 1; ty < (cy + 1) * CHUNK && ty < this.rows; ty++) {
+        for (let tx = cx * CHUNK; tx < (cx + 1) * CHUNK && tx < this.cols; tx++) this.ruinsWallHanging(p, tx, ty, B);
+      }
+    }
     if (castle) {
       for (let ty = cy * CHUNK - 1; ty < (cy + 1) * CHUNK && ty < this.rows; ty++) {
         for (let tx = cx * CHUNK; tx < (cx + 1) * CHUNK && tx < this.cols; tx++) this.castleWallHanging(p, tx, ty, B);
@@ -472,6 +483,41 @@ class FloorMap extends Dungeon {
     let h = (Math.imul(tx, 73856093) ^ Math.imul(ty, 19349663) ^ this.seed) >>> 0;
     h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
     return (h ^ (h >>> 16)) >>> 0;
+  }
+
+  // ---------- the ruins' look (see RuinsTiles) ----------
+
+  /** Mossy temple slabs in the rooms (a rune circle round the middle of the guardian's), grassy stepping-stone paths in the halls. */
+  ruinsFloor(p, tx, ty, zone, rng) {
+    const T = this.T;
+    const x = tx * T;
+    const y = ty * T;
+    if (zone === ZONE.HALL) {
+      const l = this.hallAt(x + T / 2, y + T / 2);
+      if (l) {
+        let a = this.rooms[l.a];
+        let b = this.rooms[l.b];
+        if (a.gx > b.gx || a.gy > b.gy) [a, b] = [b, a];
+        const along = a.gy === b.gy;
+        RuinsTiles.hall(p, x, y, rng, along, along ? ty - a.midY : tx - a.midX);
+        return;
+      }
+    }
+    RuinsTiles.floor(p, x, y, rng);
+    const boss = this.bossRoom;
+    if (boss && this.nearRoom(boss, tx, ty)) {
+      const cx = (boss.x0 + boss.x1 + 1) / 2 * T;
+      const cy = (boss.y0 + boss.y1 + 1) / 2 * T;
+      RuinsTiles.circle(p, x, y, cx, cy, 6.5 * T);
+    }
+  }
+
+  /** Glyph tablets set into the ruins' walls here and there (the upper tile of a two-tile wall face). */
+  ruinsWallHanging(p, tx, ty, B) {
+    if (B(tx, ty) === TILE.FLOOR || B(tx, ty + 1) === TILE.FLOOR || B(tx, ty + 2) !== TILE.FLOOR) return;
+    if (B(tx - 1, ty + 2) !== TILE.FLOOR || B(tx + 1, ty + 2) !== TILE.FLOOR) return;
+    if (this.torches.some((t) => Math.abs(t.tx - tx) <= 1 && t.ty === ty)) return;
+    if (this.tileHash(tx, ty) % 11 === 0) RuinsTiles.tablet(p, tx * this.T, ty * this.T);
   }
 
   castleFloor(p, tx, ty, zone, rng) {

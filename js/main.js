@@ -38,7 +38,7 @@ const App = {
       ['Forging the heroes...', buildHeroSprites],
       ['Raising the dead...', () => { buildEnemySprites(); buildBossSprites(); buildPhantomSprites(); buildDeathbringerSprites(); buildManorSprites(); buildVaultSprites(); }],
       ['Sharpening the blades...', () => { buildItemSprites(); buildGraveyardSprites(); }],   // graveyard after the items: it adds to Sprites.projectiles
-      ['Crowning the court...', () => { buildCastleSprites(); buildQueenSprites(); buildKingSprites(); buildRoyalSetPieces(); buildCastleDecor(); }],
+      ['Crowning the court...', () => { buildCastleSprites(); buildQueenSprites(); buildKingSprites(); buildRoyalSetPieces(); buildCastleDecor(); buildRuinsSprites(); }],
       ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); buildObstacleSprites(); buildBarrelSprites(); }],   // obstacles after the cover (they add to Sprites.cover)
       ['Brewing potions...', () => { buildPotionSprites(); buildIconSprites(); buildRocketeerSprites(); buildBakerSprites(); buildUpgradeSprites(); }],   // the rocketeer's and baker's gear add to the weapons, items and icons
       ['Rehearsing the battles...', () => MenuShowcase.start(0)],

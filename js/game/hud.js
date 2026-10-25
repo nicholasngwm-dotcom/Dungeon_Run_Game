@@ -983,7 +983,7 @@ const HUD = {
   BOSS_CARDS: {
     King: { band: ['#3e1220', '#62182c', '#8a2438'], trim: '#ecd690', glow: '255, 210, 120', h: 118 },
     Queen: { band: ['#1e1236', '#2a1840', '#46286a'], trim: '#ff6a80', glow: '255, 110, 220', h: 104 },
-    Golem: { band: ['#2e1c10', '#4a2e18', '#6e4826'], trim: '#ffb02e', glow: '255, 150, 60', h: 150 },
+    Golem: { band: ['#1a2a1c', '#2e4430', '#4a6a44'], trim: '#5cf0d8', glow: '90, 240, 215', h: 150 },
     PhantomKing: { band: ['#140a20', '#24123a', '#3a2260'], trim: '#b45aff', glow: '180, 90, 255', h: 112 },
     Deathbringer: { band: ['#06040a', '#120a1c', '#22143a'], trim: '#dcb44c', glow: '150, 90, 255', h: 170 },
     RoyalPrince: { band: ['#2e1c10', '#5a3a1e', '#8a5a2e'], trim: '#ecd690', glow: '255, 210, 140', h: 100 },

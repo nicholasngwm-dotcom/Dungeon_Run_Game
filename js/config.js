@@ -551,6 +551,112 @@ const CONFIG = {
       hp: 90, speed: 64, radius: 13, damage: 14,
       preferredMin: 150, preferredMax: 280, windup: 0.6, cooldown: 3.4, dropSpeed: 250, drops: 3, spreadDegrees: 22, bounces: 1, coins: 0,
     },
+
+    // ---------- the Ancient Ruins: rock and clay guardians, stirred by the magic lingering in the air ----------
+    // Rockmite: a little rock golem; keeps back and throws small rocks
+    rockmite: {
+      hp: 70, speed: 66, radius: 11, damage: 14,
+      preferredMin: 150, preferredMax: 280, windup: 0.5, cooldown: 1.5, rockSpeed: 320,
+    },
+    // Rock disc: a floating stone ring with magic at its core; aims (a line that locks), then fires a laser
+    rockDisc: {
+      hp: 90, speed: 58, radius: 13, damage: 22,
+      preferredMin: 200, preferredMax: 340, windup: 1.0, aimLockAt: 0.35, beamTime: 0.25, beamWidth: 12, cooldown: 2.4,
+    },
+    // Clay guard: its clay shield soaks the first hit it takes, then crumbles; thrusts its spear down a lane
+    clayGuard: {
+      hp: 140, speed: 64, radius: 14, damage: 24,
+      attackRange: 80, thrustReach: 104, thrustWidth: 26, windup: 0.55, recovery: 0.5, cooldown: 1.1, knockbackResist: 0.3,
+    },
+    // Clay slime: comes in threes (companions); hops, leaps onto you, and splits into splitCount little ones
+    claySlime: {
+      hp: 60, speed: 62, radius: 12, damage: 14,
+      leapTrigger: 120, leapMaxDistance: 130, landRadius: 36,
+      windup: 0.55, leapTime: 0.45, recovery: 0.6, cooldown: 1.4,
+      splitCount: 3, companions: [['claySlime', 2]],
+    },
+    claySlimeTiny: {
+      hp: 18, speed: 84, radius: 7, damage: 7,
+      leapTrigger: 90, leapMaxDistance: 100, landRadius: 22,
+      windup: 0.45, leapTime: 0.35, recovery: 0.45, cooldown: 1.1,
+      splitCount: 0,
+    },
+    // Clay bud golem: a small clay golem that walks up and slams the ground all round it
+    clayBud: {
+      hp: 120, speed: 58, radius: 13, damage: 26,
+      slamRange: 64, slamRadius: 74, windup: 0.75, recovery: 0.6, cooldown: 1.6, knockbackResist: 0.4,
+    },
+    // Rock shell: a crab in a spiked rock shell (armour); rock spikes burst up in a line right across the room
+    rockShell: {
+      hp: 220, speed: 40, radius: 16, damage: 24, armor: 0.5,
+      preferredMin: 160, preferredMax: 300, spikeEvery: 4.2, castTime: 0.6,
+      spikeSpacing: 38, spikeDelay: 0.6, spikeStep: 0.045, spikeRadius: 22, spikeMax: 30,
+      knockbackResist: 0.6, stunResist: 0.3,
+    },
+    // Rock bowler: carries a giant boulder about, rolls it down a lane (it bounces off the walls `bounces` times), then spends
+    // raiseTime s empty-handed, raising a new one out of the ground
+    rockBowler: {
+      hp: 160, speed: 50, radius: 15, damage: 32,
+      preferredMin: 180, preferredMax: 320, windup: 1.0, aimLockAt: 0.3, boulderSpeed: 330, boulderRadius: 17, bounces: 4, raiseTime: 1.2,
+      cooldown: 3.0, knockbackResist: 0.5,
+    },
+    // Rock wizard: draws the lingering magic into a cloud and launches it; the cloud lingers cloudLife s,
+    // hurting anyone inside every 0.25s (damage is per tick)
+    rockWizard: {
+      hp: 110, speed: 52, radius: 12, damage: 5,
+      preferredMin: 200, preferredMax: 330, gather: 1.2, cloudSpeed: 170, cloudRadius: 56, cloudLife: 3, cloudHit: 18, cooldown: 3.4,
+    },
+    // Ruined turret: never moves; fires four lasers at once in a cross. While it aims (windup, with the four lines
+    // showing) it turns to a + or an X, whichever lines up with you, locking aimLockAt s before it fires;
+    // each laser runs to the wall (up to range) and lasts beamTime; then it waits cooldown
+    ruinedTurret: {
+      hp: 200, speed: 0, radius: 16, damage: 26, contactDamage: 0,
+      range: 900, windup: 1.1, aimLockAt: 0.35, beamTime: 0.35, beamWidth: 14, cooldown: 2.0, turnRate: 3,
+      knockbackResist: 1, stunResist: 0.5, heartChance: 0.15,
+    },
+    // Stone pillar: hops after you quickly, slams the ground round it, then can't be hurt for invulnTime
+    stonePillar: {
+      hp: 180, speed: 0, radius: 15, damage: 28,
+      hopEvery: 0.55, hopDistance: 96, hopTime: 0.32, slamRange: 70, slamRadius: 60, windup: 0.4, invulnTime: 2,
+      knockbackResist: 1, stunResist: 0.5,
+    },
+    // stage 2+: Rock golem: extremely tanky; slams the ground, sending a narrow shockwave across the room that stuns
+    rockGolem: {
+      hp: 560, speed: 52, radius: 19, damage: 30,
+      slamRange: 260, windup: 0.9, waveSpeed: 400, waveWidth: 34, waveReach: 900, stun: 1.0, recovery: 0.9, cooldown: 2.6,
+      knockbackResist: 0.9, stunResist: 0.6, heartChance: 0.2,
+    },
+    // stage 2+: Ancient portal: never moves; every summonEvery s its pool swirls open for openTime s and calls
+    // through either one rock golem (golemChance of the time) or three rock discs. It keeps at most summonMax of its
+    // own alive and raises summonTotal in all (and shares the summon cap with every other summoner)
+    ancientPortal: {
+      hp: 320, speed: 0, radius: 20, damage: 0, contactDamage: 0,
+      summonEvery: 7, openTime: 1.4, golemChance: 0.35, summonMax: 4, summonTotal: 9,
+      knockbackResist: 1, stunResist: 1, heartChance: 0.2,
+    },
+    // stage 2+: Magic pillar: every enemy within wardRadius takes only wardCap damage from any hit until it's destroyed
+    magicPillar: {
+      hp: 260, speed: 0, radius: 15, damage: 0, contactDamage: 0,
+      wardRadius: 180, wardCap: 1, knockbackResist: 1, stunResist: 1, heartChance: 0.15,
+    },
+    // stage 3: Ancient light: can't be hurt while its totem stands (it falls with it); charges a beam for chargeTime,
+    // then blasts it for beamTime (damage per tick), turning slowly after you; then rests
+    ancientLight: {
+      hp: 300, speed: 46, radius: 14, damage: 8,
+      preferredMin: 200, preferredMax: 340, chargeTime: 3, beamTime: 3, beamWidth: 20, beamTick: 0.15, beamTurn: 0.8, rest: 1.6,
+      companions: [['lightTotem', 1]], knockbackResist: 0.6, stunResist: 0.5,
+    },
+    lightTotem: {
+      hp: 240, speed: 0, radius: 14, damage: 0, contactDamage: 0, knockbackResist: 1, stunResist: 1, heartChance: 0.2,
+    },
+    // stage 3: Ancient rotator: two stone rings round it block blockChance of hits; it sends out one of its three
+    // floating guns at a time: a laser from afar, or a rush in close for a shotgun blast of pellets
+    ancientRotator: {
+      hp: 440, speed: 46, radius: 17, damage: 14,
+      preferredMin: 180, preferredMax: 320, blockChance: 0.2, gunEvery: 1.7,
+      laserWindup: 0.9, laserDamage: 24, laserWidth: 10, rushSpeed: 330, pellets: 7, spreadDegrees: 50, pelletSpeed: 240,
+      knockbackResist: 0.7, stunResist: 0.4, heartChance: 0.2,
+    },
   },
 
   // ---------------------------------------------------------
@@ -608,6 +714,28 @@ const CONFIG = {
       summons: ['squire', 'castleArcher', 'castleKnight'],
       heavy: { catapult: 1, flamingCatapult: 1, clusterCatapult: 1, cavalry: 1, executioner: 1, bishop: 1, minstrel: 1, castleSorcerer: 1, general: 1, royalGuard: 2 },
       stageLines: ['Clear the rooms and find the throne', 'The fallen court stirs', 'The crown awaits'],
+    },
+    ruins: {
+      name: 'Ancient Ruins',
+      blurb: 'An overgrown temple of rock and clay. The magic lingering in the air wakes its stones to guard something.',
+      // a soft green dusk with a teal cast; the lingering magic drifts in clouds (RuinsDecor), not fog
+      night: { dark: 0.2, color: '6, 22, 20' },
+      fog: false,
+      layout: { small: 'ruinRocks', pillar: 'ruinPillar', long: 'ruinStatue', wallH: 'ruinWallH', wallV: 'ruinWallV', block: 'ruinBlock' },
+      boss: 'golem',
+      enemies: {
+        1: [['rockmite', 4], ['rockDisc', 2], ['clayGuard', 3], ['claySlime', 2], ['clayBud', 3], ['rockShell', 1],
+            ['rockBowler', 2], ['rockWizard', 2], ['ruinedTurret', 1], ['stonePillar', 1]],
+        2: [['rockmite', 3], ['rockDisc', 2], ['clayGuard', 3], ['claySlime', 2], ['clayBud', 2], ['rockShell', 1],
+            ['rockBowler', 2], ['rockWizard', 2], ['ruinedTurret', 1], ['stonePillar', 1],
+            ['rockGolem', 1], ['ancientPortal', 1], ['magicPillar', 1]],
+        3: [['rockmite', 3], ['rockDisc', 2], ['clayGuard', 3], ['claySlime', 2], ['clayBud', 2], ['rockShell', 1],
+            ['rockBowler', 2], ['rockWizard', 2], ['ruinedTurret', 1], ['stonePillar', 2],
+            ['rockGolem', 1], ['ancientPortal', 1], ['magicPillar', 1], ['ancientLight', 1], ['ancientRotator', 1]],
+      },
+      summons: ['rockmite', 'clayBud', 'clayGuard'],
+      heavy: { rockShell: 1, ruinedTurret: 1, stonePillar: 2, rockGolem: 1, ancientPortal: 1, magicPillar: 1, ancientLight: 1, ancientRotator: 1 },
+      stageLines: ['Clear the rooms and wake the guardian', 'The old stones stir', 'The magic grows restless'],
     },
   },
 

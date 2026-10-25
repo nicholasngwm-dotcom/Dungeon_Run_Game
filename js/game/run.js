@@ -191,6 +191,7 @@ class DungeonRun {
 
   /** The dungeon theme whose boss room a boss fights in (the castle's royals, or the graveyard). */
   static bossTheme(type) {
+    if (type === 'golem') return 'ruins';
     return ['queen', 'king', 'prince', 'princess'].includes(type) ? 'castle' : 'graveyard';
   }
 
@@ -243,6 +244,7 @@ class DungeonRun {
       if (r.type === 'boss' && this.bossType === 'princess') this.studyCover(r);
       if (r.type === 'boss' && this.bossType === 'phantom') this.manorStairs(r);
       if (r.type === 'boss' && this.bossType === 'deathbringer') this.cryptTombs(r);
+      if (r.type === 'boss' && this.bossType === 'golem') this.guardianCover(r);
       if (r.type === 'boss' && this.bossType === 'king') this.throneHallPillars(r);
       if (r.type === 'combat') this.addSpikes(r);
       this.addProps(r);
@@ -251,11 +253,15 @@ class DungeonRun {
     // swinging doors at both ends of every hallway (each room door knows its pair of leaves)
     const leaves = [];
     for (const r of f.rooms) for (const d of r.doors) { d.swing = leaves.length; leaves.push({ ...d.leaf, tiles: d.tiles }); }
-    // the graveyard's are creaking wrought-iron gates (the castle keeps heavy oak doors)
+    // the graveyard's are creaking wrought-iron gates, the ruins' stone pillars the magic raises and sinks
+    // (the castle keeps heavy oak doors)
     const iron = this.themeId === 'graveyard';
+    const stone = this.themeId === 'ruins';
     this.doors = new SwingDoors(leaves, iron
       ? { reach: 72, height: 70, edge: 8, style: 'iron', sounds: { open: 'gateCreak', shut: 'gateShut', slam: 'gateClang' } }
-      : { reach: 72, height: 64, edge: 10 });
+      : stone
+        ? { reach: 72, height: 78, style: 'stone', sounds: { open: 'graveRumble', shut: 'stomp', slam: 'stomp' } }
+        : { reach: 72, height: 64, edge: 10 });
     this.decor = new FloorDecor(f, this);
     this.barrels = Barrels.place(this);   // explosive, poison and frost barrels in the fight rooms (after the decor, clear of it)
     this.fog = this.theme.night && this.theme.fog !== false ? this.placeFog(f) : [];
@@ -769,13 +775,17 @@ class DungeonRun {
         pt = f.freePoint(pt.x, pt.y, 10, 8);
         const e = createEnemy(this.pickEnemy(counts), pt.x, pt.y);
         this.world.scaleEnemy(e);
-        e.age = 5;
-        e.room = r;
-        e.home = { x: pt.x, y: pt.y };
-        e.goal = null;
-        e.idle = rand(0.5, 4);
-        e.facing = Math.random() < 0.5 ? 1 : -1;
-        this.sleepers.push(e);
+        const wait = (s) => {
+          s.age = 5;
+          s.room = r;
+          s.home = { x: s.x, y: s.y };
+          s.goal = null;
+          s.idle = rand(0.5, 4);
+          s.facing = Math.random() < 0.5 ? 1 : -1;
+          this.sleepers.push(s);
+        };
+        wait(e);
+        this.world.addCompanions(e, wait);   // the clay slimes' other two, the ancient light's totem
       }
     }
   }
@@ -1185,6 +1195,17 @@ class DungeonRun {
       this.cover.push({ kind, tx, ty, w, h, x: tx * T, y: ty * T, seed: i, room: r, material: 'stone' });
       for (let j = 0; j < h; j++) for (let k = 0; k < w; k++) f.grid[ty + j][tx + k] = TILE.COVER;
     });
+  }
+
+  /**
+   * The Clay Golem's room in the ruins: broken columns and mossy rock piles in a ring inside the
+   * braziers, cover from its orbs and beams. When it curls up and rolls, it smashes straight through them.
+   */
+  guardianCover(r) {
+    this.bossCover(r, [
+      ['ruinPillar', -6, -2, 1, 1], ['ruinPillar', 5, -2, 1, 1], ['ruinPillar', -6, 3, 1, 1], ['ruinPillar', 5, 3, 1, 1],
+      ['ruinRocks', -3, 4, 1, 1], ['ruinRocks', 2, 4, 1, 1], ['ruinRocks', -10, 0, 1, 1], ['ruinRocks', 9, 0, 1, 1],
+    ]);
   }
 
   /**
@@ -2571,6 +2592,7 @@ class DungeonRun {
       else if (d.kind === 'prop' && (d.name === 'candelabra' || d.name === 'cauldron')) out.push({ x: d.x, y: d.y - 24, r: 90, s: 0.85, rgb: d.name === 'cauldron' ? '140, 255, 140' : '255, 190, 90' });
     }
     if (this.themeId === 'castle') CastleDecor.lights(this.decor, out, t);
+    if (this.themeId === 'ruins') RuinsDecor.lights(this.decor, out, t);
     if (this.bossType === 'phantom') ManorDecor.lights(this.decor, out, t);
     this.extraLights = this.extraLights.filter((l) => l.until > this.world.time);
     out.push(...this.extraLights);

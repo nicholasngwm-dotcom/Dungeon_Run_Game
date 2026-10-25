@@ -1,11 +1,12 @@
 // Clay Golem sprites: body, head, fists, rolled-up ball, chain link,
 // plus its clay minions.
-// Drawn with a 7-step clay ramp (darkest first), molten rune glow and moss,
+// Drawn with a 7-step clay ramp (darkest first), carved like the ruins it guards (greek-key
+// bands, glyphs), overgrown with moss, flowers and vines, the ruins' teal magic glowing in it,
 // in the same top-left-lit style as the heroes.
 
 const GOLEM_COLORS = {
   clay: '#c47a45', clayD: '#94552c', clayDD: '#6b3a1d', clayL: '#e3a066',
-  crack: '#4a2412', moss: '#6f8f3c', mossD: '#4f6a2a', glow: '#ffd34a', hot: '#ff7a1a',
+  crack: '#4a2412', moss: '#6f8f3c', mossD: '#4f6a2a', glow: '#5cf0d8', hot: '#22b8a6',
 };
 
 const GOLEM_BODY = { w: 132, h: 120, ax: 66, ay: 108 };
@@ -15,7 +16,8 @@ const GOLEM_BALL = { r: 54, size: 116 };
 
 const CLAY = ['#3a1c0c', '#5e3018', '#84461f', '#a95f30', '#c97b45', '#e3a066', '#f6c890'];
 const MOSS = ['#2e4418', '#4f6a2a', '#6f8f3c', '#94b450'];
-const EMBER = ['#7a2a10', '#c84a14', '#ff7a1a', '#ffd34a', '#fff6c8'];
+// the magic that animates it (the ruins' lingering magic), darkest first
+const EMBER = ['#0a3634', '#127068', '#22b8a6', '#5cf0d8', '#e8fffa'];
 
 /** Moss clump with a lit top and a couple of drips. */
 function golemMoss(p, x, y, w) {
@@ -26,7 +28,7 @@ function golemMoss(p, x, y, w) {
   p.rect(x + w - 3, y + 3, 1, 3, MOSS[0]);
 }
 
-/** Crack with molten light leaking out of it. */
+/** Crack with the magic's light leaking out of it. */
 function golemCrack(p, pts, molten = true) {
   for (let i = 0; i + 1 < pts.length; i++) {
     const [x0, y0] = pts[i];
@@ -91,14 +93,42 @@ function drawGolemBody(p, pose) {
   p.rect(64, 60, 4, 4, EMBER[3]);
   p.rect(65, 61, 2, 2, EMBER[4]);
 
-  // molten cracks
+  // the ruins' greek-key pattern carved round its belly, along the seam
+  for (let x = 30; x < 100; x += 8) {
+    const y = 73 - Math.round(((x + 2 - 66) / 52) ** 2 * 8);
+    p.rect(x, y, 6, 1, CLAY[5]);
+    p.rect(x + 5, y, 1, 4, CLAY[5]);
+    p.rect(x + 2, y + 2, 3, 1, CLAY[1]);
+    p.rect(x, y + 1, 1, 3, CLAY[1]);
+  }
+  // a glyph pressed into each shoulder plate
+  for (const gx of [36, 96]) {
+    p.line(gx - 3, 46, gx, 43, EMBER[2]); p.line(gx, 43, gx + 3, 46, EMBER[2]);
+    p.line(gx + 3, 46, gx, 49, EMBER[2]); p.line(gx, 49, gx - 3, 46, EMBER[2]);
+    p.px(gx, 46, EMBER[4]);
+  }
+
+  // cracks with the magic shining through
   golemCrack(p, [[30, 52], [40, 64], [36, 74]]);
   golemCrack(p, [[96, 46], [90, 58], [98, 70]]);
   golemCrack(p, [[72, 82], [78, 90]], false);
 
-  // moss on top, neck socket
+  // vines trailing down from its shoulders, leaves along them
+  for (const [x0, y0, len] of [[14, 52, 40], [118, 50, 34]]) {
+    for (let i = 0; i < len; i++) {
+      const vx = x0 + Math.round(Math.sin(i * 0.3 + x0) * 2);
+      p.px(vx, y0 + i, MOSS[0]);
+      if (i % 5 === 2) { p.rect(vx + 1, y0 + i, 2, 2, MOSS[2]); p.px(vx + 2, y0 + i, MOSS[3]); }
+      if (i % 7 === 5) p.rect(vx - 2, y0 + i, 2, 2, MOSS[1]);
+    }
+  }
+
+  // moss on top (little flowers in it), neck socket
   golemMoss(p, 44, 29, 14);
   golemMoss(p, 80, 31, 10);
+  p.px(50, 27, '#e86a8a'); p.px(51, 27, '#ffd0dc');
+  p.px(84, 29, '#ffd34a');
+  p.px(18, 33, '#c8a0ff');
   p.ellipse(66, 30, 18, 6, CLAY[1]);
   p.ellipse(66, 29, 14, 4, CLAY[0]);
   p.rect(58, 29, 16, 1, EMBER[0]);
@@ -151,7 +181,17 @@ function drawGolemHead(p, angry) {
   p.line(58, 34, 54, 46, CLAY[1]);
   golemCrack(p, [[52, 8], [46, 17]]);
   golemCrack(p, [[16, 34], [13, 44]], false);
+  // a carved band across the brow (the ruins' key pattern) and a glyph glowing in the middle of it
+  p.rect(12, 13, 48, 5, CLAY[2]);
+  p.rect(12, 13, 48, 1, CLAY[5]);
+  for (let x = 14; x < 56; x += 7) { p.rect(x, 14, 5, 1, CLAY[5]); p.rect(x + 4, 14, 1, 3, CLAY[5]); p.rect(x + 1, 16, 3, 1, CLAY[0]); }
+  p.rect(33, 12, 6, 7, CLAY[1]);
+  p.line(34, 15, 36, 13, EMBER[3]); p.line(36, 13, 38, 15, EMBER[3]);
+  p.line(38, 15, 36, 17, EMBER[3]); p.line(36, 17, 34, 15, EMBER[3]);
+  p.px(36, 15, EMBER[4]);
   golemMoss(p, 28, 4, 12);
+  p.px(33, 2, '#e86a8a');
+  p.px(34, 2, '#ffd0dc');
 }
 
 function drawGolemFist(p) {
@@ -183,6 +223,11 @@ function drawGolemFist(p) {
   p.round(15, 2, 18, 7, CLAY[4], 3);
   p.rect(17, 3, 8, 1, CLAY[6]);
   golemCrack(p, [[16, 22], [22, 30]]);
+  // a glyph on the back of the hand
+  p.line(17, 15, 20, 12, EMBER[2]); p.line(20, 12, 23, 15, EMBER[2]);
+  p.line(23, 15, 20, 18, EMBER[2]); p.line(20, 18, 17, 15, EMBER[2]);
+  p.px(20, 15, EMBER[4]);
+  golemMoss(p, 26, 6, 8);
 }
 
 function drawGolemBall(p) {

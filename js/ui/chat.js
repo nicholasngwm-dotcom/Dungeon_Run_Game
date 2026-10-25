@@ -19,6 +19,8 @@ const Chat = {
     this.el = document.getElementById('chat');
     this.logEl = document.getElementById('chat-log');
     this.input = document.getElementById('chat-input');
+    this.hintEl = document.getElementById('chat-hint');
+    this.showKeys();
     // caught first (capture): Enter opens it while playing online; while it's open Esc closes it
     // (never reaching the game, where Esc would open the menu)
     window.addEventListener('keydown', (e) => {
@@ -54,6 +56,7 @@ const Chat = {
     Input.reset();   // let go of whatever was held, so the hero stops
     this.el.classList.add('open');
     this.el.classList.remove('hidden');
+    this.showKeys();
     this.logEl.scrollTop = this.logEl.scrollHeight;
     setTimeout(() => this.input.focus(), 0);
   },
@@ -63,7 +66,15 @@ const Chat = {
     this.input.value = '';
     this.input.blur();
     this.el.classList.remove('open');
+    this.showKeys();
     Input.reset();
+  },
+
+  /** The faint line under the chat saying which keys work it (what to press now). */
+  showKeys() {
+    this.hintEl.textContent = this.isOpen
+      ? 'ENTER: SEND  ·  ESC: CANCEL  ·  /W NAME MESSAGE: WHISPER'
+      : 'PRESS ENTER TO CHAT  ·  /HELP FOR COMMANDS';
   },
 
   /** Leaving multiplayer: the box closes and the log is cleared. */

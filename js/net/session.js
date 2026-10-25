@@ -50,7 +50,7 @@ class Session {
     this.classId = classId;
     this.transport = transport;
     this.events = events;
-    this.gameEvents = gameEvents;
+    this.gameEvents = Session.outsideSim(gameEvents);
     this.game = null;
     this.scene = null;           // 'lobby' | 'run' | 'test'
     this.tick = 0;
@@ -72,6 +72,42 @@ class Session {
     this.bundles = new Map();    // bundle number -> bundle, waiting to be applied
     this.nextK = null;           // the next bundle number to apply
     this.captureLocal = null;    // tests can replace input capture
+  }
+
+  /**
+   * The game's calls out to the app (Mira's greeting, opening the shop or a panel, toasts, the
+   * end screen...) happen part-way through a shared step, but they're this screen's business,
+   * often only for this screen's hero. So they run with the browser's own Math: a random greeting
+   * picked on one machine must not use up a number of the shared generator there and not on the
+   * others, which would leave that machine's randomness one step ahead from then on (a desync).
+   * And an error in one is caught here, so it can't abort the step on this machine only.
+   * (A proxy, so handlers the app adds later are covered too.)
+   */
+  static outsideSim(events) {
+    const wrapped = new Map();
+    return new Proxy(events, {
+      get(target, name) {
+        const fn = target[name];
+        if (typeof fn !== 'function') return fn;
+        if (!wrapped.has(fn)) {
+          wrapped.set(fn, (...args) => {
+            const shared = { random: Math.random };
+            for (const k of Object.keys(NativeMath)) shared[k] = Math[k];
+            Math.random = nativeRandom;
+            Object.assign(Math, NativeMath);
+            try {
+              return fn.apply(target, args);
+            } catch (e) {
+              console.error(`Error in ${String(name)} (kept out of the shared simulation):`, e);
+              return undefined;
+            } finally {
+              Object.assign(Math, shared);
+            }
+          });
+        }
+        return wrapped.get(fn);
+      },
+    });
   }
 
   get dt() { return 1 / CONFIG.multiplayer.tickRate; }

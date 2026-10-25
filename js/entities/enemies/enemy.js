@@ -41,6 +41,7 @@ class Enemy extends Entity {
     if (this.frozenTime > 0) this.frozenFx(dt, world);
     this.frozenTime -= dt;
     this.weakened = this.weakenUntil > world.time;   // (for drawing)
+    this.isWarded = this.wardedUntil > world.time;   // inside a magic pillar's ward (for drawing)
     if (this.asleep && !(this.stunTime > dt)) { this.asleep = false; this.wokeUp(world, 0); }
     this.iced = (this.iced || 0) - dt;       // coated in the Baker's icing (Bigger Cakes): slowed
     this.groggy = (this.groggy || 0) - dt;   // still drowsy after a lullaby (Groggy): slowed
@@ -159,6 +160,7 @@ class Enemy extends Entity {
 
   /** Returns true if the damage was applied. */
   takeDamage(amount, world) {
+    this.appliedDamage = undefined;
     if (this.dead) return false;
     if (this.asleep) {
       this.asleep = false;
@@ -169,6 +171,11 @@ class Enemy extends Entity {
       world.effects.text(this.hx, this.hy - 30, 'WOKE UP', { color: '#c8b8ff', size: 7 });
       this.wokeUp(world, this.waking);
     }
+    // inside a magic pillar's ward (the ruins): no hit does more than its cap
+    if (this.wardedUntil > world.time && amount > this.wardCap) {
+      amount = this.wardCap;
+      this.appliedDamage = amount;
+    }
     // a general's rallying shield soaks up hits first
     if (this.shieldHp > 0) {
       const soak = Math.min(this.shieldHp, amount);
@@ -177,7 +184,8 @@ class Enemy extends Entity {
       if (this.shieldHp <= 0) world.effects.burst(this.hx, this.hy, { count: 12, colors: ['#ffe680', '#ff9a8a', '#ffffff'], speed: [40, 140], life: [0.2, 0.4] });
       if (amount <= 0) { this.flashTime = 0.05; return true; }
     }
-    this.hp -= amount * (1 - (this.cfg.armor || 0));   // armoured enemies shrug off part of every hit
+    // armoured enemies shrug off part of every hit (but a warded hit is already as small as it gets)
+    this.hp -= this.appliedDamage !== undefined ? amount : amount * (1 - (this.cfg.armor || 0));
     this.flashTime = 0.1;
     if (this.hp <= 0) this.die(world);
     return true;
@@ -411,6 +419,17 @@ class Enemy extends Entity {
     }
   }
 
+  /** Warded by a magic pillar: a shell of teal glyph-light round it, turning slowly. */
+  drawWard(ctx) {
+    const pulse = 0.55 + Math.sin(this.animTime * 5) * 0.15;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, this.x, this.hy, this.radius + 10, '90, 240, 215', 0.22 * pulse, 2, this.radius + 14);
+    ctx.globalAlpha = pulse;
+    PFX.ring(ctx, this.x, this.hy, this.radius + 7, this.radius + 11, '#5cf0d8', 2, { dash: [2, 3], spin: this.animTime * 1.5 });
+    ctx.restore();
+  }
+
   /** Spurred on by a minstrel's song: a little red note bobbing over its head. */
   drawHasted(ctx) {
     const img = Sprites.projectiles.redNote;
@@ -481,6 +500,7 @@ class Enemy extends Entity {
   /** Circling stars over stunned enemies (an ice block if frozen, z's if asleep, a startled "!" while waking). */
   drawStun(ctx) {
     this.drawWeaken(ctx);
+    if (this.isWarded) this.drawWard(ctx);
     if (this.hasted > 0) this.drawHasted(ctx);
     if (this.rallied > 0 || this.shieldHp > 0) this.drawRally(ctx);
     if (this.sleepMeter > 0 && !this.asleep) this.drawSleepMeter(ctx);
@@ -542,6 +562,11 @@ function createEnemy(type, x, y) {
     cavalry: Cavalry, castleSorcerer: CastleSorcerer, executioner: Executioner, jester: Jester,
     royalGuard: RoyalGuard, prince: Prince, princess: Princess, gardener: Gardener,
     general: General, clusterCatapult: ClusterCatapult, princeGuard: PrinceGuard,
+    // the ancient ruins
+    rockmite: Rockmite, rockDisc: RockDisc, clayGuard: ClayGuard, claySlime: ClaySlime, claySlimeTiny: ClaySlime,
+    clayBud: ClayBud, rockShell: RockShell, rockBowler: RockBowler, rockWizard: RockWizard, ruinedTurret: RuinedTurret,
+    stonePillar: StonePillar, rockGolem: RockGolem, ancientPortal: AncientPortal, magicPillar: MagicPillar, lightTotem: LightTotem,
+    ancientLight: AncientLight, ancientRotator: AncientRotator,
   };
   return new classes[type](x, y, type);
 }

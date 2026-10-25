@@ -534,8 +534,19 @@ h2 {
   z-index: 30;
   pointer-events: none;
 }
+/* the faint reminder under the chat of how to use it (always there in multiplayer) */
+.chat-hint {
+  margin-top: 3px;
+  padding: 0 2px;
+  font-size: 6px;
+  color: #a99bbd;
+  opacity: 0.6;
+  text-shadow: 1px 1px 0 #000;
+  white-space: pre-wrap;   /* keep the gaps round the separators */
+}
+.chat.open .chat-hint { opacity: 0.85; }
 .chat-log {
-  max-height: 72px;
+  max-height: 53px;   /* three whole lines */
   overflow: hidden;
   font-size: 8px;
   line-height: 1.6;

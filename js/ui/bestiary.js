@@ -49,12 +49,32 @@ const BESTIARY = {
     { boss: 'queen', name: 'The Queen', role: 'boss', from: 1, stage: 'STAGE 2', desc: 'Floats down under a magic umbrella and throws it to spin and spray magic, clockwise then anticlockwise. At half health she rings the bell: she runs you down, blinks to her umbrella in bursts of magic, guards behind it to heal, and the hedges shift.' },
     { boss: 'king', name: 'The King', role: 'boss', from: 1, stage: 'STAGE 3', desc: 'Smites shockwaves from his throne with his scepter, calls a royal guard, and throws the scepter where you would run. At half health he rises with four bishops and his greatsword.' },
   ],
+  ruins: [
+    { type: 'rockmite', name: 'Rockmite', role: 'ranged', desc: 'A little rock golem the magic woke. Keeps its distance and throws small rocks.' },
+    { type: 'rockDisc', name: 'Rock Disc', role: 'ranged', desc: 'A floating ring of stone with magic at its core. A red line shows its aim, locks, and then a laser fires down it.' },
+    { type: 'clayGuard', name: 'Clay Guard', role: 'melee', desc: 'A terracotta soldier. Its clay shield takes the first hit, then crumbles. Thrusts its spear down a narrow lane: step aside.' },
+    { type: 'claySlime', name: 'Clay Slime', role: 'melee', desc: 'Always comes in threes. Leaps onto you, and when one dies it splits into three tiny ones.' },
+    { type: 'clayBud', name: 'Clay Bud Golem', role: 'melee', desc: 'A small clay golem with a flower bud on its head. Walks up to you and slams the ground all round it.' },
+    { type: 'rockShell', name: 'Rock Shell', role: 'special', desc: 'A low shell crowned with a great fan of rock spikes and one burning red eye: hits only do half damage. Rock spikes burst up in a line right across the room, where the ground cracks first.' },
+    { type: 'rockBowler', name: 'Rock Bowler', role: 'ranged', desc: 'Carries a giant boulder about in its arms. It hoists it overhead and rolls it down a lane, bowling through everything and bouncing off the walls four times before it breaks. Then it has to raise a new one from the ground: rush it while its hands are empty.' },
+    { type: 'rockWizard', name: 'Rock Wizard', role: 'ranged', desc: 'An old rock being with a staff. It draws the magic out of the air into a cloud and launches it: the cloud lingers for 3 seconds, hurting anyone inside.' },
+    { type: 'ruinedTurret', name: 'Ruined Turret', role: 'ranged', desc: 'Never moves. It fires four lasers at once in a cross, to the walls. While it aims (four red lines) it turns to a + or an X, whichever lines up with you, then locks just before it fires: stand between the lines.' },
+    { type: 'stonePillar', name: 'Stone Pillar', role: 'melee', desc: 'A temple column woken by the magic, its broken drums held together by it, two stone fists floating at its sides. Hops after you quickly and slams the ground round it. After each slam it turns hard as stone and cannot be hurt for 2 seconds.' },
+    { type: 'rockGolem', name: 'Rock Golem', role: 'melee', desc: 'Extremely tanky. Slams the ground and a narrow shockwave races across the room down a red lane: it stuns.' },
+    { type: 'ancientPortal', name: 'Ancient Portal', role: 'summoner', desc: 'An old stone gateway to wherever the magic comes from. Every few seconds its pool swirls open and something comes through: a rock golem, or three rock discs. It cannot move or fight back: break it before it fills the room.' },
+    { type: 'magicPillar', name: 'Magic Pillar', role: 'special', desc: 'Every enemy inside its teal ring takes only 1 damage from any hit until the pillar is destroyed. Break it first.' },
+    { type: 'ancientLight', name: 'Ancient Light', role: 'special', desc: 'A being of magic and light, tethered to a totem: it cannot be hurt while the totem stands, and falls with it. Charges a beam for 3 seconds, then blasts it for 3, turning after you.' },
+    { type: 'lightTotem', name: 'Light Totem', role: 'special', from: 3, note: 'WITH THE ANCIENT LIGHT', desc: 'The ancient light\'s source of power. Break it and the light goes out.' },
+    { type: 'ancientRotator', name: 'Ancient Rotator', role: 'ranged', desc: 'Two stone rings circle it and block one hit in five. It sends out its three floating guns one at a time: a laser from afar, or a rush in close for a shotgun blast.' },
+    { boss: 'golem', name: 'The Clay Golem', role: 'boss', from: 1, stage: 'EVERY STAGE', desc: 'Guardian of the ruins, rising out of the floor. Its head throws bouncing orbs of magic and its fists rocket-punch down red lanes. Break the head and it floats free, firing beams and bursts of orbs while the body opens up. Break both fists and it lumbers after you, stomping out rings that slow. Near the end it curls into a ball and rolls. Clay minions keep coming throughout.' },
+  ],
 };
 
 // portrait scale per enemy (default 1.5) so the big ones still fit the page
 const BESTIARY_SCALE = {
   undeadKnight: 1.15, minigunner: 1.05, gravestone: 1.4, reaper: 1.3, flyingSkull: 2.4, ghost: 1.3, wraith: 1.3,
   cavalry: 1.0, catapult: 1.2, flamingCatapult: 1.2, executioner: 1.05, royalGuard: 1.3,
+  rockGolem: 1.05, rockShell: 1.3, ancientPortal: 1.6, magicPillar: 1.1, lightTotem: 1.2, stonePillar: 1.2, claySlime: 2, claySlimeTiny: 2.4,
 };
 
 const BESTIARY_ROLES = ['all', 'melee', 'ranged', 'summoner', 'special', 'boss'];
@@ -186,7 +206,18 @@ const Bestiary = {
       rows.forEach((row, j) => [...row].forEach((ch, i) => { if (colors[ch]) { ctx.fillStyle = colors[ch]; ctx.fillRect(i * 2, j * 2 + 1, 2, 2); } }));
       return c.toDataURL();
     };
-    this.emblems ??= { boss: emblem('boss'), puzzle: emblem('puzzle'), castle: crown() };
+    // the ruins': a mossy standing stone with a glyph glowing in it
+    const glyphStone = () => {
+      const c = document.createElement('canvas');
+      c.width = 16;
+      c.height = 16;
+      const ctx = c.getContext('2d');
+      const rows = ['..mmmm..', '.kSSSSk.', '.kSgSSk.', '.kgcgSk.', '.kSgSSk.', '.kSSSSk.', '.mmmmmm.', '........'];
+      const colors = { S: '#9a845e', g: '#22b8a6', c: '#b8fff0', m: '#549044', k: OUTLINE };
+      rows.forEach((row, j) => [...row].forEach((ch, i) => { if (colors[ch]) { ctx.fillStyle = colors[ch]; ctx.fillRect(i * 2, j * 2 + 1, 2, 2); } }));
+      return c.toDataURL();
+    };
+    this.emblems ??= { boss: emblem('boss'), puzzle: emblem('puzzle'), castle: crown(), ruins: glyphStone() };
     const theme = (name, icon, on, locked, id = '') => `<button class="bookmark dungeon${on ? ' on' : ''}${locked ? ' locked' : ''}"${locked ? ' disabled' : ` data-action="bestiaryTheme:${id}"`}>`
       + `<img src="${icon}" alt=""><span>${name}</span></button>`;
     document.getElementById('bestiary-themes').innerHTML = Object.keys(BESTIARY)
@@ -599,7 +630,7 @@ const Bestiary = {
         continue;
       }
       // each boss's idle loop (the King on his throne)
-      const list = { phantom: Sprites.phantom.walk || Sprites.phantom.idle, deathbringer: Sprites.deathbringer.body, queen: Sprites.queen.idle, king: Sprites.king.sit, princeBoss: Sprites.enemies.prince.idle, princessBoss: Sprites.enemies.princess.idle }[entry.boss];
+      const list = { golem: Sprites.golem.body.walk, phantom: Sprites.phantom.walk || Sprites.phantom.idle, deathbringer: Sprites.deathbringer.body, queen: Sprites.queen.idle, king: Sprites.king.sit, princeBoss: Sprites.enemies.prince.idle, princessBoss: Sprites.enemies.princess.idle }[entry.boss];
       const frame = list[Math.floor(time * (entry.boss === 'phantom' ? 8 : 4)) % list.length].img;
       const s = Math.min(3, Math.floor(Math.min(canvas.width / frame.width, canvas.height / frame.height) * 4) / 4);
       const w = frame.width * s;

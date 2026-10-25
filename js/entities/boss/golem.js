@@ -131,7 +131,7 @@ class GolemFist extends GolemPart {
           const hitWall = world.dungeon.isSolidAt(this.x + Math.cos(this.angle) * 6, this.y + Math.sin(this.angle) * 6);
           world.shake(hitWall ? 6 : 3, 0.2);
           Sound.play('impact');
-          world.effects.burst(this.x, this.y, { count: 12, colors: [GOLEM_COLORS.clay, GOLEM_COLORS.clayDD, '#6a6080'], speed: [60, 160] });
+          world.effects.burst(this.x, this.y, { count: 12, colors: [GOLEM_COLORS.clay, GOLEM_COLORS.clayDD, '#7a8372'], speed: [60, 160] });
         } else {
           this.x += Math.cos(this.angle) * step;
           this.y += Math.sin(this.angle) * step;
@@ -255,7 +255,7 @@ class Golem {
   }
 
   get name() { return 'CLAY GOLEM'; }
-  get title() { return 'Guardian of the Crypt'; }
+  get title() { return 'Guardian of the Ruins'; }
   get defeatText() { return 'The Clay Golem has fallen.'; }
 
   /** Health bars drawn in the world next to each part that can be hit. */
@@ -281,7 +281,7 @@ class Golem {
       this.intro -= dt;
       world.shake(3, 0.1);
       if (Math.random() < 0.5) {
-        world.effects.burst(this.x + rand(-60, 60), this.y + rand(-4, 8), { count: 2, colors: ['#5a4d78', '#3a354d', GOLEM_COLORS.clayD], speed: [40, 120], up: 60, gravity: 200 });
+        world.effects.burst(this.x + rand(-60, 60), this.y + rand(-4, 8), { count: 2, colors: ['#5c6558', '#2e342d', GOLEM_COLORS.clayD], speed: [40, 120], up: 60, gravity: 200 });
       }
       this.updatePartPositions();
       return;
@@ -374,7 +374,7 @@ class Golem {
       vx: Math.cos(angle) * f.speed,
       vy: Math.sin(angle) * f.speed,
       radius: f.radius, damage: f.damage, life: f.life, bounces: f.bounces, friendly: false,
-      sprite: Sprites.projectiles.golemFireball, spin: 6, glow: '255, 90, 30', trail: ['#ff5a1e', '#ffd34a'],
+      sprite: Sprites.projectiles.golemOrb, spin: 6, glow: RUIN_MAGIC, trail: ['#22b8a6', '#5cf0d8'],
     }));
   }
 
@@ -390,7 +390,7 @@ class Golem {
       this.burstCharge += dt;
       if (Math.random() < 0.6) {
         const a = rand(0, TAU);
-        world.effects.burst(h.x + Math.cos(a) * 50, h.y + Math.sin(a) * 50, { count: 1, colors: ['#ffd34a', '#ff7a1a'], speed: [0, 0], life: [0.2, 0.3], size: [3, 4] });
+        world.effects.burst(h.x + Math.cos(a) * 50, h.y + Math.sin(a) * 50, { count: 1, colors: ['#5cf0d8', '#22b8a6'], speed: [0, 0], life: [0.2, 0.3], size: [3, 4] });
         const last = world.effects.particles[world.effects.particles.length - 1];
         last.vx = -Math.cos(a) * 200;
         last.vy = -Math.sin(a) * 200;
@@ -440,7 +440,7 @@ class Golem {
             }
           }
         }
-        world.effects.burst(L.end.x, L.end.y, { count: 8, colors: ['#ff4a3a', '#ffd0c0'], speed: [40, 140], life: [0.15, 0.3] });
+        world.effects.burst(L.end.x, L.end.y, { count: 8, colors: ['#5cf0d8', '#e8fffa'], speed: [40, 140], life: [0.15, 0.3] });
       }
       if (L.t >= c.laserWindup + c.laserDuration) {
         this.laser = null;
@@ -486,7 +486,7 @@ class Golem {
         this.shockwaves.push({ x: this.x, y: this.y, r: 20, hit: false });
         world.shake(7, 0.3);
         Sound.play('stomp');
-        world.effects.burst(this.x, this.y, { count: 24, colors: ['#6a6080', '#3a354d', GOLEM_COLORS.clayD], speed: [80, 220], life: [0.3, 0.6], size: [3, 5] });
+        world.effects.burst(this.x, this.y, { count: 24, colors: ['#7a8372', '#3a354d', GOLEM_COLORS.clayD], speed: [80, 220], life: [0.3, 0.6], size: [3, 5] });
       }
     } else {
       if (!p.dead) {
@@ -571,10 +571,16 @@ class Golem {
         break;
       case 'rolling': {
         const step = c.rollSpeed * dt;
+        // in a dungeon run it ploughs straight through any cover in its way, leaving rubble
+        if (world.run) {
+          const ahead = GOLEM_BALL.r * 0.5;
+          const n = world.run.destroyObstacles(this.x + Math.cos(R.angle) * ahead, this.y - 16 + Math.sin(R.angle) * ahead, GOLEM_BALL.r * 0.9);
+          if (n) world.shake(8, 0.3);
+        }
         const hit = world.dungeon.move(this, Math.cos(R.angle) * step, Math.sin(R.angle) * step);
         this.ballAngle += (step / GOLEM_BALL.r) * (Math.cos(R.angle) >= 0 ? 1 : -1);
         if (Math.random() < 0.7) {
-          world.effects.burst(this.x, this.y, { count: 1, colors: ['#6a6080', GOLEM_COLORS.clayD], speed: [20, 60], life: [0.3, 0.5], size: [3, 5] });
+          world.effects.burst(this.x, this.y, { count: 1, colors: ['#7a8372', GOLEM_COLORS.clayD], speed: [20, 60], life: [0.3, 0.5], size: [3, 5] });
         }
         for (const h of world.heroes) {   // rolls over every hero in its path, once each per roll
           if (R.hitHeroes.has(h) || dist(this.x, this.bodyCenterY, h.hx, h.hy) >= GOLEM_BALL.r + h.radius - 6) continue;
@@ -584,7 +590,7 @@ class Golem {
           this.rollCount++;
           world.shake(hit.hitX || hit.hitY ? 10 : 4, 0.35);
           Sound.play('impact');
-          world.effects.burst(this.x, this.bodyCenterY, { count: 20, colors: ['#5a4d78', '#3a354d', GOLEM_COLORS.clay], speed: [60, 200], life: [0.3, 0.6], size: [3, 5] });
+          world.effects.burst(this.x, this.bodyCenterY, { count: 20, colors: ['#5c6558', '#2e342d', GOLEM_COLORS.clay], speed: [60, 200], life: [0.3, 0.6], size: [3, 5] });
           const rest = this.rollCount % c.rollsBeforeRest === 0;
           R.state = rest ? 'rest' : 'stun';
           R.t = 0;
@@ -678,7 +684,7 @@ class Golem {
     // shockwaves (slow, no damage) in orange
     for (const s of this.shockwaves) {
       ctx.save();
-      ctx.strokeStyle = 'rgba(216, 176, 112, 0.8)';
+      ctx.strokeStyle = 'rgba(120, 230, 210, 0.75)';
       ctx.lineWidth = 6;
       ctx.beginPath();
       ctx.arc(s.x, s.y, s.r, 0, TAU);
@@ -746,8 +752,8 @@ class Golem {
       ctx.globalCompositeOperation = 'lighter';
       const g = this.body.immune ? 0.15 : 0.35 + Math.sin(this.time * 6) * 0.15;
       const gr = ctx.createRadialGradient(this.x, this.y - 46 - lift, 2, this.x, this.y - 46 - lift, 30);
-      gr.addColorStop(0, `rgba(255, 180, 60, ${g})`);
-      gr.addColorStop(1, 'rgba(255, 120, 30, 0)');
+      gr.addColorStop(0, `rgba(120, 250, 225, ${g})`);
+      gr.addColorStop(1, 'rgba(34, 184, 166, 0)');
       ctx.fillStyle = gr;
       ctx.fillRect(this.x - 30, this.y - 76 - lift, 60, 60);
     }
@@ -772,8 +778,8 @@ class Golem {
       ctx.globalCompositeOperation = 'lighter';
       const r = 50 + Math.sin(this.time * 5) * 5;
       const gr = ctx.createRadialGradient(h.x, h.y, 4, h.x, h.y, r);
-      gr.addColorStop(0, 'rgba(255, 90, 40, 0.45)');
-      gr.addColorStop(1, 'rgba(255, 60, 20, 0)');
+      gr.addColorStop(0, 'rgba(90, 240, 215, 0.45)');
+      gr.addColorStop(1, 'rgba(34, 184, 166, 0)');
       ctx.fillStyle = gr;
       ctx.fillRect(h.x - r, h.y - r, r * 2, r * 2);
       ctx.globalCompositeOperation = 'source-over';
@@ -825,22 +831,22 @@ class Golem {
       ctx.globalCompositeOperation = 'lighter';
       const r = 4 + t * 10;
       const g = ctx.createRadialGradient(h.x, h.y, 1, h.x, h.y, r * 2);
-      g.addColorStop(0, 'rgba(255, 230, 210, 0.9)');
-      g.addColorStop(0.4, 'rgba(255, 80, 50, 0.6)');
-      g.addColorStop(1, 'rgba(255, 40, 20, 0)');
+      g.addColorStop(0, 'rgba(230, 255, 250, 0.9)');
+      g.addColorStop(0.4, 'rgba(90, 240, 215, 0.6)');
+      g.addColorStop(1, 'rgba(34, 184, 166, 0)');
       ctx.fillStyle = g;
       ctx.fillRect(h.x - r * 2, h.y - r * 2, r * 4, r * 4);
     } else {
       const t = (L.t - c.laserWindup) / c.laserDuration;
       ctx.globalCompositeOperation = 'lighter';
       ctx.lineCap = 'round';
-      ctx.strokeStyle = `rgba(255, 60, 40, ${0.7 * (1 - t)})`;
+      ctx.strokeStyle = `rgba(34, 200, 180, ${0.7 * (1 - t)})`;
       ctx.lineWidth = c.laserWidth * 1.6;
       ctx.beginPath();
       ctx.moveTo(h.x, h.y);
       ctx.lineTo(L.end.x, L.end.y);
       ctx.stroke();
-      ctx.strokeStyle = `rgba(255, 240, 220, ${1 - t})`;
+      ctx.strokeStyle = `rgba(230, 255, 250, ${1 - t})`;
       ctx.lineWidth = c.laserWidth * 0.5;
       ctx.stroke();
     }

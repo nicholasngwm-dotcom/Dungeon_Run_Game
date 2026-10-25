@@ -9,7 +9,7 @@
 // simulation; the idle animation (crows, embers, mist) is visual only.
 
 // Lights: the half-size of the small solid post at the base of each [hw, hh] (px)
-const DECOR_POSTS = { lampPost: [6, 4], brazier: [8, 5], campfire: [12, 6], soulTree: [6, 4] };
+const DECOR_POSTS = { lampPost: [6, 4], brazier: [8, 5], campfire: [12, 6], soulTree: [6, 4], magicBrazier: [8, 5], runeStone: [8, 4], ruinTree: [5, 4] };
 const PROP_POSTS = { candelabra: [5, 4] };
 // the two soul lanterns hanging off a soulTree, from its foot (px; mirrored when it faces left)
 const SOUL_LANTERNS = [[-20, -40], [22, -44]];
@@ -92,6 +92,7 @@ class FloorDecor {
       return;
     }
     if (this.floor.themeId === 'castle' && CastleDecor.decorate(this, r)) return;
+    if (this.floor.themeId === 'ruins' && RuinsDecor.decorate(this, r)) return;
     const T = this.floor.T;
     switch (r.type) {
       case 'start':
@@ -224,6 +225,7 @@ class FloorDecor {
     const p = world.localPlayer;   // visual only: crows and mist react to this screen's hero
     const castle = this.floor.themeId === 'castle';
     if (castle) CastleDecor.update(this, dt, world);
+    if (this.floor.themeId === 'ruins') RuinsDecor.update(this, dt, world);
     for (const d of this.items) {
       if (d.kind === 'crow') this.updateCrow(d, dt, p);
       else if (d.kind === 'campfire' && nativeRandom() < dt * 8) {
@@ -235,7 +237,7 @@ class FloorDecor {
     removeDead(this.items);
     // mist drifting up out of the ground near the hero (the graveyard only)
     this.mistTimer -= dt;
-    if (!castle && this.mistTimer <= 0 && !p.dead) {
+    if (this.floor.themeId === 'graveyard' && this.mistTimer <= 0 && !p.dead) {
       this.mistTimer = 0.12;
       world.effects.burst(p.x + vrand(-460, 460), p.y + vrand(-260, 260), {
         count: 1, colors: ['rgba(120, 160, 140, 0.25)', 'rgba(90, 120, 110, 0.22)'], speed: [4, 12], up: 8, life: [2, 3.5], size: [6, 10],
@@ -274,6 +276,7 @@ class FloorDecor {
     for (const d of this.items) {
       if (!this.visible(d, cam, 200)) continue;
       if (this.floor.themeId === 'castle') CastleDecor.drawGround(this, ctx, d);
+      else if (RuinsDecor.draws(d.kind)) RuinsDecor.drawGround(this, ctx, d);
       else if (ManorDecor.draws(d.kind)) ManorDecor.drawGround(this, ctx, d);
       if (d.kind === 'rug') this.drawRug(ctx, d);
       if (d.kind === 'runeCircle') this.drawRuneCircle(ctx, d);
@@ -304,6 +307,7 @@ class FloorDecor {
     if (d.kind === 'crow' && d.flying) return d.y + 400;
     if (d.kind === 'manorPhantom') return ManorDecor.phantomAt(d, this.time).y;
     if (ManorDecor.draws(d.kind)) return ManorDecor.sortY(d);
+    if (RuinsDecor.draws(d.kind)) return RuinsDecor.sortY(d);
     return CastleDecor.sortY(d);
   }
 
@@ -331,6 +335,7 @@ class FloorDecor {
   drawItem(ctx, d) {
     if (CastleDecor.draws(d.kind)) return CastleDecor.drawItem(this, ctx, d);
     if (ManorDecor.draws(d.kind)) return ManorDecor.drawItem(this, ctx, d);
+    if (RuinsDecor.draws(d.kind)) return RuinsDecor.drawItem(this, ctx, d);
     const x = Math.round(d.x);
     const y = Math.round(d.y);
     const R = (rx, ry, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x + rx, y + ry, w, h); };

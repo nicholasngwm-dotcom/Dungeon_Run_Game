@@ -70,6 +70,8 @@ class SwingDoors {
     for (const dr of this.doors) {
       this.updateBlocking(dr, world);
       dr.slam -= dt;
+      // the ruins' stone doors: how far they moved last step (rock and dust while moving, a thud as they settle)
+      if (this.style === 'stone') { this.stoneFx(dr, world, dr.lastOpen ?? dr.open, dr.open); dr.lastOpen = dr.open; }
       if (dr.locked) {
         // slam shut: a puff of dust along the doorway as it bangs closed
         if (dr.open > 0) {
@@ -130,6 +132,7 @@ class SwingDoors {
         const m = 120;
         if (x1 < camera.x - m || x0 > camera.x + camera.width + m || y1 < camera.y - m || y0 > camera.y + camera.height + m) continue;
       }
+      if (this.style === 'stone') { items.push(...this.stoneDrawables(dr)); continue; }
       // eased swing with a little overshoot when it bangs open
       const k = dr.open;
       const e = k < 1 ? 1 - (1 - k) ** 3 + Math.sin(k * Math.PI) * 0.06 : 1;
@@ -148,6 +151,150 @@ class SwingDoors {
       if (dr.locked && dr.open === 0) items.push({ y: (dr.ns ? dr.b : dr.y) + 1, draw: (ctx) => (this.style === 'iron' ? this.drawChains(ctx, dr) : this.drawBar(ctx, dr)) });
     }
     return items;
+  }
+
+  // ---------- the ruins' doors: stone pillars that the magic raises and sinks ----------
+
+  /**
+   * One great carved sandstone pillar standing in a doorway (built once), 26px wide: a broad capital
+   * with a key band, a fluted shaft lit down its left, a base, moss on top and a vine. Its glyph is
+   * drawn live (it brightens when sealed).
+   */
+  static stonePillar(H) {
+    SwingDoors.pillars ??= {};
+    if (SwingDoors.pillars[H]) return SwingDoors.pillars[H];
+    const D = RU.sand;
+    const W = 26;
+    const img = PixelArt.make(W, H + 4, (p) => {
+      p.rect(3, 8, W - 6, H - 6, D[2]);
+      p.rect(3, 8, 4, H - 6, D[4]);
+      p.rect(W - 7, 8, 4, H - 6, D[1]);
+      for (const x of [9, 13, 17]) p.rect(x, 11, 1, H - 12, D[1]);   // fluting
+      // the capital: broad, with a key band carved round it
+      p.rect(0, 1, W, 8, D[3]);
+      p.rect(0, 1, W, 1, D[4]);
+      p.rect(0, 8, W, 1, D[0]);
+      for (let x = 2; x < W - 4; x += 6) { p.rect(x, 3, 4, 1, D[1]); p.rect(x + 3, 3, 1, 3, D[1]); p.rect(x, 5, 2, 1, D[1]); }
+      // the base
+      p.rect(1, H - 2, W - 2, 5, D[1]);
+      p.rect(1, H - 2, W - 2, 1, D[3]);
+      p.rect(9, Math.round(H * 0.42) - 1, 8, 11, D[1]);   // the glyph's recess
+      ruMoss(p, 1, 1, 12, Math.round(H) % 3 === 0 ? 0 : -1);
+      ruCrack(p, [[5, Math.round(H * 0.7)], [8, Math.round(H * 0.8)]], D, false);
+      for (let i = 0; i < 18; i++) {
+        const vx = W - 5 + Math.round(Math.sin(i * 0.5) * 1.5);
+        p.px(vx, 9 + i, RU.moss[1]);
+        if (i % 5 === 2) p.rect(vx - 2, 9 + i, 2, 2, RU.moss[3]);
+      }
+    }, OUTLINE, 0.5);
+    return (SwingDoors.pillars[H] = img);
+  }
+
+  /**
+   * A doorway of great stone pillars, one every 22px along it: shut, they stand full height side by
+   * side; as the door opens they sink into the ground all together, as one wall, grinding and
+   * trembling, and rise again together to shut it. Locked, their glyphs flare in a pulsing seal.
+   */
+  stoneDrawables(dr) {
+    const items = [];
+    const H = this.height;
+    const len = dr.b - dr.a;
+    const n = Math.max(1, Math.round(len / 22));
+    const img = SwingDoors.stonePillar(H);
+    const sealed = dr.locked && dr.open === 0;
+    const k = dr.open;
+    const up = 1 - (k * k * (3 - 2 * k));
+    const moving = k > 0 && k < 1;
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n;
+      const x = dr.ns ? dr.x : lerp(dr.a, dr.b, u);
+      const y = dr.ns ? lerp(dr.a, dr.b, u) + 8 : dr.y + 8;
+      const jolt = dr.slam > 0 ? Math.round(Math.sin(dr.slam * 60 + i) * dr.slam * 4) : 0;
+      items.push({
+        y: y - 1,
+        draw: (ctx) => {
+          // grinding: the whole wall trembles side to side while it moves
+          const shake = moving ? Math.round(Math.sin(performance.now() / 30 + i * 0.3)) : 0;
+          const h = Math.round((H + 4) * up);
+          if (h > 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x - 14, y - H - 10, 28, H + 10);
+            ctx.clip();
+            ctx.drawImage(img, Math.round(x - 13 + shake), Math.round(y - h + jolt));
+            ctx.restore();
+            // the glyph on its face: faint at rest, bright while it moves, burning as a seal while the room is locked
+            const gy = Math.round(y - h + H * 0.42 + 4 + jolt);
+            if (gy < y - 3) {
+              const pulse = sealed ? 0.75 + Math.sin(performance.now() / 160 + i) * 0.25 : moving ? 0.8 : 0.45;
+              ctx.save();
+              ctx.globalAlpha = pulse;
+              ctx.fillStyle = sealed || moving ? '#b8fff0' : '#22b8a6';
+              ctx.fillRect(Math.round(x + shake) - 1, gy - 4, 2, 9);
+              ctx.fillRect(Math.round(x + shake) - 4, gy - 1, 8, 3);
+              ctx.globalCompositeOperation = 'lighter';
+              PFX.glow(ctx, x, gy, sealed ? 14 : moving ? 12 : 8, RUIN_MAGIC, sealed ? 0.5 : moving ? 0.4 : 0.2);
+              ctx.restore();
+            }
+          }
+          // where it sinks into the floor: a dark slot, its lip glowing with the magic while it moves
+          if (up < 1) {
+            ctx.fillStyle = 'rgba(14, 20, 14, 0.8)';
+            ctx.fillRect(Math.round(x - 12), Math.round(y - 3), 24, 5);
+            if (moving) {
+              ctx.save();
+              ctx.globalCompositeOperation = 'lighter';
+              ctx.globalAlpha = 0.8;
+              ctx.fillStyle = '#5cf0d8';
+              ctx.fillRect(Math.round(x - 12), Math.round(y - 3), 24, 1);
+              PFX.glow(ctx, x, y - 2, 14, RUIN_MAGIC, 0.3);
+              ctx.restore();
+            }
+          }
+        },
+      });
+    }
+    return items;
+  }
+
+  /**
+   * The ruins' stone doors moving (visual only): while they grind up or down, chips of rock and grit
+   * spray from the slot and tumble off the pillar tops, dust rolls along the floor and motes of the
+   * magic rise; the moment they settle (fully up or fully down) they land with a thud: a burst of
+   * rubble and dust all along the doorway, and a bump of the camera if this screen's hero is near.
+   */
+  stoneFx(dr, world, prev, now) {
+    const H = this.height;
+    const along = (u) => (dr.ns ? { x: dr.x + vrand(-8, 8), y: lerp(dr.a, dr.b, u) } : { x: lerp(dr.a, dr.b, u), y: dr.y + vrand(-2, 4) });
+    const ROCK = ['#9a845e', '#7a6648', '#5a4a34', '#bca47a'];
+    if (prev !== now) {
+      const top = H * (1 - (now * now * (3 - 2 * now)));
+      for (let i = 0; i < 3; i++) {
+        const p = along(vrand(0, 1));
+        // rock chips spraying out of the slot; grit and chunks tumbling off the tops of the pillars
+        world.effects.burst(p.x, p.y + 6, { count: 2, colors: ROCK, speed: [30, 110], life: [0.3, 0.7], up: 90, gravity: 380, size: [2, 4] });
+        if (top > 8 && vrand(0, 1) < 0.5) world.effects.burst(p.x, p.y + 6 - top, { count: 1, colors: ROCK, speed: [10, 40], life: [0.4, 0.8], gravity: 420, size: [2, 3] });
+      }
+      if (vrand(0, 1) < 0.3) {
+        const p = along(vrand(0, 1));
+        world.effects.smoke(p.x, p.y + 6, { count: 2, radius: 10, life: 0.8, rise: 10, colors: ['#5a4a34', '#7a6648', '#9a845e'] });
+      }
+      if (vrand(0, 1) < 0.5) {
+        const p = along(vrand(0, 1));
+        world.effects.burst(p.x, p.y + 4, { count: 1, colors: ['#5cf0d8', '#b8fff0'], speed: [10, 30], life: [0.5, 0.9], up: 60, size: [1, 2] });
+      }
+    }
+    const landed = (prev > 0 && now === 0) || (prev < 1 && now === 1);
+    if (!landed) return;
+    // the thud: rubble and dust bursting all along the doorway
+    const steps = Math.max(3, Math.round((dr.b - dr.a) / 14));
+    for (let i = 0; i <= steps; i++) {
+      const p = along(i / steps);
+      world.effects.burst(p.x, p.y + 6, { count: 4, colors: ROCK, speed: [40, 140], life: [0.3, 0.7], up: 70, gravity: 380, size: [2, 4] });
+      world.effects.smoke(p.x, p.y + 6, { count: 1, radius: 12, life: 0.9, rise: 8, colors: ['#5a4a34', '#7a6648', '#9a845e'] });
+    }
+    const me = world.localPlayer;
+    if (me && SwingDoors.distTo(dr, me.x, me.y) < 260) world.shake(now === 0 ? 3 : 2, 0.15);
   }
 
   drawLeaf(ctx, hx, hy, ex, ey) {
