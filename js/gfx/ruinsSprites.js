@@ -119,17 +119,13 @@ function buildRuinsProjectiles() {
   const sprite = (w, h, fn) => PixelArt.make(w, h, fn, OUTLINE);
   Object.assign(Sprites.projectiles, {
     pebble: sprite(10, 10, (p) => ruRock(p, 5, 5, 4, 4, RU.sand)),
-    boulder: sprite(36, 36, (p) => {
+    // the rock bowler's giant mossy boulder (the castle catapults have their own `boulder`)
+    ruinBoulder: sprite(36, 36, (p) => {
       ruRock(p, 18, 18, 16, 16);
       p.line(6, 18, 30, 18, RU.stone[1], 2);   // a band so its roll shows
       p.line(6, 16, 30, 16, RU.stone[4]);
       ruMoss(p, 10, 6, 8, 0);
       ruGlyph(p, 22, 25);
-    }),
-    magicBolt: sprite(12, 12, (p) => {
-      p.circle(6, 6, 5, RU.magic[2]);
-      p.circle(6, 6, 3, RU.magic[3]);
-      p.circle(5, 5, 1, RU.magic[5]);
     }),
     magicPellet: sprite(7, 7, (p) => {
       p.circle(3, 3, 3, RU.magic[3]);

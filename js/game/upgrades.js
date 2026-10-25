@@ -14,6 +14,7 @@
 // the whole party. Potion prices rise with the stage (CONFIG.run.shop.stagePrice).
 
 const MELEE_HEROES = ['warrior'];   // heroes whose basic attack is a melee swing
+const BEATDOWN = { max: 20, decay: 1 };   // Beatdown: most stacks, and seconds without a hit for one to fall off
 const PET_HEROES = ['rogue'];       // heroes with followers that fight for them (the Rogue's clones)
 
 const SHOP_UPGRADES = [
@@ -55,8 +56,8 @@ const SHOP_UPGRADES = [
   },
   {
     id: 'beatdown', name: 'Beatdown', color: '#ff5a3a', needs: (p) => MELEE_HEROES.includes(p.classId),
-    desc: 'Each melee basic attack that lands adds a stack (up to 30): +2% melee damage per stack. Lose 1 stack every 2s without a hit.',
-    hud: (p) => { const s = Upgrades.state(p); return { count: s.stacks, active: s.stacks >= 30 }; },
+    desc: 'Each melee basic attack that lands adds a stack (up to 20): +2% melee damage per stack. Lose 1 stack every second without a hit.',
+    hud: (p) => { const s = Upgrades.state(p); return { count: s.stacks, active: s.stacks >= BEATDOWN.max }; },
   },
   {
     id: 'manaCrystal', name: 'Mana Crystal', color: '#4ad8ff', needs: (p) => p.resource?.name === 'MANA',
@@ -426,10 +427,10 @@ const Upgrades = {
       if (p === world.localPlayer) Sound.play('aim', 0.2);
     }
     if (this.has(p, 'deadlyPrecision')) s.steady = clamp((s.steady || 0) + (this.still(p) ? dt : -dt) * 4, 0, 1);   // eases the sights in and out
-    // Beatdown: a stack falls off every 2s without a hit
+    // Beatdown: a stack falls off every BEATDOWN.decay seconds without a hit
     if (s.stacks > 0) {
       s.idle += dt;
-      if (s.idle >= 2) { s.idle = 0; s.stacks--; }
+      if (s.idle >= BEATDOWN.decay) { s.idle = 0; s.stacks--; }
     }
     if (this.has(p, 'burstDodging')) this.updateDodges(p, dt);
     if (this.has(p, 'lastDefence') && !p.dead && p.hp > 0 && p.hp < p.maxHp * 0.1) this.lastDefence(p, world);
@@ -543,9 +544,9 @@ const Upgrades = {
     if (!this.has(p, 'beatdown')) return;
     const s = this.state(p);
     s.idle = 0;
-    if (s.stacks < 30) {
+    if (s.stacks < BEATDOWN.max) {
       s.stacks++;
-      if (s.stacks === 30) this.proc(p, world, 'beatdown', 'BEATDOWN MAX!', 9);
+      if (s.stacks === BEATDOWN.max) this.proc(p, world, 'beatdown', 'BEATDOWN MAX!', 9);
     }
   },
 
@@ -957,7 +958,7 @@ const Upgrades = {
       ctx.globalCompositeOperation = 'lighter';
       PFX.glow(ctx, x, y + 3, 8 + stacks / 5, '255, 90, 58', 0.5 + stacks / 60);
       ctx.restore();
-      HUD.text(ctx, `${stacks}`, x, y, { size: 6, align: 'center', color: stacks >= 30 ? '#ffe680' : '#ff8a6a' });
+      HUD.text(ctx, `${stacks}`, x, y, { size: 6, align: 'center', color: stacks >= BEATDOWN.max ? '#ffe680' : '#ff8a6a' });
     }
   },
 

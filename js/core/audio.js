@@ -659,16 +659,14 @@ const SFX = {
   },
 
   // Priestess
-  // calling the rays: a clear temple bell
+  // calling the rays (her basic attack, so it's heard a lot): one short, soft, rounded note with a quiet fifth over it
   holyChime: (s) => {
-    s.ring({ freq: 1047, dur: 1.2, vol: 0.07, metal: false, wet: 0.6 });
-    s.ring({ freq: 1568, dur: 0.9, vol: 0.04, delay: 0.05, metal: false, wet: 0.6 });
+    s.layer({ src: 'sine', freq: s.vary(784, 0.01), dur: 0.22, attack: 0.01, vol: 0.05, wet: 0.25 });
+    s.layer({ src: 'sine', freq: 1175, dur: 0.14, attack: 0.01, vol: 0.015, delay: 0.02, wet: 0.25 });
   },
-  // a ray of light coming down: a shimmering column of sound with a warm glow under it
+  // a ray of light landing: just a soft low tick under the chime
   holyRay: (s) => {
-    [1568, 2093, 2637].forEach((f) => s.layer({ src: 'sine', freq: s.vary(f, 0.01), dur: 0.6, attack: 0.08, vol: 0.025, vib: 10, vibRate: 7, wet: 0.6 }));
-    s.layer({ src: 'noise', dur: 0.5, attack: 0.1, vol: 0.08, filter: 'highpass', ffreq: 6500, fto: 3000, wet: 0.4 });
-    s.layer({ src: 'sine', freq: 262, dur: 0.5, attack: 0.05, vol: 0.06, wet: 0.3 });
+    s.layer({ src: 'sine', freq: s.vary(523, 0.03), dur: 0.12, attack: 0.01, vol: 0.02, wet: 0.15 });
   },
   // light missiles: a quick rising cascade of bells, sparkling
   lightMissiles: (s) => {

@@ -60,7 +60,7 @@ const HERO_GUIDE = {
       { key: 'LMB', icon: 'primary', name: 'Magic Missile', tags: [`${c.bolt.damage} dmg`, `${c.bolt.cost} mana`],
         desc: 'Hold to fire homing orbs that curve toward the nearest enemy. Cheap, so it is your main way to deal steady damage.' },
       { key: 'RMB', icon: 'secondary', name: 'Frostfire Ball', tags: [`${c.fireball.damage} dmg`, `${c.fireball.cost} mana`, `${sec(c.fireball.cooldown)} cd`],
-        desc: 'Throw a slow ball that explodes where it lands, hitting every enemy in a wide area.' },
+        desc: `Throw a ball that explodes where it lands. Every enemy in the blast is ignited with frostfire for ${sec(c.fireball.burnTime)}: it burns for ${c.fireball.burnDps} damage a second and is slowed by ${pct(c.fireball.slow)} at the same time.` },
       { key: 'E', icon: 'e', name: 'Lightning', tags: [`${c.lightning.damage} dmg`, `${c.lightning.cost} mana`],
         desc: `Press E, then click an enemy. After ${sec(c.lightning.delay)} lightning strikes it, then jumps to up to ${c.lightning.arcCount} nearby enemies for ${c.lightning.arcDamage} each.` },
       { key: 'F', icon: 'f', name: 'Bird Form', tags: [`${c.bird.cost} mana`, `${sec(c.bird.cooldown)} cd`],

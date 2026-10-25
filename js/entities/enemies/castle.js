@@ -343,6 +343,7 @@ class Catapult extends Enemy {
     switch (this.state) {
       case 'chase':
         this.arm = Math.min(0, this.arm + dt * 1.5);
+        this.trundle(dt, world, p);
         if (p.dead || this.attackCooldown > 0 || this.distanceTo(p) > c.range) return;
         this.faceToward(p.x);
         this.setState('windup');
@@ -367,6 +368,29 @@ class Catapult extends Enemy {
         if (this.stateTime >= 0.6) { this.setState('chase'); this.attackCooldown = c.cooldown + rand(0, 0.6); }
         break;
     }
+  }
+
+  /**
+   * Between shots it trundles about on its wheels, very slowly: away from you if you get within
+   * keepAway, in toward you if you're out of its range, and otherwise rolling slowly to one side
+   * (it changes its mind now and then). It stands still to wind up and loose.
+   */
+  trundle(dt, world, p) {
+    const c = this.cfg;
+    if (p.dead || !(this.speed > 0)) return;
+    const d = this.distanceTo(p);
+    const toward = angleTo(this.x, this.y, p.x, p.y);
+    this.drift = (this.drift ?? rand(1.5, 3.5)) - dt;
+    if (this.drift <= 0) { this.drift = rand(2, 4); this.side = Math.random() < 0.5 ? 1 : -1; }
+    if (d < c.keepAway) this.moveToward(world, this.x - Math.cos(toward) * 100, this.y - Math.sin(toward) * 100, this.speed, dt);
+    else if (d > c.range * 0.9) this.moveToward(world, p.x, p.y, this.speed, dt);
+    else this.moveAngle(world, toward + (Math.PI / 2) * (this.side || 1), this.speed * 0.6, dt);
+  }
+
+  update(dt, world) {
+    const x0 = this.x;
+    super.update(dt, world);
+    this.wheelTurn = (this.wheelTurn || 0) + (this.x - x0) / 8;   // its wheels turn as it rolls (radius 8)
   }
 
   /** Where the bucket is (world space) for an arm angle. */
@@ -457,6 +481,24 @@ class Catapult extends Enemy {
       if (this.flaming && vrand(0, 1) < 0.5) PFX.flame(ctx, b.x, b.y - 8, 8, 12, this.animTime * 8, ENEMY_FIRE_COLORS);
     }
     this.drawFrame(ctx, fr.base, this.anchor, alpha);
+    // its two wheels, drawn turning as it rolls (over the still ones in the base)
+    ctx.globalAlpha = alpha;
+    for (const wx of [18, 60]) {
+      const cx = Math.round(this.x + (wx - this.anchor.x) * this.facing);
+      const cy = Math.round(this.y + (52 - this.anchor.y));
+      PFX.disc(ctx, cx, cy, 8, 8, '#3b2416', 1);
+      PFX.disc(ctx, cx, cy, 6, 6, '#5b3922', 1);
+      ctx.fillStyle = '#22150e';
+      for (let k = 0; k < 4; k++) {
+        const a = this.wheelTurn * this.facing + (k * Math.PI) / 4;
+        for (let s = -5; s <= 5; s++) ctx.fillRect(Math.round(cx + Math.cos(a) * s), Math.round(cy + Math.sin(a) * s), 1, 1);
+      }
+      ctx.fillStyle = '#585d6c';
+      ctx.fillRect(cx - 1, cy - 1, 3, 3);
+      ctx.fillStyle = '#adb2c0';
+      ctx.fillRect(cx - 1, cy - 1, 1, 1);
+    }
+    ctx.globalAlpha = 1;
     if (this.flaming) {
       const bx = this.x + (6 - this.anchor.x) * this.facing;
       PFX.flame(ctx, bx, this.y - 30, 8, 12, this.animTime * 8, ENEMY_FIRE_COLORS);
@@ -1851,10 +1893,12 @@ class ClusterCatapult extends FlamingCatapult {
   hurl(world, at) {
     const c = this.cfg;
     const n = randInt(c.boulders[0], c.boulders[1]);
+    const turn = rand(0, TAU);
     for (let i = 0; i < n; i++) {
-      // the first lands on you; the rest scatter round you, so there are gaps to run through
-      const a = rand(0, TAU);
-      const d = i === 0 ? 0 : rand(c.spread * 0.35, c.spread);
+      // the first lands on you; the rest are spaced out evenly round you (a little jitter, well out from
+      // the middle), so the volley covers a wide area with gaps to run through rather than clumping
+      const a = turn + ((i - 1) / (n - 1)) * TAU + rand(-0.25, 0.25);
+      const d = i === 0 ? 0 : rand(c.spread * 0.55, c.spread);
       const pt = world.dungeon.freePoint(at.x + Math.cos(a) * d, at.y + Math.sin(a) * d * 0.75, 6, 6);
       world.after(i * c.stagger, () => { if (!this.dead) super.hurl(world, pt); });
     }

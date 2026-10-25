@@ -439,7 +439,7 @@ class RockBowler extends Enemy {
           this.carrying = false;
           enemyShot(world, this.x + Math.cos(this.aim) * 26, this.y - 8 + Math.sin(this.aim) * 26, this.aim, c.boulderSpeed, {
             radius: c.boulderRadius, damage: c.damage, life: 6, bounces: c.bounces, pierce: 4, knockback: 220,
-            sprite: Sprites.projectiles.boulder, spin: (c.boulderSpeed / c.boulderRadius) * (Math.cos(this.aim) >= 0 ? 1 : -1),
+            sprite: Sprites.projectiles.ruinBoulder, spin: (c.boulderSpeed / c.boulderRadius) * (Math.cos(this.aim) >= 0 ? 1 : -1),
             trail: ['#5c6558', '#7a6648'],
           });
           world.shake(3, 0.15);
@@ -477,7 +477,7 @@ class RockBowler extends Enemy {
   }
 
   draw(ctx) {
-    const img = Sprites.projectiles.boulder;
+    const img = Sprites.projectiles.ruinBoulder;
     const s = CONFIG.enemyDrawScale;
     const f = this.facing;
     const held = 28;   // the boulder's size in its arms (it's held a little in front, so it looks smaller than rolling)
@@ -851,7 +851,11 @@ class StonePillar extends Enemy {
   }
 }
 
-/** Rock golem (stage 2+): extremely tanky; slams the ground and a narrow shockwave races across the room, stunning. */
+/**
+ * Rock golem (stage 2+): extremely tanky. It raises both fists (its core blazing, the ground
+ * trembling, a red fan marking where it'll strike) and slams the ground: a shockwave of rock rips
+ * outward in a wide fan, a ridge of jagged stone racing across the floor, and stuns whoever it catches.
+ */
 class RockGolem extends Enemy {
   constructor(x, y) {
     super('rockGolem', x, y);
@@ -860,7 +864,8 @@ class RockGolem extends Enemy {
     this.hh = 9;
     this.hitOffY = 30;
     this.barOffset = 74;
-    this.waves = [];   // racing shockwaves: { x, y, angle, d, hit }
+    this.attackAngle = 0;
+    this.waves = [];   // fans of rock racing outward: { x, y, angle, r, hit }
     this.gibColors = [...RUIN_ROCK_GIBS, '#549044'];
   }
 
@@ -880,18 +885,14 @@ class RockGolem extends Enemy {
           this.attackAngle = angleTo(this.x, this.y, p.x, p.y);
           this.faceToward(p.x);
           Sound.play('windup');
+          Sound.play('graveRumble', 0.15);
         }
         break;
       case 'windup':
-        if (this.stateTime < c.windup - 0.3 && !p.dead) this.attackAngle = angleTo(this.x, this.y, p.x, p.y);
-        this.aimEnd = world.dungeon.raycast(this.x, this.y, this.attackAngle, c.waveReach);
-        if (this.stateTime >= c.windup) {
-          this.waves.push({ x: this.x, y: this.y, angle: this.attackAngle, d: 20, hit: new Set() });
-          world.shake(6, 0.25);
-          world.effects.burst(this.x, this.y, { count: 20, colors: RUIN_ROCK_GIBS, speed: [80, 200], life: [0.3, 0.6], up: 50 });
-          Sound.play('stomp');
-          this.setState('recover');
-        }
+        if (this.stateTime < c.windup - c.aimLockAt && !p.dead) { this.attackAngle = angleTo(this.x, this.y, p.x, p.y); this.faceToward(p.x); }
+        // the ground trembles round it as it gathers itself (visual only)
+        if (vrand(0, 1) < dt * 18) world.effects.burst(this.x + vrand(-30, 30), this.y + vrand(-6, 10), { count: 1, colors: RUIN_ROCK_GIBS, speed: [10, 40], life: [0.2, 0.4], up: 40 });
+        if (this.stateTime >= c.windup) this.slam(world);
         break;
       case 'recover':
         if (this.stateTime >= c.recovery) { this.setState('chase'); this.attackCooldown = c.cooldown; }
@@ -899,51 +900,128 @@ class RockGolem extends Enemy {
     }
   }
 
+  slam(world) {
+    this.waves.push({ x: this.x, y: this.y, angle: this.attackAngle, r: 24, hit: new Set() });
+    world.shake(9, 0.35);
+    world.effects.burst(this.x, this.y, { count: 30, colors: RUIN_ROCK_GIBS, speed: [80, 240], life: [0.3, 0.7], up: 70, gravity: 380, size: [2, 5] });
+    world.effects.smoke(this.x, this.y, { count: 6, radius: 20, life: 0.9, rise: 12, colors: ['#2e342d', '#5c6558', '#7a8372'] });
+    const { x, y } = this;
+    world.effects.add(0.35, (ctx, t) => {
+      ctx.save();
+      ctx.globalAlpha = 1 - t;
+      PFX.ring(ctx, x, y, 20 + t * 40, (20 + t * 40) * 0.5, '#a0a892', 2, { thick: 2 });
+      ctx.restore();
+    });
+    Sound.play('stomp');
+    Sound.play('impact', 0.1);
+    this.setState('recover');
+  }
+
   updateWaves(dt, world) {
     const c = this.cfg;
+    const half = (c.waveArcDegrees * DEG) / 2;
     for (const w of this.waves) {
-      const step = c.waveSpeed * dt;
-      w.d += step;
-      const x = w.x + Math.cos(w.angle) * w.d;
-      const y = w.y + Math.sin(w.angle) * w.d;
-      if (w.d > c.waveReach || world.dungeon.isSolidAt(x, y)) { w.dead = true; continue; }
+      w.r += c.waveSpeed * dt;
+      if (w.r > c.waveReach) { w.dead = true; continue; }
+      // everyone the front of the fan sweeps over (inside its arc), once each
       for (const a of world.allies) {
-        if (w.hit.has(a) || dist(a.x, a.y, x, y) > c.waveWidth / 2 + a.radius + 6) continue;
+        if (w.hit.has(a)) continue;
+        const d = dist(w.x, w.y, a.x, a.y);
+        if (Math.abs(d - w.r) > c.waveWidth / 2 + a.radius) continue;
+        if (Math.abs(angleDiff(w.angle, angleTo(w.x, w.y, a.x, a.y))) > half + a.radius / Math.max(d, 1)) continue;
         w.hit.add(a);
-        if (a.hurt(c.damage, world, x, y)) a.stun?.(c.stun, world);
+        if (a.hurt(c.damage, world, w.x, w.y)) {
+          a.stun?.(c.stun, world);
+          a.knockback?.(angleTo(w.x, w.y, a.x, a.y), 160);
+        }
       }
-      // the ground splitting and rock jutting up behind the wave (visual only)
-      w.fx = (w.fx || 0) - dt;
-      if (w.fx <= 0) {
-        w.fx = 0.05;
-        const fx = x;
-        const fy = y;
-        world.effects.add(0.5, (ctx, t) => {
-          ctx.save();
-          ctx.globalAlpha = 1 - t;
-          const up = Math.round(10 * Math.sin(Math.min(1, t * 4) * Math.PI / 2) * (1 - t));
-          ctx.fillStyle = OUTLINE;
-          ctx.fillRect(Math.round(fx) - 5, Math.round(fy) - up - 1, 10, up + 3);
-          ctx.fillStyle = '#5c6558';
-          ctx.fillRect(Math.round(fx) - 4, Math.round(fy) - up, 8, up + 1);
-          ctx.fillStyle = '#a0a892';
-          ctx.fillRect(Math.round(fx) - 4, Math.round(fy) - up, 3, 1);
-          ctx.restore();
-        });
-        world.effects.burst(fx, fy, { count: 2, colors: RUIN_ROCK_GIBS, speed: [30, 80], life: [0.2, 0.4], up: 40 });
+      // grit thrown up all along the front as it tears through the floor (visual only)
+      for (let i = 0; i < 2; i++) {
+        const ang = w.angle + vrand(-half, half);
+        const fx = w.x + Math.cos(ang) * w.r;
+        const fy = w.y + Math.sin(ang) * w.r;
+        if (!world.dungeon.isSolidAt(fx, fy)) world.effects.burst(fx, fy, { count: 1, colors: RUIN_ROCK_GIBS, speed: [30, 90], life: [0.2, 0.45], up: 60, gravity: 300, size: [2, 3] });
       }
     }
     removeDead(this.waves);
   }
 
   drawTelegraph(ctx) {
-    if (this.state !== 'windup' || !this.aimEnd) return;
-    Telegraph.line(ctx, this.x, this.y, this.aimEnd.x, this.aimEnd.y, this.cfg.waveWidth, this.stateTime / this.cfg.windup);
+    if (this.state !== 'windup') return;
+    const c = this.cfg;
+    Telegraph.cone(ctx, this.x, this.y, this.attackAngle, c.waveArcDegrees * DEG, c.waveReach, this.stateTime / c.windup);
+  }
+
+  drawGround(ctx) {
+    super.drawGround(ctx);
+    for (const w of this.waves) this.drawWave(ctx, w);
+  }
+
+  /**
+   * One fan of rock racing outward: the torn-up floor behind it, and along its front a ridge of jagged
+   * stone spikes, tallest in the middle of the fan, fading as it reaches the end of its run.
+   */
+  drawWave(ctx, w) {
+    const c = this.cfg;
+    const half = (c.waveArcDegrees * DEG) / 2;
+    const fade = 1 - Math.max(0, (w.r - c.waveReach * 0.7) / (c.waveReach * 0.3));
+    const n = Math.max(6, Math.round((w.r * half * 2) / 9));
+    ctx.save();
+    // the scar it leaves: a dark band behind the front
+    ctx.globalAlpha = 0.35 * fade;
+    for (let i = 0; i <= n; i++) {
+      const ang = w.angle - half + (i / n) * half * 2;
+      for (let back = 6; back < 30; back += 6) {
+        const r = w.r - back;
+        if (r < 20) continue;
+        ctx.fillStyle = '#1c201c';
+        ctx.fillRect(Math.round(w.x + Math.cos(ang) * r) - 2, Math.round(w.y + Math.sin(ang) * r * 0.9) - 1, 4, 3);
+      }
+    }
+    // a band of dust and grit boiling up just ahead of the ridge
+    ctx.globalAlpha = 0.45 * fade;
+    for (let i = 0; i <= n; i += 2) {
+      const ang = w.angle - half + (i / n) * half * 2;
+      PFX.disc(ctx, w.x + Math.cos(ang) * (w.r + 6), w.y + Math.sin(ang) * (w.r + 6) * 0.9 - 6, 8, 5, '#7a8372', 2);
+    }
+    // the ridge of spikes along the front
+    ctx.globalAlpha = fade;
+    for (let i = 0; i <= n; i++) {
+      const u = i / n;
+      const ang = w.angle - half + u * half * 2;
+      const x = Math.round(w.x + Math.cos(ang) * w.r);
+      const y = Math.round(w.y + Math.sin(ang) * w.r * 0.9);
+      const h = Math.round((12 + Math.sin(u * Math.PI) * 14) * (0.7 + 0.3 * Math.abs(Math.sin(i * 2.7))));
+      ctx.fillStyle = OUTLINE;
+      ctx.beginPath(); ctx.moveTo(x - 7, y + 2); ctx.lineTo(x, y - h - 1); ctx.lineTo(x + 7, y + 2); ctx.fill();
+      ctx.fillStyle = '#5c6558';
+      ctx.beginPath(); ctx.moveTo(x - 6, y + 1); ctx.lineTo(x, y - h); ctx.lineTo(x + 6, y + 1); ctx.fill();
+      ctx.fillStyle = '#a0a892';
+      ctx.beginPath(); ctx.moveTo(x - 5, y + 1); ctx.lineTo(x, y - h); ctx.lineTo(x - 1, y + 1); ctx.fill();
+    }
+    ctx.restore();
   }
 
   currentFrame() {
     if (this.state === 'windup') return this.frames.slam[0];
     return super.currentFrame();
+  }
+
+  draw(ctx) {
+    // trembling and glowing as it gathers itself to slam
+    const windup = this.state === 'windup' ? this.stateTime / this.cfg.windup : 0;
+    const shake = windup > 0.4 ? Math.round(Math.sin(this.animTime * 45) * windup * 2) : 0;
+    ctx.save();
+    ctx.translate(shake, 0);
+    this.drawFrame(ctx, this.currentFrame(), this.anchor, this.spawnAlpha);
+    ctx.restore();
+    if (windup > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, this.x, this.y - 18, 16 + windup * 18, RUIN_MAGIC, (0.3 + windup * 0.6) * this.spawnAlpha);
+      ctx.restore();
+    }
+    this.drawHealthBar(ctx);
   }
 }
 

@@ -188,7 +188,9 @@ class Mage extends Player {
 
   explode(world, x, y) {
     const c = this.cfg.fireball;
-    this.hitCircle(world, x, y, c.radius, c.damage, { knockback: 260, sound: 'hit', fire: true });
+    const hit = this.hitCircle(world, x, y, c.radius, c.damage, { knockback: 260, sound: 'hit', fire: true });
+    // everything it caught is ignited with frostfire: burning and slowed at once
+    for (const t of hit) world.frostfire(t, c.burnDps, c.burnTime, c.slow);
     world.effects.burst(x, y, { count: 30, colors: ['#1f7a72', '#3fc2a8', '#9cf0d8', '#2a2129'], speed: [80, 260], life: [0.3, 0.7], size: [3, 6] });
     // frostfire: a crown of ghost flames, shards of teal ice and a dark smoke cloud
     world.effects.flames(x, y + 8, { count: 7, spread: c.radius * 0.55, height: 42, width: 16, life: 0.7, colors: MAGE_FX.flame });

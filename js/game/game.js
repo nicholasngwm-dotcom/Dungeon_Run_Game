@@ -243,6 +243,21 @@ class Game {
     this.dots.push({ target, dps, t: duration, tick: 0.5, color, kind, source: this.actor });
   }
 
+  /**
+   * The Mage's frostfire: the target burns (dps for `duration`) and, if it can be slowed (plain enemies),
+   * moves `slow` slower for as long as it burns. Landing it again refreshes it rather than stacking it.
+   */
+  frostfire(target, dps, duration, slow) {
+    if (target.dead) return;
+    const d = this.dots.find((x) => x.target === target && x.kind === 'frostfire' && !x.dead);
+    if (d) { d.t = Math.max(d.t, duration); d.dps = Math.max(d.dps, dps); d.source = this.actor; }
+    else this.addDot(target, dps, duration, '#9cf0d8', 'frostfire');
+    if ('speedBoost' in target) {
+      target.frostfireUntil = Math.max(target.frostfireUntil || 0, this.time + duration);
+      target.frostfireSlow = slow;
+    }
+  }
+
   updateDots(dt) {
     for (const d of this.dots) {
       d.t -= dt;
@@ -251,9 +266,10 @@ class Game {
       this.dotFx(d, dt);
       if (d.tick <= 0) {
         d.tick += 0.5;
-        this.damageTarget(d.target, d.dps * 0.5, { sound: null, noCrit: true, color: d.color, source: d.source, fire: d.kind === 'burn' });
-        const colors = d.kind === 'burn' ? ['#ffd34a', '#ff8a1e', '#e0461e'] : [d.color, '#7a1010'];
-        this.effects.burst(d.target.hx, d.target.hy, { count: d.kind === 'burn' ? 5 : 2, colors, speed: [10, 40], life: [0.2, 0.4], up: d.kind === 'burn' ? 40 : 0 });
+        const flame = d.kind === 'burn' || d.kind === 'frostfire';
+        this.damageTarget(d.target, d.dps * 0.5, { sound: null, noCrit: true, color: d.color, source: d.source, fire: flame });
+        const colors = d.kind === 'burn' ? ['#ffd34a', '#ff8a1e', '#e0461e'] : d.kind === 'frostfire' ? ['#9cf0d8', '#3fc2a8', '#e6f6ff'] : [d.color, '#7a1010'];
+        this.effects.burst(d.target.hx, d.target.hy, { count: flame ? 5 : 2, colors, speed: [10, 40], life: [0.2, 0.4], up: flame ? 40 : 0 });
       }
       if (d.t <= 0) d.dead = true;
     }
@@ -271,6 +287,14 @@ class Game {
       }
       if (vrand(0, 1) < dt * 10) {
         this.effects.burst(t.hx + vrand(-r, r), t.hy - vrand(0, r), { count: 1, colors: ['#ffd34a', '#ff8a1e', '#fff6c8'], speed: [5, 20], life: [0.4, 0.7], up: 50, size: [1, 2] });
+      }
+    } else if (d.kind === 'frostfire') {
+      // ghost-teal flames licking up the body, and frost glittering off it as it slows
+      if (vrand(0, 1) < dt * 20) {
+        this.effects.flames(t.hx + vrand(-r * 0.7, r * 0.7), t.hy + r * vrand(0.2, 0.9), { count: 1, height: vrand(16, 26), width: vrand(8, 12), life: vrand(0.3, 0.5), colors: MAGE_FX.flame });
+      }
+      if (vrand(0, 1) < dt * 12) {
+        this.effects.burst(t.hx + vrand(-r, r), t.hy - vrand(0, r), { count: 1, colors: ['#e6f6ff', '#9ad0ff', '#9cf0d8'], speed: [5, 18], life: [0.4, 0.7], up: vrand(0, 1) < 0.5 ? 30 : -10, size: [1, 2] });
       }
     } else if (d.kind === 'bleed' && vrand(0, 1) < dt * 6) {
       this.effects.burst(t.hx + vrand(-r * 0.5, r * 0.5), t.hy, { count: 1, colors: ['#c43a44', '#6a1622'], speed: [0, 10], life: [0.3, 0.5], gravity: 300, drag: 0, size: [2, 2] });
@@ -551,8 +575,11 @@ class Game {
     for (const p of this.heroes) p.heal(p.maxHp * CONFIG.bossHealPercent, this);
     this.boss = Game.createBoss(type, this.dungeon.center);
     this.boss.cfg = scaleBossDamage(this.boss.cfg, CONFIG.enemyDamage);
-    this.boss.maxHp = Math.round(this.boss.maxHp * this.playerScale.hp);
-    this.boss.hp = this.boss.maxHp;
+    if (this.boss.scaleHealth) this.boss.scaleHealth(this.playerScale.hp);   // the golem's health is in its parts
+    else {
+      this.boss.maxHp = Math.round(this.boss.maxHp * this.playerScale.hp);
+      this.boss.hp = this.boss.maxHp;
+    }
     this.beginBossIntro();
   }
 

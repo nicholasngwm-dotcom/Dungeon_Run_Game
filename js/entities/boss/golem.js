@@ -241,6 +241,14 @@ class Golem {
     this.updatePartPositions();
   }
 
+  /** Toughness for the stage and party size: its health is in its parts, so every part is scaled by k. */
+  scaleHealth(k) {
+    for (const part of [this.body, this.head, ...this.fists]) {
+      part.maxHp = Math.round(part.maxHp * k);
+      part.hp = part.maxHp;
+    }
+  }
+
   get isRolling() { return this.mode === 'roll' && this.roll && this.roll.state !== 'rest' && this.roll.state !== 'stun'; }
   get bodyCenterY() { return this.mode === 'roll' ? this.y - GOLEM_BALL.r : this.y - 50; }
 

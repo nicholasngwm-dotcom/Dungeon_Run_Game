@@ -113,7 +113,9 @@ const CONFIG = {
       crit: { chance: 0.1, multiplier: 1.5 },
       resource:  { name: 'MANA', max: 200, regen: 5, color: '#3fc2a8' },
       bolt:      { damage: 24, cost: 3, cooldown: 0.3, speed: 360, turnRate: 7, seekRange: 420, life: 2.2 },
-      fireball:  { damage: 90, cost: 30, cooldown: 3, speed: 340, radius: 95, maxRange: 450 },
+      // RMB: the frostfire ball; everything in its blast is ignited with frostfire for burnTime s: burning
+      // (burnDps) and slowed by `slow` at once. Another hit refreshes it rather than stacking
+      fireball:  { damage: 65, cost: 30, cooldown: 2, speed: 340, radius: 70, maxRange: 450, burnDps: 12, burnTime: 3, slow: 0.35 },
       // E: pick a target with LMB, lightning strikes after `delay` and arcs
       lightning: { damage: 240, cost: 120, cooldown: 3, delay: 1, selectRadius: 70,
                    arcRange: 240, arcDamage: 140, arcCount: 4 },
@@ -431,25 +433,26 @@ const CONFIG = {
       hp: 95, speed: 60, radius: 13, damage: 34,
       preferredMin: 190, preferredMax: 340, windup: 0.85, aimLockAt: 0.25, bulletSpeed: 640, reload: 2.6,
     },
-    // Catapult: never moves; hurls boulders that land where the red circle shows
+    // Catapult: trundles about very slowly on its wheels, keeping keepAway from you (all the catapults do);
+    // stops to hurl boulders that land where the red circle shows
     catapult: {
-      hp: 300, speed: 0, radius: 20, damage: 40, contactDamage: 0,
+      hp: 300, speed: 22, radius: 20, damage: 40, contactDamage: 0, keepAway: 260,
       range: 560, windup: 1.0, flight: 1.1, cooldown: 3.0, blastRadius: 62,
       knockbackResist: 1, stunResist: 0.5, heartChance: 0.15,
     },
     // stage 2+: Flaming catapult: tougher; its burning boulders hit harder and leave fire that burns (burnDps for burnTime)
     flamingCatapult: {
-      hp: 480, speed: 0, radius: 20, damage: 52, contactDamage: 0,
+      hp: 480, speed: 20, radius: 20, damage: 52, contactDamage: 0, keepAway: 260,
       range: 580, windup: 1.0, flight: 1.1, cooldown: 3.2, blastRadius: 66,
       fireRadius: 64, fireTime: 4, burnDps: 9, burnTime: 3,
       knockbackResist: 1, stunResist: 0.5, heartChance: 0.18,
     },
     // stage 3: Cluster catapult: a plain catapult's hp, but it hurls a whole volley: boulders[0]-boulders[1]
-    // burning boulders raining down within `spread` px of you, `stagger` s apart, each like the flaming catapult's
+    // burning boulders raining down spaced out round you, up to `spread` px away, `stagger` s apart, each like the flaming catapult's
     clusterCatapult: {
-      hp: 300, speed: 0, radius: 20, damage: 52, contactDamage: 0,
+      hp: 300, speed: 20, radius: 20, damage: 52, contactDamage: 0, keepAway: 260,
       range: 600, windup: 1.3, flight: 1.1, cooldown: 4.5, blastRadius: 66,
-      boulders: [5, 6], spread: 130, stagger: 0.12,
+      boulders: [5, 6], spread: 210, stagger: 0.12,
       fireRadius: 64, fireTime: 4, burnDps: 9, burnTime: 3,
       knockbackResist: 1, stunResist: 0.5, heartChance: 0.18,
     },
@@ -620,10 +623,11 @@ const CONFIG = {
       hopEvery: 0.55, hopDistance: 96, hopTime: 0.32, slamRange: 70, slamRadius: 60, windup: 0.4, invulnTime: 2,
       knockbackResist: 1, stunResist: 0.5,
     },
-    // stage 2+: Rock golem: extremely tanky; slams the ground, sending a narrow shockwave across the room that stuns
+    // stage 2+: Rock golem: extremely tanky; winds up (windup, the red fan showing) and slams the ground: a shockwave of
+    // rock rips outward in a fan (waveArcDegrees wide, out to waveReach) that stuns whoever it catches
     rockGolem: {
       hp: 560, speed: 52, radius: 19, damage: 30,
-      slamRange: 260, windup: 0.9, waveSpeed: 400, waveWidth: 34, waveReach: 900, stun: 1.0, recovery: 0.9, cooldown: 2.6,
+      slamRange: 240, windup: 1.0, aimLockAt: 0.3, waveSpeed: 330, waveWidth: 30, waveReach: 400, waveArcDegrees: 70, stun: 1.0, recovery: 0.9, cooldown: 2.8,
       knockbackResist: 0.9, stunResist: 0.6, heartChance: 0.2,
     },
     // stage 2+: Ancient portal: never moves; every summonEvery s its pool swirls open for openTime s and calls
@@ -744,11 +748,12 @@ const CONFIG = {
   // ---------------------------------------------------------
   run: {
     // enemy + boss scaling per stage. Later stages get tougher enemies (hp, damage, a little speed)
-    // rather than many more of them; the counts below only creep up
+    // rather than many more of them; the counts below only creep up. Bosses get bossHp / bossDamage
+    // on top (by the later stages the heroes' upgrades make the fights easier)
     stages: [
       { hp: 1, damage: 1, speed: 1 },
-      { hp: 1.5, damage: 1.35, speed: 1.06 },
-      { hp: 2.1, damage: 1.65, speed: 1.12 },
+      { hp: 1.5, damage: 1.35, speed: 1.06, bossHp: 1.15, bossDamage: 1.1 },
+      { hp: 2.1, damage: 1.65, speed: 1.12, bossHp: 1.3, bossDamage: 1.2 },
     ],
     // random mode: chance weight of rolling a theme already used this run (vs 1 for a new one)
     repeatThemeWeight: 0.05,
@@ -809,7 +814,7 @@ const CONFIG = {
       rooms: ['combat', 'survival', 'defend'], perRoom: [2, 4], hp: 20, kinds: ['explosive', 'poison', 'frost'],
       explosive: { radius: 85, damage: 40, enemyDamage: 90, burnDps: 12, burnTime: 4 },
       poison: { radius: 80, cloudTime: 4, dps: 3, time: 8, enemyDps: 15 },
-      frost: { radius: 75, damage: 10, enemyDamage: 25, freeze: 1.5, iceRadius: 70, iceTime: 25, refreeze: 1.2 },
+      frost: { radius: 75, damage: 10, enemyDamage: 25, freeze: 1.5, iceRadius: 70, iceTime: 8, refreeze: 1.2 },
     },
     // special rooms (one or two per floor); not functional yet
     specials: ['blacksmith', 'wishingWell', 'heroStatue', 'restaurant5', 'mountTrader', 'darkTrader',

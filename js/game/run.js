@@ -897,9 +897,14 @@ class DungeonRun {
     w.boss = Game.createBoss(type, at);
     const s = this.scale;
     const b = w.boss;
-    b.maxHp = Math.round(b.maxHp * s.hp * w.playerScale.hp);   // stage x party size
-    b.hp = b.maxHp;
-    b.cfg = scaleBossDamage(b.cfg, s.damage * CONFIG.enemyDamage);
+    // stage x party size, and in the later stages a little extra on top for bosses (the heroes have upgrades by then)
+    const hp = s.hp * (s.bossHp || 1) * w.playerScale.hp;
+    if (b.scaleHealth) b.scaleHealth(hp);   // the golem's health is in its parts
+    else {
+      b.maxHp = Math.round(b.maxHp * hp);
+      b.hp = b.maxHp;
+    }
+    b.cfg = scaleBossDamage(b.cfg, s.damage * (s.bossDamage || 1) * CONFIG.enemyDamage);
     r.bossName = b.name;
     r.bossDown = false;
     Music.play('boss');
@@ -2442,9 +2447,9 @@ class DungeonRun {
   }
 
   /**
-   * The secret hole: a dark pit in the floor with a pulsing golden rim and
-   * sparks drifting up out of it. In the secret room, a shaft of light
-   * (with a rope) is the way back up.
+   * The secret hole, in hard pixels like the rest of the art: a dark pit stepping down into blackness,
+   * a pulsing ring of gold round its lip, rough stones and tufts round the rim, and sparks drifting
+   * up out of it. In the secret room, a shaft of light (with a rope) is the way back up.
    */
   drawHole(ctx, pr) {
     const x = Math.round(pr.x);
@@ -2454,103 +2459,116 @@ class DungeonRun {
     const shown = pr.kind === 'hole' ? pr.reveal || 0 : 1;   // how far the trapdoor has slid off it
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(x, y, 4, x, y, 60);
-    g.addColorStop(0, `rgba(255, 220, 140, ${(0.25 * pulse + 0.1) * shown})`);
-    g.addColorStop(1, 'rgba(255, 220, 140, 0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(x - 60, y - 60, 120, 120);
+    PFX.glow(ctx, x, y, 54, '255, 220, 140', (0.3 * pulse + 0.12) * shown, 2, 34);
     ctx.restore();
     if (pr.kind === 'hole') {
-      ctx.fillStyle = OUTLINE;
-      ctx.beginPath(); ctx.ellipse(x, y, 24, 12, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#05020a';
-      ctx.beginPath(); ctx.ellipse(x, y + 1, 21, 10, 0, 0, TAU); ctx.fill();
-      ctx.strokeStyle = `rgba(255, 214, 110, ${0.55 + pulse * 0.4})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.ellipse(x, y, 23, 11, 0, 0, TAU); ctx.stroke();
-      // crumbling stones round the rim
-      ctx.fillStyle = '#5c5676';
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * TAU + 0.3;
-        ctx.fillRect(Math.round(x + Math.cos(a) * 26) - 2, Math.round(y + Math.sin(a) * 13) - 1, 4, 3);
+      // the pit: an outline, then each step down darker, the lip lit along its far (top) edge
+      PFX.disc(ctx, x, y, 26, 14, OUTLINE);
+      PFX.disc(ctx, x, y, 24, 12, '#3a3046');
+      PFX.disc(ctx, x, y + 1, 22, 10, '#1e1626');
+      PFX.disc(ctx, x, y + 2, 18, 8, '#0e0a14');
+      PFX.disc(ctx, x, y + 3, 12, 5, '#05020a');
+      PFX.ring(ctx, x, y, 24, 12, '#5c5676', 2, { from: Math.PI, to: TAU });   // the far wall catching the light
+      // its golden rim, pulsing
+      ctx.save();
+      ctx.globalAlpha = (0.55 + pulse * 0.45) * Math.max(0.3, shown);
+      PFX.ring(ctx, x, y, 26, 13, '#ffd66e', 2, { dash: [3, 1], spin: t * 0.4 });
+      ctx.restore();
+      // rough stones and grass tufts round the lip
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * TAU + 0.3;
+        const sx = Math.round(x + Math.cos(a) * 29);
+        const sy = Math.round(y + Math.sin(a) * 15);
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(sx - 3, sy - 2, 6, 5);
+        ctx.fillStyle = i % 3 ? '#5c5676' : '#77699a';
+        ctx.fillRect(sx - 2, sy - 1, 4, 3);
+        ctx.fillStyle = '#9a90b8';
+        ctx.fillRect(sx - 2, sy - 1, 2, 1);
+        if (i % 4 === 1) { ctx.fillStyle = '#4e6e44'; ctx.fillRect(sx + 3, sy - 3, 2, 3); }
       }
     } else {
-      // shaft of light from above, and a rope to climb
+      // shaft of light from above, in stepped bands, and a rope to climb
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const sg = ctx.createLinearGradient(0, y - 140, 0, y);
-      sg.addColorStop(0, 'rgba(255, 240, 190, 0)');
-      sg.addColorStop(1, `rgba(255, 240, 190, ${0.25 + pulse * 0.15})`);
-      ctx.fillStyle = sg;
-      ctx.fillRect(x - 20, y - 140, 40, 140);
+      for (let band = 0; band < 7; band++) {
+        const top = y - 140 + band * 20;
+        ctx.fillStyle = `rgba(255, 240, 190, ${(0.04 + band * 0.04) * (0.8 + pulse * 0.4)})`;
+        ctx.fillRect(x - 20, top, 40, 20);
+        ctx.fillStyle = `rgba(255, 250, 220, ${(0.03 + band * 0.03)})`;
+        ctx.fillRect(x - 8, top, 16, 20);
+      }
       ctx.restore();
       ctx.fillStyle = OUTLINE;
       ctx.fillRect(x - 2, y - 140, 4, 136);
       ctx.fillStyle = '#c89a5a';
       ctx.fillRect(x - 1, y - 140, 2, 136);
       for (let ry = y - 136; ry < y - 6; ry += 8) { ctx.fillStyle = '#7d532f'; ctx.fillRect(x - 1, ry, 2, 2); }
-      ctx.strokeStyle = `rgba(255, 214, 110, ${0.4 + pulse * 0.3})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.ellipse(x, y, 18, 8, 0, 0, TAU); ctx.stroke();
+      ctx.save();
+      ctx.globalAlpha = 0.4 + pulse * 0.3;
+      PFX.ring(ctx, x, y, 18, 8, '#ffd66e', 2, { dash: [3, 1], spin: t * 0.4 });
+      ctx.restore();
     }
     if (pr.kind === 'hole' && shown < 1.01) this.drawTrapdoor(ctx, x, y, shown);
-    // sparks drifting up
-    for (let i = 0; i < 5; i++) {
-      const s = (t * 0.5 + i * 0.2) % 1;
+    // sparks drifting up, twinkling
+    for (let i = 0; i < 6; i++) {
+      const s = (t * 0.5 + i / 6) % 1;
+      const sx = Math.round(x + Math.sin(i * 2.3 + t) * 12);
+      const sy = Math.round(y - s * 54);
       ctx.fillStyle = `rgba(255, 230, 150, ${(1 - s) * shown})`;
-      ctx.fillRect(Math.round(x + Math.sin(i * 2.3 + t) * 12), Math.round(y - s * 50), 2, 2);
+      ctx.fillRect(sx, sy, 2, 2);
+      if (i % 2 && s < 0.5) { ctx.fillRect(sx - 1, sy + 0.5, 4, 1); }
     }
     const near = this.world.localPlayer.nearProp === pr;
     if (near) HUD.text(ctx, `[${Settings.label('interact')}] ${pr.label}`, x, y - 40, { size: 7, align: 'center', color: '#ffe680' });
   }
 
   /**
-   * The wooden trapdoor over the secret hole: oak planks with two iron straps and a
-   * ring pull. k = 0 sits over the hole; as the room is cleared it scrapes aside
-   * (eased, lifting a touch as it goes) and comes to rest beside the hole.
+   * The wooden trapdoor over the secret hole, in hard pixels: a round hatch of oak planks (built row
+   * by row in 2px steps) with two iron straps and a ring pull. k = 0 sits over the hole; as the room is
+   * cleared it scrapes aside (eased, lifting a touch as it goes) and comes to rest beside the hole.
    */
   drawTrapdoor(ctx, x, y, k) {
     const e = k * k * (3 - 2 * k);
     const ox = Math.round(x + e * 58);
     const oy = Math.round(y + e * 6 - Math.sin(k * Math.PI) * 3);
     drawShadow(ctx, ox, oy + 3, 26, 9, 0.35);
-    // the round hatch: an outline, then planks clipped to it
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(ox, oy, 27, 14, 0, 0, TAU);
-    ctx.fillStyle = OUTLINE;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(ox, oy, 25, 12, 0, 0, TAU);
-    ctx.clip();
+    PFX.disc(ctx, ox, oy, 27, 14, OUTLINE);
     const planks = ['#7d532f', '#8a5c34', '#74502c', '#86582f'];
-    for (let i = 0; i < 6; i++) {
-      const px = ox - 25 + i * 9;
-      ctx.fillStyle = planks[i % planks.length];
-      ctx.fillRect(px, oy - 12, 9, 24);
-      ctx.fillStyle = '#9c6c3e';
-      ctx.fillRect(px, oy - 12, 1, 24);
-      ctx.fillStyle = '#4a2e1c';
-      ctx.fillRect(px + 8, oy - 12, 1, 24);
+    const rx = 25;
+    const ry = 12;
+    for (let j = -ry; j < ry; j += 2) {
+      const mid = j + 1;
+      const half = Math.round((rx * Math.sqrt(Math.max(0, 1 - (mid * mid) / (ry * ry)))) / 2) * 2;
+      if (half <= 0) continue;
+      for (let px = ox - half; px < ox + half; px++) {
+        const col = Math.floor((px - (ox - rx)) / 9);
+        const edge = (px - (ox - rx)) % 9;
+        ctx.fillStyle = edge === 0 ? '#9c6c3e' : edge === 8 ? '#4a2e1c' : planks[col % planks.length];
+        ctx.fillRect(px, oy + j, 1, 2);
+      }
+      // shade the lower part of the hatch, light its top
+      if (j >= 6) { ctx.fillStyle = 'rgba(30, 16, 8, 0.35)'; ctx.fillRect(ox - half, oy + j, half * 2, 2); }
+      if (j === -ry) { ctx.fillStyle = '#b08050'; ctx.fillRect(ox - half, oy + j, half * 2, 1); }
     }
-    ctx.fillStyle = 'rgba(30, 16, 8, 0.35)';
-    ctx.fillRect(ox - 25, oy + 6, 50, 6);   // shaded lower edge
     // two iron straps with rivets
     for (const sy of [-6, 4]) {
+      const half = Math.round((rx * Math.sqrt(Math.max(0, 1 - ((sy + 1) * (sy + 1)) / (ry * ry)))) / 2) * 2;
       ctx.fillStyle = '#363a46';
-      ctx.fillRect(ox - 25, oy + sy, 50, 3);
+      ctx.fillRect(ox - half, oy + sy, half * 2, 3);
       ctx.fillStyle = '#80869a';
-      ctx.fillRect(ox - 25, oy + sy, 50, 1);
-      for (let rx = -18; rx <= 18; rx += 12) { ctx.fillStyle = '#c9d3dd'; ctx.fillRect(ox + rx, oy + sy + 1, 1, 1); }
+      ctx.fillRect(ox - half, oy + sy, half * 2, 1);
+      for (let rxp = -18; rxp <= 18; rxp += 12) { ctx.fillStyle = '#c9d3dd'; ctx.fillRect(ox + rxp, oy + sy + 1, 1, 1); }
     }
-    ctx.restore();
-    // the ring pull
-    ctx.strokeStyle = OUTLINE;
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.ellipse(ox + 12, oy - 1, 4, 3, 0, 0, TAU); ctx.stroke();
-    ctx.strokeStyle = '#d4ac4c';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    // the ring pull: a little square ring of brass
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(ox + 8, oy - 4, 9, 7);
+    ctx.fillStyle = '#d4ac4c';
+    ctx.fillRect(ox + 9, oy - 3, 7, 5);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(ox + 11, oy - 1, 3, 1);
+    ctx.fillStyle = '#f0d88a';
+    ctx.fillRect(ox + 9, oy - 3, 3, 1);
   }
 
   // ---------- gloom and fog (themes with `night`) ----------
