@@ -94,7 +94,7 @@ class Rogue extends Player {
   get bodyAlpha() { return this.vanish > 0 ? 0.15 : 1; }
 
   onKill(world) {
-    this.gainResource(this.cfg.resource.perKill);
+    this.gainResource(this.cfg.resource.perKill * Upgrades.energyScale(this));
     // passive: Killing Streak
     const c = this.cfg.passive;
     const was = this.streak;

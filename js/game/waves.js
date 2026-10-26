@@ -32,6 +32,7 @@ class WaveDirector {
 
       case 'fighting':
         if (w.enemies.length === 0 && w.pendingSpawns === 0) {
+          for (const p of w.players) p.roomCleared(w);   // a cleared wave counts as a cleared room for super buffs
           if (this.waveIndex + 1 < this.totalWaves) {
             this.state = 'break';
             this.timer = CONFIG.waveBreak;

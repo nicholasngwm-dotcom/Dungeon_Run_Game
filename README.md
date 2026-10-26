@@ -78,9 +78,9 @@ costs 10, then 5 more each time, back to 10 at the next stage's shop. Each upgra
 owned once. Entering each stage you also choose one free upgrade from three, and a wishing
 well's wish is sometimes an upgrade instead of potions.
 
-**Upgrades**: 24 shared ones (Vital Heart, Tesla Armour, Deadly Precision, Coin Siphon...;
+**Upgrades**: 30 shared ones (Vital Heart, Tesla Armour, Silver Shield, Bouncy!, Mimic Sense...;
 the few that need something only some heroes have, like mana, rockets, followers or a melee
-basic attack, only show up for those heroes) and 13 hero upgrades, framed in gold with the
+basic attack, only show up for those heroes) and 16 hero upgrades, framed in gold with the
 hero's name, that only ever show up for that hero. Hold Tab (the scoreboard) to see every
 player's upgrades: hover one to read it; cooldowns, stacks and "active right now" glows show on
 the icons, and they flash when they go off. Potion prices rise with the stage. In defend rooms,
@@ -174,7 +174,7 @@ js/
     player/             Player base + Knight (warrior.js), Archer (ranger.js), Mage, Rogue, Priestess, Bard, Rocketeer, Baker
     enemies/            Enemy base + Zombie, Slime, Wraith, Skeleton, UndeadKnight,
                         Gravestone (raises zombies/skeletons), Ghost (slowing aura),
-                        Mimic (tough lunging chest, drops regen/speed/power buffs),
+                        Mimic (tough lunging chest, drops a super regen/speed/power buff for 3 room clears),
                         graveyard.js (the Graveyard theme's new enemies)
     boss/golem.js       Clay Golem (parts, phases, attacks)
     boss/phantom.js     Phantom King (dash, eye lasers, vanish + pull shockwaves)

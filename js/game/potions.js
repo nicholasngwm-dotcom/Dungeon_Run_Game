@@ -48,9 +48,9 @@ const BAG_STACK = 10;
 /** Reach of the Inferno potion's ring of fire around the hero (px). */
 const INFERNO_RADIUS = 180;
 
-/** A potion's price at this point of the run (prices rise each stage). */
-function potionPrice(run, id) {
-  return Math.round(POTIONS[id].price * run.priceScale);
+/** A potion's price at this point of the run (prices rise each stage), for this hero (Discount Cards). full: before any discount. */
+function potionPrice(run, id, hero, full = false) {
+  return Math.round(POTIONS[id].price * run.priceScale * (full ? 1 : Upgrades.priceScale(hero)));
 }
 
 const POTIONS = {};

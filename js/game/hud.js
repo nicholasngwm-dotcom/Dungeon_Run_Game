@@ -690,24 +690,45 @@ const HUD = {
     }
   },
 
-  /** Mimic buffs: one chip each with its icon, name, seconds left and a draining bar. */
+  /**
+   * Buffs: one chip each with its icon and name. Mimic super buffs show a pip per room clear
+   * left; the sugar rush shows seconds left and a draining bar.
+   */
   drawBuffs(ctx, p, x, y) {
     let cx = x;
     for (const [type, t] of Object.entries(p.buffs)) {
       const b = CONFIG.buffs[type];
-      const w = 70;
-      const blink = t < 2 && Math.floor(t * 6) % 2;
+      const w = b.stacks ? 96 : 70;
+      const blink = b.stacks ? false : t < 2 && Math.floor(t * 6) % 2;
       this.panel(ctx, cx, y, w, 20);
       ctx.globalAlpha = blink ? 0.5 : 1;
       const icon = Sprites.pickups[`buff_${type}`];
       ctx.drawImage(icon, cx + 1, y + 1);
       this.text(ctx, b.name, cx + 21, y + 3, { size: 6, color: b.color });
-      this.text(ctx, `${Math.ceil(t)}s`, cx + w - 3, y + 3, { size: 6, align: 'right' });
+      if (!b.stacks) this.text(ctx, `${Math.ceil(t)}s`, cx + w - 3, y + 3, { size: 6, align: 'right' });
       ctx.globalAlpha = 1;
-      ctx.fillStyle = '#1c1410';
-      ctx.fillRect(cx + 21, y + 13, w - 24, 3);
-      ctx.fillStyle = b.color;
-      ctx.fillRect(cx + 21, y + 13, Math.round((w - 24) * clamp(t / (p.buffMax[type] || b.duration), 0, 1)), 3);
+      if (b.stacks) {
+        // a pip per room clear left, the last one pulsing
+        const n = p.buffMax[type] || b.stacks;
+        const pw = Math.floor((w - 24 - (n - 1) * 2) / n);
+        for (let i = 0; i < n; i++) {
+          const px = cx + 21 + i * (pw + 2);
+          ctx.fillStyle = '#1c1410';
+          ctx.fillRect(px, y + 13, pw, 4);
+          if (i >= t) continue;
+          ctx.globalAlpha = t === 1 ? 0.65 + Math.sin(performance.now() / 160) * 0.35 : 1;
+          ctx.fillStyle = b.color;
+          ctx.fillRect(px, y + 13, pw, 4);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+          ctx.fillRect(px, y + 13, pw, 1);
+          ctx.globalAlpha = 1;
+        }
+      } else {
+        ctx.fillStyle = '#1c1410';
+        ctx.fillRect(cx + 21, y + 13, w - 24, 3);
+        ctx.fillStyle = b.color;
+        ctx.fillRect(cx + 21, y + 13, Math.round((w - 24) * clamp(t / (p.buffMax[type] || b.duration), 0, 1)), 3);
+      }
       cx += w + 6;
     }
     // potion effects: the bottle of the tier that's running, the effect's name with its tier

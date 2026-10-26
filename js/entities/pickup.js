@@ -89,22 +89,22 @@ class ManaPickup extends Pickup {
 }
 
 /**
- * Buff orb from a mimic: type is a key of CONFIG.buffs (regen, speed, damage).
- * duration overrides the buff's usual length (secret-room mimics: a full minute).
+ * Super buff orb from a mimic: type is a key of CONFIG.buffs (regen, speed, damage).
+ * It lasts for the next few room clears (CONFIG.buffs[type].stacks).
  */
 class BuffPickup extends Pickup {
-  constructor(x, y, type, duration = null) {
+  constructor(x, y, type) {
     super(x, y);
     this.type = type;
-    this.duration = duration;
+    this.lifetime = 60;
   }
 
   wanted() { return true; }
 
   collect(p, world) {
     const b = CONFIG.buffs[this.type];
-    p.addBuff(this.type, this.duration || b.duration);
-    world.effects.text(p.hx, p.hy - 40, `${b.name} UP!`, { color: b.color, size: 9, life: 1 });
+    p.addBuff(this.type);
+    world.effects.text(p.hx, p.hy - 40, `${b.name}! (${b.stacks} ROOMS)`, { color: b.color, size: 9, life: 1.4 });
     world.effects.burst(p.hx, p.hy, { count: 18, colors: [b.color, '#ffffff'], speed: [40, 140], life: [0.3, 0.6], up: 30 });
   }
 

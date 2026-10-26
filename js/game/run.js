@@ -474,6 +474,7 @@ class DungeonRun {
     this.totem = null;
     Sound.play('waveStart');
     if (r.type !== 'boss') w.banner('ROOM CLEARED', 'A chest appeared', 1.6);
+    for (const p of w.players) p.roomCleared(w);   // super buffs count down by rooms
     w.maybeDropHeart(r.cx, r.cy, 0.35);
     // reward chest (in the boss room it sits below the portal)
     const T = this.floor.T;
@@ -592,7 +593,7 @@ class DungeonRun {
   /** Upgrade store: pay to swap the three offers for three new ones. */
   rerollUpgrades(hero) {
     const st = this.shopState(hero);
-    const price = rerollPrice(st.rerolls);
+    const price = rerollPrice(st.rerolls, hero);
     const ok = hero.coins >= price;
     if (ok) {
       hero.coins -= price;
@@ -606,7 +607,7 @@ class DungeonRun {
   buyPotion(hero, id) {
     const s = this.potionStock.find((x) => x.id === id);
     const pot = POTIONS[id];
-    const price = pot ? potionPrice(this, id) : Infinity;
+    const price = pot ? potionPrice(this, id, hero) : Infinity;
     const ok = !!s && !!pot && s.left > 0 && hero.coins >= price && hero.canCarry(id);
     if (ok) {
       hero.coins -= price;
@@ -2286,6 +2287,7 @@ class DungeonRun {
           ctx.restore();
         } else this.drawChest(ctx, pr, x, y);
         ctx.globalAlpha = 1;
+        if (Upgrades.isSensed(pr, this.world.localPlayer)) Upgrades.drawMimicSense(ctx, x, y, this.time);   // Mimic Sense
         if (pr.sealed) {
           // chained shut
           for (const [x1, x2] of [[-16, 16], [16, -16]]) {

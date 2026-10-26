@@ -1077,6 +1077,8 @@ h2 {
 }
 .buy:hover:not(:disabled) { background: #3f8a4a; }
 .buy:disabled { background: var(--panel-light); color: var(--muted); cursor: default; }
+/* Discount Cards: the full price, struck out in red, before the discounted one */
+.was-price { color: #ff8a7a; opacity: 0.85; margin-right: 6px; font-size: 0.85em; text-decoration: line-through; text-decoration-thickness: 2px; }
 .map-icon { flex: none; width: 28px; height: 20px; image-rendering: pixelated; }
 
 /* ===== Multiplayer ===== */

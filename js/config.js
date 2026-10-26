@@ -122,9 +122,11 @@ const CONFIG = {
       // F: turn into a small, fast bird (tiny hitbox, can't cast). F again lands early.
       // F: bird form: flies over obstacles (cover, pillars, furniture, hedges) and spike traps; walls and doors still stop it
       bird:      { cost: 30, cooldown: 6, duration: 4, speedMultiplier: 1.8, radius: 5 },
-      // Q: place a magic circle (LMB, RMB cancels) that drains enemies in it into mana.
+      // Q: place a magic circle (LMB, RMB cancels) that drains enemies in it into mana (manaSteal of the damage).
+      // The fewer enemies inside, the harder it drains each: dps x focus / sqrt(enemies inside), never below dps
+      // (so 1 enemy takes 2x, 2 take 1.4x, 4 or more take dps each).
       // While a circle is active, RMB / E / F cooldowns are capped at activeCooldown seconds.
-      ult:       { charge: 1400, duration: 5, radius: 130, dps: 50, tick: 0.25, manaSteal: 0.35, maxRange: 300, activeCooldown: 1 },
+      ult:       { charge: 1400, duration: 5, radius: 130, dps: 50, focus: 2, tick: 0.25, manaSteal: 0.45, maxRange: 300, activeCooldown: 1 },
     },
     rogue: {
       // passive: each kill in a streak adds damage (up to maxStreak); the streak ends after `duration`s without a kill
@@ -323,13 +325,14 @@ const CONFIG = {
       maxLead: 1.4,   // seconds ahead of the hero it aims for, to cut them off
     },
     // a treasure chest with teeth: hops slowly toward the hero, then lunges again and again
-    // while the hero stays within leashRange. Very tough, hits hard, usually drops a buff orb
+    // while the hero stays within leashRange. Very tough, hits hard, always drops one super buff orb
+    // (Mimic Sense: senseChance of dropping all three)
     mimic: {
       hp: 700, speed: 0, radius: 18, damage: 42, contactDamage: 14,
       hopDistance: 46, hopTime: 0.32, hopRest: 0.55,
       aggroRange: 160, leashRange: 230,
       windup: 0.42, aimLockAt: 0.15, lungeDistance: 150, lungeTime: 0.2, recovery: 0.45,
-      knockbackResist: 0.85, stunResist: 0.5, buffChance: 0.8, heartChance: 0.15,
+      knockbackResist: 0.85, stunResist: 0.5, senseChance: 0.35, heartChance: 0.15,
     },
   },
 
@@ -776,8 +779,8 @@ const CONFIG = {
     coins: { hpPerCoin: 60, summonedChance: 0.3, boss: [25, 35], roomChest: 5 },
     bossHearts: 5,                                // hearts a stage boss drops when beaten
     // secret room: 3 chests, the party opens up to `picks` (then the rest seal shut); one is a mimic
-    // that drops every buff for mimicBuffTime seconds; the others hold coins or potions (any kind)
-    secret: { chests: 3, picks: 2, coins: [20, 35], potions: [2, 4], mimicBuffTime: 60 },
+    // that drops a super buff like any other; the others hold coins or potions (any kind)
+    secret: { chests: 3, picks: 2, coins: [20, 35], potions: [2, 4] },
     // treasure room (a special room): each of its 3 chests holds coins (coins[0]-coins[1]) or, potionChance of the
     // time, potions[0]-potions[1] healing potions, mostly the small ones (healTierWeights: tier 1, 2, 3)
     treasure: { coins: [5, 35], potions: [2, 5], potionChance: 0.5, healTierWeights: [6, 3, 1] },
@@ -857,11 +860,12 @@ const CONFIG = {
   // mana orbs only drop for mana users; picking one up triggers the Mage's Mana Surge passive
   drops: { heartChance: 0.05, heartHeal: 45, manaChance: 0.45, manaRestore: 15, coinMagnet: 220 },   // coinMagnet: how far coins fly to you from (px)
 
-  // buff orbs dropped by mimics (one random type each); picking one up again refreshes it
+  // super buff orbs dropped by mimics (one random type each). They're counted in rooms, not seconds: each
+  // starts at `stacks` and loses one every time a room is cleared; picking one up again refills it
   buffs: {
-    regen:  { name: 'REGEN', duration: 8, perSecond: 0.03, color: '#6cff7a' },  // 3% max hp/s even while hit (24% total)
-    speed:  { name: 'SPEED', duration: 8, multiplier: 1.3, color: '#ffd34a' },  // +30% move speed
-    damage: { name: 'POWER', duration: 8, multiplier: 1.25, color: '#ff5a4a' }, // +25% damage, stacks with passives
+    regen:  { name: 'SUPER REGEN', stacks: 3, perSecond: 0.02, color: '#6cff7a' },  // 2% max hp/s, even while hit
+    speed:  { name: 'SUPER SPEED', stacks: 3, multiplier: 1.35, color: '#ffd34a' }, // +35% move speed
+    damage: { name: 'SUPER POWER', stacks: 3, multiplier: 1.35, color: '#ff5a4a' }, // +35% damage, stacks with passives
     sugar:  { name: 'SUGAR', duration: 5, speed: 1.25, attackSpeed: 1.3, color: '#ff8ad0' },  // the Baker's pastries: faster feet and hands
   },
 
@@ -880,7 +884,8 @@ const CONFIG = {
   waveScaling: { hp: 0.15, damage: 0.08 },
   // debuffs on bosses (they ignore plain stuns): a freeze locks a boss in ice for freezeTime x the freeze's
   // length (it can't move or attack), after which it can't be frozen again for freezeImmune seconds
-  bossDebuffs: { freezeTime: 1, freezeImmune: 4 },
+  // zapImmune: after a Zap (Tesla Armour) wears off, a boss can't be zapped again for this many seconds
+  bossDebuffs: { freezeTime: 1, freezeImmune: 4, zapImmune: 3 },
   // a boss's entrance cutscene: the camera pans over (pan s), its entrance plays, then its title card (card s)
   bossIntro: { pan: 0.9, card: 2.8 },
   // chance of each boss appearing after the last wave

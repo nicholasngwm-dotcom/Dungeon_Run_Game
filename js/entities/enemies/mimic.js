@@ -1,7 +1,7 @@
 // Mimic: a treasure chest with teeth. Hops slowly toward the hero; once they
 // come close it lunges (red lane telegraph), and keeps lunging over and over
-// until the hero gets out of range. Very tough and hits hard, but usually
-// drops a buff orb when it dies.
+// until the hero gets out of range. Very tough and hits hard, but always
+// drops a super buff orb when it dies (lasting the next 3 room clears).
 //
 // States: rest -> hop -> rest ... | windup -> lunge -> recover -> windup ...
 
@@ -120,13 +120,13 @@ class Mimic extends Enemy {
     Sound.play('pickup');
     world.maybeDropHeart(this.x - 14, this.y, this.cfg.heartChance);
     world.maybeDropMana(this.x, this.y);
-    if (this.secret) {
-      // a secret-room chest mimic: every buff, each lasting a full minute
+    // one super buff orb; a Mimic Sense hero's kill may shake all three loose
+    if (Upgrades.mimicJackpot(this, world)) {
       MIMIC_BUFFS.forEach((type, i, all) => {
         const a = (i / all.length) * TAU;
-        world.pickups.push(new BuffPickup(this.x + Math.cos(a) * 20, this.y + Math.sin(a) * 12, type, CONFIG.run.secret.mimicBuffTime));
+        world.pickups.push(new BuffPickup(this.x + Math.cos(a) * 20, this.y + Math.sin(a) * 12, type));
       });
-    } else if (Math.random() < this.cfg.buffChance) world.pickups.push(new BuffPickup(this.x + 12, this.y, choose(MIMIC_BUFFS)));
+    } else world.pickups.push(new BuffPickup(this.x + 12, this.y, choose(MIMIC_BUFFS)));
   }
 
   drawTelegraph(ctx) {

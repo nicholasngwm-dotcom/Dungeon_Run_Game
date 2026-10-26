@@ -126,10 +126,32 @@ const SHOP_UPGRADES = [
     desc: 'Enemies you defeat are much more likely to drop a heart (+15% chance).',
   },
   {
-    id: 'teslaArmour', name: 'Tesla Armour', color: '#6ad8ff', cooldown: 10,
-    desc: '+25 max HP. A static shield blocks the next hit and stuns whoever dealt it.',
+    // zap: how long whoever hit you (and anything right next to you) is Zapped: stunned, bosses too
+    id: 'teslaArmour', name: 'Tesla Armour', color: '#6ad8ff', cooldown: 10, zap: 1,
+    desc: '+25 max HP. When you\'re hit, a static shock leaps out at whoever hit you and ZAPS them: stunned for 1 second, even bosses.',
     apply(p) { p.maxHp += 25; p.hp += 25; },
     hud: (p) => ({ cd: Upgrades.cd(p, 'teslaArmour'), max: 10, active: Upgrades.cd(p, 'teslaArmour') <= 0 }),
+  },
+  {
+    id: 'silverShield', name: 'Silver Shield', color: '#d8e0ec', cooldown: 20,
+    desc: 'A silver ward blocks the next attack that hits you completely.',
+    hud: (p) => ({ cd: Upgrades.cd(p, 'silverShield'), max: 20, active: Upgrades.cd(p, 'silverShield') <= 0 }),
+  },
+  {
+    id: 'discountCards', name: 'Discount Cards', color: '#7ae0a0', discount: 0.1,
+    desc: 'Every upgrade, reroll and potion in the shops costs you 10% less.',
+  },
+  {
+    id: 'mimicSense', name: 'Mimic Sense', color: '#ff6a5a', range: 150,
+    desc: 'You can sense mimics hiding as chests when you get near them. Mimics you kill have a 35% chance to drop all three super buffs.',
+  },
+  {
+    id: 'bouncy', name: 'Bouncy!', color: '#ff9ad8', bounces: 2,
+    desc: 'Your projectiles bounce off walls up to 2 times.',
+  },
+  {
+    id: 'energyDrink', name: 'Energy Drink', color: '#f0e040', needs: (p) => p.resource?.name === 'ENERGY', rate: 1.5,
+    desc: 'Energy comes back 50% faster.',
   },
   {
     // attackSpeed: how much faster basic attacks come back, for `time`s after a hit lands on you (once per `cooldown`s)
@@ -159,14 +181,10 @@ const SHOP_UPGRADES = [
     desc: 'Camo leaves a cloud of green smoke that confuses enemies caught in it.',
   },
   {
-    id: 'empoweredSurge', name: 'Empowered Mana Surge', color: '#5af0e0', hero: 'mage',
-    desc: 'Basic attacks cast with over 150 mana deal 30% more damage.',
-    hud: (p) => ({ active: p.resource.value > 150 }),
-  },
-  {
-    id: 'magicAura', name: 'Magic Aura', color: '#3fc2a8', hero: 'mage',
-    desc: 'A small aura hurts enemies around you, turning part of the damage into mana.',
-    hud: () => ({ active: true }),
+    // mana: the least mana to cast with; damage: how much harder the missile hits then
+    id: 'empoweredSurge', name: 'Empowered Mana Surge', color: '#5af0e0', hero: 'mage', mana: 100, damage: 1.5,
+    desc: 'Basic attacks cast with 100 mana or more deal 50% more damage.',
+    hud: (p) => ({ active: Upgrades.empowered(p) }),
   },
   {
     id: 'birdieTrail', name: 'Birdie Trail', color: '#c08aff', hero: 'mage',
@@ -238,16 +256,19 @@ function drawUpgradeIcon(canvas, id) {
   ctx.drawImage(img, 0, 0);
 }
 
-/** Price of the next upgrade for this hero: it goes up with every one they've bought this run. */
-function upgradePrice(hero) {
+/**
+ * Price of the next upgrade for this hero: it goes up with every one they've bought this run.
+ * full: the price before any discount (Discount Cards), for showing what was saved.
+ */
+function upgradePrice(hero, full = false) {
   const c = CONFIG.run.shop.upgrade;
-  return c.base + c.step * (hero.upgradesBought || 0);
+  return Math.round((c.base + c.step * (hero.upgradesBought || 0)) * (full ? 1 : Upgrades.priceScale(hero)));
 }
 
-/** Price of the next reroll at this stage's upgrade store (back to the base price every stage). */
-function rerollPrice(rerolls) {
+/** Price of the next reroll at this stage's upgrade store (back to the base price every stage). full: before any discount. */
+function rerollPrice(rerolls, hero, full = false) {
   const r = CONFIG.run.shop.reroll;
-  return r.base + r.step * rerolls;
+  return Math.round((r.base + r.step * rerolls) * (full ? 1 : Upgrades.priceScale(hero)));
 }
 
 /** Small string hash (FNV-1a) for seeding. */
@@ -305,7 +326,7 @@ const Upgrades = {
 
   /** Per-hero upgrade bookkeeping: timers, stacks and counters. */
   state(p) {
-    return p.upg || (p.upg = { still: 0, stacks: 0, idle: 0, cd: {}, flash: {}, rays: 0, cakes: 0, dodges: 2, dodgeT: 0, trail: [], storms: [], auraT: 0, said: {} });
+    return p.upg || (p.upg = { still: 0, stacks: 0, idle: 0, cd: {}, flash: {}, rays: 0, cakes: 0, dodges: 2, dodgeT: 0, trail: [], storms: [], said: {} });
   },
 
   cd(p, id) { return Math.max(0, this.state(p).cd[id] || 0); },
@@ -434,8 +455,8 @@ const Upgrades = {
     }
     if (this.has(p, 'burstDodging')) this.updateDodges(p, dt);
     if (this.has(p, 'lastDefence') && !p.dead && p.hp > 0 && p.hp < p.maxHp * 0.1) this.lastDefence(p, world);
-    if (this.has(p, 'magicAura') && !p.dead) this.updateAura(p, dt, world);
     if (this.has(p, 'birdieTrail')) this.updateStorms(p, dt, world);
+    if (this.has(p, 'mimicSense') && !p.dead) this.senseMimics(p, world);
     if (p.lastShield) p.lastShield.flash -= dt;
     // the seen-on-the-hero tells (visual only)
     if (this.panicking(p) && p.moving && vrand(0, 1) < 0.5) {
@@ -567,8 +588,10 @@ const Upgrades = {
       amount *= 0.5;
       this.state(p).flash.radialBarrier = world.time;
     }
-    if (this.has(p, 'teslaArmour') && this.cd(p, 'teslaArmour') <= 0 && amount > 0) {
-      this.teslaShock(p, world, fromX, fromY, opts.projectile);
+    // Tesla Armour shocks back but doesn't stop the hit; a Silver Shield does
+    if (this.has(p, 'teslaArmour') && this.cd(p, 'teslaArmour') <= 0 && amount > 0) this.teslaShock(p, world, fromX, fromY, opts.projectile);
+    if (this.has(p, 'silverShield') && this.cd(p, 'silverShield') <= 0 && amount > 0) {
+      this.silverBlock(p, world);
       return 0;
     }
     // about to drop under 10%: the last defence goes up first and takes this hit
@@ -614,13 +637,39 @@ const Upgrades = {
   },
 
   /**
-   * Tesla Armour: the static shield takes the hit and lightning leaps out at whoever dealt it
-   * (the nearest enemy to where it came from) and anything right next to the hero: a jolt of
-   * damage and a stun. Then it recharges for 10s.
+   * Silver Shield: a ward of silver plates soaks the whole of the next attack, then
+   * takes 20s to reforge.
+   */
+  silverBlock(p, world) {
+    const u = UPGRADE_BY_ID.silverShield;
+    this.state(p).cd.silverShield = u.cooldown;
+    p.guard = CONFIG.player.guardTime;   // the rest of the same attack (a sweep, a burst) glances off too
+    this.proc(p, world, 'silverShield', 'BLOCKED!', 9);
+    world.effects.shards(p.hx, p.hy - 4, { count: 12, speed: [90, 220], life: 0.4, len: [6, 11], width: 4, colors: ['#8a94a8', '#d8e0ec', '#ffffff'] });
+    world.effects.burst(p.hx, p.hy - 4, { count: 16, colors: ['#d8e0ec', '#ffffff', '#a8b4c8'], speed: [60, 180], life: [0.2, 0.45] });
+    const x = p.x;
+    const y = p.y - 16;
+    world.effects.add(0.35, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1 - t;
+      PFX.ring(ctx, x, y, 20 + t * 22, (20 + t * 22) * 1.2, '#e6ecf6', 2, { thick: t < 0.4 ? 2 : 1 });
+      PFX.glow(ctx, x, y, 26, '216, 224, 236', 0.6 * (1 - t));
+      ctx.restore();
+    });
+    if (p === world.localPlayer) world.shake(3, 0.12);
+    Sound.play('blockClang');
+  },
+
+  /**
+   * Tesla Armour: when a hit lands, lightning leaps out at whoever dealt it (the nearest enemy
+   * to where it came from) and anything right next to the hero: a jolt of damage and a Zap
+   * that stuns them for a second, bosses included. The hit itself still lands. Then it
+   * recharges for 10s.
    */
   teslaShock(p, world, fromX, fromY, projectile) {
-    this.state(p).cd.teslaArmour = 10;
-    p.guard = CONFIG.player.guardTime;
+    const u = UPGRADE_BY_ID.teslaArmour;
+    this.state(p).cd.teslaArmour = u.cooldown;
     const ox = projectile || fromX === undefined ? p.x : fromX;
     const oy = projectile || fromY === undefined ? p.y : fromY;
     const reach = projectile ? 420 : 90;
@@ -636,7 +685,7 @@ const Upgrades = {
     for (const t of targets) if (dist(p.x, p.hy, t.hx, t.hy) < 70 + (t.radius || 0)) hit.add(t);
     for (const t of hit) {
       world.damageTarget(t, 15, { source: p, noCrit: true, sound: null, color: '#8ad8ff', fromUlt: true });
-      t.stun?.(1.5);
+      world.zap(t, u.zap);
       const x1 = p.x;
       const y1 = p.hy;
       const x2 = t.hx;
@@ -704,6 +753,69 @@ const Upgrades = {
     }
   },
 
+  /** A mimic died: true if its killer's Mimic Sense shakes all three super buffs out of it. */
+  mimicJackpot(m, world) {
+    const k = m.lastHitBy;
+    if (!k || !world.players.includes(k) || !this.has(k, 'mimicSense') || Math.random() >= m.cfg.senseChance) return false;
+    this.proc(k, world, 'mimicSense');
+    world.effects.text(m.x, m.y - 56, 'JACKPOT! ALL SUPER BUFFS', { color: UPGRADE_BY_ID.mimicSense.color, size: 9, life: 1.6 });
+    return true;
+  },
+
+  /** Mimic Sense: walking near a chest that's really a mimic, the hero feels it (called out once per hero). */
+  senseMimics(p, world) {
+    const props = world.run?.props;
+    if (!props) return;
+    const key = p.netId || 'solo';
+    for (const pr of props) {
+      if (!this.isSensed(pr, p) || pr.sensed?.includes(key)) continue;
+      (pr.sensed || (pr.sensed = [])).push(key);
+      this.proc(p, world, 'mimicSense', 'MIMIC SENSED!', 8);
+      if (p === world.localPlayer) Sound.play('windup', 0.2);
+    }
+  },
+
+  /** True if this hero can sense the prop as a mimic right now (a closed secret chest hiding one, close by). */
+  isSensed(pr, p) {
+    return pr.kind === 'secretChest' && pr.mimic && !pr.opened && !pr.gone && !!p && !p.dead
+      && this.has(p, 'mimicSense') && dist(p.x, p.y, pr.x, pr.y) <= UPGRADE_BY_ID.mimicSense.range;
+  },
+
+  /**
+   * Over a chest the local hero senses is a mimic: a red glow, a slitted eye blinking open over
+   * the lid and a "MIMIC" warning bobbing above it.
+   */
+  drawMimicSense(ctx, x, y, time) {
+    const k = 0.75 + Math.sin(time * 6) * 0.25;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, x, y - 14, 30, '255, 90, 74', 0.45 * k, 2, 18);
+    ctx.restore();
+    const ex = Math.round(x);
+    const ey = Math.round(y - 46 + Math.sin(time * 3) * 2);
+    const open = Math.floor(time * 2) % 5 ? 2 : 1;   // it blinks now and then
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(ex - 7, ey - open - 1, 14, open * 2 + 2);
+    ctx.fillStyle = '#fff2e0';
+    ctx.fillRect(ex - 6, ey - open, 12, open * 2);
+    ctx.fillStyle = '#e0302a';
+    ctx.fillRect(ex - 2, ey - open, 4, open * 2);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(ex, ey - open, 1, open * 2);
+    HUD.text(ctx, 'MIMIC', ex, ey - 13, { size: 6, align: 'center', color: '#ff6a5a' });
+  },
+
+  // ---------- shops, energy and projectiles ----------
+
+  /** What this hero pays of a shop price (Discount Cards: 10% off). */
+  priceScale(hero) { return this.has(hero, 'discountCards') ? 1 - UPGRADE_BY_ID.discountCards.discount : 1; },
+
+  /** How much faster this hero's energy comes back (Energy Drink). */
+  energyScale(p) { return p.resource?.name === 'ENERGY' && this.has(p, 'energyDrink') ? UPGRADE_BY_ID.energyDrink.rate : 1; },
+
+  /** Wall bounces added to this hero's projectiles (Bouncy!). */
+  extraBounces(p) { return this.has(p, 'bouncy') ? UPGRADE_BY_ID.bouncy.bounces : 0; },
+
   /** A room chest opened: a health potion for each Chests of Alchemy hero (40%, sometimes a large one). */
   onChest(run, x, y) {
     const w = run.world;
@@ -718,23 +830,8 @@ const Upgrades = {
 
   // ---------- the Mage ----------
 
-  /** Magic Aura: every half second, enemies within 80px take a little damage; 50% of it comes back as mana. */
-  updateAura(p, dt, world) {
-    const s = this.state(p);
-    s.auraT -= dt;
-    if (s.auraT > 0) return;
-    s.auraT = 0.5;
-    let dealt = 0;
-    for (const t of world.getTargets()) {
-      if (dist(p.x, p.y, t.x, t.y) > 80 + (t.radius || 0)) continue;
-      dealt += world.damageTarget(t, 9, { source: p, sound: null, color: '#3fc2a8', noCrit: true });
-      world.effects.burst(t.hx, t.hy, { count: 3, colors: ['#3fc2a8', '#9cf0d8'], speed: [10, 40], life: [0.2, 0.4], up: 20 });
-    }
-    if (dealt > 0) {
-      p.gainResource(dealt * 0.5);
-      s.flash.magicAura = world.time;
-    }
-  },
+  /** Empowered Mana Surge: she has enough mana for an empowered missile. */
+  empowered(p) { return this.has(p, 'empoweredSurge') && p.resource.value >= UPGRADE_BY_ID.empoweredSurge.mana; },
 
   /**
    * Birdie Trail: bird form drops a point of magic every 12px. When she flies back across
@@ -809,17 +906,10 @@ const Upgrades = {
 
   // ---------- drawing (on the hero) ----------
 
-  /** Under the hero: Deadly Precision's sights, the Magic Aura, the bird's trail and storms. */
+  /** Under the hero: Deadly Precision's sights, the bird's trail and storms. */
   drawGround(p, ctx, time) {
     if (!p.upg) return;
     const s = p.upg;
-    if (this.has(p, 'magicAura') && !p.dead) {
-      PFX.ring(ctx, p.x, p.y + 2, 80, 44, 'rgba(63, 194, 168, 0.35)', 2, { dash: [3, 4], spin: time * 0.8 });
-      for (let i = 0; i < 4; i++) {
-        const a = time * 1.6 + (i * TAU) / 4;
-        PFX.star(ctx, p.x + Math.cos(a) * 76, p.y + 2 + Math.sin(a) * 42, 1, '#3fc2a8', '#f0fff8', 2);
-      }
-    }
     if (s.steady > 0 && !p.dead) this.drawSights(p, ctx, time, s);
     // the bird's glowing trail, fading at its old end
     const pts = s.trail;
@@ -857,7 +947,6 @@ const Upgrades = {
     }
   },
 
-  /** Over the hero: the Last Defence's shield, Tesla Armour's crackle, Beatdown's stacks. */
   /**
    * Deadly Precision's sights on the floor round a hero standing still: a scope reticle that snaps
    * in tight as it locks on (s.steady eases 0..1), four sight ticks closing on the hero, a turning
@@ -890,6 +979,7 @@ const Upgrades = {
     ctx.restore();
   },
 
+  /** Over the hero: Deadly Precision's crosshair, the Last Defence's shield, Tesla Armour's crackle, the Silver Shield, Beatdown's stacks. */
   drawOver(p, ctx, time) {
     if (!p.upg || p.dead) return;
     // Deadly Precision: a crosshair out along the aim, and "x2 CRIT" over the hero, while it's steady
@@ -949,6 +1039,26 @@ const Upgrades = {
         PFX.line(ctx, x, y, x + Math.cos(a + 1.6) * 5, y + Math.sin(a + 1.6) * 5, '#c8f4ff', 1);
       }
       ctx.restore();
+    }
+    if (this.has(p, 'silverShield') && this.cd(p, 'silverShield') <= 0) {
+      // the ward is up: a faint silver shell, three little shield plates circling it, a glint passing over them
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.ring(ctx, p.x, p.y - 15, 19, 24, `rgba(216, 224, 236, ${0.22 + Math.sin(time * 4) * 0.08})`, 1);
+      ctx.restore();
+      for (let i = 0; i < 3; i++) {
+        const a = time * 1.4 + (i * TAU) / 3;
+        const x = Math.round(p.x + Math.cos(a) * 19);
+        const y = Math.round(p.y - 15 + Math.sin(a) * 24 * 0.5);
+        const lit = Math.floor(time * 3) % 3 === i;
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(x - 3, y - 3, 7, 6);
+        ctx.fillRect(x - 2, y + 3, 5, 1);
+        ctx.fillStyle = '#a8b4c8';
+        ctx.fillRect(x - 2, y - 2, 5, 5);
+        ctx.fillStyle = lit ? '#ffffff' : '#e6ecf6';
+        ctx.fillRect(x - 2, y - 2, 2, 3);
+      }
     }
     const stacks = this.has(p, 'beatdown') ? p.upg.stacks : 0;
     if (stacks > 0) {
@@ -1143,23 +1253,30 @@ const Shop = {
     for (const c of grid.querySelectorAll('canvas[data-icon]')) drawUpgradeIcon(c, c.dataset.icon);
   },
 
+  /** A price on a button with its coin; when Discount Cards cut it, the full price shows struck out before it. */
+  priceTag(price, full) {
+    const was = full > price ? `<s class="was-price">${full}</s>` : '';
+    return `${was}${price}<em></em>`;
+  },
+
   /** Bram's store: three cards to buy from (a bought one is replaced by a new one), and a reroll. */
   renderUpgrades(grid, p) {
     const st = this.run.shopState(p);
     const offers = upgradeOffers(this.run, p);
     const price = upgradePrice(p);
+    const tag = this.priceTag(price, upgradePrice(p, true));
     const flare = this.justChose;
     this.justChose = null;
     grid.innerHTML = offers.map((u, i) => {
       if (!u) return '<div class="shop-card magic faded"><span class="shop-empty">Nothing left to offer here.</span></div>';
-      const btn = `<button class="buy" data-action="buy:${u.id}" ${p.coins < price ? 'disabled' : ''}>${price}<em></em></button>`;
+      const btn = `<button class="buy" data-action="buy:${u.id}" ${p.coins < price ? 'disabled' : ''}>${tag}</button>`;
       return this.card(u, i, btn, flare === i ? ' enchant' : '');
     }).join('');
     this.paintIcons(grid);
     const extra = document.getElementById('shop-extra');
-    const rp = rerollPrice(st.rerolls);
+    const rp = rerollPrice(st.rerolls, p);
     extra.innerHTML = offers.some(Boolean)
-      ? `<button class="btn small reroll" data-action="reroll" ${p.coins < rp ? 'disabled' : ''}>Reroll &nbsp;${rp}<em></em></button>`
+      ? `<button class="btn small reroll" data-action="reroll" ${p.coins < rp ? 'disabled' : ''}>Reroll &nbsp;${this.priceTag(rp, rerollPrice(st.rerolls, p, true))}</button>`
       : '<p class="shop-note">You own every enchantment I know!</p>';
     const owned = Object.keys(p.upgradeLevels).length;
     document.getElementById('shop-hint').textContent = `Buy as many as you like: each one makes the next cost ${CONFIG.run.shop.upgrade.step} more. Rerolls get pricier too, but reset at the next stage's shop. Upgrades owned: ${owned}.`;
@@ -1188,8 +1305,8 @@ const Shop = {
       const pot = POTIONS[s.id];
       const out = s.left <= 0;
       const full = !p.canCarry(s.id);
-      const price = potionPrice(this.run, pot.id);
-      const label = out ? 'SOLD OUT' : full ? 'BAG FULL' : `${price}<em></em>`;
+      const price = potionPrice(this.run, pot.id, p);
+      const label = out ? 'SOLD OUT' : full ? 'BAG FULL' : this.priceTag(price, potionPrice(this.run, pot.id, p, true));
       return `<div class="shop-card potion${out ? ' faded' : ''}">
         <canvas width="28" height="28" data-potion="${pot.id}"></canvas>
         <b style="color:${POTION_COLORS[pot.family][1]}">${pot.name}</b>
@@ -1249,7 +1366,7 @@ const Shop = {
   reroll() {
     const p = this.hero;
     const st = this.run.shopState(p);
-    if (p.coins < rerollPrice(st.rerolls)) {
+    if (p.coins < rerollPrice(st.rerolls, p)) {
       this.say('A reroll costs coin, friend.');
       Sound.play('denied');
       return;
@@ -1261,7 +1378,7 @@ const Shop = {
     const p = this.hero;
     const pot = POTIONS[id];
     if (!pot) return;
-    if (p.coins < potionPrice(this.run, id)) { this.say("You're a little short, dear."); Sound.play('denied'); return; }
+    if (p.coins < potionPrice(this.run, id, p)) { this.say("You're a little short, dear."); Sound.play('denied'); return; }
     if (!p.canCarry(id)) { this.say('Your bag is full, dear!'); Sound.play('denied'); return; }
     App.command({ type: 'buyPotion', id });
   },

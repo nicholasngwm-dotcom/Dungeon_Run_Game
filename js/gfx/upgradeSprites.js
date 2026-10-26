@@ -231,6 +231,64 @@ function buildUpgradeSprites() {
     p.px(10, 6, '#ffffff');
   });
 
+  U.silverShield = icon((p) => {
+    // a round silver buckler, a lit rim top-left, a boss stud, a glint
+    p.circle(10, 10, 8, S[2]);
+    p.circle(10, 10, 7, S[3]);
+    p.circle(9, 9, 5, S[4]);
+    p.rect(5, 5, 3, 1, S[5]);
+    p.rect(4, 6, 1, 3, S[5]);
+    p.circle(10, 10, 2, S[2]);
+    p.px(9, 9, '#ffffff');
+    star(p, 15, 4, 2, '#ffffff', '#ffffff');
+  });
+  U.discountCards = icon((p) => {
+    // two fanned cards, the front one stamped -10%
+    p.poly([[2, 6], [10, 3], [13, 15], [5, 18]], '#2e7a50');
+    p.poly([[3, 7], [9, 5], [12, 14], [6, 16]], '#4ab878');
+    p.rect(7, 4, 11, 14, '#f4ead7');
+    p.rect(8, 5, 9, 12, '#fffaf0');
+    p.rect(9, 7, 2, 1, '#2e7a50');                 // the minus
+    p.rect(12, 6, 1, 3, '#2e7a50');                // the 1
+    p.rect(14, 6, 2, 3, '#2e7a50');                // the 0
+    p.px(14, 7, '#fffaf0');
+    p.rect(9, 11, 7, 1, '#7ae0a0');
+    p.px(10, 13, '#e0c040'); p.px(14, 14, '#e0c040');   // a gold seal or two
+    p.rect(11, 13, 3, 2, G[3]);
+  });
+  U.mimicSense = icon((p) => {
+    // a chest whose lid is an eye: the red slit iris peering out
+    p.rect(2, 10, 16, 8, L[2]);
+    p.rect(3, 11, 14, 6, L[3]);
+    p.rect(2, 13, 16, 1, G[2]);
+    p.rect(9, 12, 2, 3, G[3]);
+    p.ellipse(10, 7, 8, 4, L[3]);
+    p.ellipse(10, 7, 6, 3, '#fff2e0');
+    p.ellipse(10, 7, 2, 3, '#e0302a');
+    p.rect(10, 5, 1, 4, '#3a0a0a');
+    for (const x of [4, 8, 12, 15]) p.rect(x, 10, 1, 2, '#ffffff');   // teeth under the lid
+  });
+  U.bouncy = icon((p) => {
+    // a pink ball bouncing off a wall, its dotted path zig-zagging
+    p.rect(1, 1, 3, 18, S[1]);
+    for (const y of [4, 9, 14]) p.rect(1, y, 3, 1, S[0]);
+    for (const [x, y] of [[17, 16], [14, 13], [11, 10], [8, 7], [11, 4], [14, 2]]) p.rect(x, y, 1, 1, PINK[3]);
+    p.circle(7, 13, 3, PINK[1]);
+    p.circle(7, 13, 2, PINK[2]);
+    p.px(6, 12, '#ffffff');
+    for (const [x0, y0, x1, y1] of [[5, 8, 5, 6], [3, 11, 3, 9]]) p.line(x0, y0, x1, y1, G[3], 1);
+  });
+  U.energyDrink = icon((p) => {
+    // a can of fizzy yellow energy, a lightning bolt on the label, bubbles rising
+    p.rect(5, 4, 9, 15, S[3]);
+    p.rect(6, 5, 7, 13, '#e0c020');
+    p.rect(6, 5, 2, 13, '#fff080');
+    p.rect(5, 3, 9, 2, S[4]);
+    p.rect(8, 2, 3, 1, S[2]);
+    bolt(p, 6, 6, '#3a2a10');
+    for (const [x, y] of [[16, 4], [17, 8], [15, 1]]) p.px(x, y, '#fff6a0');
+  });
+
   U.adrenalineRush = icon((p) => {
     // a racing heart, speed lines streaming off it
     for (const [y, w] of [[6, 4], [10, 6], [14, 3]]) p.rect(1, y, w, 1, '#ffd0d8');
@@ -277,13 +335,6 @@ function buildUpgradeSprites() {
     p.circle(7, 10, 2, TEAL[4]);
     upArrow(p, 15, 8, '#5af0e0');
     star(p, 15, 15, 2, TEAL[3], '#ffffff');
-  });
-  U.magicAura = icon((p) => {
-    ring(p, 10, 11, 8, TEAL[2], 2, 0.6);
-    ring(p, 10, 11, 5, TEAL[3], 1, 0.6);
-    star(p, 10, 8, 4, TEAL[3], '#ffffff');
-    p.rect(3, 4, 2, 2, TEAL[3]);
-    p.rect(16, 5, 1, 1, TEAL[4]);
   });
   U.birdieTrail = icon((p) => {
     for (let a = 0.6; a < TAU - 0.2; a += 0.45) p.rect(10 + Math.cos(a) * 7, 11 + Math.sin(a) * 6, 2, 2, VIOLET[2]);

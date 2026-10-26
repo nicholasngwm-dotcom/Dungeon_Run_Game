@@ -241,6 +241,29 @@ class Game {
     Sound.play('glass', 0.05);
   }
 
+  /**
+   * Zapped (Tesla Armour): a jolt of static stuns the target for `duration`s, ignoring stun
+   * resistance - and it's the one stun bosses don't shrug off. A boss can't be zapped again
+   * for zapImmune seconds after one wears off.
+   */
+  zap(t, duration) {
+    if (!t || t.dead || t.prop) return;
+    if (this.isBossTarget(t)) {
+      const b = this.boss;
+      if (b.intro > 0 || b.dying > 0 || b.zapImmuneUntil > this.time) return;
+      b.zappedUntil = this.time + duration;
+      b.zapImmuneUntil = b.zappedUntil + CONFIG.bossDebuffs.zapImmune;
+      this.effects.text(b.hx, b.hy - 60, 'ZAPPED', { color: '#6ad8ff', size: 9 });
+      return;
+    }
+    if (!t.stun) return;
+    t.stun(duration);
+    if (!(t.stunTime > 0)) return;   // mid-leap: it lands first
+    t.stunTime = Math.max(t.stunTime, duration);
+    t.zapped = Math.max(t.zapped || 0, duration);
+    this.effects.text(t.hx, t.hy - 30, 'ZAPPED', { color: '#6ad8ff', size: 7 });
+  }
+
   /** Damage over time (bleed etc.), ticking twice a second; it belongs to the hero who applied it. */
   /** kind: 'burn' (flames lick up the target), 'bleed' (drips) or null. */
   addDot(target, dps, duration, color = '#ff6060', kind = null) {
@@ -981,9 +1004,14 @@ class Game {
           Sound.play('glass', 0.05);
         }
       }
+      // zapped (Tesla Armour): locked up for a moment, sparks crackling off it
+      const zapped = this.boss.zappedUntil > this.time;
+      if (zapped && vrand(0, 1) < dt * 16) {
+        this.effects.burst(this.boss.hx + vrand(-26, 26), this.boss.hy + vrand(-26, 18), { count: 2, colors: ['#ffffff', '#c8f4ff', '#6ad8ff'], speed: [40, 120], life: [0.1, 0.25], size: [1, 2] });
+      }
       if (this.cutscene) this.updateCutscene(dt);
       // pinned to a Knight's shield (Pinning Charge), it's held there, helpless
-      else if (!(this.boss.sleepUntil > this.time) && !frozen && !(this.boss.pinnedUntil > this.time)) this.boss.update(dt, this);
+      else if (!(this.boss.sleepUntil > this.time) && !frozen && !zapped && !(this.boss.pinnedUntil > this.time)) this.boss.update(dt, this);
       this.weakenScale = Projectile.enemyScale = 1;
       this.bossFocus = null;
       if (this.boss.dead) this.boss = null;
@@ -1184,6 +1212,7 @@ class Game {
     for (const p of this.enemyProjectiles) p.draw(ctx);
     if (this.boss) this.boss.drawOverlay(ctx);
     if (this.boss && this.boss.frozenUntil > this.time) this.drawBossFrozen(ctx);
+    if (this.boss && this.boss.zappedUntil > this.time) this.drawBossZapped(ctx);
     this.effects.draw(ctx);
     if (this.boss && !this.cutscene) HUD.drawBossBars(ctx, this.boss);
     this.dungeon.drawTorches(ctx, this.time, this.camera);
@@ -1198,6 +1227,53 @@ class Game {
     ctx.drawImage(this.vignette, 0, 0);
     ctx.globalAlpha = 1;
     if (!this.showcase) HUD.draw(ctx, this);
+  }
+
+  /** A zapped boss: Game.drawZapped over its body, sized to it. */
+  drawBossZapped(ctx) {
+    const b = this.boss;
+    const h = Math.max(60, (b.y - b.hy) * 2 + 16);
+    const w = Math.max(44, (b.hw || 12) * 2 + 24);
+    Game.drawZapped(ctx, b.x, b.y, w, h, this.time, b.zappedUntil - this.time);
+  }
+
+  /**
+   * Zapped: blue-white lightning crackling over a body (feet at x, y; about w x h), re-forking
+   * every few frames, a cold glow round it and ZAPPED blinking above. Visual randomness only
+   * (re-seeded from the frame, so it flickers without using the shared random).
+   */
+  static drawZapped(ctx, x, y, w, h, time, left) {
+    const a = clamp(left * 4, 0, 1);
+    const frame = Math.floor(time * 14);
+    let seed = frame * 9301 + Math.round(x) * 49297;
+    const rnd = () => { seed = (seed * 16807 + 11) % 2147483647; return (seed % 1000) / 1000; };
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, x, y - h / 2, w * 0.7, '106, 216, 255', 0.4, 2, h * 0.55);
+    for (let k = 0; k < 3; k++) {
+      // a bolt from one side of the body to the other, kinked along the way
+      let px = x + (rnd() - 0.5) * w;
+      let py = y - rnd() * h;
+      const n = 4;
+      const tx = x + (rnd() - 0.5) * w;
+      const ty = y - rnd() * h;
+      for (let i = 1; i <= n; i++) {
+        const nx = lerp(px, tx, 1 / (n - i + 1)) + (i < n ? (rnd() - 0.5) * 12 : 0);
+        const ny = lerp(py, ty, 1 / (n - i + 1)) + (i < n ? (rnd() - 0.5) * 12 : 0);
+        PFX.line(ctx, px, py, nx, ny, '#6ad8ff', 3);
+        PFX.line(ctx, px, py, nx, ny, '#ffffff', 1);
+        px = nx;
+        py = ny;
+      }
+    }
+    ctx.restore();
+    if (Math.floor(time * 6) % 3) {
+      ctx.save();
+      ctx.globalAlpha = a;
+      HUD.text(ctx, 'ZAPPED', Math.round(x), Math.round(y - h - 12), { size: 6, align: 'center', color: '#8ae4ff' });
+      ctx.restore();
+    }
   }
 
   /**

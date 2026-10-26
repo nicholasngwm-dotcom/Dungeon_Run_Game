@@ -45,6 +45,7 @@ class Enemy extends Entity {
     this.frostfired = this.frostfireUntil > world.time;   // burning with the Mage's frostfire: slowed
     if (this.asleep && !(this.stunTime > dt)) { this.asleep = false; this.wokeUp(world, 0); }
     this.iced = (this.iced || 0) - dt;       // coated in the Baker's icing (Bigger Cakes): slowed
+    this.zapped = (this.zapped || 0) - dt;   // Tesla Armour's jolt (see Game.zap): stunned, crackling
     this.groggy = (this.groggy || 0) - dt;   // still drowsy after a lullaby (Groggy): slowed
     this.waking = (this.waking || 0) - dt;
     this.hasted = (this.hasted || 0) - dt;   // a minstrel's war song (see Minstrel)
@@ -509,6 +510,7 @@ class Enemy extends Entity {
     if (this.confused > 0 && !(this.stunTime > 0)) return this.drawConfused(ctx);
     if (!(this.stunTime > 0)) return;
     if (this.frozenTime > 0) return this.drawIceBlock(ctx);
+    if (this.zapped > 0) return Game.drawZapped(ctx, this.x, this.y, this.radius * 2 + 8, Math.max(24, this.y - this.hy) * 2, this.animTime, this.zapped);
     if (this.asleep) return this.drawSleep(ctx);
     if (this.waking > 0) return this.drawWaking(ctx);
     const y = this.y - this.barOffset - 8;

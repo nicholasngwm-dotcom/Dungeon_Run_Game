@@ -93,8 +93,8 @@ class Mage extends Player {
   primary(world) {
     const c = this.cfg.bolt;
     this.cooldowns.primary = c.cooldown;
-    // Empowered Mana Surge: cast with over 150 mana, the missile is bigger and hits 30% harder
-    const empowered = Upgrades.has(this, 'empoweredSurge') && this.resource.value > 150;
+    // Empowered Mana Surge: cast with 100 mana or more, the missile is bigger and hits 50% harder
+    const empowered = Upgrades.empowered(this);
     if (!this.spend(c.cost, world)) return;
     if (empowered) Upgrades.state(this).flash.empoweredSurge = world.time;
     this.recoil = 0.08;
@@ -104,7 +104,7 @@ class Mage extends Player {
       x: this.tipX, y: this.tipY,
       vx: Math.cos(this.aim + spread) * c.speed,
       vy: Math.sin(this.aim + spread) * c.speed,
-      radius: 6, damage: c.damage * (empowered ? 1.3 : 1), life: c.life, knockback: 60, scale: empowered ? 1.5 : 1,
+      radius: 6, damage: c.damage * (empowered ? UPGRADE_BY_ID.empoweredSurge.damage : 1), life: c.life, knockback: 60, scale: empowered ? 1.5 : 1,
       sprite: Sprites.projectiles.bolt, spin: 10, glow: empowered ? '156, 255, 240' : MAGE_FX.glow, trail: ['#3fc2a8', '#9cf0d8'],
       // two motes circling the missile, and twinkles left hanging in its wake
       aura: (ctx, p) => {
@@ -437,9 +437,12 @@ class Mage extends Player {
       pg.tick -= dt;
       if (pg.tick <= 0) {
         pg.tick = c.tick;
-        for (const t of world.getTargets()) {
-          if (!this.inCircle(pg, t)) continue;
-          const dealt = world.damageTarget(t, c.dps * c.tick, { sound: null, noCrit: true, color: '#9cf0d8', fromUlt: true });
+        // the fewer caught in it, the harder it drains each of them (never less than dps)
+        const inside = world.getTargets().filter((t) => this.inCircle(pg, t));
+        const caught = inside.filter((t) => !t.prop).length;   // (a barrel in it doesn't count)
+        const focus = Math.max(1, c.focus / Math.sqrt(caught || 1));
+        for (const t of inside) {
+          const dealt = world.damageTarget(t, c.dps * focus * c.tick, { sound: null, noCrit: true, color: '#9cf0d8', fromUlt: true });
           if (dealt) {
             this.gainResource(dealt * c.manaSteal);
             world.effects.burst(t.hx, t.hy, { count: 1, colors: ['#3fc2a8', '#9cf0d8'], speed: [0, 0], life: [0.4, 0.5], size: [3, 4] });

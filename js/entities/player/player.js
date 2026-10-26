@@ -35,8 +35,8 @@ class Player extends Entity {
     this.healPopup = 0;           // batches small heals into one number
     this.healPopupTimer = 0;
     this.sinceHurt = 0;           // seconds since hp was last lost (drives passive regen)
-    this.buffs = {};              // mimic buffs: type -> seconds left
-    this.buffMax = {};            // ...and how long each one lasted when it started
+    this.buffs = {};              // mimic super buffs: type -> room clears left; the sugar rush: seconds left
+    this.buffMax = {};            // ...and what each one started at
     this.aegis = null;            // Priestess aegis: { hp, maxHp, t } soaks every kind of hit
     this.poisonTime = 0;          // enemy poison: loses poisonDps hp per second
     this.poisonDps = 0;
@@ -182,7 +182,7 @@ class Player extends Entity {
     }
     Upgrades.update(this, dt, world);
     if (this.resource) {
-      const regen = this.resource.regen * (1 + this.brew('manaRegen'));
+      const regen = this.resource.regen * (1 + this.brew('manaRegen')) * Upgrades.energyScale(this);
       this.resource.value = Math.min(this.resource.max, this.resource.value + regen * dt);
     }
     this.updateRegen(dt, world);
@@ -835,15 +835,31 @@ class Player extends Entity {
 
   // ---------- mimic buffs ----------
 
-  /** Starts (or refreshes) a buff from CONFIG.buffs; a longer one already running is kept. */
-  addBuff(type, duration = CONFIG.buffs[type].duration) {
-    if ((this.buffs[type] || 0) >= duration) return;
-    this.buffs[type] = duration;
-    this.buffMax[type] = duration;   // for the HUD's draining bar
+  /**
+   * Starts (or refills) a super buff from CONFIG.buffs at its full stacks (room clears).
+   * Timed buffs (the sugar rush) are set where they're given.
+   */
+  addBuff(type) {
+    const n = CONFIG.buffs[type].stacks;
+    this.buffs[type] = Math.max(this.buffs[type] || 0, n);
+    this.buffMax[type] = n;   // for the HUD's pips
+  }
+
+  /** A room was cleared: every super buff loses a stack, and wears off at none. */
+  roomCleared(world) {
+    for (const k of Object.keys(this.buffs)) {
+      const b = CONFIG.buffs[k];
+      if (!b.stacks) continue;
+      this.buffs[k]--;
+      if (this.buffs[k] > 0) continue;
+      delete this.buffs[k];
+      if (!this.dead) world.effects.text(this.hx, this.hy - 46, `${b.name} FADED`, { color: b.color, size: 7, life: 1.4 });
+    }
   }
 
   updateBuffs(dt, world) {
     for (const k of Object.keys(this.buffs)) {
+      if (CONFIG.buffs[k].stacks) continue;   // super buffs count rooms, not seconds
       this.buffs[k] -= dt;
       if (this.buffs[k] <= 0) delete this.buffs[k];
     }

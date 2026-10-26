@@ -37,6 +37,7 @@ class Projectile {
       owner: Projectile.actor, // hero who fired it (null for enemy shots)
     }, opts);
     if (!this.friendly) this.damage *= Projectile.enemyScale;
+    else this.bounces += Upgrades.extraBounces(this.owner);   // Bouncy!
     this.age = 0;
     this.hitSet = this.hitSet || new Set();
     this.dead = false;
@@ -79,6 +80,7 @@ class Projectile {
     this.x = px;
     this.y = py;
     this.bounces--;
+    if (this.friendly && Upgrades.has(this.owner, 'bouncy')) Upgrades.state(this.owner).flash.bouncy = world.time;
     Sound.play('bounce', 0.05);
     world.effects.burst(this.x, this.y, { count: 4, colors: this.trail || ['#ffb02e', '#ff5a1e'], speed: [30, 80], life: [0.15, 0.3] });
   }
