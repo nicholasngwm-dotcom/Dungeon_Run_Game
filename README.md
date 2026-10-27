@@ -73,7 +73,7 @@ a ring of magic (its reach glows on the floor first) before charging a giant che
 stops it until half health, when it smashes through), and slams the ground
 four times (six at half health, with bigger spikes) for massive rock spikes, at you and then
 ahead of you in turn. The power crystals slowly heal it while they stand, so break them; at
-half health broken ones start reforming out of the magic. Beating the boss
+half health broken ones reform out of the magic, but only once. Beating the boss
 opens a portal to the next stage, and after stage 3 the run is won. Later stages
 make enemies tougher (more hp and damage, a little faster) rather than sending
 many more of them, and add stage-exclusive enemies (necromancer, reaper

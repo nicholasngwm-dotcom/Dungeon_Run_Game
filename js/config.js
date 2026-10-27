@@ -1035,8 +1035,8 @@ const CONFIG = {
     slams: { count: [4, 6], every: 0.95, windup: 0.45, lead: 120, spikeDelay: 0.8, spikeRadius: 76, spikeTime: 1.1, damage: 34, phase2Size: 1.35 },
 
     // The power crystals round its room feed it: each one still standing heals it `heal` hp a second
-    // (both phases). Heroes can break them (`hp` each). In phase 2 a broken one reforms out of the magic
-    // over `reform` s (healing it again once whole)
+    // (both phases). Heroes can break them (`hp` each). In phase 2 a broken one reforms out of the magic, once
+    // only, over `reform` s (healing it again once whole); broken a second time, it's gone for good
     crystals: { hp: 500, heal: 14, reform: 9 },
   },
 

@@ -14,7 +14,7 @@
 //    Slams: ground slams in a row (4; 6 in phase 2). Odd slams make massive rock spikes erupt
 //           where the hero is; every 2nd one where they're heading (in front of them).
 //  Phase 2 (below half hp): its spikes grow bigger, its beam becomes a wrecking beam that smashes
-//  through obstacles and tears up the floor, and broken crystals reform.
+//  through obstacles and tears up the floor, and broken crystals reform (each only once).
 //  (x, y) is the ground point under it; it hovers above it.
 // =============================================================
 
@@ -49,8 +49,12 @@ class GuardianCrystal {
     this.radius = 18;
     this.broken = false;
     this.reform = 0;     // phase 2: seconds into reforming (0 = not)
+    this.reformed = false;   // it has reformed once already: broken again, it stays broken
     this.flashTime = 0;
   }
+
+  /** Phase 2 can bring it back: it's broken, and hasn't reformed before. */
+  get canReform() { return this.broken && !this.reformed; }
 
   get x() { return this.d.x; }
   get y() { return this.d.y; }
@@ -72,7 +76,7 @@ class GuardianCrystal {
     return true;
   }
 
-  /** It bursts apart: shards of crystal everywhere, its magic gone (until phase 2 reforms it). */
+  /** It bursts apart: shards of crystal everywhere, its magic gone (until phase 2 reforms it, once). */
   shatter(world) {
     this.hp = 0;
     this.broken = true;
@@ -83,13 +87,13 @@ class GuardianCrystal {
     const y = this.hy;
     world.effects.shards(x, y, { count: 22, speed: [120, 320], life: 0.7, len: [8, 16], width: 6, colors: RU.magic.slice(1, 5) });
     world.effects.burst(x, y, { count: 36, colors: ['#22b8a6', '#5cf0d8', '#b8fff0', '#ffffff'], speed: [80, 260], life: [0.4, 0.9], gravity: 300 });
-    world.effects.text(x, y - 30, 'CRYSTAL SHATTERED', { color: '#5cf0d8', size: 8, life: 1.4 });
+    world.effects.text(x, y - 30, this.reformed ? 'CRYSTAL DESTROYED FOR GOOD' : 'CRYSTAL SHATTERED', { color: '#5cf0d8', size: 8, life: 1.4 });
     world.shake(7, 0.3);
     Sound.play('glass');
     Sound.play('partBreak');
   }
 
-  /** Phase 2: a broken crystal gathers itself back out of the magic, then shines whole again. */
+  /** Phase 2: a broken crystal gathers itself back out of the magic, then shines whole again (only ever once). */
   updateReform(dt, world, time) {
     this.reform += dt;
     this.d.reform = clamp(this.reform / time, 0, 1);
@@ -103,6 +107,7 @@ class GuardianCrystal {
     }
     if (this.reform < time) return;
     this.broken = false;
+    this.reformed = true;
     this.hp = this.maxHp;
     this.reform = 0;
     this.d.broken = false;
@@ -192,7 +197,7 @@ class Guardian {
       cr.flashTime -= dt;
       cr.d.flash = (cr.d.flash || 0) - dt;
       if (cr.broken) {
-        if (this.phase === 2) cr.updateReform(dt, world, c.reform);
+        if (this.phase === 2 && cr.canReform) cr.updateReform(dt, world, c.reform);
         continue;
       }
       if (this.hp >= this.maxHp) continue;
