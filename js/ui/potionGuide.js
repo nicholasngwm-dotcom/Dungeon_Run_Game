@@ -31,22 +31,37 @@ const PotionGuide = {
     return Object.entries(fams).filter(([f]) => !only || only.includes(f));
   },
 
+  /** What a family is for (its filter group's name), for the tag on its card. */
+  groupOf(family) {
+    return Object.entries(POTION_GUIDE_GROUPS).find(([g, list]) => list && list.includes(family))?.[0] || '';
+  },
+
+  /**
+   * One card per potion family: a header in the family's colour with its strongest bottle shown big,
+   * its name and what it's for; then a row per tier - the bottle, a tier badge (I / II / III), the
+   * potion's name, what it does and its stage 1 price.
+   */
   render() {
     document.getElementById('potion-groups').innerHTML = Object.keys(POTION_GUIDE_GROUPS)
       .map((g) => `<button class="chip${this.group === g ? ' on' : ''}" data-action="potionGroup:${g}">${g.toUpperCase()}</button>`).join('');
-    const tierName = ['', 'PLAIN', 'LARGE', 'SUPER'];
     document.getElementById('potion-list').innerHTML = this.families.map(([family, pots]) => {
-      const [liquid] = POTION_COLORS[family];
+      const [liquid, light] = POTION_COLORS[family];
+      const top = pots[pots.length - 1];
       const rows = pots.map((pot) => `
-        <div class="pg-row">
+        <div class="pgx-row">
           <canvas width="28" height="28" data-potion="${pot.id}"></canvas>
-          <div class="pg-text">
-            <b>${pot.name} <i>${tierName[pot.tier]}</i></b>
-            <span>${pot.desc}</span>
-          </div>
-          <div class="pg-price">${pot.price}<em></em></div>
+          <i class="pgx-tier" style="color:${TIER_COLORS[pot.tier]}">${TIER_MARKS[pot.tier]}</i>
+          <div class="pgx-text"><b>${pot.name}</b><span>${pot.desc}</span></div>
+          <div class="pgx-price">${pot.price}<em></em></div>
         </div>`).join('');
-      return `<div class="pg-family" style="--fam:${liquid}"><h4>${BREW_LABELS[family] || pots[0].name.replace(/ Potion$/, '').toUpperCase()}</h4>${rows}</div>`;
+      return `<div class="pgx-card" style="--fam:${liquid};--light:${light}">
+        <div class="pgx-head">
+          <canvas class="pgx-big" width="28" height="28" data-potion="${top.id}"></canvas>
+          <b>${BREW_LABELS[family] || top.name.replace(/^(Super |Large )?/, '').replace(/ Potion$/, '').toUpperCase()}</b>
+          <span>${this.groupOf(family).toUpperCase()}</span>
+        </div>
+        ${rows}
+      </div>`;
     }).join('');
     for (const c of document.querySelectorAll('#potion-list canvas')) {
       const ctx = c.getContext('2d');

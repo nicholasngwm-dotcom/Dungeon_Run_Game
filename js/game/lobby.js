@@ -5,7 +5,8 @@
 // through the quarters) has every hero busy in a nook of their own (see HeroNooks:
 // walk up to one to pick them); the library,
 // kept by Elowen the librarian, has the map legend board, the bestiary lectern
-// (with enchanted books flying round it) and the potion guide's alchemy table;
+// (with enchanted books flying round it), the potion guide's alchemy table and the enchanting
+// table with the tome of every upgrade;
 // the workshop has the tinkerer; the quarters have beds by the hearth; outside,
 // the training grounds have the practice range. Walk up to a station and press E.
 // Furniture is solid, and benches, chairs and armchairs can be sat on (E).
@@ -60,6 +61,8 @@ class LobbyHub {
     this.stations.push({ kind: 'bestiary', x: 6.3 * T, y: 22.9 * T, r: 44, prompt: 'BESTIARY' });
     this.stations.push({ kind: 'legend', x: 10.2 * T, y: 23.0 * T, r: 48, prompt: 'MAP LEGEND' });
     this.stations.push({ kind: 'potions', x: 10.1 * T, y: 26.3 * T, r: 44, prompt: 'POTION GUIDE' });
+    // the enchanting table by the west shelves: the tome of every upgrade
+    this.stations.push({ kind: 'tome', x: 4.9 * T, y: 19.9 * T, r: 44, prompt: 'ENCHANTMENT TOME' });
     // the gate stands in the great hall's north wall; bottom = the floor line
     this.stations.push({ kind: 'gate', x: 22 * T, y: 5 * T + 18, bottom: 5 * T, r: 54, prompt: 'CHOOSE A DUNGEON' });
     // the grandfather clock against the great hall's west wall: tells the time of day
@@ -122,7 +125,7 @@ class LobbyHub {
     // the archery lane's targets are live (TrainingTarget, made by the game): hit them like the dummy
     this.targets = [[50.4, 18.6], [50.4, 21.8], [50.4, 25.0]].map(([tx, ty]) => ({ x: tx * T, y: ty * T }));
     for (const t of this.targets) d.addObstacle?.(t.x - 13, t.y - 8, 26, 8);
-    const base = { hero: [16, 8], pets: [36, 6], bestiary: [24, 6], legend: [44, 5], potions: [48, 10], practice: [26, 6], clock: [24, 10], hourglass: [34, 10] };
+    const base = { hero: [16, 8], pets: [36, 6], tome: [30, 8], bestiary: [24, 6], legend: [44, 5], potions: [48, 10], practice: [26, 6], clock: [24, 10], hourglass: [34, 10] };
     for (const s of this.stations) {
       const fp = base[s.kind];
       if (fp) d.addObstacle?.(s.x - fp[0] / 2, s.y - fp[1] + 4, fp[0], fp[1]);
@@ -678,6 +681,7 @@ class LobbyHub {
     else if (s.kind === 'legend') this.drawLegendBoard(ctx, s);
     else if (s.kind === 'bestiary') this.drawLectern(ctx, s);
     else if (s.kind === 'potions') this.drawAlchemyTable(ctx, s);
+    else if (s.kind === 'tome') this.drawEnchantingTable(ctx, s);
     else if (s.kind === 'clock') this.drawClock(ctx, s);
     else if (s.kind === 'hourglass') this.drawHourglass(ctx, s);
   }
@@ -835,7 +839,7 @@ class LobbyHub {
     }
     const s = this.near;
     if (!s) return;
-    const h = { hero: 78, pets: 62, workshop: 80, practice: 70, gate: -6, legend: 74, bestiary: 54, potions: 58, clock: 86, hourglass: 72 }[s.kind];
+    const h = { hero: 78, pets: 62, tome: 74, workshop: 80, practice: 70, gate: -6, legend: 74, bestiary: 54, potions: 58, clock: 86, hourglass: 72 }[s.kind];
     HUD.text(ctx, `[${Settings.label('interact')}] ${s.prompt}`, s.x, s.y - h + bob, { size: 8, align: 'center', color: '#ffe680' });
   }
 
@@ -932,53 +936,166 @@ class LobbyHub {
     ctx.restore();
   }
 
-  /** The potion guide: an alchemy table with bottles, a bubbling flask and an open recipe book. */
+  /**
+   * The enchantment tome: a squat table of dark stone with a gold-trimmed violet cloth and glowing runes
+   * carved in its front, and above it the tome itself, floating open, bobbing, its pages flicking over,
+   * glyphs of every colour of enchantment circling it and drifting up off it.
+   */
+  drawEnchantingTable(ctx, s) {
+    const x = Math.round(s.x);
+    const y = Math.round(s.y);
+    const t = this.time;
+    // the table: a stone block, lit top, shaded side, a cloth hanging over the front
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 17, y - 22, 34, 23);
+    ctx.fillStyle = '#423f50';
+    ctx.fillRect(x - 16, y - 21, 32, 21);
+    ctx.fillStyle = '#5c586c';
+    ctx.fillRect(x - 16, y - 21, 32, 4);
+    ctx.fillStyle = '#2a2834';
+    ctx.fillRect(x + 11, y - 17, 5, 17);
+    ctx.fillStyle = '#5a2a8a';
+    ctx.fillRect(x - 10, y - 21, 20, 13);
+    ctx.fillStyle = '#7a4ab0';
+    ctx.fillRect(x - 10, y - 21, 20, 2);
+    ctx.fillStyle = '#d4ac4c';
+    ctx.fillRect(x - 10, y - 9, 20, 1);
+    for (const fx of [-8, 0, 8]) ctx.fillRect(x + fx - 1, y - 8, 2, 2);   // tassels
+    // runes carved in the stone, glowing in turn
+    for (let i = 0; i < 2; i++) {
+      const rx = x - 13 + i * 24;
+      const k = 0.4 + Math.max(0, Math.sin(t * 2 + i * 2)) * 0.6;
+      ctx.fillStyle = `rgba(200, 160, 255, ${k})`;
+      ctx.fillRect(rx, y - 6, 3, 1);
+      ctx.fillRect(rx + 1, y - 7, 1, 3);
+    }
+    // the glow under the floating tome
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    drawGlow(ctx, x, y - 40, 30 + Math.sin(t * 3) * 3, '190, 140, 255', 0.45);
+    ctx.restore();
+    // the tome: floating open over the table, bobbing, a page flicking over now and then
+    const by = Math.round(y - 40 + Math.sin(t * 2) * 2);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 13, by - 2, 26, 11);
+    ctx.fillStyle = '#6a2a3a';                 // the leather cover showing under the pages
+    ctx.fillRect(x - 12, by + 6, 24, 2);
+    ctx.fillStyle = '#f4ead7';
+    ctx.fillRect(x - 12, by - 1, 11, 7);
+    ctx.fillRect(x + 1, by - 1, 11, 7);
+    ctx.fillStyle = '#c8b898';
+    ctx.fillRect(x - 1, by - 1, 2, 8);         // the spine's fold
+    ctx.fillStyle = '#8a6a9a';
+    for (let i = 0; i < 3; i++) { ctx.fillRect(x - 10, by + 1 + i * 2, 7, 1); ctx.fillRect(x + 3, by + 1 + i * 2, 7, 1); }
+    const flip = (t * 0.7) % 3;
+    if (flip < 0.4) {
+      // a page turning: rising off the right side and falling over to the left
+      const k = flip / 0.4;
+      const w = Math.round(Math.cos(k * Math.PI) * 10);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(w >= 0 ? x + 1 : x + w, by - 1 - Math.round(Math.sin(k * Math.PI) * 5), Math.abs(w) || 1, 7);
+    }
+    // glyphs of the enchantments' colours circling it, sparks drifting up off the pages
+    const colors = ['#e84a4a', '#ffd34a', '#6ad8ff', '#c08aff', '#9aff4a', '#ff8ad0'];
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    colors.forEach((c, i) => {
+      const a = t * 1.2 + (i / colors.length) * TAU;
+      const gx = x + Math.cos(a) * 22;
+      const gy = by + 2 + Math.sin(a) * 7;
+      const front = Math.sin(a) > 0;
+      ctx.globalAlpha = front ? 1 : 0.45;
+      PFX.star(ctx, gx, gy, 1, c, '#ffffff', 2);
+    });
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < 3; i++) {
+      const k = (t * 0.6 + i / 3) % 1;
+      ctx.fillStyle = `rgba(220, 190, 255, ${1 - k})`;
+      ctx.fillRect(Math.round(x - 6 + i * 6 + Math.sin(t * 2 + i) * 3), Math.round(by - 4 - k * 22), 2, 2);
+    }
+    ctx.restore();
+  }
+
+  /**
+   * The potion guide: an alchemist's table (after Terraria's). A dark wooden table banded in brass,
+   * glass orbs set in its front corners glowing blue round a brass emblem; on top a big green flask
+   * tipped on its stand pouring into a little pink round-bottomed flask, orange bottles in a row, and
+   * a tall brass still with a blue bulb, bubbling.
+   */
   drawAlchemyTable(ctx, s) {
     const x = Math.round(s.x);
     const y = Math.round(s.y);
     const t = this.time;
-    // a dark wooden workbench with a violet cloth
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x - 21, y - 16, 5, 17);
-    ctx.fillRect(x + 16, y - 16, 5, 17);
-    ctx.fillRect(x - 25, y - 25, 50, 11);
-    ctx.fillStyle = '#5b3922';
-    ctx.fillRect(x - 20, y - 15, 3, 15);
-    ctx.fillRect(x + 17, y - 15, 3, 15);
-    ctx.fillRect(x - 24, y - 24, 48, 9);
-    ctx.fillStyle = '#7d532f';
-    ctx.fillRect(x - 24, y - 24, 48, 2);
-    ctx.fillStyle = '#5a2a8a';
-    ctx.fillRect(x - 10, y - 24, 20, 12);
-    ctx.fillStyle = '#d4ac4c';
-    ctx.fillRect(x - 10, y - 13, 20, 1);
-    // open recipe book
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x - 20, y - 32, 22, 9);
-    ctx.fillStyle = '#e8dcc0';
-    ctx.fillRect(x - 19, y - 31, 10, 7);
-    ctx.fillRect(x - 8, y - 31, 9, 7);
-    ctx.fillStyle = '#8a7a5a';
-    for (let i = 0; i < 3; i++) { ctx.fillRect(x - 17, y - 30 + i * 2, 6, 1); ctx.fillRect(x - 6, y - 30 + i * 2, 5, 1); }
-    // three potions from the shop on the table
-    ['health-potion', 'mana-potion', 'speed-potion'].forEach((id, i) => {
-      const img = Sprites.potions[id];
-      if (img) ctx.drawImage(img, x + 2 + i * 8, y - 39, 16, 16);
-    });
-    // a bubbling flask over a little flame
-    const fx = x + 19;
-    drawFlame(ctx, fx, y - 26, t, 3);
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(fx - 5, y - 38, 10, 9);
-    ctx.fillRect(fx - 2, y - 44, 4, 6);
-    ctx.fillStyle = '#9a4ae0';
-    ctx.fillRect(fx - 4, y - 36, 8, 6);
-    for (let i = 0; i < 2; i++) {
-      const b = (t * 0.8 + i * 0.5) % 1;
-      ctx.fillStyle = `rgba(224, 184, 255, ${1 - b})`;
-      ctx.fillRect(fx - 1 + i * 2, Math.round(y - 46 - b * 14), 2, 2);
+    const WOOD = ['#2a1a10', '#4a2e1c', '#6a4428', '#8c5e36'];
+    const BRASS = ['#6a4a14', '#a07a24', '#d4ac4c', '#f4d88a'];
+    const rect = (c, rx, ry, w, h) => { ctx.fillStyle = c; ctx.fillRect(x + rx, y + ry, w, h); };
+    // legs and the table's front panel
+    rect(OUTLINE, -25, -26, 50, 27);
+    rect(WOOD[1], -24, -25, 48, 25);
+    rect(WOOD[2], -24, -25, 48, 3);
+    rect(WOOD[0], -24, -3, 48, 3);
+    rect(WOOD[0], -19, -21, 38, 16);                     // the recessed middle
+    rect(WOOD[1], -19, -21, 38, 1);
+    // brass banding round the top and down the corners
+    rect(BRASS[1], -25, -27, 50, 3);
+    rect(BRASS[3], -25, -27, 50, 1);
+    for (const cx of [-25, 22]) { rect(BRASS[1], cx, -24, 3, 22); rect(BRASS[2], cx, -24, 1, 22); }
+    // glass orbs in the front corners, glowing blue, and the brass emblem between them
+    for (const ox of [-15, 15]) {
+      PFX.disc(ctx, x + ox, y - 13, 6, 6, OUTLINE, 1);
+      PFX.disc(ctx, x + ox, y - 13, 5, 5, '#2a5ad0', 1);
+      PFX.disc(ctx, x + ox, y - 13, 3, 3, '#8ad8ff', 1);
+      rect('#ffffff', ox - 2, -16, 2, 2);
     }
-    drawGlow(ctx, x, y - 34, 30, '200, 140, 255', 0.18 + Math.sin(t * 3) * 0.06);
+    PFX.disc(ctx, x, y - 13, 6, 6, OUTLINE, 1);
+    PFX.disc(ctx, x, y - 13, 5, 5, BRASS[2], 1);
+    PFX.disc(ctx, x, y - 13, 3, 3, BRASS[3], 1);
+    rect(BRASS[0], -1, -15, 2, 4);
+    // on top, left: a big green flask tipped on a brass stand, pouring into a pink round-bottomed flask
+    rect(OUTLINE, -22, -34, 2, 8);
+    rect(BRASS[1], -21, -34, 1, 7);
+    PFX.disc(ctx, x - 16, y - 40, 8, 8, OUTLINE, 1);
+    PFX.disc(ctx, x - 16, y - 40, 7, 7, '#3ab84a', 1);
+    PFX.disc(ctx, x - 17, y - 42, 4, 4, '#a8ffb0', 1);
+    rect(OUTLINE, -10, -50, 9, 5);                       // its neck, tipped right
+    rect('#a8e8ff', -9, -49, 7, 3);
+    const drip = (t * 2) % 1;
+    rect('#6aff7a', -2, -45 + Math.round(drip * 10), 1, 2);
+    PFX.disc(ctx, x + 1, y - 30, 5, 5, OUTLINE, 1);
+    PFX.disc(ctx, x + 1, y - 30, 4, 4, '#e0609a', 1);
+    PFX.disc(ctx, x, y - 31, 2, 2, '#ffd0e8', 1);
+    rect(OUTLINE, -1, -38, 4, 5);
+    rect('#d8e8f8', 0, -37, 2, 4);
+    // orange bottles in a row
+    for (const bx of [-8, 8]) {
+      rect(OUTLINE, bx - 2, -33, 5, 7);
+      rect('#ff8a1e', bx - 1, -31, 3, 4);
+      rect('#ffd34a', bx - 1, -31, 1, 2);
+      rect(WOOD[3], bx - 1, -35, 3, 2);
+    }
+    // right: a tall brass still with a blue bulb, bubbles rising out of its spout
+    rect(OUTLINE, 14, -58, 5, 32);
+    rect(BRASS[1], 15, -57, 3, 31);
+    rect(BRASS[3], 15, -57, 1, 31);
+    PFX.disc(ctx, x + 16, y - 37, 6, 7, OUTLINE, 1);
+    PFX.disc(ctx, x + 16, y - 37, 5, 6, '#4a8ad8', 1);
+    PFX.disc(ctx, x + 15, y - 39, 2, 3, '#c8f0ff', 1);
+    rect(OUTLINE, 12, -60, 9, 3);
+    rect(BRASS[2], 13, -59, 7, 1);
+    rect(OUTLINE, 19, -56, 6, 2);                         // the spout
+    rect(BRASS[1], 20, -56, 5, 1);
+    for (let i = 0; i < 3; i++) {
+      const b = (t * 0.8 + i / 3) % 1;
+      ctx.fillStyle = `rgba(200, 240, 255, ${1 - b})`;
+      ctx.fillRect(Math.round(x + 24 + Math.sin(t * 3 + i) * 2), Math.round(y - 58 - b * 14), 2, 2);
+    }
+    // the glass glowing
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    drawGlow(ctx, x - 16, y - 40, 16, '90, 220, 110', 0.25 + Math.sin(t * 3) * 0.05);
+    drawGlow(ctx, x + 16, y - 37, 14, '120, 180, 255', 0.25);
+    for (const ox of [-15, 15]) drawGlow(ctx, x + ox, y - 13, 10, '120, 180, 255', 0.2 + Math.sin(t * 2 + ox) * 0.06);
+    ctx.restore();
   }
 
   /** The grandfather clock: its hands show the lobby's time of day, the pendulum swings behind the glass. */
@@ -1159,6 +1276,7 @@ class LobbyHub {
       if (s.kind === 'gate') out.push({ x: s.x, y: s.bottom - 20, r: 150, s: 0.9, rgb: '180, 90, 255' });
       else if (s.kind === 'workshop') out.push({ x: s.x, y: s.y - 40, r: 130, s: 0.85, rgb: '140, 210, 255' });
       else if (s.kind === 'bestiary' || s.kind === 'potions') out.push({ x: s.x, y: s.y - 34, r: 70, s: 0.7, rgb: '200, 160, 255' });
+      else if (s.kind === 'tome') out.push({ x: s.x, y: s.y - 40, r: 90, s: 0.85, rgb: '190, 140, 255' });
       else if (s.kind === 'hourglass') out.push({ x: s.x, y: s.y - 34, r: 90, s: 0.8, rgb: '170, 180, 255' });
     }
     out.push({ x: this.librarian.x, y: this.librarian.y - 10, r: 70, s: 0.7, rgb: '255, 200, 120' });

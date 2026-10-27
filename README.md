@@ -42,6 +42,8 @@ a station and press E:
 - **Map legend** board (bottom left): what each minimap colour means and what each room is for.
 - **Bestiary** lectern (bottom left): a book of every enemy in a theme, two per spread. Flip pages with the arrows (or A / D) and filter by stage and role.
 - **Potion guide** alchemy table (beside the bestiary): every potion, what it does and its stage 1 price.
+- **Enchantment tome** on its enchanting table (library, by the west shelves): every shop upgrade, general and
+  each hero's own, with its icon, what it does and its cooldown; filter by general or by hero.
 - **Gate** (top, at the end of the carpet): choose a game mode and start a run.
 
 There is also a training dummy in the lobby to try abilities on. After a run,
