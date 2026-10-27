@@ -34,20 +34,19 @@ const UpgradeGuide = {
       .map(([f, label]) => `<button class="chip${this.filter === f ? ' on' : ''}" data-action="tomeFilter:${f}">${label}</button>`).join('');
     const total = SHOP_UPGRADES.length;
     document.getElementById('tome-count').textContent = `${total} enchantments: ${SHOP_UPGRADES.filter((u) => !u.hero).length} general, ${total - SHOP_UPGRADES.filter((u) => !u.hero).length} for one hero only.`;
+    // each section: a heading, then its upgrades as cards filling the rows left to right
     document.getElementById('tome-list').innerHTML = this.sections.map(([title, color, list]) => {
-      const rows = list.map((u) => {
-        const cd = u.cooldown ? `<i>COOLDOWN ${u.cooldown >= 60 ? `${u.cooldown / 60} MIN` : `${u.cooldown}s`}</i>` : '';
-        const mp = u.id === 'resurrect' ? '<i>MULTIPLAYER ONLY</i>' : '';
+      const cards = list.map((u) => {
+        const cd = u.cooldown ? `<em>COOLDOWN ${u.cooldown >= 60 ? `${u.cooldown / 60} MIN` : `${u.cooldown}s`}</em>` : '';
+        const mp = u.id === 'resurrect' ? '<em>MULTIPLAYER ONLY</em>' : '';
         return `
-        <div class="pg-row">
+        <div class="tome-card" style="--glow:${u.color}">
           <canvas data-icon="${u.id}"></canvas>
-          <div class="pg-text">
-            <b style="color:${u.color}">${u.name} ${cd}${mp}</b>
-            <span>${u.desc}</span>
-          </div>
+          <b style="color:${u.color}">${u.name}</b>
+          <span>${u.desc}</span>${cd}${mp}
         </div>`;
       }).join('');
-      return `<div class="pg-family tome-section" style="--fam:${color}"><h4>${title}</h4>${rows}</div>`;
+      return `<div class="tome-section" style="--fam:${color}"><h4>${title}</h4><div class="tome-cards">${cards}</div></div>`;
     }).join('');
     for (const c of document.querySelectorAll('#tome-list canvas[data-icon]')) drawUpgradeIcon(c, c.dataset.icon);
   },

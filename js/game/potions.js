@@ -71,37 +71,106 @@ const POTION_COLORS = {
 /** Heal-type potions: the shop always stocks at least one. */
 const HEAL_FAMILIES = ['heal', 'regen'];
 
-/** Builds Sprites.potions[id]: 28x28 bottle icons (bigger, fancier bottles for higher tiers). */
+/**
+ * Each potion family's bottle (Terraria-style: every kind its own shape, easy to tell apart at a
+ * glance). body(p, d, c) fills the bottle's body inset by d px (d = 0: the glass, 1+: the liquid
+ * inside); neck: [top, bottom] rows of its neck (null: none); fill: the row the liquid comes up to;
+ * mark(p, light, white) paints its symbol on the liquid; extra(p) adds trim over the glass (bands,
+ * spikes, flames). All on a 28x28 canvas, the bottle standing on row 26.
+ */
+const POTION_BOTTLES = {
+  // health: the classic round flask, a heart in it
+  heal: { neck: [6, 12], fill: 13, body: (p, d, c) => p.circle(14, 18, 8 - d, c),
+    mark: (p, l, w) => { p.rect(11, 16, 2, 2, w); p.rect(15, 16, 2, 2, w); p.rect(11, 18, 6, 2, w); p.rect(12, 20, 4, 1, w); p.rect(13, 21, 2, 1, w); } },
+  // regeneration: a squat jar, a leaf in it
+  regen: { neck: [8, 13], fill: 15, body: (p, d, c) => p.round(5 + d, 13 + d, 18 - d * 2, 13 - d * 2, c, 3),
+    mark: (p, l, w) => { p.poly([[10, 22], [17, 15], [18, 16], [12, 23]], w); p.line(10, 23, 15, 18, l); } },
+  // mana: a conical flask, a star in it
+  mana: { neck: [5, 10], fill: 14, body: (p, d, c) => p.poly([[11 + d * 0.5, 9 + d], [17 - d * 0.5, 9 + d], [23 - d, 26 - d], [5 + d, 26 - d]], c),
+    mark: (p, l, w) => { p.rect(13, 16, 2, 7, w); p.rect(11, 18, 6, 3, w); p.px(10, 19, w); p.px(17, 19, w); } },
+  // mana regeneration: a tall test-tube vial, rising waves in it
+  manaRegen: { neck: null, fill: 10, body: (p, d, c) => p.round(9 + d, 5 + d, 10 - d * 2, 21 - d * 2, c, 4),
+    mark: (p, l, w) => { for (const y of [13, 17, 21]) { p.rect(11, y, 2, 1, w); p.rect(13, y - 1, 2, 1, w); p.rect(15, y, 2, 1, w); } } },
+  // rage: a cut-glass diamond, a flame in it
+  rage: { neck: [5, 9], fill: 14, body: (p, d, c) => p.poly([[14, 8 + d], [23 - d, 17], [14, 26 - d], [5 + d, 17]], c),
+    mark: (p, l, w) => { p.poly([[11, 22], [12, 17], [14, 19], [15, 14], [17, 18], [17, 22]], w); p.rect(13, 20, 2, 2, l); } },
+  // focus: a flat lens-shaped flask, an eye in it
+  focus: { neck: [7, 13], fill: 15, body: (p, d, c) => p.ellipse(14, 20, 11 - d, 6 - d, c),
+    mark: (p, l, w) => { p.poly([[8, 20], [14, 17], [20, 20], [14, 23]], w); p.rect(13, 19, 3, 3, l); p.px(14, 20, OUTLINE); } },
+  // strength: a heavy square bottle with shoulders, a sword in it
+  strength: { neck: [5, 10], fill: 13, body: (p, d, c) => p.poly([[9 + d, 10 + d], [19 - d, 10 + d], [22 - d, 13 + d], [22 - d, 26 - d], [6 + d, 26 - d], [6 + d, 13 + d]], c),
+    mark: (p, l, w) => { p.rect(13, 14, 2, 8, w); p.rect(11, 21, 6, 1, w); p.rect(13, 22, 2, 2, l); } },
+  // speed: a small bulb on a very long neck, a lightning bolt in it
+  speed: { neck: [5, 15], fill: 17, body: (p, d, c) => p.circle(14, 20, 6 - d, c),
+    mark: (p, l, w) => { p.poly([[15, 16], [12, 20], [14, 20], [12, 24], [17, 19], [15, 19]], w); } },
+  // bulldose: a banded keg, chevrons pushing out
+  bulldose: { neck: [7, 12], fill: 14, body: (p, d, c) => p.round(5 + d, 12 + d, 18 - d * 2, 14 - d * 2, c, 5),
+    mark: (p, l, w) => { for (const x of [10, 15]) { p.line(x, 16, x + 3, 19, w); p.line(x + 3, 19, x, 22, w); } },
+    extra: (p) => { p.rect(5, 15, 18, 1, '#8a6a4a'); p.rect(5, 23, 18, 1, '#8a6a4a'); } },
+  // teleportation: a twisting teardrop, a swirl in it
+  teleport: { neck: [5, 8], fill: 13, body: (p, d, c) => { p.circle(14, 20, 6 - d, c); p.poly([[14, 7 + d * 2], [20 - d, 19], [8 + d, 19]], c); },
+    mark: (p, l, w) => { p.circle(14, 20, 3, w); p.circle(14, 20, 2, l); p.px(15, 19, w); p.px(13, 17, w); } },
+  // ironskin: a shield-shaped bottle, riveted
+  ironskin: { neck: [5, 11], fill: 14, body: (p, d, c) => p.poly([[6 + d, 11 + d], [22 - d, 11 + d], [22 - d, 18], [14, 26 - d], [6 + d, 18]], c),
+    mark: (p, l, w) => { p.rect(13, 14, 2, 8, w); p.rect(10, 16, 8, 2, w); },
+    extra: (p) => { for (const [x, y] of [[7, 12], [20, 12], [7, 17], [20, 17]]) p.px(x, y, '#d0d6e0'); } },
+  // thorns: a round bottle bristling with thorns, a thorn in it
+  thorns: { neck: [6, 11], fill: 14, body: (p, d, c) => p.circle(14, 19, 7 - d, c),
+    mark: (p, l, w) => { p.poly([[11, 22], [14, 15], [17, 22]], w); p.rect(13, 20, 2, 2, l); },
+    extra: (p) => { for (const [x0, y0, x1, y1] of [[6, 16, 3, 14], [6, 22, 3, 23], [22, 16, 25, 14], [22, 22, 25, 23], [10, 26, 9, 27], [18, 26, 19, 27]]) p.line(x0, y0, x1, y1, '#4a8a2a', 2); } },
+  // purity: a tall elegant vase, a sparkle in it
+  purity: { neck: [5, 10], fill: 13, body: (p, d, c) => p.poly([[12 + d * 0.5, 10], [16 - d * 0.5, 10], [21 - d, 21], [18 - d, 26 - d], [10 + d, 26 - d], [7 + d, 21]], c),
+    mark: (p, l, w) => { p.rect(13, 15, 2, 8, w); p.rect(10, 18, 8, 2, w); p.px(11, 16, l); p.px(16, 21, l); } },
+  // inferno: a fat cauldron-round flask with fire licking out of its mouth, a flame in it
+  inferno: { neck: [8, 11], fill: 13, body: (p, d, c) => p.ellipse(14, 19, 10 - d, 7 - d, c),
+    mark: (p, l, w) => { p.poly([[10, 23], [11, 18], [13, 20], [14, 15], [16, 19], [18, 17], [18, 23]], w); },
+    extra: (p) => { p.poly([[11, 8], [12, 3], [14, 6], [15, 1], [17, 8]], '#ff8a1e'); p.poly([[13, 8], [14, 5], [16, 8]], '#ffd34a'); } },
+};
+
+/**
+ * Builds Sprites.potions[id]: 28x28 bottle icons. Every family has its own bottle shape, colour and
+ * symbol (POTION_BOTTLES); the tier shows on the stopper and trim: I a plain cork, II a silver cap and
+ * collar, III a gold cap, a gold band round the neck and a twinkle.
+ */
 function buildPotionSprites() {
   Sprites.potions = {};
+  const glass = '#c8d8e8';
+  const glassDark = '#9aa8c0';
   for (const pot of Object.values(POTIONS)) {
+    const B = POTION_BOTTLES[pot.family];
     const [liquid, light] = POTION_COLORS[pot.family];
     Sprites.potions[pot.id] = PixelArt.make(28, 28, (p) => {
-      const glass = '#c8d8e8';
-      const cork = '#9a6a3a';
+      const c = p.ctx;
+      const clipped = (x, y, w, h, fn) => { c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip(); fn(); c.restore(); };
+      // the neck and the glass body
+      const neckTop = B.neck ? B.neck[0] : 5;
+      if (B.neck) {
+        p.rect(12, B.neck[0], 4, B.neck[1] - B.neck[0] + 1, glass);
+        p.rect(15, B.neck[0], 1, B.neck[1] - B.neck[0] + 1, glassDark);
+      }
+      B.body(p, 0, glass);
+      // the liquid up to its fill line, lit along its left side, a bright line at its surface
+      clipped(0, B.fill, 28, 28, () => B.body(p, 1, liquid));
+      clipped(0, B.fill, 11, 28, () => { B.body(p, 2, light); B.body(p, 3, liquid); });
+      clipped(0, B.fill, 28, 1, () => B.body(p, 1, light));
+      B.mark(p, light, '#ffffff');
+      if (B.extra) B.extra(p);
+      p.rect(9, B.fill - 3, 1, 2, '#ffffff');   // a glint on the glass
+      // the stopper, by tier
+      const top = neckTop - 3;
       if (pot.tier === 1) {
-        // small round flask
-        p.rect(12, 5, 4, 3, cork);
-        p.rect(11, 8, 6, 3, glass);
-        p.circle(14, 17, 7, glass);
-        p.ellipse(14, 18, 6, 5, liquid);
-        p.rect(11, 14, 2, 4, light);
+        p.rect(12, top, 4, 3, '#9a6a3a');
+        p.rect(12, top, 4, 1, '#c8925a');
       } else if (pot.tier === 2) {
-        // tall bottle
-        p.rect(12, 2, 4, 3, cork);
-        p.rect(11, 5, 6, 4, glass);
-        p.round(8, 9, 12, 16, glass, 3);
-        p.round(9, 12, 10, 12, liquid, 2);
-        p.rect(10, 13, 2, 7, light);
+        p.rect(11, top, 6, 3, '#a8aebc');
+        p.rect(11, top, 6, 1, '#e4e7ee');
+        p.rect(11, top + 3, 6, 1, '#7a8092');                          // a silver collar
       } else {
-        // ornate flask with a gold band and a star
-        p.rect(12, 1, 4, 3, '#d4ac4c');
-        p.rect(11, 4, 6, 3, glass);
-        p.poly([[7, 9], [21, 9], [24, 17], [20, 25], [8, 25], [4, 17]], glass);
-        p.poly([[8, 12], [20, 12], [22, 17], [19, 23], [9, 23], [6, 17]], liquid);
-        p.rect(7, 9, 14, 2, '#d4ac4c');
-        p.rect(9, 13, 2, 6, light);
-        p.rect(19, 15, 3, 1, '#fff2a0'); p.rect(20, 14, 1, 3, '#fff2a0');
+        p.rect(11, top, 6, 3, '#d4ac4c');
+        p.rect(11, top, 6, 1, '#fff2a0');
+        p.rect(13, top - 2, 2, 2, '#d4ac4c');                          // the knob
+        p.rect(11, top + 4, 6, 1, '#d4ac4c');                          // a gold band round the neck
+        p.rect(21, 4, 3, 1, '#fff2a0'); p.rect(22, 3, 1, 3, '#fff2a0');   // a twinkle
       }
     }, OUTLINE, 0.5);
   }
