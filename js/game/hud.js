@@ -513,9 +513,12 @@ const HUD = {
   /** Screen rect of bag slot i (shared by drawing and the mouse). */
   bagSlotRect(i) { return { x: 14 + i * 44, y: 484, s: 40 }; },
 
+  /** How many slots this screen's hero's bag has (5, or 7 with a Backpack). */
+  bagSize: 5,
+
   /** The bag slot under a screen point, or -1. */
   bagSlotAt(mx, my) {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < this.bagSize; i++) {
       const r = this.bagSlotRect(i);
       if (mx >= r.x - 2 && mx < r.x + r.s + 2 && my >= r.y - 2 && my < r.y + r.s + 2) return i;
     }
@@ -525,7 +528,7 @@ const HUD = {
   /** True inside the bag's area (slots, gaps and a margin): letting go of a drag here doesn't drop anything. */
   inBag(mx, my) {
     const a = this.bagSlotRect(0);
-    const b = this.bagSlotRect(4);
+    const b = this.bagSlotRect(this.bagSize - 1);
     return mx >= a.x - 14 && mx < b.x + b.s + 14 && my >= a.y - 26;
   },
 
@@ -540,6 +543,7 @@ const HUD = {
   handleBagMouse(p) {
     const m = Input._mouse;
     if (!p || p.dead) { this.bagDrag = null; return; }
+    this.bagSize = p.inventory.length;
     if (this.bagDrag) {
       m.left = m.leftPressed = false;
       if (m.leftReleased) {
@@ -564,10 +568,11 @@ const HUD = {
   },
 
   /**
-   * Bottom-left: the 5-slot bag of bought potions, each with the key that
+   * Bottom-left: the 5-slot bag (7 with a Backpack) of bought potions, each with the key that
    * drinks it and how many. While dragging, the potion follows the mouse.
    */
   drawInventory(ctx, p) {
+    this.bagSize = p.inventory.length;
     const drag = this.bagDrag && p.inventory[this.bagDrag.from] ? this.bagDrag : null;
     const m = Input._mouse;
     const first = this.bagSlotRect(0);

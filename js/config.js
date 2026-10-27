@@ -1023,10 +1023,11 @@ const CONFIG = {
     // and sweeps out to `radius` at `speed` px/s: no damage, but every hero it passes is slowed for `slow` s.
     // Then the chest charges for `charge` s (aiming, locking on lockAt s before it fires), then blasts the
     // beam for `time` s, turning after the hero at most turn rad/s [phase 1, phase 2], `width` px wide
-    // [phase 1, phase 2]. Heroes in it take `damage` every `tick` s. In phase 1 any obstacle stops it;
+    // [phase 1, phase 2]. Heroes in it take `damage` every `tick` s (`damage2` in phase 2: kept as its own number,
+    // not a pair, so the stage scaling reaches it). In phase 1 any obstacle stops it;
     // in phase 2 it smashes through them (only the walls stop it).
     shockwave: { windup: 0.9, radius: 340, speed: 280, band: 26, slow: 2.5 },
-    beam: { charge: 3, lockAt: 0.5, time: 3.2, turn: [0.45, 0.45], width: [40, 34], damage: 22, tick: 0.3, length: 1100 },
+    beam: { charge: 3, lockAt: 0.5, time: 3.2, turn: [0.45, 0.45], width: [34, 50], damage: 32, damage2: 58, tick: 0.3, length: 1100 },
 
     // Ground slams: `count` in a row [phase 1, phase 2], `every` s apart, each raising its arms for `windup` s.
     // Odd slams (1st, 3rd...) aim at where the hero is; every 2nd at where they're going (`lead` px ahead of

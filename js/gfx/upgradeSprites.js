@@ -289,6 +289,72 @@ function buildUpgradeSprites() {
     for (const [x, y] of [[16, 4], [17, 8], [15, 1]]) p.px(x, y, '#fff6a0');
   });
 
+  U.backpack = icon((p) => {
+    // a leather pack, flap buckled, a potion peeking out of the side pocket
+    p.round(3, 5, 14, 14, L[2], 3);
+    p.round(4, 6, 6, 12, L[3], 2);
+    p.rect(3, 4, 14, 6, L[1]);                     // the flap
+    p.rect(3, 4, 14, 1, L[3]);
+    p.rect(9, 8, 3, 4, G[2]);                      // buckle
+    p.px(10, 9, G[3]);
+    p.round(6, 0, 8, 5, L[1], 2);                  // carry loop
+    p.rect(8, 2, 4, 2, OUTLINE);
+    p.rect(14, 10, 4, 7, L[1]);                    // side pocket...
+    p.rect(15, 7, 2, 4, '#d8303a');                // ...with a potion in it
+    p.px(15, 6, S[4]);
+    plus(p, 5, 15, G[3]);
+  });
+  U.potionDosage = icon((p) => {
+    // a big health potion with an up arrow: more healing per sip
+    p.rect(6, 2, 5, 3, L[3]);                      // cork
+    p.rect(7, 5, 3, 3, S[3]);                      // neck
+    p.circle(8, 13, 6, S[4]);
+    p.circle(8, 13, 5, '#d8303a');
+    p.rect(4, 13, 9, 4, '#a01a24');
+    p.rect(5, 10, 2, 3, '#ff9a9a');
+    heart(p, 8, 13, 0.4, '#ffffff');
+    upArrow(p, 16, 8, G[3]);
+    plus(p, 16, 15, '#ff9a9a');
+  });
+  U.nuclearReactor = icon((p) => {
+    // a glowing reactor core with the radiation trefoil, rings round it
+    ring(p, 10, 10, 9, '#4a8a1a', 1);
+    p.circle(10, 10, 7, '#2a4a14');
+    p.circle(10, 10, 6, '#9aff4a');
+    for (const a of [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6]) {
+      p.poly([[10, 10], [10 + Math.cos(a - 0.5) * 6, 10 + Math.sin(a - 0.5) * 6], [10 + Math.cos(a + 0.5) * 6, 10 + Math.sin(a + 0.5) * 6]], '#2a4a14');
+    }
+    p.circle(10, 10, 2, '#2a4a14');
+    p.px(10, 10, '#e8ffd0');
+    star(p, 16, 3, 2, '#e8ffd0', '#ffffff');
+  });
+  U.lastHurrah = icon((p) => {
+    // a little skull bursting into a fireball
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU;
+      p.poly([[10, 10], [10 + Math.cos(a - 0.25) * 6, 10 + Math.sin(a - 0.25) * 6], [10 + Math.cos(a) * 10, 10 + Math.sin(a) * 10], [10 + Math.cos(a + 0.25) * 6, 10 + Math.sin(a + 0.25) * 6]], i % 2 ? FIRE[1] : FIRE[0]);
+    }
+    p.circle(10, 10, 6, FIRE[2]);
+    p.round(6, 6, 8, 7, '#f4ead7', 3);             // the skull
+    p.rect(7, 12, 6, 3, '#f4ead7');
+    p.rect(7, 8, 2, 2, OUTLINE);
+    p.rect(11, 8, 2, 2, OUTLINE);
+    p.px(10, 11, OUTLINE);
+    for (const x of [8, 10, 12]) p.px(x, 14, '#a89a88');
+  });
+  U.freeReroll = icon((p) => {
+    // two dice tumbling, a FREE tag of gold
+    p.round(2, 7, 9, 9, '#f4ead7', 2);
+    for (const [x, y] of [[4, 9], [8, 13], [6, 11]]) p.px(x, y, OUTLINE);
+    p.round(10, 3, 8, 8, '#e8dcc8', 2);
+    for (const [x, y] of [[12, 5], [15, 5], [12, 8], [15, 8]]) p.px(x, y, OUTLINE);
+    p.line(4, 4, 8, 2, G[3], 1);                   // a curved arrow: rolling again
+    p.px(8, 1, G[3]); p.px(9, 2, G[3]);
+    p.rect(10, 14, 9, 5, G[2]);
+    p.rect(10, 14, 9, 1, G[3]);
+    p.rect(12, 16, 5, 1, '#fff2a0');
+  });
+
   U.adrenalineRush = icon((p) => {
     // a racing heart, speed lines streaming off it
     for (const [y, w] of [[6, 4], [10, 6], [14, 3]]) p.rect(1, y, w, 1, '#ffd0d8');

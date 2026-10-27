@@ -59,7 +59,7 @@ class Player extends Entity {
     this.coins = 0;
     this.coinFlash = 0;
     this.upgradeLevels = {};
-    // potions: 5 inventory slots ({ id, count } or null) and the effects running (family -> { t, v })
+    // potions: 5 inventory slots (7 with the Backpack upgrade; { id, count } or null) and the effects running (family -> { t, v })
     this.inventory = [null, null, null, null, null];
     this.brews = {};
     this.cursor = { x, y };       // where this hero's player is pointing (each hero has their own in multiplayer)
@@ -881,9 +881,9 @@ class Player extends Entity {
       * (this.inspired > 0 ? 1 + CONFIG.classes.bard.morale.damage : 1);
   }
 
-  // ---------- potions (inventory slots 1-5) ----------
+  // ---------- potions (inventory slots 1-5, 1-7 with a Backpack) ----------
 
-  /** Drinks the potion in inventory slot i (keys 1-5). Nothing happens if it can't help right now. */
+  /** Drinks the potion in inventory slot i (keys 1-5, or 1-7). Nothing happens if it can't help right now. */
   useItem(i, world) {
     const slot = this.inventory[i];
     if (!slot || this.dead) return;
@@ -960,7 +960,7 @@ class Player extends Entity {
     switch (pot.family) {
       case 'heal':
         if (this.hp >= this.maxHp) { say('FULL HP', '#d8c8a0'); return false; }
-        this.heal(pot.value, world);
+        this.heal(pot.value * Upgrades.potionScale(this), world);   // (Higher Potion Dosage)
         break;
       case 'mana': {
         const r = this.resource;
@@ -1059,7 +1059,7 @@ class Player extends Entity {
       else delete this.brews[k];
     }
     const regen = this.brews.regen;
-    if (regen) this.heal(this.maxHp * 0.02 * regen.v * dt, world, true);
+    if (regen) this.heal(this.maxHp * 0.02 * regen.v * Upgrades.potionScale(this) * dt, world, true);
     if (this.brews.purity) this.cleanse();
     const fire = this.brews.inferno;
     if (fire) {

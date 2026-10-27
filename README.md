@@ -91,7 +91,7 @@ costs 10, then 5 more each time, back to 10 at the next stage's shop. Each upgra
 owned once. Entering each stage you also choose one free upgrade from three, and a wishing
 well's wish is sometimes an upgrade instead of potions.
 
-**Upgrades**: 30 shared ones (Vital Heart, Tesla Armour, Silver Shield, Bouncy!, Mimic Sense...;
+**Upgrades**: 35 shared ones (Vital Heart, Tesla Armour, Silver Shield, Backpack, Nuclear Reactor, Last Hurrah...;
 every hero can be offered any of them, even the few that only help heroes with mana, rockets,
 energy, followers or pets, or a melee basic attack) and 16 hero upgrades, framed in gold with the
 hero's name, that only ever show up for that hero. Hold Tab (the scoreboard) to see every

@@ -153,6 +153,31 @@ const SHOP_UPGRADES = [
     desc: 'Energy comes back 50% faster.',
   },
   {
+    // slots: how many the bag holds with it (5 without)
+    id: 'backpack', name: 'Backpack', color: '#c8925a', slots: 7,
+    desc: 'Your bag holds 2 more potions (7 slots, keys 6 and 7 for the new ones).',
+    apply(p) { while (p.inventory.length < UPGRADE_BY_ID.backpack.slots) p.inventory.push(null); },
+  },
+  {
+    id: 'potionDosage', name: 'Higher Potion Dosage', color: '#ff7a8a', scale: 1.5,
+    desc: 'Health and regeneration potions heal 50% more.',
+  },
+  {
+    // rate: how much of the ultimate's charge fills each second on its own (1/60: a full charge a minute)
+    id: 'nuclearReactor', name: 'Nuclear Reactor', color: '#9aff4a', rate: 1 / 60,
+    desc: 'Your ultimate slowly charges on its own over time (a full charge every minute), on top of the damage you deal.',
+    hud: (p) => ({ active: p.ult < p.ultMax }),
+  },
+  {
+    // chance: of an enemy you kill blowing up; after delay s it bursts, hitting every enemy within radius for damage
+    id: 'lastHurrah', name: 'Last Hurrah', color: '#ff8a3a', chance: 0.25, delay: 0.35, radius: 80, damage: 45,
+    desc: 'Enemies you kill have a 25% chance to blow up a moment later, hurting the enemies around them.',
+  },
+  {
+    id: 'freeReroll', name: 'Free Reroll', color: '#8ac8ff',
+    desc: 'Your first reroll at every shop is free.',
+  },
+  {
     // attackSpeed: how much faster basic attacks come back, for `time`s after a hit lands on you (once per `cooldown`s)
     id: 'adrenalineRush', name: 'Adrenaline Rush', color: '#ff4a6a', cooldown: 7, time: 4, attackSpeed: 0.4,
     desc: 'Taking damage gives you 40% faster attacks for 4 seconds. 7 second cooldown.',
@@ -267,6 +292,7 @@ function upgradePrice(hero, full = false) {
 /** Price of the next reroll at this stage's upgrade store (back to the base price every stage). full: before any discount. */
 function rerollPrice(rerolls, hero, full = false) {
   const r = CONFIG.run.shop.reroll;
+  if (!full && rerolls === 0 && Upgrades.has(hero, 'freeReroll')) return 0;   // Free Reroll: the first one at each shop
   return Math.round((r.base + r.step * rerolls) * (full ? 1 : Upgrades.priceScale(hero)));
 }
 
@@ -456,6 +482,8 @@ const Upgrades = {
     if (this.has(p, 'lastDefence') && !p.dead && p.hp > 0 && p.hp < p.maxHp * 0.1) this.lastDefence(p, world);
     if (this.has(p, 'birdieTrail')) this.updateStorms(p, dt, world);
     if (this.has(p, 'mimicSense') && !p.dead) this.senseMimics(p, world);
+    // Nuclear Reactor: the ultimate fills a little every second on its own (only in a fight's world, not the keep)
+    if (this.has(p, 'nuclearReactor') && !p.dead && !world.lobby) p.gainUlt(p.ultMax * UPGRADE_BY_ID.nuclearReactor.rate * dt);
     if (p.lastShield) p.lastShield.flash -= dt;
     // the seen-on-the-hero tells (visual only)
     if (this.panicking(p) && p.moving && vrand(0, 1) < 0.5) {
@@ -739,6 +767,7 @@ const Upgrades = {
     const k = e.lastHitBy;
     const w = run.world;
     if (!k || !w.players.includes(k) || e.exploded) return;
+    if (this.has(k, 'lastHurrah') && Math.random() < UPGRADE_BY_ID.lastHurrah.chance) this.lastHurrah(w, k, e.x, e.y);
     if (this.has(k, 'coinSiphon') && !e.owner && Math.random() < 0.3) {
       const n = randInt(3, 5);
       run.spawnCoins(e.x, e.y - 4, n);
@@ -750,6 +779,51 @@ const Upgrades = {
       w.pickups.push(new HeartPickup(e.x + 12, e.y - 4));
       this.state(k).flash.lifeLeech = w.time;
     }
+  },
+
+  /**
+   * Last Hurrah: the body swells with light, then blows up, hurting every enemy round it (the hero who
+   * killed it gets the credit; one it kills can blow up in turn).
+   */
+  lastHurrah(world, k, x, y) {
+    const u = UPGRADE_BY_ID.lastHurrah;
+    // the warning: a glow building where it fell
+    world.effects.add(u.delay, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, x, y - 12, 8 + t * 18, '255, 170, 70', 0.6 + t * 0.6, 2);
+      ctx.restore();
+    });
+    world.after(u.delay, () => {
+      for (const t of world.getTargets()) {
+        if (t.prop || dist(x, y, t.x, t.y) > u.radius + (t.radius || 0)) continue;
+        world.damageTarget(t, u.damage, { source: k, angle: angleTo(x, y, t.x, t.y), knockback: 160, noCrit: true, sound: null, fire: true, color: u.color });
+      }
+      this.state(k).flash.lastHurrah = world.time;
+      const r = u.radius;
+      world.effects.add(0.4, (ctx, t) => {
+        const e = 1 - (1 - t) ** 3;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        PFX.glow(ctx, x, y - 12, r * (0.4 + e * 0.5), '255, 140, 50', 1.3 * (1 - t), 2, r * 0.6 * (0.4 + e * 0.5));
+        PFX.glow(ctx, x, y - 14, r * 0.3 * (1 - t * 0.7), '255, 240, 200', 1.4 * (1 - t));
+        ctx.restore();
+        ctx.save();
+        ctx.globalAlpha = 1 - t;
+        PFX.ring(ctx, x, y, r * e, r * 0.55 * e, '#ffe0a0', 2, { thick: t < 0.3 ? 3 : 1 });
+        ctx.restore();
+      });
+      world.effects.add(1.6, (ctx, t) => {
+        ctx.save();
+        ctx.globalAlpha = 0.5 * (1 - t);
+        PFX.disc(ctx, x, y, r * 0.5, r * 0.28, '#1a1210');
+        ctx.restore();
+      }, true);
+      world.effects.smoke(x, y - 12, { count: 7, radius: r * 0.4, life: 0.9, rise: 26 });
+      world.effects.burst(x, y - 10, { count: 26, colors: ['#ffd34a', '#ff8a1e', '#e0461e', '#ffffff'], speed: [80, 240], life: [0.3, 0.6], size: [2, 4] });
+      world.shake(5, 0.25);
+      Sound.play('explosion', 0.05);
+    });
   },
 
   /** A mimic died: true if its killer's Mimic Sense shakes all three super buffs out of it. */
@@ -805,6 +879,9 @@ const Upgrades = {
   },
 
   // ---------- shops, energy and projectiles ----------
+
+  /** How much more a health or regeneration potion heals this hero (Higher Potion Dosage). */
+  potionScale(p) { return this.has(p, 'potionDosage') ? UPGRADE_BY_ID.potionDosage.scale : 1; },
 
   /** What this hero pays of a shop price (Discount Cards: 10% off). */
   priceScale(hero) { return this.has(hero, 'discountCards') ? 1 - UPGRADE_BY_ID.discountCards.discount : 1; },
@@ -1255,7 +1332,7 @@ const Shop = {
   /** A price on a button with its coin; when Discount Cards cut it, the full price shows struck out before it. */
   priceTag(price, full) {
     const was = full > price ? `<s class="was-price">${full}</s>` : '';
-    return `${was}${price}<em></em>`;
+    return price <= 0 ? `${was}FREE` : `${was}${price}<em></em>`;   // (Free Reroll)
   },
 
   /** Bram's store: three cards to buy from (a bought one is replaced by a new one), and a reroll. */
@@ -1321,7 +1398,7 @@ const Shop = {
       <div class="bag-slot" data-slot="${i}"${s ? ` draggable="true" title="${POTIONS[s.id].name}"` : ''}><i>${Settings.label(`item${i + 1}`)}</i>${s ? `<canvas width="28" height="28" data-bag="${s.id}"></canvas><b>${s.count > 1 ? `x${s.count}` : ''}</b>` : ''}</div>`).join('')}</div>`;
     for (const c of extra.querySelectorAll('canvas')) c.getContext('2d').drawImage(Sprites.potions[c.dataset.bag], 0, 0);
     this.bindBagDrag(extra);
-    document.getElementById('shop-hint').textContent = `Potions go in your bag (5 slots, up to ${BAG_STACK} of a kind each). Drag to rearrange; drink with the slot keys during a fight.${this.run.stage > 1 ? ' Prices rise each stage.' : ''}`;
+    document.getElementById('shop-hint').textContent = `Potions go in your bag (${p.inventory.length} slots, up to ${BAG_STACK} of a kind each). Drag to rearrange; drink with the slot keys during a fight.${this.run.stage > 1 ? ' Prices rise each stage.' : ''}`;
   },
 
   /** Drag a bag slot onto another to move, swap or stack it (same command as the in-game bag). */

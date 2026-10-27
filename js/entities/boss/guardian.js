@@ -428,7 +428,7 @@ class Guardian {
       for (const a of world.allies) {
         if (a.dead || a.prop) continue;
         if (pointSegmentDistance(a.hx, a.hy, this.coreX, this.coreY, B.end.x, B.end.y) < c.width[this.phase - 1] / 2 + (a.radius || 10)) {
-          a.hurt(c.damage, world, this.coreX, this.coreY, { projectile: true });
+          a.hurt(this.phase === 2 ? c.damage2 : c.damage, world, this.coreX, this.coreY, { projectile: true });
         }
       }
     }
