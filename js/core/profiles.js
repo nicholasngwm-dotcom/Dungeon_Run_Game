@@ -3,7 +3,7 @@
 // browser (localStorage). ProfileStore is the only part that touches storage, so it can be
 // swapped for Steam Cloud or an online account later without changing the rest.
 
-const PROFILE_VERSION = 2;   // bump when a profile's saved shape changes (and upgrade old ones in Profiles.upgrade)
+const PROFILE_VERSION = 3;   // bump when a profile's saved shape changes (and upgrade old ones in Profiles.upgrade)
 const PROFILE_MAX = 6;       // profiles kept on one machine
 const PROFILE_NAME_MAX = 14;
 
@@ -45,13 +45,19 @@ const Profiles = {
   /**
    * A profile saved by an older version of the game, brought up to PROFILE_VERSION.
    * v2: gems, and how many enhancements each hero has ({ classId: count }).
+   * v3: the pets bought (pets: [kind]) and the one that comes along (pet: kind or null).
    */
   upgrade(p) {
     const out = { createdAt: 0, lastPlayedAt: 0, ...p, version: PROFILE_VERSION };
     out.gems = Math.max(0, Math.floor(Number(out.gems) || 0));
     out.enhancements = this.cleanEnhancements(out.enhancements);
+    out.pets = Array.isArray(out.pets) ? [...new Set(out.pets.filter((k) => CONFIG.pets[k]))] : [];
+    out.pet = out.pets.includes(out.pet) ? out.pet : null;
     return out;
   },
+
+  /** A pet kind, or null if it isn't one (also used on what other players send). */
+  cleanPet(kind) { return CONFIG.pets[kind] ? kind : null; },
 
   /** { classId: count } with only real heroes and counts in range (also used on what other players send). */
   cleanEnhancements(e) {
@@ -83,7 +89,7 @@ const Profiles = {
     const now = Date.now();
     const p = {
       id: `p${now.toString(36)}${Math.floor(nativeRandom() * 1e6).toString(36)}`, name: name.trim(), createdAt: now, lastPlayedAt: 0,
-      version: PROFILE_VERSION, gems: 0, enhancements: {},
+      version: PROFILE_VERSION, gems: 0, enhancements: {}, pets: [], pet: null,
     };
     this.list.push(p);
     this.save();
@@ -135,6 +141,32 @@ const Profiles = {
     this.current.enhancements[classId] = this.enhancementCount(classId) + 1;
     this.save();
     return t;
+  },
+
+  // ---------- pets (the profile playing now) ----------
+
+  ownsPet(kind) { return !!this.current && this.current.pets.includes(kind); },
+
+  /** The pet that comes along (null for none). */
+  get pet() { return this.current ? this.current.pet : null; },
+
+  /** Buys pet `kind` with gems and brings it along. Returns true if it worked. */
+  buyPet(kind) {
+    const c = CONFIG.pets[kind];
+    if (!c || !this.current || this.ownsPet(kind) || this.gems < c.cost) return false;
+    this.current.gems -= c.cost;
+    this.current.pets.push(kind);
+    this.current.pet = kind;
+    this.save();
+    return true;
+  },
+
+  /** Brings owned pet `kind` along (null: leave every pet at home). */
+  choosePet(kind) {
+    if (!this.current || (kind && !this.ownsPet(kind))) return false;
+    this.current.pet = kind || null;
+    this.save();
+    return true;
   },
 };
 

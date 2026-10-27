@@ -36,6 +36,11 @@ class Game {
     this.enh = {};
     for (const r of this.roster) this.enh[r.id] = { ...(r.enh || {}) };
     if (!this.multiplayer && !this.showcase) this.enh[this.roster[0].id] = { ...(Profiles.current?.enhancements || {}) };
+    // the pet each player brings along, { id: kind or null }: the same way round as the enhancements
+    this.petChoice = {};
+    for (const r of this.roster) this.petChoice[r.id] = Profiles.cleanPet(r.pet);
+    if (!this.multiplayer && !this.showcase) this.petChoice[this.roster[0].id] = Profiles.pet;
+    this.pets = [];                // the heroes' pets (see Pet, syncPets)
     this.players = [];
     // a run builds its own floors (FloorMap) and sets this.dungeon
     this.run = opts.run ? new DungeonRun(this, opts.run) : null;
@@ -103,6 +108,7 @@ class Game {
     p.netId = entry.id;
     p.name = entry.name;
     p.isBot = !!entry.bot;   // a player who dropped out mid-run, played by the AI (BotPilot)
+    p.petKind = this.petChoice[entry.id] || null;   // the pet they bring
     return p;
   }
 
@@ -332,6 +338,7 @@ class Game {
   get allies() {
     const list = this.heroes;
     list.push(...this.clones.filter((c) => !c.dead));
+    list.push(...this.pets.filter((pt) => pt.fighting));   // a pet that ran home to heal is left alone
     list.push(...this.barriers.filter((b) => b.ally && !b.dead));   // the Baker's oven: enemies can hit it
     if (this.run) list.push(...this.run.allies());
     return list;
@@ -355,7 +362,7 @@ class Game {
     }
     if (best) return best;
     for (const a of allies) {
-      if (a.prop) continue;   // barrels get hit, never hunted
+      if (a.prop || a.notHunted) continue;   // barrels get hit, never hunted (nor is a pet bird: melee can't reach it)
       const d = dist(enemy.x, enemy.y, a.x, a.y);
       if (a.invisible && d > (a.detectRange ?? CONFIG.player.invisibleDetectRange)) continue;
       if (d < bestD) { bestD = d; best = a; }
@@ -511,7 +518,7 @@ class Game {
   contactDamage() {
     for (const e of this.enemies) {
       if (e.dead || e.age < 0.3 || e.state === 'leap') continue;
-      const damage = e.cfg.contactDamage ?? CONFIG.enemyContactDamage;
+      const damage = Math.round((e.cfg.contactDamage ?? CONFIG.enemyContactDamage) * CONFIG.contactScale);
       if (damage <= 0) continue;
       this.weakenScale = Game.weakenOf(e, this);
       for (const a of this.allies) {
@@ -600,7 +607,7 @@ class Game {
     this.bannerData = { text, sub, t: duration, maxT: duration };
   }
 
-  /** type: 'golem' | 'phantom', or omitted to roll using CONFIG.bosses. */
+  /** type: a boss id ('golem', 'guardian', 'phantom'...), or omitted to roll using CONFIG.bosses. */
   startBoss(type = Game.rollBoss()) {
     Music.play('boss');
     for (const p of this.heroes) p.heal(p.maxHp * CONFIG.bossHealPercent, this);
@@ -672,6 +679,7 @@ class Game {
   static createBoss(type, center) {
     if (type === 'phantom') return new PhantomKing(center.x, center.y);
     if (type === 'deathbringer') return new Deathbringer(center.x, center.y);
+    if (type === 'guardian') return new Guardian(center.x, center.y);
     if (type === 'queen') return new Queen(center.x, center.y);
     if (type === 'king') return new King(center.x, center.y);
     if (type === 'prince') return new RoyalPrince(center.x, center.y);
@@ -736,6 +744,11 @@ class Game {
         if (hero.classId === cmd.classId) this.swapHero(cmd.classId, hero);
         return;
       }
+      case 'pet':
+        // a player bought or chose a pet (in the lobby): it trots over to them now (syncPets)
+        if (!this.lobby || !hero) return;
+        this.petChoice[fromId] = Profiles.cleanPet(cmd.kind);
+        return;
       case 'buy':
         if (this.run && hero) this.run.buyUpgrade(hero, cmd.upgrade);
         return;
@@ -794,6 +807,24 @@ class Game {
     return !!this.readyCheck && this.players.every((p) => this.readyCheck.ready[p.netId]);
   }
 
+  /**
+   * Every hero has the pet their player chose, and no other: a pet whose hero was replaced (another
+   * hero picked in the lobby, a practice respawn) follows the new one, and one that's no longer
+   * chosen (or whose player left) goes home in a puff.
+   */
+  syncPets() {
+    for (const pt of this.pets) {
+      if (!this.players.includes(pt.owner)) pt.owner = this.players.find((p) => p.netId === pt.ownerId) || null;
+      if (!pt.owner || this.petChoice[pt.ownerId] !== pt.kind) pt.leave(this);
+    }
+    removeDead(this.pets);
+    for (const p of this.players) {
+      const kind = this.petChoice[p.netId];
+      p.petKind = kind || null;
+      if (kind && !this.pets.some((pt) => pt.owner === p)) this.pets.push(new Pet(kind, p, this));
+    }
+  }
+
   /** A player left the game: their hero (and clones) vanish. */
   removeHero(id) {
     const p = this.heroById(id);
@@ -834,7 +865,7 @@ class Game {
     this.practice.portal = { boss, x: pt.x, y: pt.y, t: 0, used: false };
     this.effects.burst(pt.x, pt.y - 20, { count: 30, colors: ['#b45aff', '#e0c0ff', '#ffffff'], speed: [40, 160], life: [0.3, 0.7] });
     Sound.play('phantomAppear');
-    const name = { golem: 'THE CLAY GOLEM', phantom: 'THE PHANTOM KING', deathbringer: 'THE DEATHBRINGER', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[boss] || boss.toUpperCase();
+    const name = { golem: 'THE CLAY GOLEM', guardian: 'THE GUARDIAN', phantom: 'THE PHANTOM KING', deathbringer: 'THE DEATHBRINGER', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[boss] || boss.toUpperCase();
     this.banner('A PORTAL OPENS', `Step in to face ${name}`, 2.4);
   }
 
@@ -869,7 +900,7 @@ class Game {
     }
     PFX.glow(ctx, x, y, 40 * grow, '200, 140, 255', 0.8, 2, 24 * grow);
     ctx.restore();
-    const name = { golem: 'CLAY GOLEM', phantom: 'PHANTOM KING', deathbringer: 'DEATHBRINGER', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[P.boss] || P.boss.toUpperCase();
+    const name = { golem: 'CLAY GOLEM', guardian: 'THE GUARDIAN', phantom: 'PHANTOM KING', deathbringer: 'DEATHBRINGER', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[P.boss] || P.boss.toUpperCase();
     HUD.text(ctx, `TO ${name}`, Math.round(x), Math.round(y - 50), { size: 7, align: 'center', color: '#e0c0ff' });
     HUD.text(ctx, 'STEP IN', Math.round(x), Math.round(y - 40), { size: 5, align: 'center', color: '#ffe680' });
   }
@@ -973,6 +1004,8 @@ class Game {
     Input.override = null;
     this.decayRevives(dt);
     for (const c of this.clones) { this.setActor(c.owner); c.update(dt, this); }
+    this.syncPets();
+    for (const pt of this.pets) { this.setActor(pt.owner); pt.update(dt, this); }
     this.setActor(null);
     for (const b of this.barriers) b.update(dt, this);
     // while each enemy acts, weakenScale tones down the hits it lands and the shots it fires
@@ -1185,6 +1218,7 @@ class Game {
     if (this.boss) this.boss.drawGround(ctx);
     for (const e of this.enemies) e.drawGround(ctx);
     for (const cl of this.clones) cl.drawGround(ctx);
+    for (const pt of this.pets) pt.drawGround(ctx);
     for (const d of this.dummies) d.drawGround(ctx);
     for (const p of this.players) if (p.dead && this.multiplayer) p.drawDowned(ctx, this.time);
     // aim previews (targeting rings, placement ghosts) are only drawn for this screen's hero
@@ -1195,6 +1229,7 @@ class Game {
     const items = this.enemies.map((e) => ({ y: e.y, draw: (c) => Game.drawEnemy(c, e) }));
     for (const p of this.heroes) items.push({ y: p.y, draw: (c) => p.draw(c) });
     for (const cl of this.clones) items.push({ y: cl.y, draw: (c) => cl.draw(c) });
+    for (const pt of this.pets) items.push({ y: pt.y, draw: (c) => pt.draw(c) });
     for (const d of this.dummies) items.push({ y: d.y, draw: (c) => d.draw(c) });
     for (const b of this.barriers) items.push({ y: b.y, draw: (c) => b.draw(c) });
     if (this.boss) items.push(...this.boss.getDrawables());

@@ -28,7 +28,7 @@ const ManorDecor = {
       at('prop', s * 13.4, -1, { name: 'candelabra' });
       at('prop', s * 13.4, 6, { name: 'candelabra' });
       fd.add('manorClock', { x: r.cx + s * 13.6 * T, y: top + 1.4 * T });
-      // dust-sheeted furniture stands about the hall, solid: things to weave round as he hunts you (shots fly over)
+      // dust-sheeted furniture stands about the hall, solid: things to weave round as he hunts you, and cover from his eye lasers (he floats through it)
       at('sheeted', s * 10.4, -2.4, { name: 'sheetChair', facing: s, solid: [13, 6] });
       at('sheeted', s * 11.2, 2.4, { name: 'sheetSofa', facing: s, solid: [26, 6] });
       at('sheeted', s * 5.6, 3.6, { name: 'sheetSofa', facing: -s, solid: [26, 6] });

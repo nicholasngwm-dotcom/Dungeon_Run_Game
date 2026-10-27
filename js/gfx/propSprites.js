@@ -630,6 +630,37 @@ const PROP_DEFS = {
     });
   }],
 
+  // ---------- the pet room ----------
+  // a plump round cushion for a pet to sit on (red / blue)
+  petBedRed: [26, 11, (p) => petBed(p, ['#6a1a24', '#a83040', '#d8505e', '#f08a90'])],
+  petBedBlue: [26, 11, (p) => petBed(p, ['#1a2a5a', '#2a4a90', '#4a78c8', '#8ab0f0'])],
+  // a tin bowl heaped with food
+  bowl: [12, 6, (p) => {
+    p.ellipse(6, 3, 5, 2, '#a07a4a');                // kibble
+    p.px(4, 2, '#d8a870'); p.px(7, 2, '#d8a870');
+    p.poly([[0, 3], [12, 3], [10, 6], [2, 6]], IRON[2]);
+    p.rect(1, 3, 10, 1, IRON[4]);
+    p.rect(2, 5, 8, 1, IRON[1]);
+  }],
+  // the bird's perch: a turned post, a crossbar and a seed tray
+  perch: [16, 32, (p) => {
+    p.rect(3, 30, 10, 2, WOOD[1]);                   // foot
+    p.rect(7, 6, 2, 25, WOOD[2]);
+    p.rect(7, 6, 1, 25, WOOD[4]);
+    p.rect(1, 5, 14, 2, WOOD[3]);                    // crossbar
+    p.rect(1, 5, 14, 1, WOOD[4]);
+    p.rect(4, 18, 8, 2, WOOD[2]);                    // seed tray
+    p.px(5, 17, '#e0c060'); p.px(8, 17, '#e0c060'); p.px(10, 17, '#c8a040');
+  }],
+  // a muddy wallow on the floor (drawn flat, like the rugs) for the pig
+  rugMud: [44, 16, (p) => {
+    p.ellipse(22, 8, 21, 7, '#3a2818');
+    p.ellipse(21, 8, 18, 5, '#5a3e24');
+    p.ellipse(14, 7, 6, 2, '#6e4c2c');
+    p.ellipse(30, 9, 5, 2, '#6e4c2c');
+    p.rect(18, 6, 3, 1, '#a8865a'); p.rect(27, 8, 2, 1, '#a8865a');   // wet glints
+  }],
+
   rugRound: [64, 30, (p) => {
     p.ellipse(32, 15, 30, 13, '#5a1a3a');
     p.ellipse(32, 15, 27, 11, '#7a2a4a');
@@ -680,6 +711,15 @@ function cat(p, mode, step, C = CAT_COATS.ginger.coat, eye = '#2a1a10') {
   // legs mid-stride
   const a = step ? 1 : -1;
   for (const [x, s] of [[2, a], [4, -a], [8, a], [10, -a]]) p.rect(x + s, 9, 1, 4, C[1]);
+}
+
+/** A round pet cushion, seen from the front: piped rim, a soft dip in the middle. C = darkest first. */
+function petBed(p, C) {
+  p.ellipse(13, 6, 13, 5, C[1]);
+  p.ellipse(13, 5, 11, 4, C[2]);
+  p.ellipse(13, 5, 7, 2, C[1]);                     // the dip
+  p.ellipse(10, 3, 5, 1, C[3]);                     // lit top-left of the rim
+  p.rect(2, 9, 22, 2, C[0]);
 }
 
 /** A wooden bed seen from the foot, headboard against the wall. blanket = [dark, mid, light]. */

@@ -9,7 +9,7 @@
 // simulation; the idle animation (crows, embers, mist) is visual only.
 
 // Lights: the half-size of the small solid post at the base of each [hw, hh] (px)
-const DECOR_POSTS = { lampPost: [6, 4], brazier: [8, 5], campfire: [12, 6], soulTree: [6, 4], magicBrazier: [8, 5], runeStone: [8, 4], ruinTree: [5, 4] };
+const DECOR_POSTS = { lampPost: [6, 4], brazier: [8, 5], campfire: [12, 6], soulTree: [6, 4], magicBrazier: [8, 5], runeStone: [8, 4], ruinTree: [5, 4], powerCrystal: [14, 6], guardianRock: [13, 6] };
 const PROP_POSTS = { candelabra: [5, 4] };
 // the two soul lanterns hanging off a soulTree, from its foot (px; mirrored when it faces left)
 const SOUL_LANTERNS = [[-20, -40], [22, -44]];
@@ -42,7 +42,7 @@ class FloorDecor {
       if (post) {
         const [hw, hh] = post;
         if (f.boxHitsTiles(d.x, d.y - hh, hw + 4, hh + 4)) { d.dead = true; continue; }   // up against a wall or doorway: dropped
-        f.addPost(d.x, d.y - hh, hw, hh);
+        d.post = f.addPost(d.x, d.y - hh, hw, hh);   // (kept, so the golem's roll can knock it over: DungeonRun.clearRoom)
         continue;
       }
       const w = DECOR_FIXTURES[d.kind];

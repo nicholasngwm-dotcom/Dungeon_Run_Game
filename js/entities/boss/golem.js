@@ -557,6 +557,9 @@ class Golem {
     this.stompRaise = -1;
     if (this.phase === 1) this.enterPhase2(world); // the head can't stay on a rolling ball
     this.roll = { state: 'curl', t: 0, angle: 0, hitHeroes: new Set() };
+    // the shock of it curling up brings down everything in the room, so nothing can stop the ball
+    const room = world.run?.floor.roomAt(this.x, this.y);
+    if (room && world.run.clearRoom(room)) world.shake(14, 0.6);
     world.banner('IT CURLS INTO A BALL!', 'Dodge the roll');
     Sound.play('bossRoar');
   }

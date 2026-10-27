@@ -279,7 +279,7 @@ class Session {
   /** Host only: the room is open; start the lobby with just the host. */
   hostStart(code) {
     this.code = code;
-    this.roster = [{ id: this.id, name: this.name, classId: this.classId, enh: Profiles.cleanEnhancements(Profiles.current?.enhancements) }];
+    this.roster = [{ id: this.id, name: this.name, classId: this.classId, enh: Profiles.cleanEnhancements(Profiles.current?.enhancements), pet: Profiles.pet }];
     this.queueScene('lobby');
   }
 
@@ -287,7 +287,8 @@ class Session {
   currentRoster() {
     return this.roster.map((r) => {
       const hero = this.game && this.game.heroById(r.id);
-      return { ...r, classId: hero ? hero.classId : r.classId, enh: (this.game && this.game.enh[r.id]) || r.enh || {} };
+      const pet = this.game && r.id in this.game.petChoice ? this.game.petChoice[r.id] : r.pet;
+      return { ...r, classId: hero ? hero.classId : r.classId, enh: (this.game && this.game.enh[r.id]) || r.enh || {}, pet: Profiles.cleanPet(pet) };
     });
   }
 
@@ -378,7 +379,7 @@ class Session {
         if (this.scene !== 'lobby') return this.transport.send(peer, { t: 'reject', reason: 'That game is already in a dungeon. Try again when they are back in the lobby.' });
         const newId = `p${this.nextId++}`;
         this.peers.set(peer, newId);
-        this.roster.push({ id: newId, name: String(msg.name || 'Hero').slice(0, 14), classId: this.freeClass(msg.classId), enh: Profiles.cleanEnhancements(msg.enh) });
+        this.roster.push({ id: newId, name: String(msg.name || 'Hero').slice(0, 14), classId: this.freeClass(msg.classId), enh: Profiles.cleanEnhancements(msg.enh), pet: Profiles.cleanPet(msg.pet) });
         this.clientInputs[newId] = { h: 0, p: new Set(), x: new Set(), mx: 0, my: 0, ml: 0, mr: 0, lp: 0, rp: 0 };
         this.transport.send(peer, { t: 'welcome', id: newId, code: this.code });
         // everyone (re)starts the lobby together with the new roster
@@ -445,7 +446,7 @@ class Session {
 
   /** Client: connected to the host - introduce ourselves. */
   hello() {
-    this.transport.send('host', { t: 'hello', name: this.name, classId: this.classId, enh: Profiles.current?.enhancements || {}, build: BUILD });
+    this.transport.send('host', { t: 'hello', name: this.name, classId: this.classId, enh: Profiles.current?.enhancements || {}, pet: Profiles.pet, build: BUILD });
   }
 
   onClientMessage(msg) {

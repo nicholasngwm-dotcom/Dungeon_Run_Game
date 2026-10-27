@@ -51,6 +51,33 @@ const CONFIG = {
   ],
 
   // ---------------------------------------------------------
+  //  PETS (bought with gems in the keep's pet room, saved on the profile; one comes along at a time)
+  //  They follow their hero and fight whatever is near them. They never die: at 0 hp a pet runs back
+  //  to its hero and won't fight until it has healed to full (recoverTime s). Out of a fight it heals
+  //  regen of its max hp per second once it hasn't been hit for regenDelay s. Enemy bodies never hurt
+  //  pets. damage: each attack; every: seconds between attacks; their damage grows by stageDamage
+  //  per stage after the first. Total Loyalty / Stronger Buddies (the follower upgrades) apply to them.
+  // ---------------------------------------------------------
+  petRules: { recoverTime: 12, regen: 0.04, regenDelay: 4, leash: 300, stageDamage: 0.35, hurtGrace: 0.35 },
+  pets: {
+    // bleed: every `every` s a scratch makes the target bleed (dps for time s)
+    cat:  { name: 'Cat', cost: 250, hp: 150, speed: 240, damage: 9, every: 0.55, reach: 10, color: '#e08a44',
+            bleed: { every: 4, dps: 10, time: 3 },
+            desc: 'Scratches enemies, and every 4 seconds a scratch makes them bleed.' },
+    // bark: every `every` s, enemies within radius move `slow` slower for time s
+    dog:  { name: 'Dog', cost: 300, hp: 175, speed: 230, damage: 13, every: 0.8, reach: 10, color: '#c89a5a',
+            bark: { every: 3, radius: 130, slow: 0.4, time: 2.5 },
+            desc: 'Bites enemies, and barks every 3 seconds, slowing every enemy nearby.' },
+    // flies, and only projectiles can hit it (no melee swings, slams or bites)
+    bird: { name: 'Bird', cost: 250, hp: 75, speed: 280, damage: 4, every: 0.2, reach: 8, color: '#6ab8ff', flying: true,
+            desc: 'Rapidly pecks at enemies. It flies, so melee attacks can\'t touch it.' },
+    // mud: each bite leaves a patch (radius, lasting time s): enemies in it move `slow` slower and take dps
+    pig:  { name: 'Pig', cost: 350, hp: 250, speed: 200, damage: 20, every: 1.4, reach: 12, color: '#ff9ab0',
+            mud: { radius: 40, time: 5, slow: 0.35, dps: 8 },
+            desc: 'Toughest of the lot. Bites slowly, leaving mud that slows enemies and hurts them while they stand in it.' },
+  },
+
+  // ---------------------------------------------------------
   //  HERO CLASSES
   //  ult.charge = damage the hero must deal to fill the Q ultimate
   // ---------------------------------------------------------
@@ -262,6 +289,12 @@ const CONFIG = {
   //  stunResist = fraction of stun duration ignored
   //  contactDamage (optional) overrides the shared enemyContactDamage
   enemyContactDamage: 10,   // touching an enemy's body hurts (hero i-frames limit the rate)
+  // every enemy's body (contactDamage) hurts this much more, to make up for knockback pushing them about harder
+  contactScale: 1.2,
+  // knockback on enemies: every push is `scale` x stronger and eases off at `decay` per second (lower slides
+  // further). An enemy knocked into a wall or obstacle at slamSpeed px/s or more is slammed: it takes
+  // slamDamage (more the faster it hit, up to slamMax) from whoever knocked it, and is dazed for slamStun s
+  knockback: { scale: 1.6, decay: 7, slamSpeed: 230, slamDamage: 18, slamMax: 60, slamStun: 0.35 },
   // a knob for how big enemies draw (around their feet). Their sprites are drawn in the
   // heroes' chibi proportions, so 1; hit boxes, reaches and telegraphs never scale
   enemyDrawScale: 1,
@@ -729,7 +762,8 @@ const CONFIG = {
       night: { dark: 0.2, color: '6, 22, 20' },
       fog: false,
       layout: { small: 'ruinRocks', pillar: 'ruinPillar', long: 'ruinStatue', wallH: 'ruinWallH', wallV: 'ruinWallV', block: 'ruinBlock' },
-      boss: 'golem',
+      // each stage's boss: the Clay Golem or the Guardian (not the same one twice in a row)
+      bosses: ['golem', 'guardian'],
       enemies: {
         1: [['rockmite', 4], ['rockDisc', 2], ['clayGuard', 3], ['claySlime', 2], ['clayBud', 3], ['rockShell', 1],
             ['rockBowler', 2], ['rockWizard', 2], ['ruinedTurret', 1], ['stonePillar', 1]],
@@ -968,6 +1002,44 @@ const CONFIG = {
   //  Phase 3 (below phase3At hp): both move sets, faster.
   //  Per-phase values are [phase 1, phase 2, phase 3].
   // ---------------------------------------------------------
+  // ---------------------------------------------------------
+  //  THE GUARDIAN (the Ancient Ruins' other boss, any stage): a floating figure of rock bound by
+  //  magic crystals. It drifts round the room, over every obstacle, and takes turns between its
+  //  chest beam and a chain of ground slams. Below phase2At it slams more, with bigger spikes, its beam
+  //  smashes through obstacles instead of being stopped by them, and its broken crystals reform.
+  // ---------------------------------------------------------
+  guardian: {
+    hp: 6400,
+    phase2At: 0.5,
+    contactDamage: 18,
+    contactRadius: 26,     // touching its shadow hurts within this distance
+    floatSpeed: 110,       // how fast it drifts after its spot near the hero
+    orbitRadius: 240,      // how far from the hero it hangs
+    hover: 34,             // how high it floats over the ground
+    // seconds spent floating between attacks [phase 1, phase 2]; the attacks take turns: beam, slams, beam...
+    attackInterval: [2.4, 1.8],
+
+    // The beam: first a ring of magic bursts out of it - its area glows on the floor for `windup` s first -
+    // and sweeps out to `radius` at `speed` px/s: no damage, but every hero it passes is slowed for `slow` s.
+    // Then the chest charges for `charge` s (aiming, locking on lockAt s before it fires), then blasts the
+    // beam for `time` s, turning after the hero at most turn rad/s [phase 1, phase 2], `width` px wide
+    // [phase 1, phase 2]. Heroes in it take `damage` every `tick` s. In phase 1 any obstacle stops it;
+    // in phase 2 it smashes through them (only the walls stop it).
+    shockwave: { windup: 0.9, radius: 340, speed: 280, band: 26, slow: 2.5 },
+    beam: { charge: 3, lockAt: 0.5, time: 3.2, turn: [0.45, 0.45], width: [40, 34], damage: 22, tick: 0.3, length: 1100 },
+
+    // Ground slams: `count` in a row [phase 1, phase 2], `every` s apart, each raising its arms for `windup` s.
+    // Odd slams (1st, 3rd...) aim at where the hero is; every 2nd at where they're going (`lead` px ahead of
+    // them). The ground glows for spikeDelay s, then massive rock spikes blast up over spikeRadius and stand
+    // for spikeTime s (they hurt once, as they erupt). In phase 2 the spikes (and their area) are phase2Size x bigger
+    slams: { count: [4, 6], every: 0.95, windup: 0.45, lead: 120, spikeDelay: 0.8, spikeRadius: 76, spikeTime: 1.1, damage: 34, phase2Size: 1.35 },
+
+    // The power crystals round its room feed it: each one still standing heals it `heal` hp a second
+    // (both phases). Heroes can break them (`hp` each). In phase 2 a broken one reforms out of the magic
+    // over `reform` s (healing it again once whole)
+    crystals: { hp: 500, heal: 14, reform: 9 },
+  },
+
   phantom: {
     hp: 7000,              // phase 3 (below phase3At) gets 1800 of this
     phase2At: 0.6,

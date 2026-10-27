@@ -230,13 +230,13 @@ class CastleKeep extends Dungeon {
 
   /**
    * Baked rugs: the red runner from the gate through the quarters into the hall of
-   * heroes, the long purple one in the armory, the library's blue carpet.
+   * heroes, the long purple one in the pet room (the old armory), the library's blue carpet.
    */
   drawRugs(p) {
     const T = this.T;
     // runner down the great hall, through the quarters and into the hall of heroes
     Castle.rug(p, 21 * T + 4, 5 * T, 2 * T - 8, 36 * T, ['#3e0f16', '#7c1f2a', '#dcb44c', '#a63036'], { runner: true });
-    Castle.rug(p, 2.6 * T, 7.2 * T, 8.8 * T, 2.6 * T, ['#1e1430', '#4a2a6a', '#d4ac4c', '#6a3a8a']);
+    Castle.rug(p, 2.6 * T, 8.9 * T, 8.8 * T, 2.6 * T, ['#1e1430', '#4a2a6a', '#d4ac4c', '#6a3a8a']);   // under the pet keeper's board, clear of the pets' spots
     Castle.rug(p, 3.2 * T, 20.2 * T, 6.2 * T, 5.4 * T, ['#141a30', '#22305a', '#a07a24', '#2a3a6a']);
     // a rug in each hero's colours under their nook in the hall of heroes (north row: against the
     // wall; south row: reaching down towards the south wall)

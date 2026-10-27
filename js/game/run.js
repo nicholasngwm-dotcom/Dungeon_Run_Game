@@ -191,7 +191,7 @@ class DungeonRun {
 
   /** The dungeon theme whose boss room a boss fights in (the castle's royals, or the graveyard). */
   static bossTheme(type) {
-    if (type === 'golem') return 'ruins';
+    if (type === 'golem' || type === 'guardian') return 'ruins';
     return ['queen', 'king', 'prince', 'princess'].includes(type) ? 'castle' : 'graveyard';
   }
 
@@ -245,6 +245,7 @@ class DungeonRun {
       if (r.type === 'boss' && this.bossType === 'phantom') this.manorStairs(r);
       if (r.type === 'boss' && this.bossType === 'deathbringer') this.cryptTombs(r);
       if (r.type === 'boss' && this.bossType === 'golem') this.guardianCover(r);
+      if (r.type === 'boss' && this.bossType === 'guardian') this.crystalCover(r);
       if (r.type === 'boss' && this.bossType === 'king') this.throneHallPillars(r);
       if (r.type === 'combat') this.addSpikes(r);
       this.addProps(r);
@@ -1090,8 +1091,7 @@ class DungeonRun {
    * Boss-room fixtures (the throne, the bell, the desk) hold. Returns how many fell.
    */
   destroyObstacles(x, y, r) {
-    const f = this.floor;
-    const T = f.T;
+    const T = this.floor.T;
     let n = 0;
     for (const o of this.cover) {
       if (o.fixed || o.dead) continue;
@@ -1099,22 +1099,59 @@ class DungeonRun {
       const nx = clamp(x, o.x, o.x + o.w * T);
       const ny = clamp(y, o.y, o.y + o.h * T);
       if (dist(x, y, nx, ny) > r) continue;
-      o.dead = true;
+      this.knockDown(o);
       n++;
-      for (let j = 0; j < o.h; j++) for (let i = 0; i < o.w; i++) {
-        if (f.grid[o.ty + j][o.tx + i] === TILE.COVER) f.grid[o.ty + j][o.tx + i] = TILE.FLOOR;
-        this.rubble.push({ x: (o.tx + i + 0.5) * T, y: (o.ty + j + 0.75) * T, material: o.material || this.coverMaterial(o.kind), seed: o.tx * 7 + o.ty * 13 + i * 3 + j });
-      }
-      if (o.item) o.item.dead = true;   // solid decor goes with it
-      const cx = o.x + (o.w * T) / 2;
-      const cy = o.y + (o.h * T) / 2;
-      const colors = { wood: ['#5b3922', '#9c6c3e', '#3b2416'], metal: ['#585d6c', '#adb2c0', '#383b48'], plant: ['#264228', '#6a9a52', '#5b3922'] }[o.material] || ['#56546a', '#8e8ca2', '#3e3c4c'];
-      this.world.effects.burst(cx, cy - 10, { count: 14 + o.w * o.h * 4, colors, speed: [80, 260], life: [0.4, 0.9], up: 120, gravity: 420, size: [2, 4] });
-      this.world.effects.smoke(cx, cy - 6, { count: 3 + o.w * o.h, radius: 14, life: 0.9, rise: 18, colors: ['#3a3430', '#5a524a', '#8a8070'] });
     }
     removeDead(this.cover);
     if (n) Sound.play('partBreak');
     return n;
+  }
+
+  /**
+   * Knocks down everything solid in room r: all its cover and solid decor, even the pieces no
+   * blast can move, and the posts of its braziers and furniture (the decor goes with them).
+   * The golem does this as it curls up to roll, so nothing in its room can stop the ball.
+   * Only the hidden fixtures (a throne's solid back, stairs) stay. Returns how many fell.
+   */
+  clearRoom(r) {
+    const f = this.floor;
+    const inRoom = (tx, ty) => tx >= r.x0 && tx <= r.x1 && ty >= r.y0 && ty <= r.y1;
+    let n = 0;
+    for (const o of this.cover) {
+      if (o.dead || o.hidden || !inRoom(o.tx, o.ty)) continue;
+      this.knockDown(o);
+      n++;
+    }
+    removeDead(this.cover);
+    for (const d of this.decor.items) {
+      if (!d.post || d.dead || !inRoom(Math.floor(d.x / f.T), Math.floor((d.y - 2) / f.T))) continue;
+      f.removePost(d.post);
+      d.dead = true;
+      n++;
+      this.world.effects.burst(d.x, d.y - 14, { count: 16, colors: ['#56546a', '#8e8ca2', '#3e3c4c', '#ffb02e'], speed: [80, 240], life: [0.4, 0.8], up: 110, gravity: 420, size: [2, 4] });
+      this.world.effects.smoke(d.x, d.y - 8, { count: 4, radius: 12, life: 0.8, rise: 18, colors: ['#3a3430', '#5a524a', '#8a8070'] });
+      this.rubble.push({ x: d.x, y: d.y - 2, material: 'stone', seed: Math.round(d.x * 3 + d.y) });
+    }
+    for (const b of this.barrels) if (b.room === r && !b.dead) { Barrels.burst(this.world, b, 0.1 + n * 0.02); n++; }
+    if (n) Sound.play('partBreak');
+    return n;
+  }
+
+  /** One obstacle falls: its tiles are floor again, rubble is left on them, debris and dust fly. */
+  knockDown(o) {
+    const f = this.floor;
+    const T = f.T;
+    o.dead = true;
+    for (let j = 0; j < o.h; j++) for (let i = 0; i < o.w; i++) {
+      if (f.grid[o.ty + j][o.tx + i] === TILE.COVER) f.grid[o.ty + j][o.tx + i] = TILE.FLOOR;
+      this.rubble.push({ x: (o.tx + i + 0.5) * T, y: (o.ty + j + 0.75) * T, material: o.material || this.coverMaterial(o.kind), seed: o.tx * 7 + o.ty * 13 + i * 3 + j });
+    }
+    if (o.item) o.item.dead = true;   // solid decor goes with it
+    const cx = o.x + (o.w * T) / 2;
+    const cy = o.y + (o.h * T) / 2;
+    const colors = { wood: ['#5b3922', '#9c6c3e', '#3b2416'], metal: ['#585d6c', '#adb2c0', '#383b48'], plant: ['#264228', '#6a9a52', '#5b3922'] }[o.material] || ['#56546a', '#8e8ca2', '#3e3c4c'];
+    this.world.effects.burst(cx, cy - 10, { count: 14 + o.w * o.h * 4, colors, speed: [80, 260], life: [0.4, 0.9], up: 120, gravity: 420, size: [2, 4] });
+    this.world.effects.smoke(cx, cy - 6, { count: 3 + o.w * o.h, radius: 14, life: 0.9, rise: 18, colors: ['#3a3430', '#5a524a', '#8a8070'] });
   }
 
   /** Rubble left by knocked-down obstacles, flat on the floor under everyone. */
@@ -1211,6 +1248,17 @@ class DungeonRun {
     this.bossCover(r, [
       ['ruinPillar', -6, -2, 1, 1], ['ruinPillar', 5, -2, 1, 1], ['ruinPillar', -6, 3, 1, 1], ['ruinPillar', 5, 3, 1, 1],
       ['ruinRocks', -3, 4, 1, 1], ['ruinRocks', 2, 4, 1, 1], ['ruinRocks', -10, 0, 1, 1], ['ruinRocks', 9, 0, 1, 1],
+    ]);
+  }
+
+  /**
+   * The Guardian's crystal cavern: rocks split open by crystals in a wide ring (out past the giant
+   * rocks it rises from), cover from its beam until its phase 2 beam smashes through them.
+   */
+  crystalCover(r) {
+    this.bossCover(r, [
+      ['ruinCrystal', -7, -2, 1, 1], ['ruinCrystal', 6, -2, 1, 1], ['ruinCrystal', -7, 3, 1, 1], ['ruinCrystal', 6, 3, 1, 1],
+      ['ruinCrystal', -3, 5, 1, 1], ['ruinCrystal', 2, 5, 1, 1], ['ruinRocks', -11, 0, 1, 1], ['ruinRocks', 10, 0, 1, 1],
     ]);
   }
 

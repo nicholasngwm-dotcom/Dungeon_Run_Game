@@ -207,7 +207,7 @@ const HUD = {
     }
     // the rooms' names
     const T = CONFIG.tileSize;
-    const names = { hall: 'GREAT HALL', armory: 'ARMORY', heroes: 'HALL OF HEROES', library: 'LIBRARY', workshop: 'WORKSHOP', quarters: 'QUARTERS', yard: 'TRAINING GROUNDS', garden: 'GARDEN' };
+    const names = { hall: 'GREAT HALL', armory: 'PET ROOM', heroes: 'HALL OF HEROES', library: 'LIBRARY', workshop: 'WORKSHOP', quarters: 'QUARTERS', yard: 'TRAINING GROUNDS', garden: 'GARDEN' };
     for (const [id, room] of Object.entries(d.rooms || {})) {
       if (!names[id]) continue;
       const [x, y] = at(((room.x0 + room.x1 + 1) / 2) * T, (room.y0 + 0.4) * T);

@@ -245,6 +245,7 @@ class PhantomKing {
       vy: Math.sin(angle) * L.speed,
       radius: L.radius, damage: L.damage, life: L.life, friendly: false,
       sprite: Sprites.phantom.laser, glow: '255, 70, 220', trail: ['#ff4ad8', '#ffb0f0'],
+      hitsPosts: true,   // the hall's sheeted furniture is cover from them (he floats through it himself)
     }));
   }
 

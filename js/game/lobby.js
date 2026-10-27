@@ -1,6 +1,7 @@
 // The lobby: the party's castle keep (see CastleKeep), walked around between runs.
 // Every room has its job: the great hall holds the dungeon gate and the feast
-// tables; the armory racks the keep's spare weapons; the big hall of heroes (south,
+// tables; the pet room (the old armory) has the pets on show and the keeper's board, where
+// pets are bought with gems and one is picked to come along; the big hall of heroes (south,
 // through the quarters) has every hero busy in a nook of their own (see HeroNooks:
 // walk up to one to pick them); the library,
 // kept by Elowen the librarian, has the map legend board, the bestiary lectern
@@ -17,7 +18,7 @@ const PROP_FOOTPRINT = {
   hearth: [62, 12], armchair: [20, 12], stool: [10, 6], chair: [14, 10], target: [26, 8],
   dummy: [12, 8], dummyBroken: [12, 8], dummyBurnt: [12, 8], pell: [14, 6], tree: [18, 10],
   well: [44, 22], readingTable: [56, 12], desk: [54, 14], globe: [16, 8], scrollRack: [34, 10],
-  bookStack: [16, 6], lampPost: [8, 6], trough: [32, 10],
+  bookStack: [16, 6], lampPost: [8, 6], trough: [32, 10], perch: [10, 4],
   anvil: [28, 10], grindstone: [22, 6], pedestal: [36, 10], goldPile: [28, 8], targetClean: [26, 8],
   anvil: [28, 10], grindstone: [22, 6], pedestal: [36, 10], goldPile: [28, 8], targetClean: [26, 8],
 };
@@ -49,6 +50,10 @@ class LobbyHub {
       if (n) this.stations.push({ kind: 'hero', id, x: n.at[0] * T, y: n.at[1] * T, r: 40, prompt: `PICK ${CONFIG.classes[id].name.toUpperCase()}` });
     }
     this.stations.push({ kind: 'workshop', x: 36.6 * T, y: 9.6 * T, r: 56, prompt: 'WORKSHOP' });
+    // the pet room: the keeper's signboard in the middle (buy and choose pets), and a spot on show for each pet
+    this.stations.push({ kind: 'pets', x: 6.75 * T, y: 10.4 * T, r: 60, prompt: 'PETS' });
+    this.petSpots = { cat: [3.4, 7.55], dog: [5.6, 7.55], bird: [7.75, 6.95], pig: [9.9, 7.95] };
+    for (const k of Object.keys(this.petSpots)) this.petSpots[k] = { x: this.petSpots[k][0] * T, y: this.petSpots[k][1] * T };
     // out in the yard, by the path from the keep's side door
     this.stations.push({ kind: 'practice', x: 40.6 * T, y: 18.8 * T, r: 50, prompt: 'PRACTICE RANGE' });
     // the library: bestiary lectern on the carpet, the legend board and potion guide along the east side
@@ -64,10 +69,12 @@ class LobbyHub {
 
     // set dressing per room (tile coordinates of each prop's bottom centre; true = flipped)
     this.decor = [
-      // the armory: weapon racks round the walls, banners, the anvil and grindstone, chests of spares
-      ['weaponRack', 3.0, 12.7], ['weaponRack', 10.6, 12.7], ['plant', 11.4, 6.1],
-      ['weaponRack', 4.6, 6.4], ['weaponRack', 6.75, 6.4], ['weaponRack', 8.9, 6.4], ['bannerRed', 2.7, 6.6], ['bannerBlue', 10.4, 6.6],
-      ['anvil', 5.0, 9.8], ['grindstone', 8.5, 9.6], ['chest', 4.3, 11.5], ['chest', 9.2, 11.5],
+      // the pet room (the old armory): the four pets on show along the north wall - the cat and dog on
+      // cushions with their bowls, the bird on its perch, the pig in its wallow - with sacks of feed,
+      // hay and plants about
+      ['rugMud', 9.9, 7.9], ['petBedRed', 3.4, 7.7], ['petBedBlue', 5.6, 7.7], ['perch', 7.75, 7.6],
+      ['bowl', 4.4, 8.3], ['bowl', 6.6, 8.3], ['trough', 9.9, 6.4], ['plant', 11.4, 6.1], ['plant', 2.4, 6.1],
+      ['bannerGreen', 6.75, 6.6], ['sacks', 3.0, 12.6], ['hayBale', 10.3, 12.6], ['barrel', 2.7, 10.4],
       // the hall of heroes' lounge, between the nooks: armchairs on a round rug, candles
       ['rugRound', 21.5, 43.4], ['armchair', 19.7, 42.9], ['armchair', 23.3, 42.9, true],
       ['candelabra', 18.2, 45.0], ['candelabra', 24.8, 45.0], ['plant', 4.6, 45.7], ['plant', 38.8, 45.7],
@@ -115,7 +122,7 @@ class LobbyHub {
     // the archery lane's targets are live (TrainingTarget, made by the game): hit them like the dummy
     this.targets = [[50.4, 18.6], [50.4, 21.8], [50.4, 25.0]].map(([tx, ty]) => ({ x: tx * T, y: ty * T }));
     for (const t of this.targets) d.addObstacle?.(t.x - 13, t.y - 8, 26, 8);
-    const base = { hero: [16, 8],bestiary: [24, 6], legend: [44, 5], potions: [48, 10], practice: [26, 6], clock: [24, 10], hourglass: [34, 10] };
+    const base = { hero: [16, 8], pets: [36, 6], bestiary: [24, 6], legend: [44, 5], potions: [48, 10], practice: [26, 6], clock: [24, 10], hourglass: [34, 10] };
     for (const s of this.stations) {
       const fp = base[s.kind];
       if (fp) d.addObstacle?.(s.x - fp[0] / 2, s.y - fp[1] + 4, fp[0], fp[1]);
@@ -146,7 +153,7 @@ class LobbyHub {
     ];
     // wooden signs naming the rooms: [text, x, y (board centre), sort y]
     this.signs = [
-      ['ARMORY', 6.75, 3.75, 5], ['HALL OF HEROES', 18.6, 31.75, 33],['LIBRARY', 9.55, 14.3, 16], ['WORKSHOP', 36.6, 3.75, 5], ['QUARTERS', 16.9, 21.6, 23],
+      ['PETS', 6.75, 3.75, 5], ['HALL OF HEROES', 18.6, 31.75, 33],['LIBRARY', 9.55, 14.3, 16], ['WORKSHOP', 36.6, 3.75, 5], ['QUARTERS', 16.9, 21.6, 23],
     ].map(([text, tx, ty, sy]) => ({ text, x: tx * T, y: ty * T, sortY: sy * T }));
     this.signposts = [{ text: 'TRAINING GROUNDS', x: 34.6 * T, y: 19.0 * T }];
 
@@ -486,6 +493,11 @@ class LobbyHub {
       else if (s.kind === 'hero') items.push(...HeroNooks.drawables(s.id, s.x, s.y, this.time, this.world.players.some((p) => p.classId === s.id)));
       else items.push({ y: s.y, draw: (ctx) => this.drawStation(ctx, s) });
     }
+    // the pets on show, each at its spot, unless it's out following someone around the keep
+    for (const [kind, at] of Object.entries(this.petSpots)) {
+      if (this.world.pets.some((pt) => pt.kind === kind)) continue;
+      items.push({ y: at.y + 2, draw: (ctx) => this.drawShowPet(ctx, kind, at) });
+    }
     for (const d of this.decor) {
       if (d.name.startsWith('rug')) continue;   // flat on the floor (drawGround)
       items.push({
@@ -581,8 +593,88 @@ class LobbyHub {
     }
   }
 
+  /**
+   * A pet on show in the pet room, sitting at its spot: it breathes, now and then looks about or
+   * hops (the cat and dog), and the bird flutters up off its perch and settles again.
+   */
+  drawShowPet(ctx, kind, at) {
+    const f = Sprites.pets[kind];
+    const seed = { cat: 0, dog: 2.3, bird: 4.1, pig: 6.7 }[kind];
+    const t = this.time + seed;
+    const cycle = t % 7;
+    let pose = f.sit;
+    let lift = 0;
+    let facing = Math.floor(t / 7) % 2 ? -1 : 1;   // turns to look the other way now and then
+    if (kind === 'bird' && cycle > 5.6) { pose = f.walk[Math.floor(t * 14) % 2]; lift = Math.sin(((cycle - 5.6) / 1.4) * Math.PI) * 10; }
+    else if (kind === 'pig' && cycle < 2) pose = f.rest;                       // a roll in the mud
+    else if (cycle > 6.4) { pose = f.walk[0]; lift = Math.sin(((cycle - 6.4) / 0.6) * Math.PI) * 4; }   // a happy hop
+    if (kind === 'pig' && cycle < 2) facing = 1;
+    drawShadow(ctx, at.x, at.y + 1, 8, 3, 0.25);
+    const breathe = Math.sin(t * 3) > 0.6 ? 1 : 0;
+    ctx.save();
+    ctx.translate(Math.round(at.x), Math.round(at.y - lift));
+    ctx.scale(facing, 1);
+    ctx.drawImage(pose.img, -pose.ax, -pose.ay - breathe);
+    ctx.restore();
+    // a heart now and then for the pets you own
+    if (Profiles.ownsPet(kind) && cycle > 3 && cycle < 3.8) {
+      const k = (cycle - 3) / 0.8;
+      ctx.save();
+      ctx.globalAlpha = 1 - k;
+      HUD.text(ctx, '♥', Math.round(at.x), Math.round(at.y - 26 - k * 10), { size: 7, align: 'center', color: '#ff7aa0' });
+      ctx.restore();
+    }
+  }
+
+  /**
+   * The pet keeper's signboard: a hanging board on two posts with a paw print and "PETS",
+   * a little bell on the corner, a pouch of treats hung from a peg.
+   */
+  drawPetBoard(ctx, s) {
+    const x = Math.round(s.x);
+    const y = Math.round(s.y);
+    for (const dx of [-20, 18]) {
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x + dx - 1, y - 34, 4, 35);
+      ctx.fillStyle = '#5b3922';
+      ctx.fillRect(x + dx, y - 34, 2, 34);
+      ctx.fillStyle = '#8c5e36';
+      ctx.fillRect(x + dx, y - 34, 1, 34);
+    }
+    // the board
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 25, y - 50, 50, 22);
+    ctx.fillStyle = '#a07a24';
+    ctx.fillRect(x - 24, y - 49, 48, 20);
+    ctx.fillStyle = '#3b2416';
+    ctx.fillRect(x - 22, y - 47, 44, 16);
+    ctx.fillStyle = '#4e301c';
+    ctx.fillRect(x - 22, y - 47, 44, 2);
+    // a paw print, then the word
+    ctx.fillStyle = '#ffb0c8';
+    ctx.fillRect(x - 18, y - 39, 5, 4);
+    for (const [px, py] of [[-19, -43], [-16, -44], [-13, -43]]) ctx.fillRect(x + px, y + py, 2, 2);
+    HUD.text(ctx, 'PETS', x + 4, y - 44, { size: 8, align: 'center', color: '#ffe9a8' });
+    // the bell, swinging
+    const sw = Math.round(Math.sin(this.time * 2.5) * 1.5);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x + 21 + sw, y - 30, 6, 6);
+    ctx.fillStyle = '#e0b84a';
+    ctx.fillRect(x + 22 + sw, y - 29, 4, 4);
+    ctx.fillStyle = '#fff2a0';
+    ctx.fillRect(x + 22 + sw, y - 29, 1, 2);
+    // a pouch of treats on the left post
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 27, y - 26, 8, 9);
+    ctx.fillStyle = '#c8a070';
+    ctx.fillRect(x - 26, y - 25, 6, 7);
+    ctx.fillStyle = '#e8c890';
+    ctx.fillRect(x - 26, y - 25, 2, 3);
+  }
+
   drawStation(ctx, s) {
-    if (s.kind === 'practice') this.drawPractice(ctx, s);
+    if (s.kind === 'pets') this.drawPetBoard(ctx, s);
+    else if (s.kind === 'practice') this.drawPractice(ctx, s);
     else if (s.kind === 'legend') this.drawLegendBoard(ctx, s);
     else if (s.kind === 'bestiary') this.drawLectern(ctx, s);
     else if (s.kind === 'potions') this.drawAlchemyTable(ctx, s);
@@ -743,7 +835,7 @@ class LobbyHub {
     }
     const s = this.near;
     if (!s) return;
-    const h = { hero: 78, workshop: 80, practice: 70, gate: -6, legend: 74, bestiary: 54, potions: 58, clock: 86, hourglass: 72 }[s.kind];
+    const h = { hero: 78, pets: 62, workshop: 80, practice: 70, gate: -6, legend: 74, bestiary: 54, potions: 58, clock: 86, hourglass: 72 }[s.kind];
     HUD.text(ctx, `[${Settings.label('interact')}] ${s.prompt}`, s.x, s.y - h + bob, { size: 8, align: 'center', color: '#ffe680' });
   }
 

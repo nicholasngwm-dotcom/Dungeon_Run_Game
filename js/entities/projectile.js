@@ -16,6 +16,7 @@ class Projectile {
       friendly: true,      // true = hurts enemies, false = hurts the player
       pierce: 0,           // extra targets it can pass through
       bounces: 0,          // wall bounces before it breaks
+      hitsPosts: false,    // stopped by posts too (furniture, braziers), which shots normally fly over
       knockback: 80,
       sprite: null,
       spin: 0,             // radians/s; 0 = face direction of travel
@@ -60,6 +61,12 @@ class Projectile {
       } else {
         return this.destroy(world, null);
       }
+    }
+    if (this.hitsPosts) {
+      // a shot fired from over a piece of furniture flies on until it's clear of it; after that, any post stops it
+      const inPost = world.dungeon.postAt?.(this.x, this.y, this.radius);
+      if (!inPost) this.clearOfPosts = true;
+      else if (this.clearOfPosts) return this.destroy(world, null);
     }
 
     if (this.trail && Math.random() < 0.6) {

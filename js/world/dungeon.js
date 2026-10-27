@@ -223,6 +223,18 @@ class Dungeon {
     if (this.posts) this.posts = this.posts.filter((o) => o !== post);
   }
 
+  /**
+   * True if a shot of radius r at (x, y) runs into a post (furniture, braziers): its footprint
+   * and up to `tall` px above it (the piece's body, which stands up off the floor).
+   */
+  postAt(x, y, r = 0, tall = 22) {
+    if (!this.posts) return false;
+    for (const o of this.posts) {
+      if (Math.abs(x - o.x) < o.hw + r && y > o.y - o.hh - tall - r && y < o.y + o.hh + r) return true;
+    }
+    return false;
+  }
+
   /** True if a hw/hh box at (x, y) overlaps any post. */
   boxHitsPost(x, y, hw, hh) {
     if (!this.posts) return false;

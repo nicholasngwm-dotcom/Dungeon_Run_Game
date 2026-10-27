@@ -967,6 +967,16 @@ h2 {
 .dialog-text { font-size: 12px; line-height: 1.8; min-height: 50px; cursor: pointer; }
 .dialog-options { display: flex; gap: 10px; }
 
+/* ===== Pets (the keep's pet room) ===== */
+#screen-pets { gap: 12px; }
+.shop-items.pets { grid-template-columns: repeat(4, 190px); }
+.shop-items.pets .shop-card { min-height: 200px; }
+.shop-card.pet canvas { width: 72px; height: 60px; }
+.shop-card.pet .pet-hp { font-size: 11px; color: #ff8a8a; flex: none; }
+.shop-card.pet.with-you { border-color: #7ae0a0; box-shadow: inset 2px 2px 0 var(--panel-light), 0 0 0 2px #7ae0a0; }
+.pets-gems { font-size: 18px; color: #8ac8ff; }
+.pets-gems .gem-img { width: 22px; height: 20px; }
+
 /* ===== Shop ===== */
 #screen-shop { gap: 12px; }
 .shop-head { display: flex; align-items: center; gap: 24px; }

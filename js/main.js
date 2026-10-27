@@ -38,8 +38,8 @@ const App = {
       ['Forging the heroes...', buildHeroSprites],
       ['Raising the dead...', () => { buildEnemySprites(); buildBossSprites(); buildPhantomSprites(); buildDeathbringerSprites(); buildManorSprites(); buildVaultSprites(); }],
       ['Sharpening the blades...', () => { buildItemSprites(); buildGraveyardSprites(); }],   // graveyard after the items: it adds to Sprites.projectiles
-      ['Crowning the court...', () => { buildCastleSprites(); buildQueenSprites(); buildKingSprites(); buildRoyalSetPieces(); buildCastleDecor(); buildRuinsSprites(); }],
-      ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); buildObstacleSprites(); buildBarrelSprites(); }],   // obstacles after the cover (they add to Sprites.cover)
+      ['Crowning the court...', () => { buildCastleSprites(); buildQueenSprites(); buildKingSprites(); buildRoyalSetPieces(); buildCastleDecor(); buildRuinsSprites(); buildGuardianSprites(); }],
+      ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); buildPetSprites(); buildObstacleSprites(); buildBarrelSprites(); }],   // obstacles after the cover (they add to Sprites.cover)
       ['Brewing potions...', () => { buildPotionSprites(); buildIconSprites(); buildRocketeerSprites(); buildBakerSprites(); buildUpgradeSprites(); }],   // the rocketeer's and baker's gear add to the weapons, items and icons
       ['Rehearsing the battles...', () => MenuShowcase.start(0)],
     ];
@@ -215,6 +215,7 @@ const App = {
     switch (station.kind) {
       case 'hero': this.openPanel(); Menus.showHero(station.id, this.game.localPlayer.classId); break;
       case 'workshop': this.openPanel('workshop'); break;
+      case 'pets': this.openPanel('pets'); Menus.showPets(); break;
       case 'practice':
         if (this.mp) Menus.toast('THE PRACTICE RANGE IS SINGLE PLAYER ONLY', '#ffe680');
         else this.startPractice();
@@ -313,6 +314,26 @@ const App = {
     Menus.toast(`${CONFIG.classes[classId].name.toUpperCase()}: ${t.name.toUpperCase()}`, '#8ac8ff');
     this.command({ type: 'enhance', classId, count: Profiles.enhancementCount(classId) });
     Menus.showEnhanced(classId);   // the stats it raised, before and after
+  },
+
+  /** Pet room: buys pet `kind` with this profile's gems; it comes along straight away (every machine is told). */
+  buyPet(kind) {
+    if (!Profiles.buyPet(kind)) {
+      Menus.toast(Profiles.current ? 'NOT ENOUGH GEMS' : 'PICK A PROFILE FIRST', '#e04545');
+      return;
+    }
+    Sound.play('pickup');
+    Menus.toast(`NEW FRIEND: ${CONFIG.pets[kind].name.toUpperCase()}!`, CONFIG.pets[kind].color);
+    this.command({ type: 'pet', kind });
+    Menus.showPets();
+  },
+
+  /** Pet room: brings owned pet `kind` along (null leaves every pet at home). */
+  choosePet(kind) {
+    if (!Profiles.choosePet(kind)) return;
+    Sound.play('pickup');
+    this.command({ type: 'pet', kind });
+    Menus.showPets();
   },
 
   // ---------- multiplayer ----------

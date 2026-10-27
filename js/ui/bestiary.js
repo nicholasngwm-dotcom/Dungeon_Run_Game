@@ -67,6 +67,7 @@ const BESTIARY = {
     { type: 'lightTotem', name: 'Light Totem', role: 'special', from: 3, note: 'WITH THE ANCIENT LIGHT', desc: 'The ancient light\'s source of power. Break it and the light goes out.' },
     { type: 'ancientRotator', name: 'Ancient Rotator', role: 'ranged', desc: 'Two stone rings circle it and block one hit in five. It sends out its three floating guns one at a time: a laser from afar, or a rush in close for a shotgun blast.' },
     { boss: 'golem', name: 'The Clay Golem', role: 'boss', from: 1, stage: 'EVERY STAGE', desc: 'Guardian of the ruins, rising out of the floor. Its head throws bouncing orbs of magic and its fists rocket-punch down red lanes. Break the head and it floats free, firing beams and bursts of orbs while the body opens up. Break both fists and it lumbers after you, stomping out rings that slow. Near the end it curls into a ball and rolls. Clay minions keep coming throughout.' },
+    { boss: 'guardian', name: 'The Guardian', role: 'boss', from: 1, stage: 'EVERY STAGE', desc: 'A towering figure of rock held together by the magic of the great crystals round its cavern: the giant rocks lying in its room rise and come together to form it. It floats over everything in its way. Before each beam it raises its arms and the floor round it glows: a moment later a ring of magic sweeps out across that area, slowing anyone it passes. Then its chest crystal charges for 3 seconds and it fires a giant beam that turns slowly after you: hide behind cover. The crystals slowly heal it while they stand: break them! It also slams the ground four times: massive rock spikes erupt where you stand, then ahead of you, in turn. Below half health it slams six times with bigger spikes, its beam smashes straight through cover, and broken crystals slowly reform out of the magic.' },
   ],
 };
 
@@ -339,7 +340,7 @@ const Bestiary = {
     let stats;
     if (e.boss) {
       const c = CONFIG[e.boss];
-      const dmg = { phantom: c.dashDamage, deathbringer: c.slash?.damage, queen: c.homing?.damage, king: c.sword?.damage, princeBoss: c.dash?.damage, princessBoss: c.sky?.damage }[e.boss];
+      const dmg = { phantom: c.dashDamage, guardian: c.beam?.damage, deathbringer: c.slash?.damage, queen: c.homing?.damage, king: c.sword?.damage, princeBoss: c.dash?.damage, princessBoss: c.sky?.damage }[e.boss];
       stats = `HP ${c.hp} &nbsp; DMG ${dmg}`;
     } else {
       const c = CONFIG.enemies[e.type];
@@ -630,7 +631,7 @@ const Bestiary = {
         continue;
       }
       // each boss's idle loop (the King on his throne)
-      const list = { golem: Sprites.golem.body.walk, phantom: Sprites.phantom.walk || Sprites.phantom.idle, deathbringer: Sprites.deathbringer.body, queen: Sprites.queen.idle, king: Sprites.king.sit, princeBoss: Sprites.enemies.prince.idle, princessBoss: Sprites.enemies.princess.idle }[entry.boss];
+      const list = { golem: Sprites.golem.body.walk, guardian: Sprites.guardian.idle, phantom: Sprites.phantom.walk || Sprites.phantom.idle, deathbringer: Sprites.deathbringer.body, queen: Sprites.queen.idle, king: Sprites.king.sit, princeBoss: Sprites.enemies.prince.idle, princessBoss: Sprites.enemies.princess.idle }[entry.boss];
       const frame = list[Math.floor(time * (entry.boss === 'phantom' ? 8 : 4)) % list.length].img;
       const s = Math.min(3, Math.floor(Math.min(canvas.width / frame.width, canvas.height / frame.height) * 4) / 4);
       const w = frame.width * s;

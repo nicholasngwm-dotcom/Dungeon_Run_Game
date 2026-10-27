@@ -7,15 +7,14 @@
 // Rerolling swaps the 3 for new ones; it gets pricier each time, back to the base price at the
 // next stage's shop. Offers come from a seed (run + stage + hero + rerolls), so every machine
 // and the shop window agree on them without sending them around. Each upgrade can be owned once.
-// Hero upgrades (`hero`) only ever show up for that hero; some shared ones need something the
-// hero has (`needs`: mana, rockets, followers, a melee basic attack).
+// Hero upgrades (`hero`) only ever show up for that hero; the shared ones show up for every hero,
+// even the few that only do something for some (mana, rockets, energy, followers or pets, a melee swing).
+// (`needs` can still keep an upgrade back, e.g. Resurrect is only offered in multiplayer.)
 //
 // Potion store: 6 different potions, 1-4 of each (see potions.js), shared by
 // the whole party. Potion prices rise with the stage (CONFIG.run.shop.stagePrice).
 
-const MELEE_HEROES = ['warrior'];   // heroes whose basic attack is a melee swing
 const BEATDOWN = { max: 20, decay: 1 };   // Beatdown: most stacks, and seconds without a hit for one to fall off
-const PET_HEROES = ['rogue'];       // heroes with followers that fight for them (the Rogue's clones)
 
 const SHOP_UPGRADES = [
   // ---------- shared ----------
@@ -55,30 +54,30 @@ const SHOP_UPGRADES = [
     apply(p) { p.attackSpeed *= 1.1; p.speed *= 1.1; },
   },
   {
-    id: 'beatdown', name: 'Beatdown', color: '#ff5a3a', needs: (p) => MELEE_HEROES.includes(p.classId),
+    id: 'beatdown', name: 'Beatdown', color: '#ff5a3a',
     desc: 'Each melee basic attack that lands adds a stack (up to 20): +2% melee damage per stack. Lose 1 stack every second without a hit.',
     hud: (p) => { const s = Upgrades.state(p); return { count: s.stacks, active: s.stacks >= BEATDOWN.max }; },
   },
   {
-    id: 'manaCrystal', name: 'Mana Crystal', color: '#4ad8ff', needs: (p) => p.resource?.name === 'MANA',
+    id: 'manaCrystal', name: 'Mana Crystal', color: '#4ad8ff',
     desc: 'Mana regenerates at 7 per second.',
-    apply(p) { p.resource.regen = Math.max(7, p.resource.regen + 2); },
+    apply(p) { if (p.resource?.name === 'MANA') p.resource.regen = Math.max(7, p.resource.regen + 2); },
   },
   {
-    id: 'celestialPeach', name: 'Celestial Peach', color: '#ffaac8', needs: (p) => p.resource?.name === 'MANA',
+    id: 'celestialPeach', name: 'Celestial Peach', color: '#ffaac8',
     desc: '+50 max mana.',
-    apply(p) { p.resource.max += 50; p.resource.value += 50; },
+    apply(p) { if (p.resource?.name === 'MANA') { p.resource.max += 50; p.resource.value += 50; } },
   },
   {
-    id: 'totalLoyalty', name: 'Total Loyalty', color: '#ffb84a', needs: (p) => PET_HEROES.includes(p.classId),
+    id: 'totalLoyalty', name: 'Total Loyalty', color: '#ffb84a',
     desc: 'Your followers and pets attack 50% faster and fight up close more eagerly.',
   },
   {
-    id: 'strongerBuddies', name: 'Stronger Buddies', color: '#9ae06a', needs: (p) => PET_HEROES.includes(p.classId),
+    id: 'strongerBuddies', name: 'Stronger Buddies', color: '#9ae06a',
     desc: 'Your followers and pets have 60% more HP and are bigger.',
   },
   {
-    id: 'longerReach', name: 'Longer Reach', color: '#c8d8e8', needs: (p) => MELEE_HEROES.includes(p.classId),
+    id: 'longerReach', name: 'Longer Reach', color: '#c8d8e8',
     desc: 'Melee attacks reach 25% further.',
   },
   {
@@ -109,9 +108,9 @@ const SHOP_UPGRADES = [
     hud: (p) => ({ cd: Upgrades.cd(p, 'lastDefence'), max: 180, active: !!p.lastShield }),
   },
   {
-    id: 'biggerMagazine', name: 'Bigger Magazine', color: '#ff9a3a', needs: (p) => p.resource?.name === 'AMMO',
+    id: 'biggerMagazine', name: 'Bigger Magazine', color: '#ff9a3a',
     desc: '30% more ammo.',
-    apply(p) { const r = p.resource; const more = Math.ceil(r.max * 1.3) - r.max; r.max += more; r.value += more; },
+    apply(p) { const r = p.resource; if (r?.name !== 'AMMO') return; const more = Math.ceil(r.max * 1.3) - r.max; r.max += more; r.value += more; },
   },
   {
     id: 'chestsOfAlchemy', name: 'Chests of Alchemy', color: '#ff6a7a',
@@ -150,7 +149,7 @@ const SHOP_UPGRADES = [
     desc: 'Your projectiles bounce off walls up to 2 times.',
   },
   {
-    id: 'energyDrink', name: 'Energy Drink', color: '#f0e040', needs: (p) => p.resource?.name === 'ENERGY', rate: 1.5,
+    id: 'energyDrink', name: 'Energy Drink', color: '#f0e040', rate: 1.5,
     desc: 'Energy comes back 50% faster.',
   },
   {

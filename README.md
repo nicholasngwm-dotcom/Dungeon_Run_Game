@@ -32,6 +32,12 @@ a station and press E:
 
 - **Hero statues** (left): pick your hero. Subclass slots are shown but not in yet.
 - **Workshop** (right): under construction.
+- **Pet room** (the old armory, top left): buy a cat, dog, bird or pig with gems (saved on your
+  profile) and pick one to come along. Pets follow you and fight near you: the cat's scratches
+  make enemies bleed every 4s, the dog barks every 3s to slow enemies, the bird pecks fast and
+  can't be hit by melee, the pig bites slowly and leaves slowing, hurting mud. Pets never die:
+  at 0 HP they run back to you and rest until healed (12s), and enemy bodies can't hurt them.
+  Total Loyalty and Stronger Buddies work on pets.
 - **Practice range** (bottom right): opens the practice range with your hero.
 - **Map legend** board (bottom left): what each minimap colour means and what each room is for.
 - **Bestiary** lectern (bottom left): a book of every enemy in a theme, two per spread. Flip pages with the arrows (or A / D) and filter by stage and role.
@@ -60,7 +66,14 @@ eight tendrils: scythe slashes throw waves of darkness across the room, tendrils
 around the room to slam the ground (cut them down and they go back to it), and it blinks
 to a new spot every 7 seconds. At half health the room goes dark and its forked double
 scythes spin on their own (shadow bombs, and a whirl when you're close); at 10% it vanishes,
-sends four reapers and hunts you as a shade. Beating the boss
+sends four reapers and hunts you as a shade. In the Ancient Ruins each stage's boss is the
+Clay Golem or the Guardian, in a crystal cavern: the giant rocks lying in the room rise on
+the power crystals' magic and come together to form it, a floating figure of rock that slows you with
+a ring of magic (its reach glows on the floor first) before charging a giant chest beam (cover
+stops it until half health, when it smashes through), and slams the ground
+four times (six at half health, with bigger spikes) for massive rock spikes, at you and then
+ahead of you in turn. The power crystals slowly heal it while they stand, so break them; at
+half health broken ones start reforming out of the magic. Beating the boss
 opens a portal to the next stage, and after stage 3 the run is won. Later stages
 make enemies tougher (more hp and damage, a little faster) rather than sending
 many more of them, and add stage-exclusive enemies (necromancer, reaper
@@ -79,8 +92,8 @@ owned once. Entering each stage you also choose one free upgrade from three, and
 well's wish is sometimes an upgrade instead of potions.
 
 **Upgrades**: 30 shared ones (Vital Heart, Tesla Armour, Silver Shield, Bouncy!, Mimic Sense...;
-the few that need something only some heroes have, like mana, rockets, followers or a melee
-basic attack, only show up for those heroes) and 16 hero upgrades, framed in gold with the
+every hero can be offered any of them, even the few that only help heroes with mana, rockets,
+energy, followers or pets, or a melee basic attack) and 16 hero upgrades, framed in gold with the
 hero's name, that only ever show up for that hero. Hold Tab (the scoreboard) to see every
 player's upgrades: hover one to read it; cooldowns, stacks and "active right now" glows show on
 the icons, and they flash when they go off. Potion prices rise with the stage. In defend rooms,
@@ -95,7 +108,7 @@ but do nothing yet: items, food, free upgrades and gems are not in.
 
 Walk onto the practice range pad in the lobby and press E. A training dummy shows your DPS
 (top of the screen), and the panel on the right lets you switch hero, spawn
-any graveyard or castle enemy, open a portal to any boss's room (Clay Golem, Phantom King,
+any graveyard or castle enemy, open a portal to any boss's room (Clay Golem, Guardian, Phantom King,
 Deathbringer, Prince, Princess, Queen, King), clear the arena, fill your ultimate, and toggle
 god mode, infinite mana (also light orbs) and infinite energy. Dying respawns you.
 "Back to lobby" on the panel (or in the pause menu) returns to the lobby.
@@ -177,6 +190,7 @@ js/
                         Mimic (tough lunging chest, drops a super regen/speed/power buff for 3 room clears),
                         graveyard.js (the Graveyard theme's new enemies)
     boss/golem.js       Clay Golem (parts, phases, attacks)
+    boss/guardian.js    The Guardian (the ruins' floating rock boss: slowing ring + chest beam, spike slams, healing crystals)
     boss/phantom.js     Phantom King (dash, eye lasers, vanish + pull shockwaves)
     boss/deathbringer.js The Deathbringer (scythes, tendrils, darkness, the shade)
   game/                 Game world, wave director, lobby hub, dungeon run (rooms + objectives), HUD

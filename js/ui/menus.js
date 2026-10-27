@@ -260,6 +260,9 @@ const Menus = {
       case 'chooseHero': app.pickHero(this.heroPreview.id); break;
       case 'heroTab': this.setHeroTab(arg); break;
       case 'enhance': app.buyEnhancement(this.heroPreview.id); break;
+      case 'petBuy': app.buyPet(arg); break;
+      case 'petChoose': app.choosePet(arg); break;
+      case 'petNone': app.choosePet(null); break;
       case 'mode':
         if (arg === 'set') this.showDungeonView('themes');
         else if (arg === 'random') app.startDungeonRun({ mode: 'random' });
@@ -729,6 +732,41 @@ const Menus = {
   },
 
   gemImg() { return `<img class="gem-img" src="${this.spriteUrl(Sprites.vault.gemIcon)}" alt="gems">`; },
+
+  /**
+   * The pet room's window: a card per pet (CONFIG.pets) with its portrait, health and what it
+   * does. Not owned: its gem price on a buy button. Owned: bring it along, or (the one that's
+   * along) leave it at home. Only one pet comes along at a time.
+   */
+  showPets() {
+    document.getElementById('pets-gems').innerHTML = `${this.gemImg()} ${Profiles.gems}`;
+    const along = Profiles.pet;
+    document.getElementById('pets-list').innerHTML = Object.entries(CONFIG.pets).map(([kind, c]) => {
+      const owned = Profiles.ownsPet(kind);
+      const btn = along === kind ? '<button class="buy" data-action="petNone">LEAVE AT HOME</button>'
+        : owned ? `<button class="buy" data-action="petChoose:${kind}">BRING ALONG</button>`
+          : `<button class="buy" data-action="petBuy:${kind}" ${Profiles.current && Profiles.gems >= c.cost ? '' : 'disabled'}>${this.gemImg()} ${c.cost}</button>`;
+      return `<div class="shop-card pet${along === kind ? ' with-you' : ''}">
+        <canvas data-pet="${kind}"></canvas>
+        <b style="color:${c.color}">${c.name.toUpperCase()}${along === kind ? ' (WITH YOU)' : ''}</b>
+        <div class="pet-hp">${c.hp} HP</div>
+        <span>${c.desc}</span>
+        ${btn}
+      </div>`;
+    }).join('');
+    // each portrait: the pet sitting, drawn 3x
+    for (const cv of document.querySelectorAll('#pets-list canvas[data-pet]')) {
+      const pose = Sprites.pets[cv.dataset.pet].sit;
+      cv.width = 24;
+      cv.height = 20;
+      const ctx = cv.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(pose.img, Math.round(12 - pose.ax), 20 - pose.ay - 1);
+    }
+    document.getElementById('pets-hint').textContent = Profiles.current
+      ? 'Pets never die: at 0 health they run back to you and rest until they\'re healed. Enemy bodies can\'t hurt them. Follower upgrades (Total Loyalty, Stronger Buddies) work on pets.'
+      : 'Pick a profile to keep pets.';
+  },
 
   /**
    * Hero `id`'s gem enhancements (CONFIG.enhancements, the same six for every hero, each hero

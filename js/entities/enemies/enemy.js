@@ -46,6 +46,7 @@ class Enemy extends Entity {
     if (this.asleep && !(this.stunTime > dt)) { this.asleep = false; this.wokeUp(world, 0); }
     this.iced = (this.iced || 0) - dt;       // coated in the Baker's icing (Bigger Cakes): slowed
     this.zapped = (this.zapped || 0) - dt;   // Tesla Armour's jolt (see Game.zap): stunned, crackling
+    this.petSlow = (this.petSlow || 0) - dt; // a dog's bark or a pig's mud (see Pet): slowed
     this.groggy = (this.groggy || 0) - dt;   // still drowsy after a lullaby (Groggy): slowed
     this.waking = (this.waking || 0) - dt;
     this.hasted = (this.hasted || 0) - dt;   // a minstrel's war song (see Minstrel)
@@ -126,7 +127,14 @@ class Enemy extends Entity {
   get speedBoost() {
     return (this.rallied > 0 ? this.rallySpeed || 1 : 1) * (this.sticky > 0 ? 1 - CONFIG.classes.baker.passive.slow : 1)
       * (this.iced > 0 ? 0.6 : 1) * (this.groggy > 0 && !(this.stunTime > 0) ? 0.6 : 1)
-      * (this.frostfired ? 1 - (this.frostfireSlow || 0) : 1);   // burning with the Mage's frostfire
+      * (this.frostfired ? 1 - (this.frostfireSlow || 0) : 1)   // burning with the Mage's frostfire
+      * (this.petSlow > 0 ? 1 - (this.petSlowBy || 0) : 1);     // a dog's bark, a pig's mud (see Pet)
+  }
+
+  /** Slowed by a pet (a dog's bark, a pig's mud) by `slow` for `time`s; the stronger slow wins while both run. */
+  petSlowed(slow, time) {
+    if (!(this.petSlow > 0) || slow >= (this.petSlowBy || 0)) this.petSlowBy = slow;
+    this.petSlow = Math.max(this.petSlow || 0, time);
   }
 
   moveAngle(world, a, speed, dt) {
@@ -139,7 +147,43 @@ class Enemy extends Entity {
   faceToward(x) { this.facing = x >= this.x ? 1 : -1; }
 
   knockback(angle, force) {
-    super.knockback(angle, force * (1 - this.knockbackResist));
+    super.knockback(angle, force * CONFIG.knockback.scale * (1 - this.knockbackResist));
+  }
+
+  /**
+   * Knockback carries an enemy further than other things (CONFIG.knockback.decay), and one
+   * knocked into a wall or obstacle fast enough is slammed: a hit from whoever knocked it
+   * (more the faster it was going), a short daze, dust and a thud.
+   */
+  updateKnockback(dt, world) {
+    const k = CONFIG.knockback;
+    const speed = Math.hypot(this.kbx, this.kby);
+    if (speed < 1) return;
+    const x0 = this.x;
+    const y0 = this.y;
+    const step = speed * dt;
+    world.dungeon.move(this, this.kbx * dt, this.kby * dt);
+    const decay = Math.min(1, k.decay * dt);
+    this.kbx -= this.kbx * decay;
+    this.kby -= this.kby * decay;
+    if (speed < k.slamSpeed || dist(x0, y0, this.x, this.y) > step * 0.4) return;
+    // it hit something solid
+    const a = Math.atan2(this.kby, this.kbx);
+    this.kbx = 0;
+    this.kby = 0;
+    const by = this.lastHitBy;
+    if (by && world.players.includes(by)) {
+      const dmg = Math.min(k.slamMax, Math.round(k.slamDamage * (speed / k.slamSpeed)));
+      world.damageTarget(this, dmg, { source: by, noCrit: true, sound: null, color: '#d8b890', fromUlt: true });
+      if (!this.dead) world.effects.text(this.hx, this.hy - 36, 'SLAM!', { color: '#d8b890', size: 7 });
+    }
+    if (!this.dead) this.stun(k.slamStun);
+    const wx = this.x + Math.cos(a) * this.radius;
+    const wy = this.y + Math.sin(a) * this.radius * 0.6;
+    world.effects.burst(wx, wy - 6, { count: 12, colors: ['#8a6a4a', '#d8b890', '#f4e8d0'], speed: [40, 140], life: [0.2, 0.45], up: 30 });
+    world.effects.smoke(wx, wy, { count: 4, radius: 10, life: 0.5, rise: 16 });
+    world.shake(3, 0.12);
+    Sound.play('heavySwing', 0.08);
   }
 
   /**

@@ -588,6 +588,35 @@ const SFX = {
     s.layer({ src: 'brown', dur: 1.6, attack: 0.05, vol: 0.7, delay: 0.06, filter: 'lowpass', ffreq: 260, fto: 70, wet: 0.5 });
     s.layer({ src: 'brown', dur: 1.2, attack: 0.15, vol: 0.4, delay: 0.4, filter: 'lowpass', ffreq: 180, wet: 0.5 });
   },
+  // the Guardian's chest crystal charging its beam (3s): a deep hum swelling and rising, a
+  // shimmering whine climbing over it, and crackles of magic quickening toward the end
+  guardianCharge: (s) => {
+    s.layer({ src: 'sawtooth', freq: 55, to: 140, dur: 3, attack: 2.4, vol: 0.12, filter: 'lowpass', ffreq: 300, fto: 1400, vib: 4, vibRate: 7 });
+    s.layer({ src: 'sine', freq: 330, to: 1320, dur: 3, attack: 2.6, vol: 0.06, vib: 20, vibRate: 11, wet: 0.4 });
+    s.layer({ src: 'noise', dur: 3, attack: 2.8, vol: 0.12, filter: 'bandpass', ffreq: 600, fto: 5000, q: 3, wet: 0.3 });
+    s.crackle({ dur: 1.4, rate: 70, vol: 0.12, freq: 2600, delay: 1.6, grow: 2 });
+  },
+  // the Guardian's beam going off: a thunderous crack, a bright zap tearing downward, a heavy
+  // driven boom, then the beam's roaring, wavering hum while it burns (about 3s)
+  guardianBeam: (s) => {
+    s.layer({ src: 'noise', dur: 0.12, attack: 0.002, vol: 0.6, drive: 6, filter: 'highpass', ffreq: 1500 });
+    s.layer({ src: 'sawtooth', freq: 2600, to: 160, dur: 0.45, attack: 0.004, vol: 0.14, drive: 4, wet: 0.4 });
+    s.layer({ src: 'square', freq: 1300, to: 220, dur: 0.35, attack: 0.004, vol: 0.06, delay: 0.02, wet: 0.4 });
+    s.layer({ src: 'brown', dur: 1.4, attack: 0.02, vol: 0.85, filter: 'lowpass', ffreq: 400, fto: 60, drive: 2, wet: 0.5 });
+    s.layer({ src: 'sine', freq: 90, to: 38, dur: 0.9, attack: 0.01, vol: 0.4 });
+    // the burn: a buzzing hum with a hiss riding on it, fading as the beam closes
+    s.layer({ src: 'sawtooth', freq: 110, dur: 3.1, attack: 0.15, vol: 0.09, delay: 0.1, filter: 'lowpass', ffreq: 900, q: 4, vib: 6, vibRate: 13 });
+    s.layer({ src: 'sawtooth', freq: 221, dur: 3.1, attack: 0.15, vol: 0.05, delay: 0.1, filter: 'lowpass', ffreq: 1600, vib: 9, vibRate: 9 });
+    s.layer({ src: 'noise', dur: 3.1, attack: 0.2, vol: 0.12, delay: 0.1, filter: 'bandpass', ffreq: 3200, q: 1.5, wet: 0.3 });
+    s.crackle({ dur: 2.8, rate: 40, vol: 0.12, freq: 3500, delay: 0.2 });
+  },
+  // rocks bursting up out of the ground: a deep crunch, stone cracking apart and chunks clattering down
+  rockErupt: (s) => {
+    s.layer({ src: 'brown', dur: 0.5, attack: 0.005, vol: 0.9, filter: 'lowpass', ffreq: 500, fto: 80, drive: 3, wet: 0.3 });
+    s.layer({ src: 'noise', dur: 0.12, attack: 0.002, vol: 0.4, drive: 4, filter: 'bandpass', ffreq: 1800, q: 1 });
+    s.crackle({ dur: 0.35, rate: 70, vol: 0.25, freq: 1400, filter: 'bandpass' });
+    for (let i = 0; i < 4; i++) s.layer({ src: 'noise', dur: 0.05, attack: 0.002, vol: 0.18, filter: 'bandpass', ffreq: s.vary(900 + i * 300, 0.3), q: 4, delay: 0.25 + i * 0.07 + nativeRandom() * 0.04 });
+  },
   // turning into a bird: a puff of magic, wings beating and a bright chirp
   birdForm: (s) => {
     s.layer({ src: 'noise', dur: 0.3, attack: 0.03, vol: 0.2, filter: 'bandpass', ffreq: 1200, fto: 4000, q: 1, wet: 0.3 });
