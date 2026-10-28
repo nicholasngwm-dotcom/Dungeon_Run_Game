@@ -1,4 +1,4 @@
-// The heroes' pets (Sprites.pets[kind]): a cat, a dog, a bird, a flying fish and a pig, each facing right in a
+// The heroes' pets (Sprites.pets[kind]): a cat, a dog, a bird, a flying fish, an enchanted butterfly and a pig, each facing right in a
 // few poses: sit, walk (two steps), attack and rest (curled up, healing). Painted with the
 // PixelArt toolkit like the keep's cats (propSprites.js): soft ramps, a dark outline, lit from
 // the top-left. Each pose is { img, ax, ay } anchored at the bottom centre (the feet).
@@ -9,6 +9,7 @@ const DOG_COAT = ['#5a3a1a', '#8a5a2a', '#c89a5a', '#ecc890'];
 const PIG_SKIN = ['#a0465a', '#d86a82', '#ff9ab0', '#ffd0dc'];
 const BIRD_FEATHERS = ['#1a3a7a', '#2a6ad0', '#6ab8ff', '#c8e8ff'];
 const FISH_SCALES = ['#1a4a6a', '#2a8ab0', '#4ad0e8', '#c8f4ff'];
+const BUTTERFLY_WINGS = ['#3a1a5a', '#a04ad0', '#e08aff', '#ffd0ff'];
 
 /** A dog facing right: sitting, walking (step 0/1), biting/barking (mouth open, ears up) or lying down. */
 function petDog(p, mode, step) {
@@ -164,7 +165,49 @@ function petFish(p, mode, step) {
   p.line(wing[0][0], wing[0][1], wing[2][0], wing[2][1], fin[1]);   // the fin's bright leading edge
 }
 
-/** Builds Sprites.pets: { cat, dog, bird, fish, pig } -> { sit, walk: [a, b], attack, rest }. */
+/**
+ * An enchanted butterfly, seen from the front: wings folded up together (sitting), beating open /
+ * half shut (flying), spread wide and glowing (casting) or folded flat on the floor (resting).
+ */
+function petButterfly(p, mode, step) {
+  const W = BUTTERFLY_WINGS;
+  const body = '#3a1a4a';
+  const spot = '#8af0ff';
+  if (mode === 'rest') {
+    p.poly([[2, 11], [7, 5], [12, 11]], W[1]);     // wings folded flat over it
+    p.poly([[4, 11], [7, 7], [10, 11]], W[2]);
+    p.px(7, 9, spot);
+    p.rect(6, 10, 3, 1, body);
+    return;
+  }
+  if (mode === 'sit') {
+    p.poly([[7, 9], [3, 0], [11, 0]], W[1]);       // wings pressed together, upright
+    p.poly([[7, 8], [5, 1], [9, 1]], W[2]);
+    p.px(6, 2, W[3]); p.px(7, 4, spot);
+    p.rect(6, 8, 2, 4, body);
+    p.px(5, 7, body); p.px(9, 7, body);           // antennae peeking out
+    return;
+  }
+  const wide = mode === 'attack' || !step;
+  // one side of wings, mirrored: a big upper wing and a smaller lower one
+  for (const m of [-1, 1]) {
+    const x = (dx) => 7 + m * dx;
+    const up = wide ? [[x(0), 5], [x(7), 0], [x(7), 6]] : [[x(0), 5], [x(4), 0], [x(5), 6]];
+    const low = wide ? [[x(0), 7], [x(6), 8], [x(3), 11]] : [[x(0), 7], [x(4), 8], [x(2), 11]];
+    p.poly(up, W[1]);
+    p.poly(low, W[1]);
+    p.poly([[x(1), 5], [up[1][0] - m, up[1][1] + 1], [up[2][0] - m, up[2][1] - 1]], W[2]);
+    p.px(x(wide ? 5 : 3), 3, spot);                // glowing eye-spots
+    p.px(x(wide ? 3 : 2), 9, W[3]);
+  }
+  p.px(wide ? 1 : 3, 1, W[3]);                     // light on the top-left wingtip
+  p.rect(6, 4, 2, 7, body);                        // body
+  p.px(5, 3, body); p.px(4, 2, body);              // antennae
+  p.px(8, 3, body); p.px(9, 2, body);
+  if (mode === 'attack') { p.px(7, 4, '#ffffff'); p.px(0, 4, '#ffffff'); p.px(14, 4, '#ffffff'); }
+}
+
+/** Builds Sprites.pets: { cat, dog, bird, fish, butterfly, pig } -> { sit, walk: [a, b], attack, rest }. */
 function buildPetSprites() {
   const poseOf = (w, h, draw) => ({ img: PixelArt.make(w + 2, h + 2, (p) => { p.ctx.translate(1, 1); draw(p); }, OUTLINE, 'soft'), ax: Math.round(w / 2) + 1, ay: h });
   const set = (w, h, fn) => ({
@@ -185,5 +228,6 @@ function buildPetSprites() {
     pig: set(22, 15, petPig),
     bird: set(14, 12, petBird),
     fish: set(16, 12, petFish),
+    butterfly: set(15, 12, petButterfly),
   };
 }

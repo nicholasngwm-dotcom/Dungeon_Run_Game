@@ -493,14 +493,29 @@ class Game {
     });
   }
 
+  /**
+   * Pets whose passive brings better drops (the enchanted butterfly), with their heroes. Always on
+   * while the pet is along: fighting, following or resting.
+   */
+  luckyPets() { return this.pets.filter((pt) => pt.cfg.luck && !pt.dead && this.players.includes(pt.owner)); }
+
   maybeDropHeart(x, y, chance = CONFIG.drops.heartChance) {
-    if (Math.random() < chance) this.pickups.push(new HeartPickup(x, y));
+    const bonus = this.luckyPets().reduce((s, pt) => s + pt.cfg.luck.heart, 0);
+    if (Math.random() < chance + bonus) this.pickups.push(new HeartPickup(x, y));
   }
 
-  /** Mana orbs only drop while someone in the party uses mana. */
+  /**
+   * Mana orbs only drop while someone in the party uses mana (more often with a Mage's butterfly).
+   * A Priestess's butterfly shakes loose light orbs too.
+   */
   maybeDropMana(x, y) {
+    const lucky = this.luckyPets();
+    for (const pt of lucky) {
+      if (pt.owner.classId === 'priestess' && Math.random() < pt.cfg.luck.light) this.pickups.push(new LightPickup(x + rand(-8, 8), y + rand(-8, 8)));
+    }
     if (!this.players.some((p) => p.resource && p.resource.name === 'MANA')) return;
-    if (Math.random() >= CONFIG.drops.manaChance) return;
+    const bonus = lucky.reduce((s, pt) => s + (pt.owner.classId === 'mage' ? pt.cfg.luck.mana : 0), 0);
+    if (Math.random() >= CONFIG.drops.manaChance + bonus) return;
     this.pickups.push(new ManaPickup(x + rand(-8, 8), y + rand(-8, 8)));
   }
 

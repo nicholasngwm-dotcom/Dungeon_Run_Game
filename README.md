@@ -34,7 +34,7 @@ a station and press E:
 - **Workshop** (right): under construction.
 - **Pet room** (the old armory, top left): buy a cat, dog, bird or pig with gems (saved on your
   profile) and pick one to come along. Pets follow you and fight near you: the cat's scratches
-  make enemies bleed every 3s, the dog barks every 5s to knock enemies back, the flying fish spits exploding water balls from long range, the bird pecks fast and
+  make enemies bleed every 3s, the dog barks every 5s to knock enemies back, the flying fish spits exploding water balls from long range, the enchanted butterfly casts slow magic waves and (always, even out of a fight) makes enemies drop more hearts, plus mana for a Mage or light orbs for a Priestess, the bird pecks fast and
   can't be hit by melee, the pig bites slowly and leaves slowing, hurting mud. Pets never die:
   at 0 HP they run back to you and rest until healed (12s), and enemy bodies can't hurt them.
   Total Loyalty and Stronger Buddies work on pets.

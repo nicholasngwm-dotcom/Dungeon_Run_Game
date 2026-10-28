@@ -1000,7 +1000,7 @@ h2 {
 
 /* ===== Pets (the keep's pet room) ===== */
 #screen-pets { gap: 12px; }
-.shop-items.pets { grid-template-columns: repeat(5, 172px); }
+.shop-items.pets { grid-template-columns: repeat(6, 146px); }
 .shop-items.pets .shop-card { min-height: 200px; }
 .shop-card.pet canvas { width: 72px; height: 60px; }
 .shop-card.pet .pet-hp { font-size: 11px; color: #ff8a8a; flex: none; }

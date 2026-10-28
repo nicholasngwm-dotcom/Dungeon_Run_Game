@@ -1,8 +1,9 @@
-// Pets: a hero's animal companion (CONFIG.pets: cat, dog, bird, fish, pig), bought with gems in the
-// keep's pet room and brought along on every run. A pet trots after its hero and fights whatever
+// Pets: a hero's animal companion (CONFIG.pets: cat, dog, bird, fish, butterfly, pig), bought with gems
+// in the keep's pet room and brought along on every run. A pet trots after its hero and fights whatever
 // comes near them: the cat's scratches make enemies bleed, the dog's bark knocks them back, the bird
-// pecks fast and can't be reached by melee, the flying fish spits bursting water balls from afar,
-// and the pig's bites leave slowing, hurting mud.
+// pecks fast and can't be reached by melee, the flying fish spits bursting water balls from afar, the
+// enchanted butterfly casts slow magic waves, and the pig's bites leave slowing, hurting mud.
+// A pet's passive (the butterfly's better drops, see Game.luckyPets) is on whenever it's along.
 //
 // Pets never die. Enemies may go for them (they're allies, see Game.allies), but enemy bodies
 // never hurt them; at 0 hp a pet runs back to its hero and sits out the fight until it has
@@ -34,6 +35,7 @@ class Pet extends Entity {
     this.specialT = this.cfg.bleed ? 1 : this.cfg.bark ? 1.5 : 0;   // first bleed / bark comes soon
     this.mud = [];                    // the pig's mud patches: { x, y, t, tick }
     this.shots = [];                  // the fish's water balls in flight: { x0, y0 (mouth), g0 (ground under it), x, y (where it lands), t, time }
+    this.waves = [];                  // the butterfly's magic waves: { x, y, a, d (distance gone), hit: Set }
     this.sinceHit = 99;
     this.invulnerable = 0;
     this.moving = false;
@@ -69,6 +71,7 @@ class Pet extends Entity {
     this.updateKnockback(dt, world);
     this.updateMud(dt, world);
     this.updateShots(dt, world);
+    this.updateWaves(dt, world);
     // too far behind (or shut out of the room the hero's fighting in): it catches up in a puff
     if (dist(this.x, this.y, o.x, o.y) > R.leash * 1.8 || this.shutOut(world)) this.catchUp(world);
 
@@ -165,6 +168,7 @@ class Pet extends Entity {
     this.attackT = c.every / (this.loyal ? 1.5 : 1);
     this.lunge = Math.min(0.18, this.attackT * 0.6);
     if (c.shot) return this.shoot(t, world);
+    if (c.wave) return this.castWave(t, world);
     const angle = angleTo(this.x, this.y, t.x, t.y);
     world.damageTarget(t, c.damage * this.stageScale(world), { source: this.owner, angle, knockback: c.flying ? 10 : 40, sound: null, fromUlt: true, color: c.color });
     world.effects.burst(t.hx, t.hy, { count: 3, colors: ['#ffffff', c.color], speed: [30, 90], life: [0.1, 0.22] });
@@ -262,6 +266,57 @@ class Pet extends Entity {
       PFX.disc(ctx, x - 0.5, y - 0.5, 2, 2, '#4ad0e8', 1);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(Math.round(x - 1), Math.round(y - 2), 1, 1);
+    }
+  }
+
+  /** The butterfly sends out a slow wave of magic toward its target. */
+  castWave(t, world) {
+    this.waves.push({ x: this.x, y: this.y, a: angleTo(this.x, this.y, t.x, t.y), d: 0, hit: new Set() });
+    world.effects.burst(this.x, this.y - this.flyHeight - 6, { count: 8, colors: ['#ffd0ff', '#e08aff', '#8af0ff'], speed: [20, 70], life: [0.2, 0.4] });
+    Sound.play('magic', 0.05);
+  }
+
+  /** Waves drift on through enemies (each hurt once) until they've gone their range. */
+  updateWaves(dt, world) {
+    const w = this.cfg.wave;
+    if (!w) return;
+    for (const v of this.waves) {
+      const step = w.speed * dt;
+      v.x += Math.cos(v.a) * step;
+      v.y += Math.sin(v.a) * step;
+      v.d += step;
+      if (v.d >= w.range || world.dungeon.isSolidAt?.(v.x, v.y)) { v.dead = true; continue; }
+      for (const e of world.getTargets()) {
+        if (e.dead || e.prop || v.hit.has(e) || dist(v.x, v.y, e.x, e.y) > w.width + (e.radius || 0)) continue;
+        v.hit.add(e);
+        world.damageTarget(e, this.cfg.damage * this.stageScale(world), { source: this.owner, angle: v.a, knockback: 20, sound: null, fromUlt: true, color: this.cfg.color });
+        world.effects.burst(e.hx, e.hy, { count: 6, colors: ['#ffffff', '#ffd0ff', '#e08aff'], speed: [30, 90], life: [0.15, 0.3] });
+      }
+    }
+    removeDead(this.waves);
+  }
+
+  /** A wave: a glowing violet crescent bowed forward, sparkling, fading as it nears the end of its range. */
+  drawWaves(ctx) {
+    const w = this.cfg.wave;
+    for (const v of this.waves) {
+      const fade = Math.min(1, v.d / 20, (w.range - v.d) / 50);
+      const x = v.x;
+      const y = v.y - 10;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = fade;
+      PFX.glow(ctx, x, y, w.width + 6, '224, 138, 255', 0.5);
+      for (let i = -3; i <= 3; i++) {
+        // points along an arc bowed forward, across the way it travels
+        const s = i / 3;
+        const px = x + Math.cos(v.a) * (1 - s * s) * 6 - Math.sin(v.a) * s * w.width;
+        const py = y + Math.sin(v.a) * (1 - s * s) * 6 * 0.6 + Math.cos(v.a) * s * w.width * 0.6;
+        ctx.fillStyle = Math.abs(i) <= 1 ? '#ffffff' : '#ffd0ff';
+        ctx.fillRect(Math.round(px) - 1, Math.round(py) - 1, 3, 3);
+      }
+      if (Math.floor(v.d / 6) % 2) PFX.star(ctx, x - Math.cos(v.a) * 6, y - 4, 2, '#8af0ff', '#ffffff', 1);
+      ctx.restore();
     }
   }
 
@@ -370,6 +425,7 @@ class Pet extends Entity {
 
   draw(ctx) {
     this.drawShots(ctx);
+    if (this.cfg.wave) this.drawWaves(ctx);
     if (this.dead) return;
     const pose = this.currentPose();
     const fly = this.flyHeight;

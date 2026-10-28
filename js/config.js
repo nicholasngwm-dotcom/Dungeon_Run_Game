@@ -76,6 +76,13 @@ const CONFIG = {
     fish: { name: 'Flying Fish', cost: 300, hp: 125, speed: 250, damage: 12, every: 1.1, reach: 220, color: '#4ad0e8', flying: true,
             shot: { speed: 300, splash: 36 },
             desc: 'Glides on its fins and spits little exploding water balls at enemies from long range.' },
+    // flies, and casts a slow magic wave (wave.speed px/s, out to wave.range px, wave.width wide) that drifts
+    // through enemies, hurting each once. Passive, always on while it's with its hero (fighting or not):
+    // every enemy that falls has luck.heart more chance of dropping a heart, luck.mana more of a mana orb
+    // if its hero is a Mage, and luck.light chance of a light orb if its hero is a Priestess
+    butterfly: { name: 'Enchanted Butterfly', cost: 350, hp: 50, speed: 240, damage: 16, every: 1.8, reach: 150, color: '#e08aff', flying: true,
+                 wave: { speed: 110, range: 260, width: 22 }, luck: { heart: 0.06, mana: 0.2, light: 0.25 },
+                 desc: 'Casts a slow magic wave that drifts through enemies. While it\'s with you, enemies drop more hearts (and more mana for a Mage, light orbs for a Priestess).' },
     // mud: each bite leaves a patch (radius, lasting time s): enemies in it move `slow` slower and take dps
     pig:  { name: 'Pig', cost: 350, hp: 250, speed: 200, damage: 20, every: 1.4, reach: 12, color: '#ff9ab0',
             mud: { radius: 40, time: 5, slow: 0.35, dps: 8 },
