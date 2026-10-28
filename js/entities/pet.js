@@ -1,7 +1,8 @@
-// Pets: a hero's animal companion (CONFIG.pets: cat, dog, bird, pig), bought with gems in the
+// Pets: a hero's animal companion (CONFIG.pets: cat, dog, bird, fish, pig), bought with gems in the
 // keep's pet room and brought along on every run. A pet trots after its hero and fights whatever
 // comes near them: the cat's scratches make enemies bleed, the dog's bark knocks them back, the bird
-// pecks fast and can't be reached by melee, and the pig's bites leave slowing, hurting mud.
+// pecks fast and can't be reached by melee, the flying fish spits bursting water balls from afar,
+// and the pig's bites leave slowing, hurting mud.
 //
 // Pets never die. Enemies may go for them (they're allies, see Game.allies), but enemy bodies
 // never hurt them; at 0 hp a pet runs back to its hero and sits out the fight until it has
@@ -32,6 +33,7 @@ class Pet extends Entity {
     this.lunge = 0;                   // the attack pose, held a moment after each attack
     this.specialT = this.cfg.bleed ? 1 : this.cfg.bark ? 1.5 : 0;   // first bleed / bark comes soon
     this.mud = [];                    // the pig's mud patches: { x, y, t, tick }
+    this.shots = [];                  // the fish's water balls in flight: { x0, y0 (mouth), g0 (ground under it), x, y (where it lands), t, time }
     this.sinceHit = 99;
     this.invulnerable = 0;
     this.moving = false;
@@ -66,6 +68,7 @@ class Pet extends Entity {
     this.hp = Math.min(this.hp, this.maxHp);
     this.updateKnockback(dt, world);
     this.updateMud(dt, world);
+    this.updateShots(dt, world);
     // too far behind (or shut out of the room the hero's fighting in): it catches up in a puff
     if (dist(this.x, this.y, o.x, o.y) > R.leash * 1.8 || this.shutOut(world)) this.catchUp(world);
 
@@ -161,6 +164,7 @@ class Pet extends Entity {
     const c = this.cfg;
     this.attackT = c.every / (this.loyal ? 1.5 : 1);
     this.lunge = Math.min(0.18, this.attackT * 0.6);
+    if (c.shot) return this.shoot(t, world);
     const angle = angleTo(this.x, this.y, t.x, t.y);
     world.damageTarget(t, c.damage * this.stageScale(world), { source: this.owner, angle, knockback: c.flying ? 10 : 40, sound: null, fromUlt: true, color: c.color });
     world.effects.burst(t.hx, t.hy, { count: 3, colors: ['#ffffff', c.color], speed: [30, 90], life: [0.1, 0.22] });
@@ -210,6 +214,55 @@ class Pet extends Entity {
       ctx.restore();
     });
     Sound.play('windup', 0.15);
+  }
+
+  /** The fish spits a water ball, lobbed at where the target stands now. */
+  shoot(t, world) {
+    const y0 = this.y - this.flyHeight - 6;
+    const time = Math.max(0.15, dist(this.x, y0, t.x, t.y) / this.cfg.shot.speed);
+    this.shots.push({ x0: this.x + this.facing * 6, y0, g0: this.y, x: t.x, y: t.y, t: 0, time });
+    world.effects.burst(this.x + this.facing * 8, y0, { count: 4, colors: ['#c8f4ff', '#4ad0e8'], speed: [20, 60], life: [0.1, 0.25] });
+    Sound.play('splash', 0.04);
+  }
+
+  /** Water balls in flight: each bursts where it lands, splashing every enemy close by. */
+  updateShots(dt, world) {
+    const s = this.cfg.shot;
+    if (!s) return;
+    for (const b of this.shots) {
+      b.t += dt;
+      if (b.t < b.time) continue;
+      b.dead = true;
+      for (const e of world.getTargets()) {
+        if (e.dead || e.prop || dist(b.x, b.y, e.x, e.y) > s.splash + (e.radius || 0)) continue;
+        world.damageTarget(e, this.cfg.damage * this.stageScale(world), { source: this.owner, angle: angleTo(b.x, b.y, e.x, e.y), knockback: 25, sound: null, fromUlt: true, color: this.cfg.color });
+      }
+      world.effects.burst(b.x, b.y - 4, { count: 14, colors: ['#ffffff', '#c8f4ff', '#4ad0e8', '#2a8ab0'], speed: [40, 130], life: [0.2, 0.45], gravity: 300, up: 50 });
+      const { x, y } = b;
+      world.effects.add(0.35, (ctx, k) => {
+        ctx.save();
+        ctx.globalAlpha = 1 - k;
+        PFX.ring(ctx, x, y, s.splash * (0.4 + k * 0.6), s.splash * 0.55 * (0.4 + k * 0.6), '#a8ecff', 2, { thick: k < 0.4 ? 2 : 1 });
+        ctx.restore();
+      });
+      Sound.play('splash', 0.08);
+    }
+    removeDead(this.shots);
+  }
+
+  /** The water balls arcing through the air: a little blue drop with a bright glint and a shadow below. */
+  drawShots(ctx) {
+    for (const b of this.shots) {
+      const k = clamp(b.t / b.time, 0, 1);
+      const x = lerp(b.x0, b.x, k);
+      const y = lerp(b.y0, b.y, k) - Math.sin(k * Math.PI) * 26;
+      drawShadow(ctx, x, lerp(b.g0, b.y, k), 3, 1.5, 0.25);
+      PFX.disc(ctx, x, y, 4, 4, OUTLINE, 1);
+      PFX.disc(ctx, x, y, 3, 3, '#2a8ab0', 1);
+      PFX.disc(ctx, x - 0.5, y - 0.5, 2, 2, '#4ad0e8', 1);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(Math.round(x - 1), Math.round(y - 2), 1, 1);
+    }
   }
 
   /** The pig's bite leaves a patch of mud under the enemy (only a few at once). */
@@ -316,6 +369,7 @@ class Pet extends Entity {
   }
 
   draw(ctx) {
+    this.drawShots(ctx);
     if (this.dead) return;
     const pose = this.currentPose();
     const fly = this.flyHeight;

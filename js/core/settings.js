@@ -20,6 +20,7 @@ const KEY_ACTIONS = [
   ['item5', 'Inventory slot 5'],
   ['item6', 'Inventory slot 6 (Backpack)'],
   ['item7', 'Inventory slot 7 (Backpack)'],
+  ['quickHeal', 'Quick heal (strongest health potion)'],
   ['interact', 'Interact / revive'],
   ['music', 'Toggle music'],
   ['cursor', 'Mouse / crosshair'],
@@ -43,6 +44,7 @@ const Settings = {
     minimapSize: 1.4,    // dungeon minimap scale
     crosshair: 'both',   // cross | dot | circle | both (a circle with a crosshair) - see CROSSHAIR_TYPES
     crosshairSize: 1,    // crosshair scale
+    crosshairLock: 0,    // 0 = off; else the crosshair stays this many px from the hero, the mouse turning it round them
     display: 'default',   // default | fullscreen (see Display)
     screenShake: 1,      // camera shake strength (0 = off)
     othersFx: 1,         // multiplayer: how strongly teammates' effects show (0 = hidden); yours, enemies' and text stay full
@@ -51,6 +53,7 @@ const Settings = {
       e: 'KeyE', f: 'KeyF', ult: 'KeyQ', dodge: 'ShiftLeft',
       interact: 'KeyE', music: 'KeyM', cursor: 'KeyC', scoreboard: 'Tab',
       item1: 'Digit1', item2: 'Digit2', item3: 'Digit3', item4: 'Digit4', item5: 'Digit5', item6: 'Digit6', item7: 'Digit7',
+      quickHeal: 'KeyH',
     },
   },
   data: null,

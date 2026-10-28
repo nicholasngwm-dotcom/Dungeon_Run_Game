@@ -614,6 +614,11 @@ const App = {
       if (!Input.freeMouse && !Input.locked && (Input.mouse.leftPressed || Input.mouse.rightPressed)) Input.lockPointer();
     } else Input.unlockPointer();
 
+    // crosshair lock: keep the crosshair its set distance from this screen's hero
+    const me = this.state === 'playing' && !Input.freeMouse && this.game?.localPlayer;
+    if (me) Input.updateCrosshairLock(me.pivotX - this.game.camera.x, me.pivotY - this.game.camera.y);
+    else Input.updateCrosshairLock(null, null);
+
     // the bag takes mouse clicks on its slots before the hero sees them
     HUD.handleBagMouse(this.state === 'playing' && this.game ? this.game.localPlayer : null);
     // and in the lobby, the teleport button and its map of the keep

@@ -1000,7 +1000,7 @@ h2 {
 
 /* ===== Pets (the keep's pet room) ===== */
 #screen-pets { gap: 12px; }
-.shop-items.pets { grid-template-columns: repeat(4, 190px); }
+.shop-items.pets { grid-template-columns: repeat(5, 172px); }
 .shop-items.pets .shop-card { min-height: 200px; }
 .shop-card.pet canvas { width: 72px; height: 60px; }
 .shop-card.pet .pet-hp { font-size: 11px; color: #ff8a8a; flex: none; }
@@ -1018,6 +1018,7 @@ h2 {
 .shop-items { display: grid; gap: 10px; }
 .shop-items.upgrades { grid-template-columns: repeat(3, 220px); }
 .shop-items.potions { grid-template-columns: repeat(3, 250px); }
+.shop-items.potions.many { grid-template-columns: repeat(4, 214px); }
 /* a store card: icon, name, a readable description, then the price button at the bottom */
 .shop-card {
   display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;

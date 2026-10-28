@@ -176,15 +176,19 @@ function buildPotionSprites() {
   }
 }
 
+/** How many different potions a potion store has on offer: [fewest, most]. */
+const POTION_STOCK_KINDS = [3, 8];
+
 /**
- * A potion store's stock: 6 different potions, 1-4 of each, at least one of
- * them heal-type. Runs inside the shared simulation (Math.random is seeded).
+ * A potion store's stock: 3-8 different potions (POTION_STOCK_KINDS), 1-4 of each, at least one
+ * of them heal-type. Runs inside the shared simulation (Math.random is seeded).
  */
 function rollPotionStock() {
   const all = Object.values(POTIONS);
   const heals = all.filter((p) => HEAL_FAMILIES.includes(p.family));
   const picked = [choose(heals)];
-  while (picked.length < 6) {
+  const kinds = randInt(POTION_STOCK_KINDS[0], POTION_STOCK_KINDS[1]);
+  while (picked.length < kinds) {
     const p = choose(all);
     if (!picked.includes(p)) picked.push(p);
   }

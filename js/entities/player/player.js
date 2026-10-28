@@ -171,6 +171,7 @@ class Player extends Entity {
       if (this.songShield.t <= 0) this.songShield = null;
     }
     for (let i = 0; i < this.inventory.length; i++) if (Input.pressed(`item${i + 1}`)) this.useItem(i, world);
+    if (Input.pressed('quickHeal')) this.quickHeal(world);
     this.busy -= dt;
     this.resourceShort = (this.resourceShort || 0) - dt;
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
@@ -891,6 +892,21 @@ class Player extends Entity {
     if (!pot || !this.drink(pot, world)) return Sound.play('denied');
     slot.count--;
     if (slot.count <= 0) this.inventory[i] = null;
+  }
+
+  /** Quick heal (H): drinks the strongest health potion in the bag, wherever it sits. */
+  quickHeal(world) {
+    if (this.dead) return;
+    let best = -1;
+    this.inventory.forEach((s, i) => {
+      const pot = s && POTIONS[s.id];
+      if (pot && pot.family === 'heal' && (best < 0 || pot.value > POTIONS[this.inventory[best].id].value)) best = i;
+    });
+    if (best < 0) {
+      world.effects.text(this.hx, this.hy - 34, 'NO HEALTH POTIONS', { color: '#d8c8a0', size: 7 });
+      return Sound.play('denied');
+    }
+    this.useItem(best, world);
   }
 
   /** Puts a potion in the bag: stacks with the same potion (up to BAG_STACK), else the first free slot. */

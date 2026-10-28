@@ -71,6 +71,11 @@ const CONFIG = {
     // flies, and only projectiles can hit it (no melee swings, slams or bites)
     bird: { name: 'Bird', cost: 250, hp: 75, speed: 280, damage: 4, every: 0.2, reach: 8, color: '#6ab8ff', flying: true,
             desc: 'Rapidly pecks at enemies. It flies, so melee attacks can\'t touch it.' },
+    // flies, and spits water balls from up to `reach` px away: each flies at shot.speed and bursts
+    // on landing, hurting every enemy within shot.splash px
+    fish: { name: 'Flying Fish', cost: 300, hp: 125, speed: 250, damage: 12, every: 1.1, reach: 220, color: '#4ad0e8', flying: true,
+            shot: { speed: 300, splash: 36 },
+            desc: 'Glides on its fins and spits little exploding water balls at enemies from long range.' },
     // mud: each bite leaves a patch (radius, lasting time s): enemies in it move `slow` slower and take dps
     pig:  { name: 'Pig', cost: 350, hp: 250, speed: 200, damage: 20, every: 1.4, reach: 12, color: '#ff9ab0',
             mud: { radius: 40, time: 5, slow: 0.35, dps: 8 },
@@ -332,9 +337,9 @@ const CONFIG = {
       windup: 0.7, aimLockAt: 0.3, cooldown: 1.9, arrowSpeed: 360,
     },
     undeadKnight: {
-      hp: 620, speed: 34, radius: 20, damage: 60,
+      hp: 620, speed: 46, radius: 20, damage: 60,
       attackRange: 72, attackReach: 98, attackArcDegrees: 140,
-      windup: 0.95, recovery: 0.8, cooldown: 1.1, knockbackResist: 0.9, stunResist: 0.5,
+      windup: 0.85, recovery: 0.7, cooldown: 0.95, knockbackResist: 0.9, stunResist: 0.5,
     },
     // summoned by the Clay Golem: smashes the ground, sending out a shockwave ring
     clayMinion: {
@@ -488,7 +493,7 @@ const CONFIG = {
     clusterCatapult: {
       hp: 300, speed: 20, radius: 20, damage: 52, contactDamage: 0, keepAway: 260,
       range: 600, windup: 1.3, flight: 1.1, cooldown: 4.5, blastRadius: 66,
-      boulders: [5, 6], spread: 210, stagger: 0.12,
+      boulders: [5, 6], spread: 180, stagger: 0.12,
       fireRadius: 64, fireTime: 4, burnDps: 9, burnTime: 3,
       knockbackResist: 1, stunResist: 0.5, heartChance: 0.18,
     },
@@ -653,10 +658,11 @@ const CONFIG = {
       range: 900, windup: 1.1, aimLockAt: 0.35, beamTime: 0.35, beamWidth: 14, cooldown: 2.0, turnRate: 3,
       knockbackResist: 1, stunResist: 0.5, heartChance: 0.15,
     },
-    // Stone pillar: hops after you quickly, slams the ground round it, then can't be hurt for invulnTime
+    // Stone pillar: hops after you quickly and slams the ground round it, then stands still for invulnTime,
+    // hardened (can't be hurt) - the only time it's immune
     stonePillar: {
       hp: 180, speed: 0, radius: 15, damage: 28,
-      hopEvery: 0.55, hopDistance: 96, hopTime: 0.32, slamRange: 70, slamRadius: 60, windup: 0.4, invulnTime: 2,
+      hopEvery: 0.55, hopDistance: 96, hopTime: 0.32, slamRange: 70, slamRadius: 60, windup: 0.4, invulnTime: 0.6,
       knockbackResist: 1, stunResist: 0.5,
     },
     // stage 2+: Rock golem: extremely tanky; winds up (windup, the red fan showing) and slams the ground: a shockwave of

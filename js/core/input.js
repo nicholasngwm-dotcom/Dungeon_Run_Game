@@ -5,7 +5,8 @@
 // While playing, the game locks the pointer and moves its own crosshair by
 // the mouse's movement times Settings sensitivity; otherwise (menus) it
 // follows the real cursor. The 'cursor' key switches play to free-mouse mode:
-// no lock, the normal pointer instead of the crosshair.
+// no lock, the normal pointer instead of the crosshair. With the crosshair lock setting on, the
+// locked crosshair stays a set distance from the hero and the mouse only turns it round them.
 
 const Input = {
   keys: new Set(),
@@ -44,8 +45,18 @@ const Input = {
       if (this.locked) {
         const rect = canvas.getBoundingClientRect();
         const s = Settings.data.sensitivity;
-        this._mouse.x = clamp(this._mouse.x + e.movementX * (CONFIG.screen.width / rect.width) * s, 0, CONFIG.screen.width);
-        this._mouse.y = clamp(this._mouse.y + e.movementY * (CONFIG.screen.height / rect.height) * s, 0, CONFIG.screen.height);
+        const dx = e.movementX * (CONFIG.screen.width / rect.width) * s;
+        const dy = e.movementY * (CONFIG.screen.height / rect.height) * s;
+        const c = this.lockCenter;
+        if (Settings.data.crosshairLock > 0 && c) {
+          // crosshair lock: the movement only turns the crosshair round the hero, at the set distance
+          const r = Settings.data.crosshairLock;
+          this.lockAngle = Math.atan2(Math.sin(this.lockAngle) * r + dy, Math.cos(this.lockAngle) * r + dx);
+          this.placeLocked();
+          return;
+        }
+        this._mouse.x = clamp(this._mouse.x + dx, 0, CONFIG.screen.width);
+        this._mouse.y = clamp(this._mouse.y + dy, 0, CONFIG.screen.height);
         return;
       }
       const rect = canvas.getBoundingClientRect();
@@ -120,6 +131,30 @@ const Input = {
 
   unlockPointer() {
     if (this.locked) document.exitPointerLock();
+  },
+
+  // ---------- crosshair lock (Settings crosshairLock: 0 = off, else the distance in px) ----------
+
+  lockCenter: null,   // where the hero aims from, on screen (set every frame while playing)
+  lockAngle: 0,
+
+  /**
+   * Called every frame while playing with the locked crosshair: (cx, cy) is the hero's aim point on
+   * screen, or null (lock not in use). With the setting on, the crosshair stays crosshairLock px from
+   * it, turning with the mouse, so it can never be lost off at the edge of the screen.
+   */
+  updateCrosshairLock(cx, cy) {
+    const on = Settings.data.crosshairLock > 0 && cx !== null && this.locked;
+    if (on && !this.lockCenter) this.lockAngle = Math.atan2(this._mouse.y - cy, this._mouse.x - cx);   // carry on from where it pointed
+    this.lockCenter = on ? { x: cx, y: cy } : null;
+    if (on) this.placeLocked();
+  },
+
+  placeLocked() {
+    const c = this.lockCenter;
+    const r = Settings.data.crosshairLock;
+    this._mouse.x = clamp(c.x + Math.cos(this.lockAngle) * r, 0, CONFIG.screen.width);
+    this._mouse.y = clamp(c.y + Math.sin(this.lockAngle) * r, 0, CONFIG.screen.height);
   },
 
   /** Switches between the locked crosshair and the free mouse pointer. Returns true if now free. */

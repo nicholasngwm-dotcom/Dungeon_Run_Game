@@ -34,7 +34,7 @@ a station and press E:
 - **Workshop** (right): under construction.
 - **Pet room** (the old armory, top left): buy a cat, dog, bird or pig with gems (saved on your
   profile) and pick one to come along. Pets follow you and fight near you: the cat's scratches
-  make enemies bleed every 3s, the dog barks every 5s to knock enemies back, the bird pecks fast and
+  make enemies bleed every 3s, the dog barks every 5s to knock enemies back, the flying fish spits exploding water balls from long range, the bird pecks fast and
   can't be hit by melee, the pig bites slowly and leaves slowing, hurting mud. Pets never die:
   at 0 HP they run back to you and rest until healed (12s), and enemy bodies can't hurt them.
   Total Loyalty and Stronger Buddies work on pets.
@@ -150,7 +150,8 @@ stay on the mouse). Settings are saved in the browser. While playing, the game
 locks the mouse pointer so sensitivity can apply; press Esc to get the cursor
 back (this pauses), or press C to switch to the normal mouse pointer without
 pausing (C again brings the crosshair back; sensitivity only applies to the
-crosshair).
+crosshair). **Crosshair lock** (under Crosshair, off by default) keeps the crosshair a set
+distance from your hero: moving the mouse turns it round them, so it can't get lost.
 
 Music: the main menu, lobby (a slower lo-fi loop), battle and boss each have
 their own track.
@@ -161,7 +162,7 @@ WASD to move, mouse to aim, left click for the primary attack (hold to repeat),
 right click for the secondary ability, E and F for class abilities, Q for the
 ultimate (it charges as you deal damage), Shift to dodge, 1-5 to drink the
 potion in that bag slot (potions are bought at the shop; there is no free
-potion), Esc to pause, M to
+potion), H to drink the strongest health potion in the bag, Esc to pause, M to
 toggle music (a toast shows ON / OFF). The bag (bottom left) can be managed
 with the mouse: drag a slot onto another to move, swap or stack potions
 (this also works in the shop's bag), drag it out of the bag to drop it on the

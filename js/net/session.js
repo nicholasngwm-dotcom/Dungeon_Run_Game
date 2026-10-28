@@ -20,7 +20,7 @@
 // interact is also held (keeping it down by a downed teammate revives them), and so are the
 // ability keys: holding one shows where the ability will land, letting go casts it
 const HELD_ACTIONS = ['up', 'down', 'left', 'right', 'interact', 'e', 'f', 'ult'];
-const PRESS_ACTIONS = ['e', 'f', 'ult', 'dodge', 'interact', 'item1', 'item2', 'item3', 'item4', 'item5', 'item6', 'item7'];
+const PRESS_ACTIONS = ['e', 'f', 'ult', 'dodge', 'interact', 'item1', 'item2', 'item3', 'item4', 'item5', 'item6', 'item7', 'quickHeal'];
 
 class Session {
   /** An input that does nothing (players with no input yet, or with a menu open). */

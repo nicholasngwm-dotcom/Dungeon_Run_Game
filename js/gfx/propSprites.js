@@ -660,6 +660,19 @@ const PROP_DEFS = {
     p.ellipse(30, 9, 5, 2, '#6e4c2c');
     p.rect(18, 6, 3, 1, '#a8865a'); p.rect(27, 8, 2, 1, '#a8865a');   // wet glints
   }],
+  // the flying fish's little pond (drawn flat, like the rugs): a ring of stones, clear water and a lily pad
+  rugPond: [40, 16, (p) => {
+    p.ellipse(20, 8, 19, 7, '#5e5046');               // stone rim
+    p.ellipse(20, 7, 18, 6, '#a8987e');
+    p.ellipse(20, 8, 16, 5, '#1a4a6a');               // deep water
+    p.ellipse(19, 7, 13, 3, '#2a8ab0');
+    p.ellipse(16, 6, 6, 1, '#4ad0e8');                // light on the water (top left)
+    p.rect(13, 5, 3, 1, '#c8f4ff'); p.rect(25, 9, 2, 1, '#c8f4ff');
+    p.ellipse(28, 7, 4, 2, '#4a8a2a');                // lily pad with a pink flower
+    p.px(26, 7, '#1a4a6a');
+    p.px(29, 6, '#ffb0c8'); p.px(30, 6, '#ff7aa0');
+    p.px(6, 4, '#6a8a3a'); p.px(34, 11, '#6a8a3a');   // moss on the stones
+  }],
 
   rugRound: [64, 30, (p) => {
     p.ellipse(32, 15, 30, 13, '#5a1a3a');

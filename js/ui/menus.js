@@ -50,6 +50,7 @@ const Menus = {
     slider('set-shake', 'screenShake', Menus.offOrPercent);
     slider('set-ofx', 'othersFx', Menus.offOrPercent);
     slider('set-xsize', 'crosshairSize', (v) => `${Math.round(v * 100)}%`, () => this.drawCrosshairPreview());
+    slider('set-xlock', 'crosshairLock', Menus.lockLabel);
     document.getElementById('set-xhair').innerHTML = CROSSHAIR_TYPES
       .map(([type, label]) => `<button class="toggle" data-action="crosshair:${type}">${label.toUpperCase()}</button>`)
       .join('');
@@ -68,6 +69,7 @@ const Menus = {
   },
 
   offOrPercent(v) { return v > 0 ? `${Math.round(v * 100)}%` : 'OFF'; },
+  lockLabel(v) { return v > 0 ? `${v}px` : 'OFF'; },
 
   /** Highlights the chosen crosshair style and redraws the preview. */
   crosshairChanged() {
@@ -172,6 +174,7 @@ const Menus = {
     set('set-shake', s.screenShake, Menus.offOrPercent(s.screenShake));
     set('set-ofx', s.othersFx, Menus.offOrPercent(s.othersFx));
     set('set-xsize', s.crosshairSize, `${Math.round(s.crosshairSize * 100)}%`);
+    set('set-xlock', s.crosshairLock, Menus.lockLabel(s.crosshairLock));
     this.musicChanged(s.music, false);
     this.displayChanged();
     this.crosshairChanged();

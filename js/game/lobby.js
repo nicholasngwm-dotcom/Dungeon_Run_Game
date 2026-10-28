@@ -53,7 +53,7 @@ class LobbyHub {
     this.stations.push({ kind: 'workshop', x: 36.6 * T, y: 9.6 * T, r: 56, prompt: 'WORKSHOP' });
     // the pet room: the keeper's signboard in the middle (buy and choose pets), and a spot on show for each pet
     this.stations.push({ kind: 'pets', x: 6.75 * T, y: 10.4 * T, r: 60, prompt: 'PETS' });
-    this.petSpots = { cat: [3.4, 7.55], dog: [5.6, 7.55], bird: [7.75, 6.95], pig: [9.9, 7.95] };
+    this.petSpots = { cat: [3.4, 7.55], dog: [5.6, 7.55], bird: [7.75, 6.95], pig: [9.9, 7.95], fish: [4.4, 10.4] };
     for (const k of Object.keys(this.petSpots)) this.petSpots[k] = { x: this.petSpots[k][0] * T, y: this.petSpots[k][1] * T };
     // out in the yard, by the path from the keep's side door
     this.stations.push({ kind: 'practice', x: 40.6 * T, y: 18.8 * T, r: 50, prompt: 'PRACTICE RANGE' });
@@ -74,8 +74,8 @@ class LobbyHub {
     this.decor = [
       // the pet room (the old armory): the four pets on show along the north wall - the cat and dog on
       // cushions with their bowls, the bird on its perch, the pig in its wallow - with sacks of feed,
-      // hay and plants about
-      ['rugMud', 9.9, 7.9], ['petBedRed', 3.4, 7.7], ['petBedBlue', 5.6, 7.7], ['perch', 7.75, 7.6],
+      // hay and plants about; the flying fish hovers over its pond nearer the door
+      ['rugMud', 9.9, 7.9], ['rugPond', 4.4, 10.65], ['petBedRed', 3.4, 7.7], ['petBedBlue', 5.6, 7.7], ['perch', 7.75, 7.6],
       ['bowl', 4.4, 8.3], ['bowl', 6.6, 8.3], ['trough', 9.9, 6.4], ['plant', 11.4, 6.1], ['plant', 2.4, 6.1],
       ['bannerGreen', 6.75, 6.6], ['sacks', 3.0, 12.6], ['hayBale', 10.3, 12.6], ['barrel', 2.7, 10.4],
       // the hall of heroes' lounge, between the nooks: armchairs on a round rug, candles
@@ -602,13 +602,17 @@ class LobbyHub {
    */
   drawShowPet(ctx, kind, at) {
     const f = Sprites.pets[kind];
-    const seed = { cat: 0, dog: 2.3, bird: 4.1, pig: 6.7 }[kind];
+    const seed = { cat: 0, dog: 2.3, bird: 4.1, pig: 6.7, fish: 1.2 }[kind];
     const t = this.time + seed;
     const cycle = t % 7;
     let pose = f.sit;
     let lift = 0;
     let facing = Math.floor(t / 7) % 2 ? -1 : 1;   // turns to look the other way now and then
-    if (kind === 'bird' && cycle > 5.6) { pose = f.walk[Math.floor(t * 14) % 2]; lift = Math.sin(((cycle - 5.6) / 1.4) * Math.PI) * 10; }
+    // the fish hovers over its pond, fins beating, and now and then leaps up in an arc
+    if (kind === 'fish') {
+      pose = f.walk[Math.floor(t * 10) % 2];
+      lift = 12 + Math.sin(t * 2.5) * 2 + (cycle > 5.8 ? Math.sin(((cycle - 5.8) / 1.2) * Math.PI) * 10 : 0);
+    } else if (kind === 'bird' && cycle > 5.6) { pose = f.walk[Math.floor(t * 14) % 2]; lift = Math.sin(((cycle - 5.6) / 1.4) * Math.PI) * 10; }
     else if (kind === 'pig' && cycle < 2) pose = f.rest;                       // a roll in the mud
     else if (cycle > 6.4) { pose = f.walk[0]; lift = Math.sin(((cycle - 6.4) / 0.6) * Math.PI) * 4; }   // a happy hop
     if (kind === 'pig' && cycle < 2) facing = 1;

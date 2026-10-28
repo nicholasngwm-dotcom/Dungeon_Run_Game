@@ -735,7 +735,7 @@ class RuinedTurret extends Enemy {
   }
 }
 
-/** Stone pillar: hops after you quickly, slams the ground round it, then can't be hurt for a moment. */
+/** Stone pillar: hops after you quickly and slams the ground round it, then stands still a moment, unhurtable. */
 class StonePillar extends Enemy {
   constructor(x, y) {
     super('stonePillar', x, y);
@@ -815,14 +815,17 @@ class StonePillar extends Enemy {
           });
           world.shake(4, 0.15);
           Sound.play('stomp', 0.15);
-          // the slam leaves it hard as the temple stone: immune for a moment
+          // the slam leaves it hard as the temple stone: it stands still, immune, for a moment
           this.invuln = c.invulnTime;
           this.attackCooldown = c.invulnTime + 0.4;
           this.setState('recover');
         }
         break;
       case 'recover':
-        if (this.stateTime >= 0.5) this.setState('chase');
+        if (this.stateTime >= c.invulnTime) {
+          this.invuln = 0;   // moving again: it can be hurt
+          this.setState('chase');
+        }
         break;
     }
   }

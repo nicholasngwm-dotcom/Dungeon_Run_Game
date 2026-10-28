@@ -1,4 +1,4 @@
-// The heroes' pets (Sprites.pets[kind]): a cat, a dog, a bird and a pig, each facing right in a
+// The heroes' pets (Sprites.pets[kind]): a cat, a dog, a bird, a flying fish and a pig, each facing right in a
 // few poses: sit, walk (two steps), attack and rest (curled up, healing). Painted with the
 // PixelArt toolkit like the keep's cats (propSprites.js): soft ramps, a dark outline, lit from
 // the top-left. Each pose is { img, ax, ay } anchored at the bottom centre (the feet).
@@ -8,6 +8,7 @@ const PET_CAT_COAT = ['#5a3a24', '#8a6040', '#b8905e', '#e0c49a'];
 const DOG_COAT = ['#5a3a1a', '#8a5a2a', '#c89a5a', '#ecc890'];
 const PIG_SKIN = ['#a0465a', '#d86a82', '#ff9ab0', '#ffd0dc'];
 const BIRD_FEATHERS = ['#1a3a7a', '#2a6ad0', '#6ab8ff', '#c8e8ff'];
+const FISH_SCALES = ['#1a4a6a', '#2a8ab0', '#4ad0e8', '#c8f4ff'];
 
 /** A dog facing right: sitting, walking (step 0/1), biting/barking (mouth open, ears up) or lying down. */
 function petDog(p, mode, step) {
@@ -125,7 +126,45 @@ function petBird(p, mode, step) {
   if (mode === 'sit') { p.px(6, 11, beak[0]); p.px(8, 11, beak[0]); }   // feet
 }
 
-/** Builds Sprites.pets: { cat, dog, bird, pig } -> { sit, walk: [a, b], attack, rest }. */
+/**
+ * A flying fish facing right: hovering (fins spread), gliding (fins up / down), spitting (mouth
+ * open, fins swept back) or flopped on the floor resting. Its big pectoral fins are its wings.
+ */
+function petFish(p, mode, step) {
+  const C = FISH_SCALES;
+  const fin = ['#3aa0c8', '#c8f4ff'];
+  const eye = '#1a1a2a';
+  if (mode === 'rest') {
+    p.poly([[0, 7], [4, 9], [0, 12]], C[1]);       // tail
+    p.ellipse(9, 10, 6, 2, C[2]);                  // lying on its side
+    p.ellipse(9, 11, 4, 1, C[3]);
+    p.rect(8, 8, 4, 1, C[3]);
+    p.poly([[6, 9], [10, 9], [7, 6]], fin[0]);     // fin folded flat
+    p.rect(12, 9, 2, 1, eye);                      // shut eye
+    p.px(15, 10, C[0]);
+    return;
+  }
+  const spit = mode === 'attack';
+  // pectoral fins: level while hovering, swept back to spit, up or down while gliding
+  const wing = mode === 'sit' ? [[6, 7], [11, 7], [3, 3]]
+    : spit ? [[6, 7], [10, 7], [1, 5]]
+      : step ? [[6, 6], [11, 6], [4, 0]] : [[6, 8], [11, 8], [4, 12]];
+  p.poly([[0, 4], [4, 7], [0, 10]], C[1]);         // forked tail
+  p.px(0, 7, C[0]);
+  p.poly([[7, 5], [11, 5], [8, 2]], C[1]);         // dorsal fin
+  p.ellipse(9, 7, 6, 3, C[2]);                     // body
+  p.rect(7, 4, 4, 1, C[3]);                        // lit back (top left)
+  p.rect(5, 6, 8, 1, C[1]);                        // a darker stripe down its side
+  p.ellipse(9, 9, 4, 1, C[3]);                     // pale belly
+  p.rect(12, 5, 2, 2, '#ffffff');                  // big eye
+  p.px(13, 6, eye);
+  if (spit) { p.rect(15, 7, 1, 2, '#123a5a'); p.px(15, 6, C[1]); }   // mouth open, spitting
+  else p.px(15, 7, C[0]);
+  p.poly(wing, fin[0]);
+  p.line(wing[0][0], wing[0][1], wing[2][0], wing[2][1], fin[1]);   // the fin's bright leading edge
+}
+
+/** Builds Sprites.pets: { cat, dog, bird, fish, pig } -> { sit, walk: [a, b], attack, rest }. */
 function buildPetSprites() {
   const poseOf = (w, h, draw) => ({ img: PixelArt.make(w + 2, h + 2, (p) => { p.ctx.translate(1, 1); draw(p); }, OUTLINE, 'soft'), ax: Math.round(w / 2) + 1, ay: h });
   const set = (w, h, fn) => ({
@@ -145,5 +184,6 @@ function buildPetSprites() {
     dog: set(20, 15, petDog),
     pig: set(22, 15, petPig),
     bird: set(14, 12, petBird),
+    fish: set(16, 12, petFish),
   };
 }

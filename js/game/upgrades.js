@@ -1299,6 +1299,8 @@ const Shop = {
     document.getElementById('shop-leave').classList.toggle('hidden', this.mode === 'pick' && this.run.needsPick(p));
     const grid = document.getElementById('shop-items');
     grid.className = `shop-items ${this.mode === 'pick' ? 'upgrades' : this.mode}`;
+    // more than 6 potions on offer: four to a row, so they still fit in two rows
+    if (this.mode === 'potions' && this.run.potionStock.length > 6) grid.classList.add('many');
     if (this.mode === 'potions') this.renderPotions(grid, p);
     else if (this.mode === 'pick') this.renderPick(grid, p);
     else this.renderUpgrades(grid, p);
