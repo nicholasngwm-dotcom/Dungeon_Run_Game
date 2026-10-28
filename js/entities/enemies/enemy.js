@@ -46,7 +46,7 @@ class Enemy extends Entity {
     if (this.asleep && !(this.stunTime > dt)) { this.asleep = false; this.wokeUp(world, 0); }
     this.iced = (this.iced || 0) - dt;       // coated in the Baker's icing (Bigger Cakes): slowed
     this.zapped = (this.zapped || 0) - dt;   // Tesla Armour's jolt (see Game.zap): stunned, crackling
-    this.petSlow = (this.petSlow || 0) - dt; // a dog's bark or a pig's mud (see Pet): slowed
+    this.petSlow = (this.petSlow || 0) - dt; // a pig's mud (see Pet): slowed
     this.groggy = (this.groggy || 0) - dt;   // still drowsy after a lullaby (Groggy): slowed
     this.waking = (this.waking || 0) - dt;
     this.hasted = (this.hasted || 0) - dt;   // a minstrel's war song (see Minstrel)
@@ -128,10 +128,10 @@ class Enemy extends Entity {
     return (this.rallied > 0 ? this.rallySpeed || 1 : 1) * (this.sticky > 0 ? 1 - CONFIG.classes.baker.passive.slow : 1)
       * (this.iced > 0 ? 0.6 : 1) * (this.groggy > 0 && !(this.stunTime > 0) ? 0.6 : 1)
       * (this.frostfired ? 1 - (this.frostfireSlow || 0) : 1)   // burning with the Mage's frostfire
-      * (this.petSlow > 0 ? 1 - (this.petSlowBy || 0) : 1);     // a dog's bark, a pig's mud (see Pet)
+      * (this.petSlow > 0 ? 1 - (this.petSlowBy || 0) : 1);     // a pig's mud (see Pet)
   }
 
-  /** Slowed by a pet (a dog's bark, a pig's mud) by `slow` for `time`s; the stronger slow wins while both run. */
+  /** Slowed by a pet (a pig's mud) by `slow` for `time`s; the stronger slow wins while both run. */
   petSlowed(slow, time) {
     if (!(this.petSlow > 0) || slow >= (this.petSlowBy || 0)) this.petSlowBy = slow;
     this.petSlow = Math.max(this.petSlow || 0, time);

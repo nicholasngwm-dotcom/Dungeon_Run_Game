@@ -62,12 +62,12 @@ const CONFIG = {
   pets: {
     // bleed: every `every` s a scratch makes the target bleed (dps for time s)
     cat:  { name: 'Cat', cost: 250, hp: 150, speed: 240, damage: 9, every: 0.55, reach: 10, color: '#e08a44',
-            bleed: { every: 4, dps: 10, time: 3 },
-            desc: 'Scratches enemies, and every 4 seconds a scratch makes them bleed.' },
-    // bark: every `every` s, enemies within radius move `slow` slower for time s
+            bleed: { every: 3, dps: 10, time: 3 },
+            desc: 'Scratches enemies, and every 3 seconds a scratch makes them bleed.' },
+    // bark: every `every` s, enemies within radius are knocked away from the dog (knockback force)
     dog:  { name: 'Dog', cost: 300, hp: 175, speed: 230, damage: 13, every: 0.8, reach: 10, color: '#c89a5a',
-            bark: { every: 3, radius: 130, slow: 0.4, time: 2.5 },
-            desc: 'Bites enemies, and barks every 3 seconds, slowing every enemy nearby.' },
+            bark: { every: 5, radius: 190, knockback: 300 },
+            desc: 'Bites enemies, and barks every 5 seconds, knocking back every enemy nearby.' },
     // flies, and only projectiles can hit it (no melee swings, slams or bites)
     bird: { name: 'Bird', cost: 250, hp: 75, speed: 280, damage: 4, every: 0.2, reach: 8, color: '#6ab8ff', flying: true,
             desc: 'Rapidly pecks at enemies. It flies, so melee attacks can\'t touch it.' },

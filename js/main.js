@@ -169,7 +169,8 @@ const App = {
       onGems: (n) => Profiles.addGems(n),   // banked on this machine's profile (in multiplayer every machine gets the event)
       onNpc: (kind, run, hero) => this.talkTo(kind, run, hero),
       onPurchase: (hero, what, ok) => Shop.onPurchase(hero, what, ok),
-      onBossArena: (boss) => this.startBossPractice(boss),
+      // (in multiplayer every machine gets these; only the host moves the party)
+      onBossArena: (boss) => (this.mp ? this.mp.startBossPractice(boss) : this.startBossPractice(boss)),
       onPracticeReturn: () => this.startPractice(),
     };
   },
@@ -217,7 +218,8 @@ const App = {
       case 'workshop': this.openPanel('workshop'); break;
       case 'pets': this.openPanel('pets'); Menus.showPets(); break;
       case 'practice':
-        if (this.mp) Menus.toast('THE PRACTICE RANGE IS SINGLE PLAYER ONLY', '#ffe680');
+        // multiplayer: the host takes the whole party there
+        if (this.mp && !this.mp.isHost) Menus.toast('ONLY THE HOST CAN OPEN THE PRACTICE RANGE', '#ffe680');
         else this.startPractice();
         break;
       case 'gate': this.useGate(); break;
@@ -506,7 +508,9 @@ const App = {
     this.startGame(this.classId);
   },
 
+  /** The practice range. Multiplayer: the host takes everyone there (and only the host can). */
   startPractice(classId = this.classId) {
+    if (this.mp) { this.mp.startPractice(this.practiceOptions); return; }
     this.classId = classId;
     this.practiceMode = true;
     this.startGame(classId);
@@ -648,6 +652,7 @@ const App = {
     const g = this.state === 'playing' && this.game;
     this.practicePanel.classList.toggle('hidden', !(g && g.cheats));
     this.practicePanel.classList.toggle('arena', !!(g && g.cheats && !g.practice));
+    if (g && g.cheats) Menus.refreshPractice(g.cheats);   // (in multiplayer a teammate may have toggled one)
 
     Input.endFrame();
     requestAnimationFrame((t) => this.loop(t));

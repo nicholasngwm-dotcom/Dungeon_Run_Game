@@ -34,7 +34,7 @@ a station and press E:
 - **Workshop** (right): under construction.
 - **Pet room** (the old armory, top left): buy a cat, dog, bird or pig with gems (saved on your
   profile) and pick one to come along. Pets follow you and fight near you: the cat's scratches
-  make enemies bleed every 4s, the dog barks every 3s to slow enemies, the bird pecks fast and
+  make enemies bleed every 3s, the dog barks every 5s to knock enemies back, the bird pecks fast and
   can't be hit by melee, the pig bites slowly and leaves slowing, hurting mud. Pets never die:
   at 0 HP they run back to you and rest until healed (12s), and enemy bodies can't hurt them.
   Total Loyalty and Stronger Buddies work on pets.
@@ -126,7 +126,13 @@ dungeon and the whole party is teleported in. Enemies get tougher and more numer
 with more players. Locked rooms pull the whole party inside, each hero has their own
 coins and shop upgrades, and a reward chest holds 5 coins per hero. A fallen hero
 lies where they fell: a teammate holding E (interact) by the body for 4 seconds
-revives them at 35% health, and anyone still down gets back up at the next stage. The practice range is single player only.
+revives them at 35% health, and anyone still down gets back up at the next stage.
+
+Only the host can open the practice range: when they do, the whole party goes with them.
+Everyone can use the practice panel (switch hero, spawn enemies, open a boss portal, toggle the
+cheats, which are shared by the party). Anyone stepping into a boss portal takes the whole party
+to that boss, and its portal back brings everyone to the range. Leaving the range ("Back to
+lobby", or the pause menu) is the host's call.
 
 How it works: connections are peer to peer (WebRTC via the free PeerJS service, which
 only introduces the players). Every machine runs the same simulation; the host

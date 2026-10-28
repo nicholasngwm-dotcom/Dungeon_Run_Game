@@ -69,7 +69,7 @@ class Game {
     this.mouseWorld = { x: 0, y: 0 };
     this.actor = null;             // the hero whose turn it is (their attacks, their input)
     this.director = new WaveDirector(this);
-    this.practice = opts.practice ? { options: opts.practice, log: [], total: 0, respawn: 0 } : null;
+    this.practice = opts.practice ? { options: opts.practice, log: [], total: 0, respawn: {} } : null;   // respawn: { heroId: seconds left }
     // practice cheats ({ god, infiniteMana, infiniteEnergy, noCooldowns }): the range's, or a boss arena's opened from it
     this.cheats = opts.cheats || opts.practice || null;
     this.dummies = [];
@@ -727,7 +727,7 @@ class Game {
     const hero = this.heroById(fromId);
     switch (cmd.type) {
       case 'hero': {
-        if (!this.lobby || !hero || hero.classId === cmd.classId) return;
+        if (!(this.lobby || this.practice) || !hero || hero.classId === cmd.classId) return;
         const taken = this.players.filter((p) => p.classId === cmd.classId).length;
         if (this.multiplayer && taken >= CONFIG.multiplayer.maxDuplicates) {
           if (fromId === this.localId) this.events.onToast?.(`ONLY ${CONFIG.multiplayer.maxDuplicates} OF EACH HERO`);
@@ -769,6 +769,9 @@ class Game {
         return;
       case 'cheat':
         if (hero) Cheats.apply(this, cmd, hero);
+        return;
+      case 'practice':
+        if (hero && this.cheats) this.practiceAction(cmd.action, cmd.arg, hero);
         return;
       case 'teleport':
         if (this.lobby && hero && !hero.dead) this.lobby.teleport(hero, cmd.x, cmd.y);
@@ -850,17 +853,39 @@ class Game {
     Sound.play('pickup');
   }
 
+  /** The bosses the practice range's portals lead to. */
+  static practiceBosses = ['golem', 'guardian', 'phantom', 'deathbringer', 'prince', 'princess', 'queen', 'king'];
+
+  /**
+   * A button on the practice panel, pressed by `hero`'s player (a command, so in multiplayer
+   * every machine applies it on the same tick). The cheat toggles are shared by the whole party.
+   * In a boss arena opened from the range only the cheats and "fill ult" apply.
+   */
+  practiceAction(action, arg, hero) {
+    const pr = this.practice;
+    switch (action) {
+      case 'toggle': if (arg in this.cheats) this.cheats[arg] = !this.cheats[arg]; return;
+      case 'ult': hero.ult = hero.ultMax; return;
+    }
+    if (!pr) return;
+    switch (action) {
+      case 'spawn': if (CONFIG.enemies[arg]) this.practiceSpawn(arg); return;
+      case 'arena': if (Game.practiceBosses.includes(arg)) this.openBossPortal(arg, hero); return;
+      case 'clear': this.clearEnemies(); return;
+      case 'resetDps': this.resetDps(); return;
+    }
+  }
+
   /** Practice range: an enemy spawned on request (bosses are fought in their arenas, see openBossPortal). */
   practiceSpawn(type) {
     return this.spawnEnemy(type);
   }
 
   /**
-   * Practice range: a portal to a boss's own room opens beside the hero. Walking into it
-   * takes them to a small entrance room leading to that boss (see App.startBossPractice).
+   * Practice range: a portal to a boss's own room opens beside `hero`. Any hero walking into it
+   * takes the whole party to a small entrance room leading to that boss (see App.startBossPractice).
    */
-  openBossPortal(boss) {
-    const p = this.player;
+  openBossPortal(boss, p = this.player) {
     const pt = this.dungeon.freePoint(p.x + 90, p.y, 20, 14);
     this.practice.portal = { boss, x: pt.x, y: pt.y, t: 0, used: false };
     this.effects.burst(pt.x, pt.y - 20, { count: 30, colors: ['#b45aff', '#e0c0ff', '#ffffff'], speed: [40, 160], life: [0.3, 0.7] });
@@ -869,13 +894,12 @@ class Game {
     this.banner('A PORTAL OPENS', `Step in to face ${name}`, 2.4);
   }
 
-  /** The boss portal waits for the hero to step into it. */
+  /** The boss portal waits for a hero to step into it. */
   updateBossPortal(dt) {
     const P = this.practice.portal;
     if (!P || P.used) return;
     P.t += dt;
-    const p = this.player;
-    if (P.t > 0.4 && !p.dead && dist(p.x, p.y, P.x, P.y) < 26) {
+    if (P.t > 0.4 && this.players.some((p) => !p.dead && dist(p.x, p.y, P.x, P.y) < 26)) {
       P.used = true;
       Sound.play('phantomVanish');
       this.events.onBossArena?.(P.boss);
@@ -929,39 +953,44 @@ class Game {
     return log.reduce((s, e) => s + e.dmg, 0) / span;
   }
 
-  /** The practice cheats on the local hero: full mana / light / energy, and abilities and dodge always ready. */
+  /** The practice cheats on every hero: full mana / light / energy, and abilities and dodge always ready. */
   applyCheats() {
     const o = this.cheats;
-    const p = this.player;
-    // infinite mana also covers the Priestess's light orbs
-    if (p.resource && ((p.resource.name !== 'ENERGY' && o.infiniteMana) || (p.resource.name === 'ENERGY' && o.infiniteEnergy))) {
-      p.resource.value = p.resource.max;
+    for (const p of this.players) {
+      // infinite mana also covers the Priestess's light orbs
+      if (p.resource && ((p.resource.name !== 'ENERGY' && o.infiniteMana) || (p.resource.name === 'ENERGY' && o.infiniteEnergy))) {
+        p.resource.value = p.resource.max;
+      }
+      // no cooldowns on RMB / E / F and the dodge (the basic attack keeps its own rate)
+      if (o.noCooldowns) for (const k of ['secondary', 'e', 'f', 'dodge']) p.cooldowns[k] = Math.min(p.cooldowns[k], 0);
     }
-    // no cooldowns on RMB / E / F and the dodge (the basic attack keeps its own rate)
-    if (o.noCooldowns) for (const k of ['secondary', 'e', 'f', 'dodge']) p.cooldowns[k] = Math.min(p.cooldowns[k], 0);
   }
 
   updatePractice(dt) {
     const pr = this.practice;
-    const p = this.player;
     while (pr.log.length && pr.log[0].t < this.time - 5) pr.log.shift();
     for (const d of this.dummies) d.update(dt);
     this.updateBossPortal(dt);
 
-    // no game over in practice: respawn instead
-    if (p.dead && pr.respawn <= 0) {
-      pr.respawn = 1.5;
-      this.banner('DOWNED', 'Respawning...', 1.5);
-    }
-    if (pr.respawn > 0) {
-      pr.respawn -= dt;
-      if (pr.respawn <= 0) {
-        const s = this.dungeon.playerStart;
-        this.player = createHero(p.classId, s.x, s.y, this.enhancementsOf(p.netId, p.classId));
-        this.clones = [];
-        this.barriers = [];
+    // no game over in practice: a downed hero gets back up at the start instead
+    this.players.slice().forEach((p, i) => {
+      if (!p.dead) { delete pr.respawn[p.netId]; return; }
+      if (!(p.netId in pr.respawn)) {
+        pr.respawn[p.netId] = 1.5;
+        if (p === this.localPlayer) this.banner('DOWNED', 'Respawning...', 1.5);
+        return;
       }
-    }
+      pr.respawn[p.netId] -= dt;
+      if (pr.respawn[p.netId] > 0) return;
+      delete pr.respawn[p.netId];
+      const s = this.dungeon.playerStart;
+      const off = Game.spawnOffset(i);
+      const fresh = createHero(p.classId, s.x + off.x, s.y + off.y, this.enhancementsOf(p.netId, p.classId));
+      fresh.isBot = p.isBot;
+      this.replaceHero(p, fresh);
+      this.clones = this.clones.filter((c) => c.owner !== p);
+      this.barriers = this.barriers.filter((b) => b.owner !== p);
+    });
   }
 
   get stats() {

@@ -311,24 +311,29 @@ const Menus = {
     }
   },
 
-  /** Buttons on the practice-range panel. */
+  /**
+   * Buttons on the practice-range panel. What happens in the range goes through app.command, so in
+   * multiplayer every machine applies it together (anyone can use the panel; the cheats are shared).
+   * Leaving the range (or restarting it) takes the whole party along, so in multiplayer only the host can.
+   */
   handlePractice(cmd, app) {
     const [name, arg] = cmd.split(':');
-    const game = app.game;
+    const hostOnly = () => {
+      if (app.mp && !app.mp.isHost) { this.toast('ONLY THE HOST CAN DO THAT', '#ffe680'); return true; }
+      return false;
+    };
     switch (name) {
       case 'collapse': document.getElementById('practice-panel').classList.toggle('collapsed'); break;
-      case 'class': app.startPractice(arg); break;
-      case 'spawn': game.practiceSpawn(arg); break;
-      case 'arena': game.openBossPortal(arg); break;
-      case 'clear': game.clearEnemies(); break;
-      case 'toggle':
-        app.practiceOptions[arg] = !app.practiceOptions[arg];
-        this.refreshPractice(app.practiceOptions);
+      case 'class':
+        if (!app.mp) { app.startPractice(arg); break; }
+        app.command({ type: 'hero', classId: arg });
+        app.classId = arg;
         break;
-      case 'ult': game.player.ult = game.player.ultMax; break;
-      case 'resetDps': game.resetDps(); break;
-      case 'range': app.startPractice(); break;
-      case 'lobby': app.enterLobby(); break;
+      case 'spawn': case 'arena': case 'clear': case 'toggle': case 'ult': case 'resetDps':
+        app.command({ type: 'practice', action: name, arg });
+        break;
+      case 'range': if (!hostOnly()) app.startPractice(); break;
+      case 'lobby': if (!hostOnly()) app.enterLobby(); break;
     }
   },
 

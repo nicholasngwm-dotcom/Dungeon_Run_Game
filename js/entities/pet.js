@@ -1,6 +1,6 @@
 // Pets: a hero's animal companion (CONFIG.pets: cat, dog, bird, pig), bought with gems in the
 // keep's pet room and brought along on every run. A pet trots after its hero and fights whatever
-// comes near them: the cat's scratches make enemies bleed, the dog's bark slows them, the bird
+// comes near them: the cat's scratches make enemies bleed, the dog's bark knocks them back, the bird
 // pecks fast and can't be reached by melee, and the pig's bites leave slowing, hurting mud.
 //
 // Pets never die. Enemies may go for them (they're allies, see Game.allies), but enemy bodies
@@ -189,14 +189,15 @@ class Pet extends Entity {
     });
   }
 
-  /** The dog barks: every enemy close by is slowed for a few seconds. */
+  /** The dog barks: every enemy close by is knocked away from it (a wall slam counts as its hero's hit). */
   bark(world) {
     const b = this.cfg.bark;
     this.specialT = b.every;
     this.lunge = 0.25;
     for (const e of world.enemies) {
-      if (e.dead || !e.petSlowed || dist(this.x, this.y, e.x, e.y) > b.radius + (e.radius || 0)) continue;
-      e.petSlowed(b.slow, b.time);
+      if (e.dead || e.prop || dist(this.x, this.y, e.x, e.y) > b.radius + (e.radius || 0)) continue;
+      e.lastHitBy = this.owner;
+      e.knockback(angleTo(this.x, this.y, e.x, e.y), b.knockback);
     }
     world.effects.text(this.x + this.facing * 14, this.y - 30, 'WOOF!', { color: '#ffe0a0', size: 8 });
     const { x, y } = this;

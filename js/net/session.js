@@ -14,7 +14,7 @@
 // and the network status (a lagging link) is shown separately, so the two
 // kinds of trouble can't be confused.
 //
-// Scenes (the lobby, a dungeon run, the test dungeon) start through bundle
+// Scenes (the lobby, the practice range, a dungeon run, the test dungeon) start through bundle
 // commands too, so everyone builds the new world on the same tick from the same seed.
 
 // interact is also held (keeping it down by a downed teammate revives them), and so are the
@@ -52,7 +52,7 @@ class Session {
     this.events = events;
     this.gameEvents = Session.outsideSim(gameEvents);
     this.game = null;
-    this.scene = null;           // 'lobby' | 'run' | 'test'
+    this.scene = null;           // 'lobby' | 'practice' | 'run' | 'test'
     this.tick = 0;
     this.acc = 0;
     this.id = isHost ? 'p1' : null;
@@ -250,11 +250,14 @@ class Session {
       }
     }
     if (cmd.scene === 'run') this.runOpts = cmd.run;   // (resyncRun rebuilds it)
+    // the practice range's cheats (shared by the party), also on in a boss arena opened from it
+    const cheats = cmd.practice ? { ...cmd.practice } : null;
     this.scene = cmd.scene;
     this.roster = cmd.roster;
     this.rng = seededRng(cmd.seed);
     this.desync = null;   // a new scene is built fresh from the seed, so everyone is back in step
-    const opts = { roster: cmd.roster, localId: this.id, lobby: cmd.scene === 'lobby', run: cmd.run || null, welcome: firstLobby };
+    const opts = { roster: cmd.roster, localId: this.id, lobby: cmd.scene === 'lobby', run: cmd.run || null, welcome: firstLobby,
+      practice: cmd.scene === 'practice' ? cheats : null, cheats };
     this.withRng(() => { this.game = new Game(null, this.gameEvents, opts); });
     this.game.code = this.code;
     const newcomer = !firstLobby && cmd.scene === 'lobby' && cmd.roster.find((r) => !before.includes(r.id) && r.id !== this.id);
@@ -292,12 +295,26 @@ class Session {
     });
   }
 
-  /** Queues a new scene for everyone. kind: 'lobby' | 'run' | 'test'; run: dungeon run options. */
-  queueScene(kind, run = null) {
+  /**
+   * Queues a new scene for everyone. kind: 'lobby' | 'practice' | 'run' | 'test'; run: dungeon run
+   * options; practice: the practice cheats (for the range, or a boss arena opened from it).
+   */
+  queueScene(kind, run = null, practice = null) {
     // back in the lobby the AI stand-ins go home (their seats open up again)
     if (kind === 'lobby') this.roster = this.roster.filter((r) => !r.bot);
     const roster = this.currentRoster();
-    this.queue.push({ from: this.id, cmd: { scene: kind, seed: Math.floor(nativeRandom() * 2 ** 31), roster, run } });
+    this.queue.push({ from: this.id, cmd: { scene: kind, seed: Math.floor(nativeRandom() * 2 ** 31), roster, run, practice } });
+  }
+
+  /** Host: the whole party goes to the practice range (keeping the cheats already toggled there, else `options`). */
+  startPractice(options) {
+    if (this.isHost) this.queueScene('practice', null, { ...(this.game?.cheats || options) });
+  }
+
+  /** Host: someone stepped into a practice range boss portal - the whole party goes to that boss. */
+  startBossPractice(boss) {
+    if (!this.isHost) return;
+    this.queueScene('run', { mode: 'set', theme: DungeonRun.bossTheme(boss), practiceBoss: boss }, { ...this.game.cheats });
   }
 
   startRun(run) { if (this.isHost) this.queueScene(run ? 'run' : 'test', run); }
@@ -310,7 +327,7 @@ class Session {
    */
   resyncRun() {
     if (!this.isHost || this.scene !== 'run' || !this.game?.run) return false;
-    this.queueScene('run', { ...this.runOpts, resume: this.game.run.snapshot() });
+    this.queueScene('run', { ...this.runOpts, resume: this.game.run.snapshot() }, this.game.cheats ? { ...this.game.cheats } : null);
     return true;
   }
 
@@ -421,8 +438,8 @@ class Session {
   }
 
   /**
-   * Host: a client's connection closed. In the lobby they just leave; in the middle of a
-   * run (or the test dungeon) the AI takes over their hero so the party isn't left short.
+   * Host: a client's connection closed. In the lobby or the practice range they just leave; in the
+   * middle of a run (or the test dungeon) the AI takes over their hero so the party isn't left short.
    */
   onPeerLeft(peer) {
     const id = this.peers.get(peer);
@@ -430,7 +447,7 @@ class Session {
     this.peers.delete(peer);
     delete this.clientInputs[id];
     const entry = this.roster.find((r) => r.id === id);
-    if (this.scene !== 'lobby' && entry && this.game && this.game.heroById(id)) {
+    if (this.scene !== 'lobby' && this.scene !== 'practice' && entry && this.game && this.game.heroById(id)) {
       entry.bot = true;
       entry.name = `${entry.name} (AI)`;
       this.botMem[id] = {};
