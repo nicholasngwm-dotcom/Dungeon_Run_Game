@@ -390,7 +390,7 @@ const CONFIG = {
     bletcher: {
       hp: 170, speed: 24, radius: 16, damage: 12,
       preferredMin: 150, preferredMax: 280, windup: 0.8, cooldown: 2.4, spitSpeed: 150,
-      poisonDps: 6, poisonTime: 3,
+      poisonDps: 5, poisonTime: 3,
     },
     // Skeleton warrior: its shield blocks the first hit, then it fights with a sword
     skeletonWarrior: {
@@ -863,7 +863,7 @@ const CONFIG = {
     barrels: {
       rooms: ['combat', 'survival', 'defend'], perRoom: [2, 4], hp: 20, kinds: ['explosive', 'poison', 'frost'],
       explosive: { radius: 85, damage: 40, enemyDamage: 90, burnDps: 12, burnTime: 4 },
-      poison: { radius: 80, cloudTime: 4, dps: 3, time: 8, enemyDps: 15 },
+      poison: { radius: 80, cloudTime: 4, dps: 5, time: 8, enemyDps: 15 },
       frost: { radius: 75, damage: 10, enemyDamage: 25, freeze: 1.5, iceRadius: 70, iceTime: 8, refreeze: 1.2 },
     },
     // special rooms (one or two per floor); not functional yet
