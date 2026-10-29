@@ -574,7 +574,7 @@ class Priestess extends Player {
   /** Ability outlines while a key is held: who gets the aegis, the light bomb's blast (the rune casts on the press). */
   /**
    * Her ray, aimed like a thrower's shot: a dotted arc from her staff to a circle where it will land
-   * (shown while a phone's aim stick is dragged, and following the cursor on a PC).
+   * (shown while a phone's aim stick is dragged).
    */
   throwPreview() {
     if (!this.world) return null;

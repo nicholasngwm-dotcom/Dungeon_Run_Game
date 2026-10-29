@@ -304,8 +304,8 @@ class Player extends Entity {
       shape = { lane: { x: this.x, y: this.y, angle: this.aim, length: CONFIG.player.dodge.distance, width: 22, arrow: true }, rgb: '200, 230, 255' };
     }
     // a thrower's attack (the Priestess's ray): its arc and landing spot while it's aimed (a phone's aim
-    // stick dragged; on a PC, wherever the cursor is)
-    if (!shape && this.throwPreview && !this.dead && (Touch.enabled ? Touch.throwAiming : !Input.freeMouse)) shape = this.throwPreview();
+    // stick dragged; phones only)
+    if (!shape && this.throwPreview && !this.dead && Touch.enabled && Touch.throwAiming) shape = this.throwPreview();
     if (!shape || Touch.cancelArmed) return;   // (a touch skill held on a cancel spot won't land)
     // each kind of ability has its own look, in its own colour (shape.rgb):
     //   circle  placed on a spot: a ring with a mark in the middle, no line (self: true - round the hero, no mark)
