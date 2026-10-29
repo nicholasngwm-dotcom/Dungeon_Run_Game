@@ -51,6 +51,11 @@ const Menus = {
     slider('set-ofx', 'othersFx', Menus.offOrPercent);
     slider('set-xsize', 'crosshairSize', (v) => `${Math.round(v * 100)}%`, () => this.drawCrosshairPreview());
     slider('set-xlock', 'crosshairLock', Menus.lockLabel);
+    slider('set-tsize', 'touchSize', (v) => `${Math.round(v * 100)}%`);
+    slider('set-topac', 'touchOpacity', (v) => `${Math.round(v * 100)}%`);
+    document.getElementById('set-controls').innerHTML = CONTROL_MODES
+      .map(([mode, label]) => `<button class="toggle" data-action="controls:${mode}">${label.toUpperCase()}</button>`)
+      .join('');
     document.getElementById('set-xhair').innerHTML = CROSSHAIR_TYPES
       .map(([type, label]) => `<button class="toggle" data-action="crosshair:${type}">${label.toUpperCase()}</button>`)
       .join('');
@@ -85,6 +90,17 @@ const Menus = {
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, c.width, c.height);
     HUD.drawCrosshair(ctx, c.width / 2, c.height / 2);
+  },
+
+  /** Highlights the control mode and shows its options (touch buttons, or keybinds and crosshair). */
+  controlsChanged() {
+    for (const btn of document.querySelectorAll('#set-controls .toggle')) {
+      btn.classList.toggle('off', btn.dataset.action !== `controls:${Settings.data.controls}`);
+    }
+    document.body.classList.toggle('touch', Touch.enabled);
+    const fire = document.getElementById('set-autofire');
+    fire.textContent = Settings.data.autoFire ? 'ON' : 'OFF';
+    fire.classList.toggle('off', !Settings.data.autoFire);
   },
 
   /** Highlights the current window mode. */
@@ -175,6 +191,9 @@ const Menus = {
     set('set-ofx', s.othersFx, Menus.offOrPercent(s.othersFx));
     set('set-xsize', s.crosshairSize, `${Math.round(s.crosshairSize * 100)}%`);
     set('set-xlock', s.crosshairLock, Menus.lockLabel(s.crosshairLock));
+    set('set-tsize', s.touchSize, `${Math.round(s.touchSize * 100)}%`);
+    set('set-topac', s.touchOpacity, `${Math.round(s.touchOpacity * 100)}%`);
+    this.controlsChanged();
     this.musicChanged(s.music, false);
     this.displayChanged();
     this.crosshairChanged();
@@ -298,6 +317,16 @@ const Menus = {
       case 'display':
         Display.set(arg);
         this.displayChanged();
+        this.updateSaveState();
+        break;
+      case 'controls':
+        Settings.data.controls = arg;
+        this.controlsChanged();
+        this.updateSaveState();
+        break;
+      case 'toggleAutoFire':
+        Settings.data.autoFire = !Settings.data.autoFire;
+        this.controlsChanged();
         this.updateSaveState();
         break;
       case 'crosshair':

@@ -91,24 +91,27 @@ const HUD = {
       const left = Math.max(0, CONFIG.run.strayReturn - p.strayTime).toFixed(1);
       this.text(ctx, `OUTSIDE THE ROOM - RETURNING IN ${left}s`, 480, 400, { size: 8, align: 'center', color: '#e0c0ff' });
     }
+    // with the touch controls, the aim stick is the left click and the secondary button the right
+    const say = (s) => (Touch.enabled ? s.replace(/LEFT CLICK/g, 'AIM STICK').replace(/RIGHT CLICK/g, 'SECONDARY') : s);
+    const f = Touch.enabled ? 'F' : Settings.label('f');
     if (p.targeting) {
       const msg = { mage: 'LEFT CLICK: PICK LIGHTNING TARGET', rocketeer: `LEFT CLICK: FIRE BARRAGE (${p.ammo} ROCKETS)` }[p.classId] || 'LEFT CLICK: FIRE VOLLEY';
       const color = { mage: '#9cf0d8', rocketeer: '#ff9a3a' }[p.classId] || '#a8cc6a';
-      this.text(ctx, `${msg}   RIGHT CLICK: CANCEL`, 480, 440, { size: 8, align: 'center', color });
+      this.text(ctx, say(`${msg}   RIGHT CLICK: CANCEL`), 480, 440, { size: 8, align: 'center', color });
     }
     if (p.placing) {
-      this.text(ctx, 'LEFT CLICK: PLACE DRAIN CIRCLE   RIGHT CLICK: CANCEL', 480, 440, { size: 8, align: 'center', color: '#9cf0d8' });
+      this.text(ctx, say('LEFT CLICK: PLACE DRAIN CIRCLE   RIGHT CLICK: CANCEL'), 480, 440, { size: 8, align: 'center', color: '#9cf0d8' });
     }
     if (p.choosingAegis) {
-      this.text(ctx, 'LEFT CLICK: AEGIS ON ALLY', 474, 440, { size: 8, align: 'right', color: '#ffe680' });
-      this.text(ctx, 'RIGHT CLICK: AEGIS ON SELF', 486, 440, { size: 8, color: '#ffe680' });
-      this.text(ctx, `${Settings.label('f')}: CANCEL`, 480, 456, { size: 6, align: 'center', color: '#d8c8a0' });
+      this.text(ctx, say('LEFT CLICK: AEGIS ON ALLY'), 474, 440, { size: 8, align: 'right', color: '#ffe680' });
+      this.text(ctx, say('RIGHT CLICK: AEGIS ON SELF'), 486, 440, { size: 8, color: '#ffe680' });
+      this.text(ctx, `${f}: CANCEL`, 480, 456, { size: 6, align: 'center', color: '#d8c8a0' });
     }
     if (p.choosingArrow) {
-      this.text(ctx, 'LEFT CLICK: FIRE ARROW', 474, 440, { size: 8, align: 'right', color: '#ff8a1e' });
-      this.text(ctx, 'RIGHT CLICK: ICE ARROW', 486, 440, { size: 8, color: '#9ad0ff' });
+      this.text(ctx, say('LEFT CLICK: FIRE ARROW'), 474, 440, { size: 8, align: 'right', color: '#ff8a1e' });
+      this.text(ctx, say('RIGHT CLICK: ICE ARROW'), 486, 440, { size: 8, color: '#9ad0ff' });
     }
-    this.drawAbilityTooltip(ctx, p);
+    if (!Touch.enabled) this.drawAbilityTooltip(ctx, p);
     if (game.lobby) this.drawTeleport(ctx, game);
   },
 
@@ -336,9 +339,9 @@ const HUD = {
     this.drawPassive(ctx, info, 12, y + 16);
     this.drawBuffs(ctx, p, 12, y + 16 + (info ? (info.maxPips || info.bar != null ? 26 : 15) + 8 : 0));
 
-    // abilities
+    // abilities (the touch controls draw their own buttons)
     const icons = Sprites.icons[p.classId];
-    for (const s of this.abilitySlots(p)) {
+    for (const s of Touch.enabled ? [] : this.abilitySlots(p)) {
       if (s.slot === 'q') { this.ultSlot(ctx, s.x, s.y, p); continue; }
       const icon = s.icon || (s.slot === 'dodge' ? Sprites.icons.dodge : icons[s.slot]);
       const cd = s.cd ?? p.cooldowns[s.slot];
@@ -511,7 +514,7 @@ const HUD = {
   bagDrag: null,   // { from } while a bag slot is being dragged with the mouse (this screen only)
 
   /** Screen rect of bag slot i (shared by drawing and the mouse). */
-  bagSlotRect(i) { return { x: 14 + i * 44, y: 484, s: 40 }; },
+  bagSlotRect(i) { return Touch.enabled ? Touch.bagSlotRect(i) : { x: 14 + i * 44, y: 484, s: 40 }; },
 
   /** How many slots this screen's hero's bag has (5, or 7 with a Backpack). */
   bagSize: 5,
@@ -542,7 +545,8 @@ const HUD = {
    */
   handleBagMouse(p) {
     const m = Input._mouse;
-    if (!p || p.dead) { this.bagDrag = null; return; }
+    // (with the touch controls, Touch handles the bag's taps and drags)
+    if (!p || p.dead || Touch.enabled) { this.bagDrag = null; return; }
     this.bagSize = p.inventory.length;
     if (this.bagDrag) {
       m.left = m.leftPressed = false;
@@ -577,8 +581,10 @@ const HUD = {
     const m = Input._mouse;
     const first = this.bagSlotRect(0);
     this.text(ctx, 'BAG', first.x + 2, first.y - 19, { size: 5, color: '#a99bbd' });
-    this.text(ctx, 'DRAG: MOVE / OUT TO DROP  RMB: DRINK', first.x + 24, first.y - 19, { size: 5, color: '#8a7660' });
-    const hover = this.bagSlotAt(m.x, m.y);
+    const hint = Touch.enabled ? 'TAP: DRINK  DRAG: MOVE / OUT TO DROP' : 'DRAG: MOVE / OUT TO DROP  RMB: DRINK';
+    this.text(ctx, hint, first.x + 24, first.y - 19, { size: 5, color: '#8a7660' });
+    // (the touch controls' aim point isn't a pointer: no hovering)
+    const hover = Touch.enabled ? -1 : this.bagSlotAt(m.x, m.y);
     p.inventory.forEach((slot, i) => {
       const { x: sx, y: sy, s } = this.bagSlotRect(i);
       this.panel(ctx, sx, sy, s, s);

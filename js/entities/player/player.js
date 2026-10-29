@@ -76,6 +76,9 @@ class Player extends Entity {
    */
   get extraSlots() { return []; }
 
+  /** True if RMB is held down to use (a raised shield, a charging jump), not just pressed. Touch casts the others on letting go. */
+  get holdsSecondary() { return false; }
+
   /** True while the ability in a HUD slot is being held (its slot glows). Classes override. */
   slotHeld() { return false; }
 
@@ -246,6 +249,8 @@ class Player extends Entity {
   updateAbilityKeys(world) {
     const h = this.aimHold;
     if (h) {
+      // touch: the skill button was dragged off to cancel - let go without casting
+      if (Input.pressed('cancelAim')) { this.aimHold = null; return; }
       if (Input.down(h.key)) return;   // still aiming
       this.aimHold = null;
       this.castSlot(h.slot, world);
@@ -285,7 +290,7 @@ class Player extends Entity {
   /** The held ability's outline on the floor (this screen's hero only). */
   drawAbilityPreview(ctx) {
     const shape = this.aimHold && this.abilityPreview(this.aimHold.slot);
-    if (!shape) return;
+    if (!shape || Touch.cancelArmed) return;   // (a touch skill held on a cancel spot won't land)
     const rgb = '255, 236, 170';
     const spin = this.animTime * 0.8;
     const pulse = 0.7 + Math.sin(this.animTime * 8) * 0.15;

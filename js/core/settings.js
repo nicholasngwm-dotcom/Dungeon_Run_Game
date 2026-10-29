@@ -35,6 +35,13 @@ const CROSSHAIR_TYPES = [
   ['both', 'Circle + cross'],
 ];
 
+// How the game is played, in the order the settings screen lists them (auto: touch on phones and tablets).
+const CONTROL_MODES = [
+  ['auto', 'Auto'],
+  ['touch', 'Touch'],
+  ['mouse', 'Mouse + keys'],
+];
+
 const Settings = {
   defaults: {
     sensitivity: 1,      // mouse speed multiplier while the game has the pointer locked
@@ -48,6 +55,10 @@ const Settings = {
     display: 'default',   // default | fullscreen (see Display)
     screenShake: 1,      // camera shake strength (0 = off)
     othersFx: 1,         // multiplayer: how strongly teammates' effects show (0 = hidden); yours, enemies' and text stay full
+    controls: 'auto',    // auto | touch | mouse - see CONTROL_MODES and Touch
+    autoFire: true,      // touch: dragging the aim stick attacks; off, letting go of it fires one shot
+    touchSize: 1,        // touch buttons' scale
+    touchOpacity: 0.85,  // touch buttons' opacity
     keys: {
       up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',
       e: 'KeyE', f: 'KeyF', ult: 'KeyQ', dodge: 'ShiftLeft',

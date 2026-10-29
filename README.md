@@ -20,6 +20,7 @@ VS Code Live Server.
 | `index.html?class=warrior&boss` | Go straight to a random boss |
 | `index.html?class=warrior&boss=phantom` | Go straight to a chosen boss (`golem` or `phantom`) |
 | `index.html?class=mage&practice` | Start in the practice range |
+| `index.html?touch&class=mage&practice` | Use the phone touch controls on a PC (add to any of these) |
 | `index.html?lobby&class=rogue` | Start in the lobby as the Rogue |
 | `index.html?run=graveyard&class=mage` | Start a Graveyard set-dungeon run (`run=random` for random mode, `&stage=2` or `3` to skip ahead) |
 
@@ -173,6 +174,26 @@ effect under the passive) goes on over a weaker one, which carries on underneath
 The Mage spends mana, the Rogue spends energy and the Priestess
 spends light orbs (bar under HP).
 
+### Touch controls (phones and tablets)
+
+Phones and tablets get on-screen controls automatically (Settings > Controls: Auto / Touch /
+Mouse + keys). The game is landscape only; held upright it asks you to turn the phone.
+
+- **Left thumb**: a movement joystick appears wherever you touch the left half of the screen.
+- **Aim stick** (bottom right): hold it still to attack the nearest enemy; drag it to aim.
+  With **Auto fire** on (the default) dragging keeps attacking that way; with it off, drag to
+  aim and let go to fire one shot.
+- **Skill buttons** in an arc round it: secondary, E, F and the ultimate (its ring fills as it
+  charges). Tap to cast at the nearest enemy, or drag to aim (the ability's outline shows) and
+  let go to cast. Changed your mind? Let go on the **CANCEL** mark that appears above the
+  buttons while you drag, or drag back onto the skill's own button. Dodge sits at the bottom of the arc.
+- **USE** is interact (hold it by a fallen teammate to revive), **HEAL** drinks the strongest
+  health potion, and the bag moves to the bottom middle: tap a slot to drink, drag to move it
+  or out of the bag to drop it.
+- Top left: pause, and in dungeon runs the scoreboard (a toggle).
+- Settings has button size and opacity. Touch and PC players send the same input, so they
+  play together in multiplayer like any other machines.
+
 ## Project layout
 
 ```
@@ -181,7 +202,7 @@ css/style.css           menu / UI styling
 js/
   config.js             ALL balance numbers (HP, damage, cooldowns, waves, boss)
   main.js               entry point, screen flow, main loop
-  core/                 utils, settings (saved), input (key bindings), audio (SFX + music), camera
+  core/                 utils, settings (saved), input (key bindings), touch (phone controls), audio (SFX + music), camera
   gfx/                  procedural pixel art: heroes, enemies, boss, items, tiles,
                         obstacleSprites.js (room walls and the rubble left when obstacles are blown up)
     heroes/             one file per hero + cute.js (the shared chibi style and 8-frame poses)

@@ -7,6 +7,9 @@
 // follows the real cursor. The 'cursor' key switches play to free-mouse mode:
 // no lock, the normal pointer instead of the crosshair. With the crosshair lock setting on, the
 // locked crosshair stays a set distance from the hero and the mouse only turns it round them.
+//
+// On a phone the on-screen controls (Touch) stand in for both: they fill in touchHeld /
+// touchPressed and the mouse (aim point and buttons), so nothing downstream can tell the difference.
 
 const Input = {
   keys: new Set(),
@@ -15,6 +18,9 @@ const Input = {
   // multiplayer: while a hero updates, its networked input stands in for the real devices
   // ({ held: Set, pressed: Set, mouse }); null otherwise
   override: null,
+  // the touch controls' actions: held is rebuilt every frame by Touch, pressed lasts one frame
+  touchHeld: new Set(),
+  touchPressed: new Set(),
 
   get mouse() { return this.override ? this.override.mouse : this._mouse; },
   canvas: null,
@@ -41,7 +47,9 @@ const Input = {
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.reset());
 
+    // with the touch controls on, the browser's made-up mouse events after a tap are ignored
     window.addEventListener('mousemove', (e) => {
+      if (Touch.enabled) return;
       if (this.locked) {
         const rect = canvas.getBoundingClientRect();
         const s = Settings.data.sensitivity;
@@ -64,10 +72,12 @@ const Input = {
       this._mouse.y = ((e.clientY - rect.top) / rect.height) * CONFIG.screen.height;
     });
     canvas.addEventListener('mousedown', (e) => {
+      if (Touch.enabled) return;
       if (e.button === 0) { this._mouse.left = true; this._mouse.leftPressed = true; }
       if (e.button === 2) { this._mouse.right = true; this._mouse.rightPressed = true; }
     });
     window.addEventListener('mouseup', (e) => {
+      if (Touch.enabled) return;
       if (e.button === 0) { this._mouse.left = false; this._mouse.leftReleased = true; }
       if (e.button === 2) this._mouse.right = false;
     });
@@ -88,13 +98,14 @@ const Input = {
   down(action) {
     const arrows = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
     if (this.override) return this.override.held.has(action);
-    return this.codesFor(action).some((c) => this.keys.has(c)) || (arrows[action] && this.keys.has(arrows[action]));
+    return this.codesFor(action).some((c) => this.keys.has(c)) || (arrows[action] && this.keys.has(arrows[action]))
+      || this.touchHeld.has(action);
   },
 
   /** Pressed this frame. */
   pressed(action) {
     if (this.override) return this.override.pressed.has(action);
-    return this.codesFor(action).some((c) => this.pressedKeys.has(c));
+    return this.codesFor(action).some((c) => this.pressedKeys.has(c)) || this.touchPressed.has(action);
   },
 
   /**
@@ -109,6 +120,7 @@ const Input = {
       return;
     }
     for (const c of this.codesFor(action)) this.pressedKeys.delete(c);
+    this.touchPressed.delete(action);
   },
 
   /** The other actions bound to the same key as `action` on this machine. */
@@ -168,6 +180,7 @@ const Input = {
   /** Call once at the end of every frame. */
   endFrame() {
     this.pressedKeys.clear();
+    this.touchPressed.clear();
     this._mouse.leftPressed = false;
     this._mouse.rightPressed = false;
     this._mouse.leftReleased = false;
@@ -176,6 +189,7 @@ const Input = {
   reset() {
     this.keys.clear();
     this.pressedKeys.clear();
+    this.touchPressed.clear();
     this._mouse.left = this._mouse.right = false;
   },
 };

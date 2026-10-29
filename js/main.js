@@ -5,6 +5,7 @@
 //   ?class=rogue&wave=3  start at a given wave
 //   ?class=warrior&boss  start at a random boss (&boss=golem or &boss=phantom to pick)
 //   ?class=mage&practice start in the practice range
+//   ?touch               use the phone / tablet touch controls on this computer
 //   ?lobby               start in the lobby (&class=... to pick the hero; &panel=hero:mage or &panel=workshop opens a station)
 //   ?run=graveyard       start a set-dungeon run (?run=castle, or ?run=random for random mode; &stage=2 or 3 to skip ahead)
 //   ?run=graveyard&visit=special&special=blacksmith   start inside a room type (shop, special, boss...),
@@ -55,6 +56,7 @@ const App = {
     await new Promise((r) => setTimeout(r, Math.max(0, 900 - (performance.now() - started))));
 
     Input.init(this.canvas);
+    Touch.init(this, this.canvas);
     Menus.init(this);
     Cheats.init(this);
     Chat.init(this);
@@ -117,6 +119,8 @@ const App = {
 
   applyDevShortcuts() {
     const params = new URLSearchParams(location.search);
+    // ?touch: the phone controls on this computer (not saved)
+    if (params.has('touch')) Settings.data.controls = 'touch';
     const classId = params.get('class');
     if (classId && CONFIG.classes[classId]) this.classId = classId;
     if (params.has('lobby')) {
@@ -609,13 +613,16 @@ const App = {
     }
     this.canvas.classList.toggle('free-cursor', Input.freeMouse);
 
+    // the touch controls: this frame's moving, aiming and buttons (they stand in for the mouse and keys)
+    Touch.update(this, dt);
+
     // lock the pointer while playing (aim uses Settings sensitivity); free it for menus
-    if (this.state === 'playing') {
+    if (this.state === 'playing' && !Touch.enabled) {
       if (!Input.freeMouse && !Input.locked && (Input.mouse.leftPressed || Input.mouse.rightPressed)) Input.lockPointer();
     } else Input.unlockPointer();
 
     // crosshair lock: keep the crosshair its set distance from this screen's hero
-    const me = this.state === 'playing' && !Input.freeMouse && this.game?.localPlayer;
+    const me = this.state === 'playing' && !Input.freeMouse && !Touch.enabled && this.game?.localPlayer;
     if (me) Input.updateCrosshairLock(me.pivotX - this.game.camera.x, me.pivotY - this.game.camera.y);
     else Input.updateCrosshairLock(null, null);
 
@@ -648,7 +655,8 @@ const App = {
     if (this.game) {
       this.game.render(this.ctx);
       if (this.mp) this.drawNetStatus(this.ctx);
-      if (this.state === 'playing' && !Input.freeMouse) HUD.drawCrosshair(this.ctx, Input.mouse.x, Input.mouse.y);
+      if (this.state === 'playing' && Touch.enabled) Touch.draw(this.ctx, this.game);
+      else if (this.state === 'playing' && !Input.freeMouse) HUD.drawCrosshair(this.ctx, Input.mouse.x, Input.mouse.y);
     } else {
       MenuShowcase.update(dt);
       MenuShowcase.render(this.ctx);

@@ -161,6 +161,9 @@ class Warrior extends Player {
     this.barrier.follow();
   }
 
+  /** The shield stays up while RMB is held. */
+  get holdsSecondary() { return true; }
+
   /** The shield slot glows while the shield is held up. */
   slotHeld(slot) { return slot === 'secondary' && this.barrier.raised; }
 

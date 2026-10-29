@@ -307,6 +307,9 @@ class Rocketeer extends Player {
     return { x: this.x + Math.cos(a) * reach, y: this.y + Math.sin(a) * reach, angle: a };
   }
 
+  /** The rocket jump charges while RMB is held. */
+  get holdsSecondary() { return true; }
+
   updateJumpCharge(dt, world) {
     this.jumpCharge.t += dt;
     if (Input.mouse.right && !this.dead && !(this.stunTime > 0)) return;
