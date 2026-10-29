@@ -501,11 +501,13 @@ const Touch = {
       } else if (pp.t <= 0) this.pendingPick = null;
     }
     const was = m.left;
-    // (a thrower never fires while its stick is held: it throws on letting go - where it was dragged, or
-    // a quick tap throws at the nearest enemy)
+    // A thrower (Priestess, Baker) throws on letting go - where it was dragged, or a quick tap at the nearest
+    // enemy. With Auto fire on it also keeps throwing while the stick is held: at the landing spot while
+    // dragged, or (held still a moment, so starting a drag never throws first) at the nearest enemy.
     const thrower = this.heroRules(me).thrower;
     this.throwAiming = !!(aim && aimDrag && thrower && !this.picking);
-    let fire = !!aim && !this.picking && !thrower && (!aimDrag || Settings.data.autoFire);
+    let fire = !!aim && !this.picking && (!aimDrag || Settings.data.autoFire);
+    if (thrower && fire) fire = Settings.data.autoFire && (!!aimDrag || aim.frames > 15);
     if (this.shot) {
       fire = true;
       this.shot.t -= dt;

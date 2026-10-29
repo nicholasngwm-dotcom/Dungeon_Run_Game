@@ -207,7 +207,8 @@ Mouse + keys). The game is landscape only; held upright it asks you to turn the 
   and camouflage. The Archer has separate FIRE and ICE buttons on one shared cooldown. The Priestess's and the
   Baker's attacks are
   aimed like a thrower's: drag the aim stick (a full drag is the full range) to see where it lands (the Baker's
-  shows the arc her cake flies), and
+  shows the arc her cake flies); with Auto fire on they keep throwing while the stick is held, with it off they
+  throw once on letting go, and
   let go to throw (a quick tap throws at the nearest enemy). Her Aegis
   is dragged onto a teammate (a tap shields herself). Each ability's indicator has its own shape and colour:
   a line and a circle for something thrown, a circle for something placed, a ring round you, an arrow for a
