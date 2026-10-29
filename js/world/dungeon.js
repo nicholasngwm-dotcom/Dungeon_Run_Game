@@ -203,6 +203,17 @@ class Dungeon {
     return this.tileAt(Math.floor(x / this.T), Math.floor(y / this.T)) !== TILE.FLOOR;
   }
 
+  /**
+   * True if a shot flying through (x, y) stops there: anything solid, except the tiles shots pass
+   * over (`shotThrough`: the King's throne, solid to walk into but not in the way of his attackers).
+   */
+  blocksShotAt(x, y) {
+    const tx = Math.floor(x / this.T);
+    const ty = Math.floor(y / this.T);
+    if (this.shotThrough?.has(ty * this.cols + tx)) return false;
+    return this.isSolidAt(x, y);
+  }
+
   /** True if a flier (the mage's bird) can pass over tile (tx, ty): low obstacles like cover and pillars, never walls or doors. */
   flyOver(tx, ty) {
     return FLY_OVER.has(this.tileAt(tx, ty));

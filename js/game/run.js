@@ -1201,6 +1201,9 @@ class DungeonRun {
     const f = this.floor;
     const mid = (r.x0 + r.x1) / 2;   // the middle tile (rooms are an odd width): the throne is 5 tiles round it
     for (let ty = r.y0; ty <= r.y0 + 3; ty++) for (let tx = mid - 2; tx <= mid + 2; tx++) f.grid[ty][tx] = TILE.COVER;
+    // shots fly over it: the King sits on it, and his hit point is inside its footprint
+    f.shotThrough = new Set();
+    for (let ty = r.y0; ty <= r.y0 + 3; ty++) for (let tx = mid - 2; tx <= mid + 2; tx++) f.shotThrough.add(f.idx(tx, ty));
     // (no art of its own: the throne decor draws it; fixed, so no blast knocks it down)
     this.cover.push({ kind: 'throne', tx: mid - 2, ty: r.y0, w: 5, h: 4, x: (mid - 2) * f.T, y: r.y0 * f.T, seed: 0, room: r, fixed: true, item: null, hidden: true });
   }

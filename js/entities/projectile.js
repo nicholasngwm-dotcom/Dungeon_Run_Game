@@ -55,7 +55,7 @@ class Projectile {
     this.x += this.vx * dt;
     this.y += this.vy * dt;
 
-    if (world.dungeon.isSolidAt(this.x, this.y)) {
+    if (world.dungeon.blocksShotAt(this.x, this.y)) {
       if (this.bounces > 0) {
         this.bounce(world, px, py);
       } else {
@@ -79,8 +79,8 @@ class Projectile {
   }
 
   bounce(world, px, py) {
-    const solidX = world.dungeon.isSolidAt(this.x, py);
-    const solidY = world.dungeon.isSolidAt(px, this.y);
+    const solidX = world.dungeon.blocksShotAt(this.x, py);
+    const solidY = world.dungeon.blocksShotAt(px, this.y);
     if (solidX) this.vx = -this.vx;
     if (solidY) this.vy = -this.vy;
     if (!solidX && !solidY) { this.vx = -this.vx; this.vy = -this.vy; }
