@@ -117,9 +117,9 @@ class Rocketeer extends Player {
   }
 
   /** No dodging out of the middle of a jump. */
-  startDodge(world) {
+  startDodge(world, aimed) {
     if (this.jump) return;
-    super.startDodge(world);
+    super.startDodge(world, aimed);
   }
 
   // ---------- shared: a rocket's blast ----------

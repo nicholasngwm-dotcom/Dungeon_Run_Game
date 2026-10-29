@@ -22,7 +22,8 @@ const TOUCH_SKILLS = [
   { id: 'f', angle: 270 },
   { id: 'ult', angle: 308, big: true },
 ];
-const TOUCH_AIMED = ['secondary', 'e', 'f', 'ult'];   // buttons that aim while dragged
+const TOUCH_AIMED = ['dodge', 'secondary', 'e', 'f', 'ult'];   // buttons that aim while dragged (dodge too: it dashes that way)
+const TOUCH_AIM_LOCK = 0.3;      // s a let-go skill's aim holds (and on until the hero's ability is done), so walking can't swing it
 const TOUCH_DEAD = 10;            // px a thumb moves before it counts as a drag
 const TOUCH_MOVE_DEAD = 5;        // px the movement stick moves before the hero walks
 const TOUCH_TARGET_RANGE = 340;   // auto-target reach (world px)
@@ -37,6 +38,7 @@ const Touch = {
   aimDist: 60,
   shot: null,              // Auto fire off: the shot let go of the aim stick { dir, dist, t }
   released: null,          // a skill just let go: where it casts this frame ({ x, y, dist }, or 'auto' = the auto target)
+  locked: null,            // that skill's aim, held while it plays out (a charge's windup, a dash): { x, y, dist, t }
   cancelArmed: false,      // the dragged skill is on a cancel spot (its outline is hidden)
   click: null,             // a tap on the lobby's teleport button / map, passed on as a click { x, y }
   scoreboard: false,       // the scoreboard button is a toggle (Tab is held)
@@ -159,11 +161,11 @@ const Touch = {
     const taken = (role) => [...this.pointers.values()].some((o) => o.role === role);
     if (b) {
       t.role = b.id;
-      if (b.id === 'dodge') { Input.touchPressed.add('dodge'); return; }
+      if (b.id === 'dodge') t.deferred = true;   // dodges on letting go: dragged, that way; tapped, the way the hero walks
       if (b.id === 'heal') { Input.touchPressed.add('quickHeal'); return; }
       const p = game.localPlayer;
       if (b.id === 'interact') Input.touchPressed.add('interact');   // (held while the thumb stays down)
-      else if (b.id === 'secondary') {
+      else if (b.id === 'dodge') { /* (above) */ } else if (b.id === 'secondary') {
         // a held secondary (shield, jump) is down with the thumb; the others cast on letting go
         t.deferred = !p.holdsSecondary;
         if (!t.deferred) { m.right = true; m.rightPressed = true; }
@@ -193,6 +195,13 @@ const Touch = {
       else if (this.cancelling(t)) {
         if (!t.deferred) Input.touchPressed.add('cancelAim');
         Sound.play('uiClick');
+      } else if (t.role === 'dodge') {
+        // dragged: a dodge that way (the aim, held until it's done); tapped: the way the hero walks
+        const d = this.drag(t, t.home, this.skillReach());
+        if (d) {
+          Input.touchPressed.add('dodgeAim');
+          this.released = { x: d.x, y: d.y, dist: 60 };
+        } else Input.touchPressed.add('dodge');
       } else {
         if (t.deferred && t.role === 'secondary') m.rightPressed = true;
         else if (t.deferred) Input.touchPressed.add(t.role);
@@ -273,7 +282,7 @@ const Touch = {
     if (!me) {
       // a menu took over: every thumb is let go
       this.pointers.clear();
-      this.shot = this.released = this.click = null;
+      this.shot = this.released = this.click = this.locked = null;
       this.cancelArmed = false;
       this.scoreboard = false;
       m.left = m.right = false;
@@ -339,14 +348,23 @@ const Touch = {
       want = aimDrag ? { x: aimDrag.x, y: aimDrag.y, dist: this.aimRange(aimDrag.k) } : toward();
     } else if (this.released) {
       want = this.released === 'auto' ? toward() : this.released;
+      // the skill's aim holds while it plays out (a charge's windup, a dash), whichever way the hero walks
+      if (want) this.locked = { ...want, t: TOUCH_AIM_LOCK };
     } else if (this.shot?.dir) {
       want = { x: this.shot.dir.x, y: this.shot.dir.y, dist: this.shot.dist };
     } else if (this.shot) {
       want = toward();
+    } else if (this.locked) {
+      want = this.locked;
     } else if (this.moveDir) {
       want = { x: this.moveDir.x, y: this.moveDir.y, dist: 60 };
     }
     this.released = null;
+    if (this.locked) {
+      this.locked.t -= dt;
+      // (a new skill or the aim stick takes over; otherwise it lets go once the ability is done)
+      if (skill || aim || (this.locked.t <= 0 && !(me.busy > 0 || me.channeling))) this.locked = null;
+    }
     if (want) {
       this.aimDir = { x: want.x, y: want.y };
       this.aimDist = want.dist;

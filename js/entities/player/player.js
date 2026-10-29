@@ -241,6 +241,7 @@ class Player extends Entity {
 
   handleInput(world) {
     if (Input.pressed('dodge')) this.startDodge(world);
+    if (Input.pressed('dodgeAim')) this.startDodge(world, true);   // (a phone's dodge button dragged: that way)
     if (this.busy > 0 || this.channeling) { this.aimHold = null; return; }
     this.updateAbilityKeys(world);
     if (this.busy > 0 || this.channeling) return;
@@ -297,7 +298,11 @@ class Player extends Entity {
   drawAbilityPreview(ctx) {
     // a held key's ability, or on a phone the secondary while its button is held (it casts on letting go)
     const slot = this.aimHold?.slot || (Touch.holding('secondary') ? 'secondary' : null);
-    const shape = slot && this.abilityPreview(slot);
+    let shape = slot && this.abilityPreview(slot);
+    // a phone's dodge button being dragged: the dash it will make
+    if (!shape && Touch.holding('dodge') && this.cooldowns.dodge <= 0) {
+      shape = { lane: { x: this.x, y: this.y, angle: this.aim, length: CONFIG.player.dodge.distance, width: 22 } };
+    }
     if (!shape || Touch.cancelArmed) return;   // (a touch skill held on a cancel spot won't land)
     const rgb = '255, 236, 170';
     const spin = this.animTime * 0.8;
@@ -398,11 +403,12 @@ class Player extends Entity {
 
   // ---------- dodge ----------
 
-  startDodge(world) {
+  /** A dodge the way the hero is moving (standing still: toward the aim); aimed: always toward the aim. */
+  startDodge(world, aimed = false) {
     if (this.cooldowns.dodge > 0 || this.busy > 0) return;
     const c = CONFIG.player.dodge;
     const moving = this.moveDir.x !== 0 || this.moveDir.y !== 0;
-    const angle = moving ? Math.atan2(this.moveDir.y, this.moveDir.x) : this.aim;
+    const angle = moving && !aimed ? Math.atan2(this.moveDir.y, this.moveDir.x) : this.aim;
     this.cooldowns.dodge = Upgrades.dodgeCooldown(this);
     this.dodge = { t: 0, angle, ghost: 0 };
     this.busy = c.duration;

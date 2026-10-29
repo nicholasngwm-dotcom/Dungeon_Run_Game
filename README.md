@@ -197,7 +197,9 @@ Mouse + keys). The game is landscape only; held upright it asks you to turn the 
 - **Skill buttons** in an arc round it: secondary, E, F and the ultimate (its ring fills as it
   charges). Tap to cast at the nearest enemy, or drag to aim (the ability's outline shows) and
   let go to cast. Changed your mind? Let go on the **CANCEL** mark that appears above the
-  buttons while you drag, or drag back onto the skill's own button. Dodge sits at the bottom of the arc.
+  buttons while you drag, or drag back onto the skill's own button. A skill keeps the aim you gave it while it plays
+  out (the Knight's charge goes where you aimed it, not where you walk). Dodge sits at the bottom of the arc: drag it to
+  dodge that way, or tap it to dodge the way you are walking.
 - **USE** is interact (hold it by a fallen teammate to revive), **HEAL** drinks the strongest
   health potion, and the bag moves to the bottom middle: tap a slot to drink, drag to move it
   or out of the bag to drop it.
