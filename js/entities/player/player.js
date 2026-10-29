@@ -301,36 +301,87 @@ class Player extends Entity {
     let shape = slot && this.abilityPreview(slot);
     // a phone's dodge button being dragged: the dash it will make
     if (!shape && Touch.holding('dodge') && this.cooldowns.dodge <= 0) {
-      shape = { lane: { x: this.x, y: this.y, angle: this.aim, length: CONFIG.player.dodge.distance, width: 22 } };
+      shape = { lane: { x: this.x, y: this.y, angle: this.aim, length: CONFIG.player.dodge.distance, width: 22, arrow: true }, rgb: '200, 230, 255' };
     }
     if (!shape || Touch.cancelArmed) return;   // (a touch skill held on a cancel spot won't land)
-    const rgb = '255, 236, 170';
+    // each kind of ability has its own look, in its own colour (shape.rgb):
+    //   circle  placed on a spot: a ring with a mark in the middle, no line (self: true - round the hero, no mark)
+    //   blast   thrown and bursting: a dashed path from the hand, then the filled blast where it lands
+    //   lane    a dash (arrow: true, with an arrowhead) or a beam (filled the whole way)
+    //   cone    a spread (fans of shots, a song)
+    const rgb = shape.rgb || '255, 236, 170';
     const spin = this.animTime * 0.8;
     const pulse = 0.7 + Math.sin(this.animTime * 8) * 0.15;
+    const fill = (x, y, r, sy = 1, a = 0.16) => {
+      ctx.save();
+      ctx.globalAlpha = a * pulse;
+      ctx.fillStyle = `rgb(${rgb})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * sy, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    };
     if (shape.circle) {
       const c = shape.circle;
+      fill(c.x, c.y, c.r, c.sy || 1, c.self ? 0.1 : 0.16);
       PFX.zone(ctx, c.x, c.y, c.r, 0, rgb, { sy: c.sy || 1, spin, alpha: pulse });
+      if (!c.self) {
+        // the spot it lands on: a small cross in the middle
+        const k = 5;
+        PFX.line(ctx, c.x - k, c.y, c.x + k, c.y, `rgba(${rgb}, ${pulse})`, 2);
+        PFX.line(ctx, c.x, c.y - k * (c.sy || 1), c.x, c.y + k * (c.sy || 1), `rgba(${rgb}, ${pulse})`, 2);
+      }
     } else if (shape.lane) {
       const l = shape.lane;
-      PFX.lane(ctx, l.x, l.y, l.x + Math.cos(l.angle) * l.length, l.y + Math.sin(l.angle) * l.length, l.width, 0, rgb);
+      const ex = l.x + Math.cos(l.angle) * l.length;
+      const ey = l.y + Math.sin(l.angle) * l.length;
+      if (l.arrow) {
+        // a dash: the lane, and an arrowhead where it ends
+        PFX.lane(ctx, l.x, l.y, ex, ey, l.width, 0, rgb);
+        const s = Math.max(9, l.width * 0.6);
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = `rgb(${rgb})`;
+        ctx.beginPath();
+        ctx.moveTo(ex + Math.cos(l.angle) * s, ey + Math.sin(l.angle) * s);
+        ctx.lineTo(ex + Math.cos(l.angle + 2.4) * s, ey + Math.sin(l.angle + 2.4) * s);
+        ctx.lineTo(ex + Math.cos(l.angle - 2.4) * s, ey + Math.sin(l.angle - 2.4) * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      } else {
+        // a beam: filled the whole way, brighter down its middle
+        PFX.lane(ctx, l.x, l.y, ex, ey, l.width, 1, rgb);
+        PFX.line(ctx, l.x, l.y, ex, ey, `rgba(${rgb}, ${pulse * 0.8})`, 2, [6, 4], -this.animTime * 30);
+      }
     } else if (shape.cone) {
       const c = shape.cone;
       const a0 = c.angle - c.arc / 2;
       const a1 = c.angle + c.arc / 2;
+      ctx.save();
+      ctx.globalAlpha = 0.14 * pulse;
+      ctx.fillStyle = `rgb(${rgb})`;
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y);
+      ctx.arc(c.x, c.y, c.range, a0, a1);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
       for (const r of [c.range * 0.5, c.range]) PFX.ring(ctx, c.x, c.y, r, r, `rgba(${rgb}, ${r === c.range ? pulse : 0.35})`, 2, { from: a0, to: a1, dash: r === c.range ? null : [3, 3] });
       for (const a of [a0, a1]) PFX.line(ctx, c.x, c.y, c.x + Math.cos(a) * c.range, c.y + Math.sin(a) * c.range, `rgba(${rgb}, ${pulse})`, 2, [3, 2], -this.animTime * 10);
     } else if (shape.blast) {
       // a thrown ball: its path, and the blast where it bursts (filled, so the area reads at a glance)
       const b = shape.blast;
-      PFX.line(ctx, b.fromX, b.fromY, b.x, b.y, `rgba(${b.rgb}, ${pulse})`, 2, [4, 3], -this.animTime * 20);
+      const brgb = b.rgb || rgb;
+      PFX.line(ctx, b.fromX, b.fromY, b.x, b.y, `rgba(${brgb}, ${pulse})`, 2, [4, 3], -this.animTime * 20);
       ctx.save();
       ctx.globalAlpha = 0.18 * pulse;
-      ctx.fillStyle = `rgb(${b.rgb})`;
+      ctx.fillStyle = `rgb(${brgb})`;
       ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, 0, TAU);
+      ctx.ellipse(b.x, b.y, b.r, b.r * (b.sy || 1), 0, 0, TAU);
       ctx.fill();
       ctx.restore();
-      PFX.zone(ctx, b.x, b.y, b.r, 0, b.rgb, { spin, alpha: pulse });
+      PFX.zone(ctx, b.x, b.y, b.r, 0, brgb, { sy: b.sy || 1, spin, alpha: pulse });
     } else if (shape.self) {
       PFX.ring(ctx, this.x, this.y + 4, 26, 12, `rgba(${rgb}, ${pulse})`, 2, { dash: [3, 2], spin: spin * 3 });
     }

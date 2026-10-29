@@ -297,11 +297,12 @@ class Bard extends Player {
 
   /** Ability outlines while a key is held (see Player.abilityPreview). */
   abilityPreview(slot) {
-    if (slot === 'e') return { circle: { x: this.x, y: this.y, r: this.cfg.passive.radius } };
-    if (slot === 'f') return { circle: { x: this.x, y: this.y, r: this.cfg.lullaby.radius } };
+    // inspire: a warm ring round her; lullaby: a dreamy blue one; screech: a pink cone of sound
+    if (slot === 'e') return { circle: { x: this.x, y: this.y, r: this.cfg.passive.radius, self: true }, rgb: '255, 200, 110' };
+    if (slot === 'f') return { circle: { x: this.x, y: this.y, r: this.cfg.lullaby.radius, self: true }, rgb: '170, 160, 255' };
     if (slot === 'q') {
       const c = this.cfg.ult;
-      return { cone: { x: this.pivotX, y: this.pivotY, angle: this.aim, arc: c.spreadDegrees * DEG, range: c.speed * c.life } };
+      return { cone: { x: this.pivotX, y: this.pivotY, angle: this.aim, arc: c.spreadDegrees * DEG, range: c.speed * c.life }, rgb: '255, 140, 200' };
     }
     return null;
   }

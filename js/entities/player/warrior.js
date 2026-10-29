@@ -671,15 +671,16 @@ class Warrior extends Player {
   }
 
   /** Ability outlines while a key is held: the spin's reach, the charge's lane, the cleave's line. */
+  /** Spin: a steel ring round him. Charge: an orange dash. Cleave: a golden beam. */
   abilityPreview(slot) {
-    if (slot === 'e') return { circle: { x: this.x, y: this.hy, r: this.cfg.spin.radius } };
+    if (slot === 'e') return { circle: { x: this.x, y: this.hy, r: this.cfg.spin.radius, self: true }, rgb: '228, 231, 238' };
     if (slot === 'f') {
       const c = this.cfg.charge;
-      return { lane: { x: this.x, y: this.y, angle: this.aim, length: c.distance, width: c.width } };
+      return { lane: { x: this.x, y: this.y, angle: this.aim, length: c.distance, width: c.width, arrow: true }, rgb: '255, 176, 96' };
     }
     if (slot === 'q') {
       const c = this.cfg.ult;
-      return { lane: { x: this.pivotX, y: this.pivotY, angle: this.aim, length: c.length, width: c.width } };
+      return { lane: { x: this.pivotX, y: this.pivotY, angle: this.aim, length: c.length, width: c.width }, rgb: '255, 214, 110' };
     }
     return null;
   }

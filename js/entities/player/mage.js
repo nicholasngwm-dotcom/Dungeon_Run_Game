@@ -588,9 +588,10 @@ class Mage extends Player {
       d = Math.min(d, travel);
       return { blast: { fromX: this.tipX, fromY: this.tipY, x: this.tipX + Math.cos(this.aim) * d, y: this.tipY + Math.sin(this.aim) * d, r: c.radius, rgb: '120, 235, 220' } };
     }
-    if (slot === 'e') return { circle: { x: this.cursor.x, y: this.cursor.y, r: this.cfg.lightning.selectRadius } };
-    if (slot === 'f') return { self: true };
-    if (slot === 'q') return { circle: { x: this.placePos.x, y: this.placePos.y, r: this.cfg.ult.radius, sy: MAGIC_CIRCLE_SY } };
+    // lightning: an electric-blue spot where it strikes; bird: round herself; drain: a violet magic circle placed on the floor
+    if (slot === 'e') return { circle: { x: this.cursor.x, y: this.cursor.y, r: this.cfg.lightning.selectRadius }, rgb: '150, 210, 255' };
+    if (slot === 'f') return { self: true, rgb: '192, 138, 255' };
+    if (slot === 'q') return { circle: { x: this.placePos.x, y: this.placePos.y, r: this.cfg.ult.radius, sy: MAGIC_CIRCLE_SY }, rgb: '190, 120, 255' };
     return null;
   }
 

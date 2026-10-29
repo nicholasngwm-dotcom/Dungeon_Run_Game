@@ -61,6 +61,7 @@ const Settings = {
     othersFx: 1,         // multiplayer: how strongly teammates' effects show (0 = hidden); yours, enemies' and text stay full
     controls: 'auto',    // auto | touch | mouse - see CONTROL_MODES and Touch
     autoFire: true,      // touch: dragging the aim stick attacks; off, letting go of it fires one shot
+    fixedStick: false,   // touch: the movement stick stays in one spot (the layout editor moves it) instead of following the thumb
     touchSize: 1,        // touch buttons' scale
     touchOpacity: 0.85,  // touch buttons' opacity
     uiScale: 1.35,       // touch: interface size (HUD, buttons, text and menus), x a PC's

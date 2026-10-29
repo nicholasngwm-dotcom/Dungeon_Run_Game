@@ -375,13 +375,14 @@ class Baker extends Player {
       const to = this.aimPoint(c.maxRange);
       return { blast: { fromX: this.handX, fromY: this.handY, x: to.x, y: to.y, r: c.radius, rgb: '244, 240, 232' } };
     }
+    // mega cake: a pink spot where it lands; oven: a warm spot where it's set down
     if (slot === 'q') {
       const pt = this.aimPoint(this.cfg.ult.maxRange);
-      return { circle: { x: pt.x, y: pt.y, r: this.cfg.ult.radius, sy: 0.55 } };
+      return { circle: { x: pt.x, y: pt.y, r: this.cfg.ult.radius, sy: 0.55 }, rgb: '255, 160, 210' };
     }
     if (slot === 'f') {
       const c = this.cfg.oven;
-      return { circle: { x: this.x + Math.cos(this.aim) * c.distance, y: this.y + Math.sin(this.aim) * c.distance * 0.8, r: c.radius + 6, sy: 0.5 } };
+      return { circle: { x: this.x + Math.cos(this.aim) * c.distance, y: this.y + Math.sin(this.aim) * c.distance * 0.8, r: c.radius + 6, sy: 0.5 }, rgb: '255, 150, 80' };
     }
     return null;
   }

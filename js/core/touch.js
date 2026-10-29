@@ -24,7 +24,20 @@ const TOUCH_SKILLS = [
 ];
 const TOUCH_AIMED = ['dodge', 'secondary', 'e', 'f', 'ult'];   // buttons that aim while dragged (dodge too: it dashes that way)
 const TOUCH_AIM_LOCK = 0.3;      // s a let-go skill's aim holds (and on until the hero's ability is done), so walking can't swing it
-const TOUCH_DEAD = 10;            // px a thumb moves before it counts as a drag
+// What each hero's buttons do on a phone, beyond aim-and-let-go:
+//   taps   cast the moment they're tapped (they don't aim: a heal at her feet, a song, camouflage)
+//   pick   abilities that on a PC wait for a click to place them (lightning, the volley, the barrage...):
+//          letting go of the dragged button makes that click there ('left' / 'right' mouse button)
+//   drop   dragged onto someone (the Priestess's Aegis: drop it on a teammate; a tap shields herself)
+//   arrows the button that tap-swaps fire / ice, and shoots the chosen arrow when dragged (the Archer)
+const TOUCH_HERO = {
+  priestess: { taps: ['e'], drop: 'f' },
+  bard: { taps: ['secondary', 'e', 'f'] },
+  ranger: { taps: ['e', 'f'], pick: { ult: 'left' }, arrows: 'secondary' },
+  mage: { pick: { e: 'left', ult: 'left' } },
+  rocketeer: { pick: { e: 'left' } },
+};
+const TOUCH_DEAD = 10;           // px a thumb moves before it counts as a drag
 const TOUCH_MOVE_DEAD = 5;        // px the movement stick moves before the hero walks
 const TOUCH_TARGET_RANGE = 340;   // auto-target reach (world px)
 
@@ -39,6 +52,11 @@ const Touch = {
   shot: null,              // Auto fire off: the shot let go of the aim stick { dir, dist, t }
   released: null,          // a skill just let go: where it casts this frame ({ x, y, dist }, or 'auto' = the auto target)
   locked: null,            // that skill's aim, held while it plays out (a charge's windup, a dash): { x, y, dist, t }
+  pendingPick: null,       // a let-go "pick" ability's click, made once the hero is picking: { button: 'left' | 'right', t }
+  arrowIce: false,         // the Archer's fire / ice button is set to ice
+
+  /** This hero's phone button rules (TOUCH_HERO). */
+  heroRules(p) { return (p && TOUCH_HERO[p.classId]) || {}; },
   cancelArmed: false,      // the dragged skill is on a cancel spot (its outline is hidden)
   click: null,             // a tap on the lobby's teleport button / map, passed on as a click { x, y }
   scoreboard: false,       // the scoreboard button is a toggle (Tab is held)
@@ -86,6 +104,16 @@ const Touch = {
     };
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
+    // a tap on the game that opens a menu (USE at the dungeon gate) would otherwise end with a click
+    // on whatever that menu put under the finger (the Test Dungeon card): that click is swallowed
+    canvas.addEventListener('pointerup', (e) => { if (e.pointerType !== 'mouse') this.canvasUpAt = performance.now(); });
+    canvas.addEventListener('touchend', (e) => { if (this.enabled) e.preventDefault(); }, { passive: false });   // (no made-up click at all)
+    window.addEventListener('click', (e) => {
+      if (e.target !== canvas && performance.now() - (this.canvasUpAt || -1e9) < 400) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    }, true);
   },
 
   /** A pointer event's position in game pixels (CONFIG.screen). */
@@ -130,6 +158,7 @@ const Touch = {
       aim: place('aim', ax, ay, 48 * k),
       cancel: place('cancel', ax - 150 * k, ay - 200 * k, 26 * k),   // shown while a skill is dragged
       moveR: 40 * k,
+      stick: place('stick', 130 * k, H - 120 * k, 40 * k),   // the fixed joystick's spot (and the floating one's resting hint)
       buttons,
       // past the coin / gem counter beside the health bar
       pause: square('pause', 314, 12),
@@ -165,6 +194,13 @@ const Touch = {
       if (b.id === 'dodge') t.deferred = true;   // dodges on letting go: dragged, that way; tapped, the way the hero walks
       if (b.id === 'heal') { Input.touchPressed.add('quickHeal'); return; }
       const p = game.localPlayer;
+      // a tap button: cast now, nothing to aim
+      if ((this.heroRules(p).taps || []).includes(b.id)) {
+        if (b.id === 'secondary') m.rightPressed = true;
+        else Input.touchPressed.add(b.id);
+        this.flashTap = { id: b.id, t: performance.now() };
+        return;
+      }
       if (b.id === 'interact') Input.touchPressed.add('interact');   // (held while the thumb stays down)
       else if (b.id === 'dodge') { /* (above) */ } else if (b.id === 'secondary') {
         // a held secondary (shield, jump) is down with the thumb; the others cast on letting go
@@ -185,6 +221,9 @@ const Touch = {
     } else if (pos.x < CONFIG.screen.width / 2 && pos.y > 100) {
       if (taken('move')) return;
       t.role = 'move';
+      // a fixed joystick stays where it is (Settings); a floating one starts under the thumb
+      if (Settings.data.fixedStick) { t.sx = L.stick.x; t.sy = L.stick.y; }
+      else Object.assign(t, this.clampStick(t.x, t.y, L));
     } else return;
     this.pointers.set(id, t);
   },
@@ -192,23 +231,40 @@ const Touch = {
   up(t) {
     const m = Input._mouse;
     if (TOUCH_AIMED.includes(t.role)) {
-      if (t.role === 'secondary' && !t.deferred) m.right = false;   // a held shield / jump just ends
-      else if (this.cancelling(t)) {
+      const rules = this.heroRules(this.app.game?.localPlayer);
+      const d = this.drag(t, t.home, this.skillReach());
+      if (t.role === 'secondary' && !t.deferred) {
+        // a held shield / jump just ends; a dragged one keeps its aim (the rocket jump lands where it was aimed)
+        m.right = false;
+        if (d && !this.cancelling(t)) this.released = { x: d.x, y: d.y, dist: this.skillRange(d.k) };
+      } else if (this.cancelling(t)) {
         if (!t.deferred) Input.touchPressed.add('cancelAim');
         Sound.play('uiClick');
       } else if (t.role === 'dodge') {
         // dragged: a dodge that way (the aim, held until it's done); tapped: the way the hero walks
-        const d = this.drag(t, t.home, this.skillReach());
         if (d) {
           Input.touchPressed.add('dodgeAim');
           this.released = { x: d.x, y: d.y, dist: 60 };
         } else Input.touchPressed.add('dodge');
+      } else if (t.role === rules.arrows && !d) {
+        // the Archer's fire / ice button, tapped: swap which arrow it shoots
+        this.arrowIce = !this.arrowIce;
+        Sound.play('uiClick');
+      } else if (t.role === rules.drop) {
+        // the Aegis: dropped on someone shields them (the click lands where the thumb let go); tapped, herself
+        if (t.deferred) Input.touchPressed.add(t.role);
+        if (d) {
+          this.released = this.dropAim(t);
+          this.pendingPick = { button: 'left', t: TOUCH_AIM_LOCK };
+        } else this.pendingPick = { button: 'right', t: TOUCH_AIM_LOCK };
       } else {
         if (t.deferred && t.role === 'secondary') m.rightPressed = true;
         else if (t.deferred) Input.touchPressed.add(t.role);
         // it casts where it was dragged, or at the auto target if it was only tapped
-        const d = this.drag(t, t.home, this.skillReach());
         this.released = d ? { x: d.x, y: d.y, dist: this.skillRange(d.k) } : 'auto';
+        // an ability that waits for a click to place it: the click is made for it, where it was aimed
+        const pick = t.role === rules.arrows ? (this.arrowIce ? 'right' : 'left') : rules.pick?.[t.role];
+        if (pick) this.pendingPick = { button: pick, t: TOUCH_AIM_LOCK };
       }
     }
     if (t.role === 'aim') {
@@ -239,6 +295,27 @@ const Touch = {
   },
 
   aimRange(k) { return 50 + k * 190; },
+
+  /** A dropped skill (the Aegis) aims at the spot under the thumb itself: as an aim { x, y (unit), dist (world px) }. */
+  dropAim(t) {
+    const game = this.app.game;
+    const me = game.localPlayer;
+    const w = game.camera.screenToWorld(t.x, t.y);
+    const dx = w.x - me.pivotX;
+    const dy = w.y - me.pivotY;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: dx / len, y: dy / len, dist: len };
+  },
+
+  /**
+   * Where the movement stick's base may sit: inside the left half of the screen, clear of the
+   * HUD across the top (like the floating sticks of other mobile games: it never wanders off).
+   */
+  clampStick(x, y, L) {
+    const { width: W, height: H } = CONFIG.screen;
+    const r = L.moveR;
+    return { sx: clamp(x, r + 10, W / 2 - r - 10), sy: clamp(y, Math.min(110 + r, H - r - 10), H - r - 10) };
+  },
 
   /** How far a skill button drags for full range, and the aim distance for a drag of k (0-1). */
   skillReach() { return 70 * (Settings.data.touchSize || 1); },
@@ -283,7 +360,7 @@ const Touch = {
     if (!me) {
       // a menu took over: every thumb is let go
       this.pointers.clear();
-      this.shot = this.released = this.click = this.locked = null;
+      this.shot = this.released = this.click = this.locked = this.pendingPick = null;
       this.cancelArmed = false;
       this.scoreboard = false;
       m.left = m.right = false;
@@ -309,13 +386,17 @@ const Touch = {
     this.moveDir = null;
     Input.touchMove = null;
     if (move) {
+      // a floating stick's base trails the thumb, but never leaves the left side of the screen;
+      // a fixed one stays put (the thumb steers from wherever it is)
+      if (!Settings.data.fixedStick) {
+        const tx = move.x - move.sx;
+        const ty = move.y - move.sy;
+        const tl = Math.hypot(tx, ty);
+        if (tl > L.moveR) Object.assign(move, this.clampStick(move.x - (tx / tl) * L.moveR, move.y - (ty / tl) * L.moveR, L));
+      }
       const dx = move.x - move.sx;
       const dy = move.y - move.sy;
       const len = Math.hypot(dx, dy);
-      if (len > L.moveR) {
-        move.sx = move.x - (dx / len) * L.moveR;
-        move.sy = move.y - (dy / len) * L.moveR;
-      }
       if (len > TOUCH_MOVE_DEAD) {
         const nx = dx / len;
         const ny = dy / len;
@@ -343,7 +424,8 @@ const Touch = {
     let want = null;
     if (skill) {
       const d = this.drag(skill, skill.home, this.skillReach());
-      if (!this.cancelArmed) want = d ? { x: d.x, y: d.y, dist: this.skillRange(d.k) } : toward();
+      // (a dropped skill aims at the spot under the thumb)
+      if (!this.cancelArmed) want = d ? (skill.role === this.heroRules(me).drop ? this.dropAim(skill) : { x: d.x, y: d.y, dist: this.skillRange(d.k) }) : toward();
     } else if (aim) {
       aimDrag = this.drag(aim, L.aim);
       want = aimDrag ? { x: aimDrag.x, y: aimDrag.y, dist: this.aimRange(aimDrag.k) } : toward();
@@ -377,6 +459,24 @@ const Touch = {
 
     // the attack: held while the aim stick is held (still: at the auto target; dragged: only with Auto
     // fire), or for a moment after a shot is let go
+    // a let-go "pick" ability: once the hero is waiting for its click, make it (at the locked aim)
+    const pp = this.pendingPick;
+    if (this.pickCheck && --this.pickCheck.frames <= 0) {
+      // the click didn't take (the lightning found no one there): back out of the waiting mode with
+      // its own cancel (right click), so the hero isn't left stuck in it
+      if (this.picking && (me.targeting || me.placing)) m.rightPressed = true;
+      this.pickCheck = null;
+    }
+    if (pp) {
+      pp.t -= dt;
+      if (this.picking) {
+        if (pp.button === 'right') m.rightPressed = true;
+        else m.leftPressed = true;
+        this.pendingPick = null;
+        this.pickCheck = { frames: 2 };
+        if (this.locked) this.locked.t = Math.max(this.locked.t, 0.1);   // (the click lands at the aim it was given)
+      } else if (pp.t <= 0) this.pendingPick = null;
+    }
     const was = m.left;
     let fire = !!aim && !this.picking && (!aimDrag || Settings.data.autoFire);
     if (this.shot) {
@@ -499,7 +599,7 @@ const Touch = {
 
     // movement stick: where the thumb is, or a faint hint where it usually goes
     const mv = held('move');
-    const base = mv ? { x: mv.sx, y: mv.sy } : { x: 120, y: CONFIG.screen.height - 130 };
+    const base = mv ? { x: mv.sx, y: mv.sy } : L.stick;
     ctx.globalAlpha *= mv ? 1 : 0.45;
     this.ring(ctx, base.x, base.y, L.moveR);
     const knob = mv ? this.clampTo(mv, base, L.moveR) : base;
@@ -586,7 +686,7 @@ const Touch = {
   /** Everything the editor can move: circles { id, x, y, r }, and the bag as a rect. */
   editorItems() {
     const L = this.layout();
-    const items = [L.aim, ...L.buttons, L.cancel];
+    const items = [L.aim, L.stick, ...L.buttons, L.cancel];
     for (const sq of [L.pause, L.score]) items.push({ id: sq.id, x: sq.x + sq.w / 2, y: sq.y + sq.h / 2, r: sq.w / 2, square: sq });
     const a = this.bagSlotRect(0);
     const b = this.bagSlotRect(4);
@@ -653,7 +753,7 @@ const Touch = {
     ctx.fillRect(0, 0, W, H);
     const icons = Sprites.icons[App.game?.localPlayer?.classId || App.classId];
     const glyphs = { aim: icons.primary, dodge: Sprites.icons.dodge, secondary: icons.secondary, e: icons.e, f: icons.f, ult: icons.q };
-    const names = { aim: 'ATTACK', dodge: 'DODGE', secondary: 'SECONDARY', e: 'E', f: 'F', ult: 'ULTIMATE', interact: 'USE', heal: 'HEAL', cancel: 'CANCEL', pause: 'PAUSE', score: 'SCORES', bag: 'BAG' };
+    const names = { aim: 'ATTACK', stick: 'JOYSTICK', dodge: 'DODGE', secondary: 'SECONDARY', e: 'E', f: 'F', ult: 'ULTIMATE', interact: 'USE', heal: 'HEAL', cancel: 'CANCEL', pause: 'PAUSE', score: 'SCORES', bag: 'BAG' };
     for (const it of this.editorItems()) {
       const sel = it.id === this.editSel;
       if (it.rect) {
@@ -796,6 +896,26 @@ const Touch = {
       HUD.text(ctx, `NO ${p.resource.name}`, at.x, at.y + r + 4, { size: 5, align: 'center', color: '#ff6a6a' });
     }
     this.readyFlash(ctx, b.id, ready, at.x, at.y, r);
+    // the Archer's fire / ice button: which arrow it shoots (tap swaps)
+    if (b.id === this.heroRules(p).arrows) {
+      const ice = this.arrowIce;
+      const tw = 26;
+      const ty = at.y + r - 4;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(at.x - tw / 2 - 1, ty - 1, tw + 2, 11);
+      ctx.fillStyle = ice ? '#2a6aa8' : '#b8401e';
+      ctx.fillRect(at.x - tw / 2, ty, tw, 9);
+      HUD.text(ctx, ice ? 'ICE' : 'FIRE', at.x, ty + 1, { size: 5, align: 'center', color: ice ? '#cfeaff' : '#ffe0a0' });
+    }
+    // a tap button just pressed: a quick bright ring
+    const ft = this.flashTap?.id === b.id ? (performance.now() - this.flashTap.t) / 250 : 1;
+    if (ft < 1) {
+      ctx.strokeStyle = `rgba(255, 240, 180, ${1 - ft})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(at.x, at.y, r + 2 + ft * 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     // stored uses: a little gold badge on the rim
     const charges = b.id === 'dodge' ? Upgrades.dodgeCharges(p) : p.slotCharges?.[b.id];
     if (charges) {

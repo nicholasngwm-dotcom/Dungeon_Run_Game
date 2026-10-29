@@ -98,6 +98,9 @@ const Menus = {
     const fire = document.getElementById('set-autofire');
     fire.textContent = Settings.data.autoFire ? 'ON' : 'OFF';
     fire.classList.toggle('off', !Settings.data.autoFire);
+    const stick = document.getElementById('set-fixedstick');
+    stick.textContent = Settings.data.fixedStick ? 'ON' : 'OFF';
+    stick.classList.toggle('off', !Settings.data.fixedStick);
   },
 
   /** Highlights the current window mode. */
@@ -344,6 +347,11 @@ const Menus = {
       case 'editTouchLayout': Touch.openEditor(); break;
       case 'toggleAutoFire':
         Settings.data.autoFire = !Settings.data.autoFire;
+        this.controlsChanged();
+        this.updateSaveState();
+        break;
+      case 'toggleFixedStick':
+        Settings.data.fixedStick = !Settings.data.fixedStick;
         this.controlsChanged();
         this.updateSaveState();
         break;

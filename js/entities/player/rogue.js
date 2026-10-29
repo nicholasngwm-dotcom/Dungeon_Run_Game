@@ -469,14 +469,15 @@ class Rogue extends Player {
   }
 
   /** Ability outlines while a key is held: the parry's guard arc, the dagger storm's cone, where the clones appear. */
+  /** Strike: a red dash. Parry: a short guard arc. Storm: a violet fan of daggers. Clone: round herself. */
   abilityPreview(slot) {
-    if (slot === 'secondary') return { lane: { x: this.x, y: this.y, angle: this.aim, length: this.cfg.strike.distance, width: 24 } };   // (touch: while its button is held)
-    if (slot === 'e') return { cone: { x: this.x, y: this.hy, angle: this.aim, arc: 2.2, range: 34 } };
+    if (slot === 'secondary') return { lane: { x: this.x, y: this.y, angle: this.aim, length: this.cfg.strike.distance, width: 24, arrow: true }, rgb: '255, 96, 96' };   // (touch: while its button is held)
+    if (slot === 'e') return { cone: { x: this.x, y: this.hy, angle: this.aim, arc: 2.2, range: 34 }, rgb: '230, 230, 240' };
     if (slot === 'f') {
       const d = this.cfg.dagger;
-      return { cone: { x: this.pivotX, y: this.pivotY, angle: this.aim, arc: this.cfg.storm.spreadDegrees * DEG, range: d.speed * 0.9 } };
+      return { cone: { x: this.pivotX, y: this.pivotY, angle: this.aim, arc: this.cfg.storm.spreadDegrees * DEG, range: d.speed * 0.9 }, rgb: '200, 150, 255' };
     }
-    if (slot === 'q') return { circle: { x: this.x, y: this.y, r: 40 } };
+    if (slot === 'q') return { circle: { x: this.x, y: this.y, r: 40, self: true }, rgb: '220, 80, 90' };
     return null;
   }
 

@@ -448,8 +448,18 @@ class Priestess extends Player {
 
   drawGroundExtras(ctx) {
     for (const r of this.runes) this.drawRune(ctx, r);
+    // each ray's target marker: the spot filling with light, a bright ring closing in on it as the
+    // strike comes down, and a cross at its heart, so it's clear where (and when) it will land
     for (const r of this.rays) {
-      PFX.zone(ctx, r.x, r.y, this.cfg.ray.radius, r.t / this.cfg.ray.delay, PRIESTESS_FX.gold, { spin: r.t * 3 });
+      const rad = this.cfg.ray.radius;
+      const k = clamp(r.t / this.cfg.ray.delay, 0, 1);
+      PFX.zone(ctx, r.x, r.y, rad, k, PRIESTESS_FX.gold, { spin: r.t * 3, alpha: 1.6 });
+      PFX.disc(ctx, r.x, r.y, rad * k, rad * k, `rgba(${PRIESTESS_FX.gold}, ${0.18 + 0.2 * k})`, 2);
+      const closing = rad * (1.7 - 0.7 * k);
+      PFX.ring(ctx, r.x, r.y, closing, closing, `rgba(255, 246, 200, ${0.4 + 0.6 * k})`, 2, { thick: 2 });
+      const s = 6;
+      PFX.line(ctx, r.x - s, r.y, r.x + s, r.y, 'rgba(255, 250, 220, 0.95)', 2);
+      PFX.line(ctx, r.x, r.y - s, r.x, r.y + s, 'rgba(255, 250, 220, 0.95)', 2);
     }
     if (this.bomb && this.world) {
       const c = this.cfg.ult;
@@ -562,14 +572,15 @@ class Priestess extends Player {
   }
 
   /** Ability outlines while a key is held: who gets the aegis, the light bomb's blast (the rune casts on the press). */
+  /** Aegis: a silver ring round whoever it would shield. Light bomb: a golden circle on its spot (no line). */
   abilityPreview(slot) {
     if (slot === 'f') {
       const a = this.world ? this.allyAtCursor(this.world) : this;
-      return { circle: { x: a.x, y: a.y + 4, r: 24, sy: 0.5 } };
+      return { circle: { x: a.x, y: a.y + 4, r: 24, sy: 0.5, self: true }, rgb: '220, 232, 255' };
     }
     if (slot === 'q') {
       const pt = this.aimPoint(this.world, this.cfg.ult.maxRange);
-      return { circle: { x: pt.x, y: pt.y, r: this.cfg.ult.radius } };
+      return { circle: { x: pt.x, y: pt.y, r: this.cfg.ult.radius }, rgb: '255, 226, 120' };
     }
     return null;
   }

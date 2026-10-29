@@ -12,8 +12,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Dungeon Run">
   <link rel="apple-touch-icon" href="assets/icon.png">
-  <link rel="stylesheet" href="css/alagard.css?v=20261030-397aab">
-  <link rel="stylesheet" href="css/style.css?v=20261030-397aab">
+  <link rel="stylesheet" href="css/alagard.css?v=20261030-33c1d7">
+  <link rel="stylesheet" href="css/style.css?v=20261030-33c1d7">
 </head>
 <body>
   <!-- touch controls held upright: the game is landscape only -->
@@ -265,9 +265,11 @@
         <li class="controls-note">Keys above are the defaults. Change them in Settings.</li>
       </ul>
       <ul class="controls-list touch-only">
-        <li><b>Left thumb</b> Touch anywhere on the left half to move (the stick follows your thumb)</li>
+        <li><b>Left thumb</b> Touch anywhere on the left half to move (the stick follows your thumb but stays on the left side; Settings &gt; Phone &gt; Fixed joystick keeps it in one spot)</li>
         <li><b>Aim stick</b> Hold to attack the nearest enemy, drag to aim (Auto fire off: let go to shoot once)</li>
-        <li><b>Skill buttons</b> Tap to cast at the nearest enemy, or drag to aim and let go to cast</li>
+        <li><b>Skill buttons</b> Tap to cast at the nearest enemy, or drag to aim and let go to cast (it lands where the indicator shows). Some cast on a tap, no aiming: the Priestess's healing rune, the Bard's songs, the Archer's rapid fire and camouflage</li>
+        <li><b>Archer fire / ice</b> Tap the button to swap fire and ice, drag it to shoot</li>
+        <li><b>Priestess Aegis</b> Drag it onto a teammate to shield them; tap to shield yourself</li>
         <li><b>Cancel a skill</b> While dragging, let go on the red CANCEL mark, or back on the skill's button</li>
         <li><b>Ultimate</b> The big button: its ring fills as you deal damage</li>
         <li><b>Dodge</b> The bottom button of the arc: drag it to dodge that way, or tap to dodge the way you walk</li>
@@ -611,6 +613,10 @@
               <button id="set-autofire" class="toggle" data-action="toggleAutoFire">ON</button>
             </div>
             <p class="set-note">Recommended: on (hold the aim stick to keep attacking). Off: drag to aim, let go to fire once.</p>
+            <div class="set-row" title="Off: the joystick appears wherever your thumb lands. On: it stays in one spot">Fixed joystick
+              <button id="set-fixedstick" class="toggle" data-action="toggleFixedStick">OFF</button>
+            </div>
+            <p class="set-note">Recommended: off (the stick appears under your thumb, anywhere on the left half). On: it stays in one spot; move it with Move / resize buttons.</p>
             <label class="set-row">Interface size <span id="set-ui-val">135%</span></label>
             <input type="range" id="set-ui" min="1" max="1.8" step="0.05">
             <p class="set-note">Recommended: 135%. Lower (115-120%) on a big phone or tablet to see more of the room; higher if text is hard to read.</p>
@@ -712,130 +718,130 @@
        on the same build. It's stamped automatically on every commit by tools/git-hooks/pre-commit
        (turn it on once per clone: git config core.hooksPath tools/git-hooks). -->
   <!-- Core -->
-  <script src="js/config.js?v=20261030-397aab"></script>
-  <script src="js/core/settings.js?v=20261030-397aab"></script>
-  <script src="js/core/display.js?v=20261030-397aab"></script>
+  <script src="js/config.js?v=20261030-33c1d7"></script>
+  <script src="js/core/settings.js?v=20261030-33c1d7"></script>
+  <script src="js/core/display.js?v=20261030-33c1d7"></script>
   <!-- multiplayer: PeerJS 1.5.4 for peer-to-peer connections, kept in js/lib so no CDN can block
        or break it (single player works without it) -->
-  <script src="js/lib/peerjs.min.js?v=20261030-397aab"></script>
-  <script src="js/core/utils.js?v=20261030-397aab"></script>
-  <script src="js/core/profiles.js?v=20261030-397aab"></script>
-  <script src="js/core/input.js?v=20261030-397aab"></script>
-  <script src="js/core/touch.js?v=20261030-397aab"></script>
-  <script src="js/core/audio.js?v=20261030-397aab"></script>
-  <script src="js/core/camera.js?v=20261030-397aab"></script>
+  <script src="js/lib/peerjs.min.js?v=20261030-33c1d7"></script>
+  <script src="js/core/utils.js?v=20261030-33c1d7"></script>
+  <script src="js/core/profiles.js?v=20261030-33c1d7"></script>
+  <script src="js/core/input.js?v=20261030-33c1d7"></script>
+  <script src="js/core/touch.js?v=20261030-33c1d7"></script>
+  <script src="js/core/audio.js?v=20261030-33c1d7"></script>
+  <script src="js/core/camera.js?v=20261030-33c1d7"></script>
 
   <!-- Graphics (procedural pixel art) -->
-  <script src="js/gfx/pixelArt.js?v=20261030-397aab"></script>
-  <script src="js/gfx/heroSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/heroes/cute.js?v=20261030-397aab"></script>
-  <script src="js/gfx/heroes/knight.js?v=20261030-397aab"></script>
-  <script src="js/gfx/heroes/archer.js?v=20261030-397aab"></script>
-  <script src="js/gfx/heroes/mage.js?v=20261030-397aab"></script>
-  <script src="js/gfx/heroes/rogue.js?v=20261030-397aab"></script>
-  <script src="js/gfx/heroes/priestess.js?v=20261030-397aab"></script>
-  <script src="js/gfx/heroes/bard.js?v=20261030-397aab"></script>
-  <script src="js/gfx/heroes/rocketeer.js?v=20261030-397aab"></script>
-  <script src="js/gfx/heroes/baker.js?v=20261030-397aab"></script>
-  <script src="js/gfx/pixelFx.js?v=20261030-397aab"></script>
-  <script src="js/gfx/enemies/undead.js?v=20261030-397aab"></script>
-  <script src="js/gfx/enemies/spirits.js?v=20261030-397aab"></script>
-  <script src="js/gfx/enemySprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/graveyardSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/enemies/castle.js?v=20261030-397aab"></script>
-  <script src="js/gfx/castleTiles.js?v=20261030-397aab"></script>
-  <script src="js/gfx/castleSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/enemies/ruins.js?v=20261030-397aab"></script>
-  <script src="js/gfx/ruinsTiles.js?v=20261030-397aab"></script>
-  <script src="js/gfx/ruinsSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/guardianSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/royalSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/npcSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/propSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/petSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/barrelSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/logoSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/obstacleSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/bossSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/phantomSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/deathbringerSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/manorSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/vaultSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/itemSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/iconSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/upgradeSprites.js?v=20261030-397aab"></script>
-  <script src="js/gfx/tiles.js?v=20261030-397aab"></script>
+  <script src="js/gfx/pixelArt.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/heroSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/heroes/cute.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/heroes/knight.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/heroes/archer.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/heroes/mage.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/heroes/rogue.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/heroes/priestess.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/heroes/bard.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/heroes/rocketeer.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/heroes/baker.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/pixelFx.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/enemies/undead.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/enemies/spirits.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/enemySprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/graveyardSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/enemies/castle.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/castleTiles.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/castleSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/enemies/ruins.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/ruinsTiles.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/ruinsSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/guardianSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/royalSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/npcSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/propSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/petSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/barrelSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/logoSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/obstacleSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/bossSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/phantomSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/deathbringerSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/manorSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/vaultSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/itemSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/iconSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/upgradeSprites.js?v=20261030-33c1d7"></script>
+  <script src="js/gfx/tiles.js?v=20261030-33c1d7"></script>
 
   <!-- World & entities -->
-  <script src="js/world/dungeon.js?v=20261030-397aab"></script>
-  <script src="js/world/castle.js?v=20261030-397aab"></script>
-  <script src="js/world/doors.js?v=20261030-397aab"></script>
-  <script src="js/world/lighting.js?v=20261030-397aab"></script>
-  <script src="js/world/floor.js?v=20261030-397aab"></script>
-  <script src="js/entities/effects.js?v=20261030-397aab"></script>
-  <script src="js/entities/entity.js?v=20261030-397aab"></script>
-  <script src="js/entities/projectile.js?v=20261030-397aab"></script>
-  <script src="js/entities/pickup.js?v=20261030-397aab"></script>
-  <script src="js/entities/dummy.js?v=20261030-397aab"></script>
-  <script src="js/entities/player/player.js?v=20261030-397aab"></script>
-  <script src="js/entities/player/warrior.js?v=20261030-397aab"></script>
-  <script src="js/entities/player/ranger.js?v=20261030-397aab"></script>
-  <script src="js/entities/player/mage.js?v=20261030-397aab"></script>
-  <script src="js/entities/player/rogue.js?v=20261030-397aab"></script>
-  <script src="js/entities/pet.js?v=20261030-397aab"></script>
-  <script src="js/entities/player/priestess.js?v=20261030-397aab"></script>
-  <script src="js/entities/player/bard.js?v=20261030-397aab"></script>
-  <script src="js/entities/player/rocketeer.js?v=20261030-397aab"></script>
-  <script src="js/entities/player/baker.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/enemy.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/zombie.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/slime.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/wraith.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/skeleton.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/undeadKnight.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/clayMinion.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/gravestone.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/ghost.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/mimic.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/graveyard.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/castle.js?v=20261030-397aab"></script>
-  <script src="js/entities/enemies/ruins.js?v=20261030-397aab"></script>
-  <script src="js/entities/boss/golem.js?v=20261030-397aab"></script>
-  <script src="js/entities/boss/guardian.js?v=20261030-397aab"></script>
-  <script src="js/entities/boss/phantom.js?v=20261030-397aab"></script>
-  <script src="js/entities/boss/deathbringer.js?v=20261030-397aab"></script>
-  <script src="js/entities/boss/queen.js?v=20261030-397aab"></script>
-  <script src="js/entities/boss/king.js?v=20261030-397aab"></script>
-  <script src="js/entities/boss/prince.js?v=20261030-397aab"></script>
-  <script src="js/entities/boss/princess.js?v=20261030-397aab"></script>
+  <script src="js/world/dungeon.js?v=20261030-33c1d7"></script>
+  <script src="js/world/castle.js?v=20261030-33c1d7"></script>
+  <script src="js/world/doors.js?v=20261030-33c1d7"></script>
+  <script src="js/world/lighting.js?v=20261030-33c1d7"></script>
+  <script src="js/world/floor.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/effects.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/entity.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/projectile.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/pickup.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/dummy.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/player/player.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/player/warrior.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/player/ranger.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/player/mage.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/player/rogue.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/pet.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/player/priestess.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/player/bard.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/player/rocketeer.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/player/baker.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/enemy.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/zombie.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/slime.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/wraith.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/skeleton.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/undeadKnight.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/clayMinion.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/gravestone.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/ghost.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/mimic.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/graveyard.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/castle.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/enemies/ruins.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/boss/golem.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/boss/guardian.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/boss/phantom.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/boss/deathbringer.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/boss/queen.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/boss/king.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/boss/prince.js?v=20261030-33c1d7"></script>
+  <script src="js/entities/boss/princess.js?v=20261030-33c1d7"></script>
 
   <!-- Game -->
-  <script src="js/game/waves.js?v=20261030-397aab"></script>
-  <script src="js/game/hud.js?v=20261030-397aab"></script>
-  <script src="js/game/heroNooks.js?v=20261030-397aab"></script>
-  <script src="js/game/lobby.js?v=20261030-397aab"></script>
-  <script src="js/game/decor.js?v=20261030-397aab"></script>
-  <script src="js/game/castleDecor.js?v=20261030-397aab"></script>
-  <script src="js/game/ruinsDecor.js?v=20261030-397aab"></script>
-  <script src="js/game/manorDecor.js?v=20261030-397aab"></script>
-  <script src="js/game/scenes.js?v=20261030-397aab"></script>
-  <script src="js/game/potions.js?v=20261030-397aab"></script>
-  <script src="js/game/upgrades.js?v=20261030-397aab"></script>
-  <script src="js/game/barrels.js?v=20261030-397aab"></script>
-  <script src="js/game/run.js?v=20261030-397aab"></script>
-  <script src="js/game/game.js?v=20261030-397aab"></script>
-  <script src="js/game/cheats.js?v=20261030-397aab"></script>
-  <script src="js/ui/heroGuide.js?v=20261030-397aab"></script>
-  <script src="js/ui/menus.js?v=20261030-397aab"></script>
-  <script src="js/ui/bestiary.js?v=20261030-397aab"></script>
-  <script src="js/ui/potionGuide.js?v=20261030-397aab"></script>
-  <script src="js/ui/upgradeGuide.js?v=20261030-397aab"></script>
-  <script src="js/ui/dialog.js?v=20261030-397aab"></script>
-  <script src="js/ui/chat.js?v=20261030-397aab"></script>
-  <script src="js/net/net.js?v=20261030-397aab"></script>
-  <script src="js/net/session.js?v=20261030-397aab"></script>
-  <script src="js/net/bot.js?v=20261030-397aab"></script>
-  <script src="js/ui/menuShowcase.js?v=20261030-397aab"></script>
-  <script src="js/main.js?v=20261030-397aab"></script>
+  <script src="js/game/waves.js?v=20261030-33c1d7"></script>
+  <script src="js/game/hud.js?v=20261030-33c1d7"></script>
+  <script src="js/game/heroNooks.js?v=20261030-33c1d7"></script>
+  <script src="js/game/lobby.js?v=20261030-33c1d7"></script>
+  <script src="js/game/decor.js?v=20261030-33c1d7"></script>
+  <script src="js/game/castleDecor.js?v=20261030-33c1d7"></script>
+  <script src="js/game/ruinsDecor.js?v=20261030-33c1d7"></script>
+  <script src="js/game/manorDecor.js?v=20261030-33c1d7"></script>
+  <script src="js/game/scenes.js?v=20261030-33c1d7"></script>
+  <script src="js/game/potions.js?v=20261030-33c1d7"></script>
+  <script src="js/game/upgrades.js?v=20261030-33c1d7"></script>
+  <script src="js/game/barrels.js?v=20261030-33c1d7"></script>
+  <script src="js/game/run.js?v=20261030-33c1d7"></script>
+  <script src="js/game/game.js?v=20261030-33c1d7"></script>
+  <script src="js/game/cheats.js?v=20261030-33c1d7"></script>
+  <script src="js/ui/heroGuide.js?v=20261030-33c1d7"></script>
+  <script src="js/ui/menus.js?v=20261030-33c1d7"></script>
+  <script src="js/ui/bestiary.js?v=20261030-33c1d7"></script>
+  <script src="js/ui/potionGuide.js?v=20261030-33c1d7"></script>
+  <script src="js/ui/upgradeGuide.js?v=20261030-33c1d7"></script>
+  <script src="js/ui/dialog.js?v=20261030-33c1d7"></script>
+  <script src="js/ui/chat.js?v=20261030-33c1d7"></script>
+  <script src="js/net/net.js?v=20261030-33c1d7"></script>
+  <script src="js/net/session.js?v=20261030-33c1d7"></script>
+  <script src="js/net/bot.js?v=20261030-33c1d7"></script>
+  <script src="js/ui/menuShowcase.js?v=20261030-33c1d7"></script>
+  <script src="js/main.js?v=20261030-33c1d7"></script>
 </body>
 </html>

@@ -190,7 +190,8 @@ Mouse + keys). The game is landscape only; held upright it asks you to turn the 
 
 - **Left thumb**: a movement joystick appears wherever you touch the left half of the screen.
   It's analog: the hero walks any direction at full speed from a small push, and the stick's
-  base trails your thumb so turning round is quick.
+  base trails your thumb so turning round is quick. The base never leaves the left half of the screen;
+  **Fixed joystick** (Settings > Phone) keeps it in one spot instead (move it with the button editor).
 - **Aim stick** (bottom right): hold it still to attack the nearest enemy; drag it to aim.
   With **Auto fire** on (the default) dragging keeps attacking that way; with it off, drag to
   aim and let go to fire one shot.
@@ -200,6 +201,13 @@ Mouse + keys). The game is landscape only; held upright it asks you to turn the 
   buttons while you drag, or drag back onto the skill's own button. A skill keeps the aim you gave it while it plays
   out (the Knight's charge goes where you aimed it, not where you walk). Dodge sits at the bottom of the arc: drag it to
   dodge that way, or tap it to dodge the way you are walking.
+- Abilities that wait for a click on a PC (the Mage's lightning and drain circle, the Archer's volley, the
+  Rocketeer's barrage) cast where the button was dragged when you let go. Some buttons cast on a tap with
+  nothing to aim: the Priestess's healing rune, the Bard's tune, Inspire and Lullaby, the Archer's rapid fire
+  and camouflage. The Archer's fire / ice button swaps on a tap and shoots when dragged; the Priestess's Aegis
+  is dragged onto a teammate (a tap shields herself). Each ability's indicator has its own shape and colour:
+  a line and a circle for something thrown, a circle for something placed, a ring round you, an arrow for a
+  dash, a beam, a cone.
 - **USE** is interact (hold it by a fallen teammate to revive), **HEAL** drinks the strongest
   health potion, and the bag moves to the bottom middle: tap a slot to drink, drag to move it
   or out of the bag to drop it.

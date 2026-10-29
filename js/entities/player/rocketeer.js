@@ -590,10 +590,16 @@ class Rocketeer extends Player {
   }
 
   /** Ability outlines while a key is held: the IBFR's weaving path (the barrage picks its area with LMB). */
+  /** Barrage: an orange strike zone placed on a spot. IBFR: a long fiery beam. */
   abilityPreview(slot) {
+    if (slot === 'e' && !this.targeting) {
+      const c = this.cfg.barrage;
+      const pt = this.aimPoint(c.maxRange);
+      return { circle: { x: pt.x, y: pt.y, r: c.radius, sy: 0.7 }, rgb: '255, 154, 58' };
+    }
     if (slot === 'q') {
       const c = this.cfg.ult;
-      return { lane: { x: this.pivotX, y: this.pivotY, angle: this.aim, length: c.speed * c.life, width: c.amplitude * 2 + 30 } };
+      return { lane: { x: this.pivotX, y: this.pivotY, angle: this.aim, length: c.speed * c.life, width: c.amplitude * 2 + 30 }, rgb: '255, 120, 40' };
     }
     return null;
   }
