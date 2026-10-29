@@ -24,12 +24,13 @@ const TOUCH_SKILLS = [
 ];
 const TOUCH_AIMED = ['secondary', 'e', 'f', 'ult'];   // buttons that aim while dragged
 const TOUCH_DEAD = 10;            // px a thumb moves before it counts as a drag
+const TOUCH_MOVE_DEAD = 5;        // px the movement stick moves before the hero walks
 const TOUCH_TARGET_RANGE = 340;   // auto-target reach (world px)
 
 const Touch = {
   app: null,
   canvas: null,
-  coarse: false,           // this device's main pointer is a finger
+  coarse: !!window.matchMedia?.('(pointer: coarse)').matches,   // this device's main pointer is a finger
   pointers: new Map(),     // pointerId -> { role, slot, x, y, sx, sy, moved, frames, home, away, deferred }
   moveDir: null,           // the movement stick's direction, while pushed
   aimDir: { x: 1, y: 0 },  // where the hero aims when no thumb is aiming (kept between frames)
@@ -39,8 +40,8 @@ const Touch = {
   cancelArmed: false,      // the dragged skill is on a cancel spot (its outline is hidden)
   click: null,             // a tap on the lobby's teleport button / map, passed on as a click { x, y }
   scoreboard: false,       // the scoreboard button is a toggle (Tab is held)
-  picking: false,          // the hero is choosing a spot (lightning, volley, aegis...): the aim stick picks on letting go
-  fullscreenAsked: false,
+  wasEnabled: null,        // Touch.enabled last frame (a change re-lays the screen out)
+  picking: false,         // the hero is choosing a spot (lightning, volley, aegis...): the aim stick picks on letting go
 
   /** Touch controls are on: chosen in Settings, or (auto) on a device whose main pointer is a finger. */
   get enabled() {
@@ -51,11 +52,9 @@ const Touch = {
   init(app, canvas) {
     this.app = app;
     this.canvas = canvas;
-    this.coarse = !!window.matchMedia?.('(pointer: coarse)').matches;
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' || !this.enabled) return;
       e.preventDefault();   // no made-up mouse events, no zoom or scroll
-      this.goFullscreen();
       try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* already gone */ }
       this.down(e.pointerId, this.toGame(e));
     });
@@ -77,7 +76,7 @@ const Touch = {
     window.addEventListener('pointercancel', up);
   },
 
-  /** A pointer event's position in game pixels (960x540). */
+  /** A pointer event's position in game pixels (CONFIG.screen). */
   toGame(e) {
     const rect = this.canvas.getBoundingClientRect();
     return {
@@ -86,31 +85,23 @@ const Touch = {
     };
   },
 
-  /** Phones lose a lot of screen to the browser's bars: go fullscreen (and landscape) on the first touch. */
-  goFullscreen() {
-    if (this.fullscreenAsked) return;
-    this.fullscreenAsked = true;
-    const el = document.documentElement;
-    if (document.fullscreenElement || !el.requestFullscreen) return;   // (iPhones can't: there the page is added to the home screen)
-    el.requestFullscreen().then(() => screen.orientation?.lock?.('landscape').catch(() => {})).catch(() => {});
-  },
-
-  // ---------- layout (game pixels) ----------
+  // ---------- layout (game pixels, anchored to the screen's corners) ----------
 
   layout() {
     const k = Settings.data.touchSize || 1;
-    const aim = { x: 960 - 92 * k, y: 540 - 92 * k, r: 44 * k };
+    const { width: W, height: H } = CONFIG.screen;
+    const aim = { x: W - 92 * k, y: H - 92 * k, r: 44 * k };
     const buttons = TOUCH_SKILLS.map((s) => {
       const R = (s.big ? 94 : 84) * k;
       const a = (s.angle * Math.PI) / 180;
       return { id: s.id, x: aim.x + Math.cos(a) * R, y: aim.y + Math.sin(a) * R, r: (s.big ? 27 : 21) * k };
     });
     buttons.push({ id: 'interact', x: aim.x - 140 * k, y: aim.y - 104 * k, r: 18 * k });
-    buttons.push({ id: 'heal', x: 294, y: 508, r: 16 });
+    buttons.push({ id: 'heal', x: 294, y: H - 32, r: 16 });
     return {
       aim,
       cancel: { x: aim.x + 20 * k, y: aim.y - 178 * k, r: 24 * k },   // shown while a skill is dragged
-      moveR: 46 * k,
+      moveR: 40 * k,
       buttons,
       // past the coin / gem counter beside the health bar
       pause: { x: 314, y: 12, w: 26, h: 26 },
@@ -119,7 +110,7 @@ const Touch = {
   },
 
   /** Screen rect of bag slot i with the touch controls (the bag moves to the bottom middle). */
-  bagSlotRect(i) { return { x: 320 + i * 44, y: 488, s: 40 }; },
+  bagSlotRect(i) { return { x: 320 + i * 44, y: CONFIG.screen.height - 52, s: 40 }; },
 
   // ---------- touches ----------
 
@@ -240,7 +231,13 @@ const Touch = {
   update(app, dt) {
     const m = Input._mouse;
     Input.touchHeld.clear();
+    Input.touchMove = null;
     document.body.classList.toggle('touch', this.enabled);
+    // switched on or off (Settings, or ?touch): the screen space changes with it
+    if (this.enabled !== this.wasEnabled) {
+      this.wasEnabled = this.enabled;
+      Display.layout();
+    }
     if (!this.enabled) return;
     const game = app.game;
     const me = app.state === 'playing' && game?.localPlayer;
@@ -268,8 +265,10 @@ const Touch = {
     this.cancelArmed = !!skill && this.cancelling(skill);
     if (this.scoreboard && game.run) Input.touchHeld.add('scoreboard');
 
-    // movement: eight ways (the hero's movement is digital); the stick's base trails a thumb pushed past it
+    // movement: analog, any direction at full speed past a small dead zone (Input.touchMove); the
+    // stick's base trails a thumb pushed past it, so turning round never means a long drag back
     this.moveDir = null;
+    Input.touchMove = null;
     if (move) {
       const dx = move.x - move.sx;
       const dy = move.y - move.sy;
@@ -278,13 +277,15 @@ const Touch = {
         move.sx = move.x - (dx / len) * L.moveR;
         move.sy = move.y - (dy / len) * L.moveR;
       }
-      if (len > TOUCH_DEAD) {
+      if (len > TOUCH_MOVE_DEAD) {
         const nx = dx / len;
         const ny = dy / len;
+        // (the keys' directions too, for anything that reads them: menus, the bestiary)
         if (ny < -0.38) Input.touchHeld.add('up');
         if (ny > 0.38) Input.touchHeld.add('down');
         if (nx < -0.38) Input.touchHeld.add('left');
         if (nx > 0.38) Input.touchHeld.add('right');
+        Input.touchMove = (Math.round((Math.atan2(ny, nx) / (Math.PI * 2)) * 256) + 256) % 256;
         this.moveDir = { x: nx, y: ny };
       }
     }
@@ -321,10 +322,10 @@ const Touch = {
       this.aimDir = { x: want.x, y: want.y };
       this.aimDist = want.dist;
     }
-    const hx = me.pivotX - game.camera.x;
-    const hy = me.pivotY - game.camera.y;
-    m.x = hx + this.aimDir.x * this.aimDist;
-    m.y = hy + this.aimDir.y * this.aimDist;
+    // (aim distances are in world px: the screen point is at the world's zoom)
+    const h = game.camera.worldToScreen(me.pivotX, me.pivotY);
+    m.x = h.x + this.aimDir.x * this.aimDist * Display.zoom;
+    m.y = h.y + this.aimDir.y * this.aimDist * Display.zoom;
 
     // the attack: held while the aim stick is held (still: at the auto target; dragged: only with Auto
     // fire), or for a moment after a shot is let go
@@ -400,13 +401,12 @@ const Touch = {
     // the aim line from the hero while a thumb aims
     const aiming = held('aim') || TOUCH_AIMED.some((r) => held(r));
     if (aiming && !this.cancelArmed) {
-      const hx = p.pivotX - game.camera.x;
-      const hy = p.pivotY - game.camera.y;
+      const h = game.camera.worldToScreen(p.pivotX, p.pivotY);
       ctx.strokeStyle = 'rgba(255, 236, 170, 0.7)';
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
-      ctx.moveTo(hx + this.aimDir.x * 14, hy + this.aimDir.y * 14);
+      ctx.moveTo(h.x + this.aimDir.x * 14, h.y + this.aimDir.y * 14);
       ctx.lineTo(Input._mouse.x, Input._mouse.y);
       ctx.stroke();
       ctx.setLineDash([]);
@@ -414,7 +414,7 @@ const Touch = {
 
     // movement stick: where the thumb is, or a faint hint where it usually goes
     const mv = held('move');
-    const base = mv ? { x: mv.sx, y: mv.sy } : { x: 120, y: 410 };
+    const base = mv ? { x: mv.sx, y: mv.sy } : { x: 120, y: CONFIG.screen.height - 130 };
     ctx.globalAlpha *= mv ? 1 : 0.45;
     this.ring(ctx, base.x, base.y, L.moveR);
     const knob = mv ? this.clampTo(mv, base, L.moveR) : base;

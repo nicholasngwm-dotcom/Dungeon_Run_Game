@@ -21,6 +21,14 @@ const Input = {
   // the touch controls' actions: held is rebuilt every frame by Touch, pressed lasts one frame
   touchHeld: new Set(),
   touchPressed: new Set(),
+  // the touch movement stick's direction, in 256ths of a turn (0 = right, 64 = down), or null
+  touchMove: null,
+
+  /** Analog movement direction in radians (a touch stick), or null: move by the direction keys. */
+  moveAngle() {
+    const q = this.override ? this.override.move : this.touchMove;
+    return q == null ? null : (q / 256) * Math.PI * 2;
+  },
 
   get mouse() { return this.override ? this.override.mouse : this._mouse; },
   canvas: null,

@@ -34,6 +34,7 @@ class Session {
     return {
       held,
       pressed: new Set(inp.p),
+      move: inp.m ?? null,   // analog movement (a phone's stick), else the held direction keys
       // actions this player has on the same key as interact: using up an interact press uses them up too
       linked: { interact: inp.x || [] },
       mouse: { x: 0, y: 0, left: !!inp.ml, right: !!inp.mr, leftPressed: !!inp.lp, rightPressed: !!inp.rp },
@@ -138,6 +139,7 @@ class Session {
       inp.mr = Input._mouse.right ? 1 : 0;
       inp.lp = this.pending.lp ? 1 : 0;
       inp.rp = this.pending.rp ? 1 : 0;
+      if (Input.touchMove != null) inp.m = Input.touchMove;   // a touch stick's direction (256ths of a turn)
     }
     this.pending = { p: new Set(), lp: false, rp: false };
     return inp;
@@ -166,6 +168,7 @@ class Session {
         const ci = this.clientInputs[r.id];
         if (!ci) continue;
         inputs[r.id] = { h: ci.h, p: [...ci.p], mx: ci.mx, my: ci.my, ml: ci.ml, mr: ci.mr, lp: ci.lp, rp: ci.rp };
+        if (ci.m != null) inputs[r.id].m = ci.m;
         if (ci.x.size) inputs[r.id].x = [...ci.x];
         ci.p = new Set();
         ci.x = new Set();
@@ -409,7 +412,7 @@ class Session {
         if (!ci) return;
         ci.at = performance.now();
         const i = msg.i;
-        ci.h = i.h; ci.mx = i.mx; ci.my = i.my; ci.ml = i.ml; ci.mr = i.mr;
+        ci.h = i.h; ci.mx = i.mx; ci.my = i.my; ci.ml = i.ml; ci.mr = i.mr; ci.m = i.m;
         for (const a of i.p) ci.p.add(a);
         for (const a of i.x || []) ci.x.add(a);
         if (i.lp) ci.lp = 1;

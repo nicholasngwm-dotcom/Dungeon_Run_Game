@@ -207,10 +207,16 @@ class Player extends Entity {
     // movement
     let mx = 0;
     let my = 0;
-    if (Input.down('up')) my -= 1;
-    if (Input.down('down')) my += 1;
-    if (Input.down('left')) mx -= 1;
-    if (Input.down('right')) mx += 1;
+    const stick = Input.moveAngle();   // a touch stick: any direction
+    if (stick !== null) {
+      mx = Math.cos(stick);
+      my = Math.sin(stick);
+    } else {
+      if (Input.down('up')) my -= 1;
+      if (Input.down('down')) my += 1;
+      if (Input.down('left')) mx -= 1;
+      if (Input.down('right')) mx += 1;
+    }
     const len = Math.hypot(mx, my) || 1;
     this.moveDir = { x: mx / len, y: my / len };
     this.moving = (mx !== 0 || my !== 0) && this.busy <= 0;

@@ -27,12 +27,10 @@ const App = {
   async init() {
     this.canvas = document.getElementById('game');
     this.ctx = this.canvas.getContext('2d');
-    this.ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
-    this.ctx.imageSmoothingEnabled = false;
     this.stage = document.getElementById('stage');
     this.practicePanel = document.getElementById('practice-panel');
     // fit the stage to the window before anything else, so it's never shown small in a corner
-    Display.init(this.stage);
+    Display.init(this.stage, this.canvas);
 
     // the sprites take a moment to draw: one batch per frame, so the loader's fire keeps burning
     const steps = [
@@ -585,7 +583,9 @@ const App = {
 
   frame(now) {
     const dt = Math.min((now - this.lastTime) / 1000 || 0, 1 / 30);
-    this.ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
+    // (resizing the canvas resets its state, so both are set every frame)
+    this.ctx.setTransform(Display.renderScale, 0, 0, Display.renderScale, 0, 0);
+    this.ctx.imageSmoothingEnabled = false;
     this.lastTime = now;
 
     if (Input.wasPressed('Escape')) {
@@ -623,7 +623,8 @@ const App = {
 
     // crosshair lock: keep the crosshair its set distance from this screen's hero
     const me = this.state === 'playing' && !Input.freeMouse && !Touch.enabled && this.game?.localPlayer;
-    if (me) Input.updateCrosshairLock(me.pivotX - this.game.camera.x, me.pivotY - this.game.camera.y);
+    const at = me && this.game.camera.worldToScreen(me.pivotX, me.pivotY);
+    if (me) Input.updateCrosshairLock(at.x, at.y);
     else Input.updateCrosshairLock(null, null);
 
     // the bag takes mouse clicks on its slots before the hero sees them

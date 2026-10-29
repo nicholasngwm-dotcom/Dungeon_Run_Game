@@ -1,49 +1,50 @@
-// Window mode (Settings.data.display) and the stage scaling:
+// Window mode (Settings.data.display) and the game's screen space:
+//   fullscreen - fills the whole screen (browser Fullscreen API); the default
 //   default    - the game fills the browser window
-//   fullscreen - fills the whole screen (browser Fullscreen API)
 //
-// Browsers only allow entering fullscreen from a click or key press, so a saved
-// "fullscreen" is entered on the first input after the page loads. Leaving
-// fullscreen from the browser (Esc / F11) falls back to default.
-
-// The game canvas has 2x the pixels of the 960x540 game space (see index.html), so
-// text renders sharp; App sets this scale on the context at the start of each frame.
-const RENDER_SCALE = 2;
+// Browsers only allow entering fullscreen from a click, tap or key press, so fullscreen
+// is entered on the first input after the page loads, and again on the next click or tap
+// whenever the browser leaves it (Esc, F11, switching apps). Settings > Window mode turns it off.
+//
+// The game space (CONFIG.screen) takes the window's shape: 960x540, widened (or made
+// taller) to match it, so there are no black bars. With the touch controls it is shrunk
+// by the interface size (Settings uiScale), so the HUD, buttons, text and menus all show
+// bigger on a phone; the world is zoomed (Display.zoom) to stay a comfortable size.
+// None of this touches the shared simulation: each screen draws its own view of it.
 
 const DISPLAY_MODES = [
-  ['default', 'Default'],
   ['fullscreen', 'Fullscreen'],
+  ['default', 'Window'],
 ];
+
+// the touch view shows about this much of the world from top to bottom (a PC shows 540)
+const TOUCH_VIEW_HEIGHT = 470;
 
 const Display = {
   stage: null,
-  onChange: null,   // fn(mode) when the browser changes the mode by itself
+  canvas: null,
+  scale: 1,          // CSS px per game px
+  renderScale: 2,    // canvas pixels per game px (the text stays sharp)
+  ui: 1,             // interface size: how much bigger than on a PC everything shows
+  zoom: 1,           // game px per world px
 
   get isFullscreen() { return !!document.fullscreenElement; },
   get mode() { return Settings.data.display; },
 
-  init(stage) {
+  init(stage, canvas) {
     this.stage = stage;
+    this.canvas = canvas;
     // older saves may hold a mode that no longer exists
-    if (!DISPLAY_MODES.some(([m]) => m === this.mode)) Settings.data.display = 'default';
+    if (!DISPLAY_MODES.some(([m]) => m === this.mode)) Settings.data.display = 'fullscreen';
     window.addEventListener('resize', () => this.layout());
-    document.addEventListener('fullscreenchange', () => {
-      // left fullscreen without going through the settings: show what's on screen
-      if (!this.isFullscreen && this.mode === 'fullscreen') {
-        Settings.data.display = 'default';
-        Settings.saveOne('display');
-        if (this.onChange) this.onChange('default');
-      }
-      this.layout();
-    });
-    // a saved fullscreen needs a user gesture before the browser allows it
-    const enter = () => {
-      window.removeEventListener('pointerdown', enter);
-      window.removeEventListener('keydown', enter);
+    document.addEventListener('fullscreenchange', () => this.layout());
+    // fullscreen needs a gesture: the first one of any kind, then every click or tap while out of it
+    const first = () => {
+      window.removeEventListener('keydown', first);
       if (this.mode === 'fullscreen') this.enterFullscreen();
     };
-    window.addEventListener('pointerdown', enter);
-    window.addEventListener('keydown', enter);
+    window.addEventListener('keydown', first);
+    window.addEventListener('pointerdown', () => { if (this.mode === 'fullscreen') this.enterFullscreen(); });
     this.apply();
   },
 
@@ -60,13 +61,35 @@ const Display = {
   },
 
   enterFullscreen() {
-    if (this.isFullscreen || !document.documentElement.requestFullscreen) return;
-    document.documentElement.requestFullscreen().catch(() => { /* needs a gesture: retried on the next one */ });
+    if (this.isFullscreen || !document.documentElement.requestFullscreen) return;   // (iPhones: add to the home screen instead)
+    document.documentElement.requestFullscreen()
+      .then(() => { if (Touch.enabled) screen.orientation?.lock?.('landscape').catch(() => {}); })
+      .catch(() => { /* needs a gesture: retried on the next one */ });
   },
 
-  /** Scales the 960x540 stage to fit the window, keeping 16:9. */
+  /** Sizes the game space to the window's shape, and the stage and canvas to fill it. */
   layout() {
-    const s = Math.min(window.innerWidth / CONFIG.screen.width, window.innerHeight / CONFIG.screen.height);
-    this.stage.style.transform = `translate(-50%, -50%) scale(${s})`;
+    this.ui = Touch.enabled ? Settings.data.uiScale || 1.35 : 1;
+    const aspect = window.innerWidth / window.innerHeight;
+    let w = 960;
+    let h = 540;
+    if (aspect > w / h) w = h * aspect;
+    else h = w / aspect;
+    w = Math.round(w / this.ui);
+    h = Math.round(h / this.ui);
+    CONFIG.screen.width = w;
+    CONFIG.screen.height = h;
+    this.zoom = Touch.enabled ? h / TOUCH_VIEW_HEIGHT : 1;
+    this.scale = Math.min(window.innerWidth / w, window.innerHeight / h);
+    this.renderScale = clamp(this.scale * (window.devicePixelRatio || 1), 1, 2);
+    this.stage.style.width = `${w}px`;
+    this.stage.style.height = `${h}px`;
+    this.stage.style.transform = `translate(-50%, -50%) scale(${this.scale})`;
+    const cw = Math.round(w * this.renderScale);
+    const ch = Math.round(h * this.renderScale);
+    if (this.canvas.width !== cw || this.canvas.height !== ch) {
+      this.canvas.width = cw;
+      this.canvas.height = ch;
+    }
   },
 };

@@ -144,6 +144,10 @@ networks block peer-to-peer connections.
 
 ## Settings
 
+The game fills the whole window, whatever its shape (no black bars), and goes **fullscreen**
+on the first click or key press; leave it (Esc / F11) and the next click brings it back.
+Settings > Window mode switches to playing in the browser window instead.
+
 **Settings** (main menu or pause menu) has mouse sensitivity, music on/off,
 music and sound effect volume, and key bindings for movement, E, F, Q, dodge,
 the five bag slots, interact, the music toggle and the mouse / crosshair toggle (LMB / RMB
@@ -180,6 +184,8 @@ Phones and tablets get on-screen controls automatically (Settings > Controls: Au
 Mouse + keys). The game is landscape only; held upright it asks you to turn the phone.
 
 - **Left thumb**: a movement joystick appears wherever you touch the left half of the screen.
+  It's analog: the hero walks any direction at full speed from a small push, and the stick's
+  base trails your thumb so turning round is quick.
 - **Aim stick** (bottom right): hold it still to attack the nearest enemy; drag it to aim.
   With **Auto fire** on (the default) dragging keeps attacking that way; with it off, drag to
   aim and let go to fire one shot.
@@ -191,8 +197,11 @@ Mouse + keys). The game is landscape only; held upright it asks you to turn the 
   health potion, and the bag moves to the bottom middle: tap a slot to drink, drag to move it
   or out of the bag to drop it.
 - Top left: pause, and in dungeon runs the scoreboard (a toggle).
-- Settings has button size and opacity. Touch and PC players send the same input, so they
-  play together in multiplayer like any other machines.
+- Everything (HUD, buttons, text, menus) shows bigger than on a PC; **Interface size** in
+  Settings tunes it, alongside button size and opacity. Touch and PC players send the same
+  input, so they play together in multiplayer like any other machines.
+- **Fullscreen** starts on the first tap (Android). iPhones don't allow it in the browser: use
+  Share > **Add to Home Screen**, and the game opens from there fullscreen and sideways.
 
 ## Project layout
 

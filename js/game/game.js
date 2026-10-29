@@ -1303,7 +1303,7 @@ class Game {
     ctx.restore();
 
     if (this.run) ctx.globalAlpha = 0.55;   // a softer vignette in the dungeons
-    ctx.drawImage(this.vignette, 0, 0);
+    ctx.drawImage(this.vignette, 0, 0, CONFIG.screen.width, CONFIG.screen.height);   // (stretched to this screen's shape)
     ctx.globalAlpha = 1;
     if (!this.showcase) HUD.draw(ctx, this);
   }

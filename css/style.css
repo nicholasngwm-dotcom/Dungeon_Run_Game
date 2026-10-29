@@ -1309,3 +1309,9 @@ body:not(.touch) .touch-only { display: none !important; }
 }
 /* the practice panel stops above the touch buttons (it scrolls, and "-" folds it away) */
 body.touch .practice-panel { max-height: 236px; }
+/* touch: the screen space is smaller (everything shows bigger), so a tall menu scrolls instead of spilling off */
+body.touch .screen { overflow-y: auto; justify-content: safe center; scrollbar-width: none; }
+body.touch .screen::-webkit-scrollbar { display: none; }
+/* the tallest lobby panels fit the touch screen (their lists scroll inside) */
+body.touch .hero-sheet { height: 320px; }
+body.touch .tome-list, body.touch .pgx-list { max-height: 250px; }

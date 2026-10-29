@@ -1,9 +1,13 @@
-// Heads-up display, drawn in screen space on top of the world.
+// Heads-up display, drawn in screen space on top of the world. The screen takes the
+// window's shape (Display), so everything is placed from its edges and middle (W, H).
 
 // spacing of the upgrade icon tiles on the scoreboard (px)
 const UPGRADE_TILE = 24;
 
 const HUD = {
+  get W() { return CONFIG.screen.width; },
+  get H() { return CONFIG.screen.height; },
+
   text(ctx, str, x, y, { size = 8, color = '#f4ead7', align = 'left', baseline = 'top', shadow = true } = {}) {
     ctx.font = uiFont(size);
     ctx.textAlign = align;
@@ -81,7 +85,7 @@ const HUD = {
     if (game.multiplayer) this.drawParty(ctx, game);
     this.drawWave(ctx, game);
     if (game.boss && !game.boss.dead && game.boss.intro <= 0 && !game.practice) {
-      this.text(ctx, game.boss.name, 480, 12, { size: 10, align: 'center', color: '#f2a541' });
+      this.text(ctx, game.boss.name, this.W / 2, 12, { size: 10, align: 'center', color: '#f2a541' });
     }
     this.drawBanner(ctx, game);
     this.drawBossSpeech(ctx, game);
@@ -89,7 +93,7 @@ const HUD = {
     if (game.run && Input.down('scoreboard')) this.drawScoreboard(ctx, game);
     if (game.run?.active && p.strayTime > 0) {
       const left = Math.max(0, CONFIG.run.strayReturn - p.strayTime).toFixed(1);
-      this.text(ctx, `OUTSIDE THE ROOM - RETURNING IN ${left}s`, 480, 400, { size: 8, align: 'center', color: '#e0c0ff' });
+      this.text(ctx, `OUTSIDE THE ROOM - RETURNING IN ${left}s`, this.W / 2, this.H - 140, { size: 8, align: 'center', color: '#e0c0ff' });
     }
     // with the touch controls, the aim stick is the left click and the secondary button the right
     const say = (s) => (Touch.enabled ? s.replace(/LEFT CLICK/g, 'AIM STICK').replace(/RIGHT CLICK/g, 'SECONDARY') : s);
@@ -97,19 +101,19 @@ const HUD = {
     if (p.targeting) {
       const msg = { mage: 'LEFT CLICK: PICK LIGHTNING TARGET', rocketeer: `LEFT CLICK: FIRE BARRAGE (${p.ammo} ROCKETS)` }[p.classId] || 'LEFT CLICK: FIRE VOLLEY';
       const color = { mage: '#9cf0d8', rocketeer: '#ff9a3a' }[p.classId] || '#a8cc6a';
-      this.text(ctx, say(`${msg}   RIGHT CLICK: CANCEL`), 480, 440, { size: 8, align: 'center', color });
+      this.text(ctx, say(`${msg}   RIGHT CLICK: CANCEL`), this.W / 2, this.H - 100, { size: 8, align: 'center', color });
     }
     if (p.placing) {
-      this.text(ctx, say('LEFT CLICK: PLACE DRAIN CIRCLE   RIGHT CLICK: CANCEL'), 480, 440, { size: 8, align: 'center', color: '#9cf0d8' });
+      this.text(ctx, say('LEFT CLICK: PLACE DRAIN CIRCLE   RIGHT CLICK: CANCEL'), this.W / 2, this.H - 100, { size: 8, align: 'center', color: '#9cf0d8' });
     }
     if (p.choosingAegis) {
-      this.text(ctx, say('LEFT CLICK: AEGIS ON ALLY'), 474, 440, { size: 8, align: 'right', color: '#ffe680' });
-      this.text(ctx, say('RIGHT CLICK: AEGIS ON SELF'), 486, 440, { size: 8, color: '#ffe680' });
-      this.text(ctx, `${f}: CANCEL`, 480, 456, { size: 6, align: 'center', color: '#d8c8a0' });
+      this.text(ctx, say('LEFT CLICK: AEGIS ON ALLY'), this.W / 2 - 6, this.H - 100, { size: 8, align: 'right', color: '#ffe680' });
+      this.text(ctx, say('RIGHT CLICK: AEGIS ON SELF'), this.W / 2 + 6, this.H - 100, { size: 8, color: '#ffe680' });
+      this.text(ctx, `${f}: CANCEL`, this.W / 2, this.H - 84, { size: 6, align: 'center', color: '#d8c8a0' });
     }
     if (p.choosingArrow) {
-      this.text(ctx, say('LEFT CLICK: FIRE ARROW'), 474, 440, { size: 8, align: 'right', color: '#ff8a1e' });
-      this.text(ctx, say('RIGHT CLICK: ICE ARROW'), 486, 440, { size: 8, color: '#9ad0ff' });
+      this.text(ctx, say('LEFT CLICK: FIRE ARROW'), this.W / 2 - 6, this.H - 100, { size: 8, align: 'right', color: '#ff8a1e' });
+      this.text(ctx, say('RIGHT CLICK: ICE ARROW'), this.W / 2 + 6, this.H - 100, { size: 8, color: '#9ad0ff' });
     }
     if (!Touch.enabled) this.drawAbilityTooltip(ctx, p);
     if (game.lobby) this.drawTeleport(ctx, game);
@@ -120,7 +124,7 @@ const HUD = {
   teleportOpen: false,   // this screen's map of the keep is open
 
   /** The TELEPORT button, under the lobby's title on the right (below the room code in multiplayer). */
-  teleportButtonRect(game) { return { x: 846, y: game.multiplayer ? 112 : 50, w: 100, h: 20 }; },
+  teleportButtonRect(game) { return { x: this.W - 114, y: game.multiplayer ? 112 : 50, w: 100, h: 20 }; },
 
   /**
    * Where the keep's map is drawn when open: right of the hero panel, the gems and the chat
@@ -128,7 +132,7 @@ const HUD = {
    */
   teleportMapRect(game) {
     const d = game.dungeon;
-    const h = 330;
+    const h = Math.min(330, this.H - 120);
     return { x: 362, y: 66, w: Math.round((h * d.width) / d.height), h, s: h / d.height };
   },
 
@@ -268,14 +272,14 @@ const HUD = {
       y += 22;
     }
     if (me.dead && !game.finished) {
-      this.text(ctx, 'YOU ARE DOWN', 480, 96, { size: 12, align: 'center', color: '#e04545' });
+      this.text(ctx, 'YOU ARE DOWN', this.W / 2, 96, { size: 12, align: 'center', color: '#e04545' });
       const helper = game.players.find((p) => !p.dead && p.reviveTarget === me && me.reviveProgress > 0);
       if (helper) {
-        this.text(ctx, `${helper.name.toUpperCase()} IS REVIVING YOU`, 480, 120, { size: 7, align: 'center', color: '#8cff9a' });
-        this.bar(ctx, 400, 136, 160, 6, me.reviveProgress / CONFIG.multiplayer.revive.time, '#8cff9a', '#1a2a1e');
+        this.text(ctx, `${helper.name.toUpperCase()} IS REVIVING YOU`, this.W / 2, 120, { size: 7, align: 'center', color: '#8cff9a' });
+        this.bar(ctx, this.W / 2 - 80, 136, 160, 6, me.reviveProgress / CONFIG.multiplayer.revive.time, '#8cff9a', '#1a2a1e');
       } else {
         const how = `A teammate can revive you: hold ${Settings.label('interact')} by your body for ${CONFIG.multiplayer.revive.time}s`;
-        this.text(ctx, game.run ? `${how} (or you get up at the next stage)` : how, 480, 120, { size: 7, align: 'center', color: '#d8c8a0' });
+        this.text(ctx, game.run ? `${how} (or you get up at the next stage)` : how, this.W / 2, 120, { size: 7, align: 'center', color: '#d8c8a0' });
       }
     }
   },
@@ -369,9 +373,9 @@ const HUD = {
     ];
     // class extras (the knight's shield bash) go right after the slot they belong to
     for (const extra of p.extraSlots) slots.splice(slots.findIndex((s) => s.slot === extra.after) + 1, 0, extra);
-    const x0 = 960 - 14 - 70 - 6 - slots.length * 70;
-    slots.forEach((s, i) => Object.assign(s, { x: x0 + i * 70, y: 474, w: 62, h: 50, guide: s.slot || s.guide }));
-    slots.push({ key: Settings.label('ult'), name: p.icons.q, slot: 'q', guide: 'q', x: 960 - 14 - 70, y: 474, w: 70, h: 50 });
+    const x0 = this.W - 14 - 70 - 6 - slots.length * 70;
+    slots.forEach((s, i) => Object.assign(s, { x: x0 + i * 70, y: this.H - 66, w: 62, h: 50, guide: s.slot || s.guide }));
+    slots.push({ key: Settings.label('ult'), name: p.icons.q, slot: 'q', guide: 'q', x: this.W - 14 - 70, y: this.H - 66, w: 70, h: 50 });
     return slots;
   },
 
@@ -418,7 +422,7 @@ const HUD = {
     const sw = Math.max(0, ...lines.map((l) => ctx.measureText(l).width));
     const w = Math.ceil(Math.max(tw, sw)) + 12;
     const h = 17 + lines.length * 10;
-    const bx = Math.round(clamp(x - w / 2, 4, 960 - w - 4));
+    const bx = Math.round(clamp(x - w / 2, 4, this.W - w - 4));
     const by = Math.round(y - h);
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(bx - 2, by - 2, w + 4, h + 4);
@@ -514,7 +518,7 @@ const HUD = {
   bagDrag: null,   // { from } while a bag slot is being dragged with the mouse (this screen only)
 
   /** Screen rect of bag slot i (shared by drawing and the mouse). */
-  bagSlotRect(i) { return Touch.enabled ? Touch.bagSlotRect(i) : { x: 14 + i * 44, y: 484, s: 40 }; },
+  bagSlotRect(i) { return Touch.enabled ? Touch.bagSlotRect(i) : { x: 14 + i * 44, y: this.H - 56, s: 40 }; },
 
   /** How many slots this screen's hero's bag has (5, or 7 with a Backpack). */
   bagSize: 5,
@@ -885,14 +889,14 @@ const HUD = {
   drawWave(ctx, game) {
     if (game.run) return game.run.drawHud(ctx);
     if (game.lobby) {
-      this.text(ctx, 'LOBBY', 946, 14, { size: 10, align: 'right', color: '#f2a541' });
-      this.text(ctx, `WALK TO A STATION, PRESS ${Settings.label('interact')}`, 946, 32, { size: 6, align: 'right', color: '#d8c8a0' });
+      this.text(ctx, 'LOBBY', this.W - 14, 14, { size: 10, align: 'right', color: '#f2a541' });
+      this.text(ctx, `WALK TO A STATION, PRESS ${Settings.label('interact')}`, this.W - 14, 32, { size: 6, align: 'right', color: '#d8c8a0' });
       if (game.multiplayer) {
         // the room code, big enough to read out to friends
-        this.panel(ctx, 786, 48, 160, 40);
-        this.text(ctx, 'ROOM CODE', 866, 53, { size: 6, align: 'center', color: '#a99bbd' });
-        this.text(ctx, game.code || '-----', 866, 66, { size: 14, align: 'center', color: '#ffe680' });
-        this.text(ctx, `${game.players.length}/${CONFIG.multiplayer.maxPlayers} PLAYERS`, 946, 96, { size: 6, align: 'right', color: '#d8c8a0' });
+        this.panel(ctx, this.W - 174, 48, 160, 40);
+        this.text(ctx, 'ROOM CODE', this.W - 94, 53, { size: 6, align: 'center', color: '#a99bbd' });
+        this.text(ctx, game.code || '-----', this.W - 94, 66, { size: 14, align: 'center', color: '#ffe680' });
+        this.text(ctx, `${game.players.length}/${CONFIG.multiplayer.maxPlayers} PLAYERS`, this.W - 14, 96, { size: 6, align: 'right', color: '#d8c8a0' });
       }
       return;
     }
@@ -900,16 +904,16 @@ const HUD = {
       const pr = game.practice;
       const o = pr.options;
       const flags = [o.god && 'GOD', o.infiniteMana && 'INF MANA', o.infiniteEnergy && 'INF ENERGY', o.noCooldowns && 'NO CD'].filter(Boolean).join('  ');
-      this.text(ctx, 'PRACTICE RANGE', 480, 12, { size: 9, align: 'center', color: '#f2a541' });
-      this.text(ctx, `DPS ${Math.round(game.dps)}   TOTAL ${pr.total}`, 480, 28, { size: 8, align: 'center' });
-      if (flags) this.text(ctx, flags, 480, 42, { size: 6, align: 'center', color: '#8cff9a' });
+      this.text(ctx, 'PRACTICE RANGE', this.W / 2, 12, { size: 9, align: 'center', color: '#f2a541' });
+      this.text(ctx, `DPS ${Math.round(game.dps)}   TOTAL ${pr.total}`, this.W / 2, 28, { size: 8, align: 'center' });
+      if (flags) this.text(ctx, flags, this.W / 2, 42, { size: 6, align: 'center', color: '#8cff9a' });
       return;
     }
     const d = game.director;
     if (d.state === 'boss') return;
-    this.text(ctx, `WAVE ${d.waveNumber}/${d.totalWaves}`, 946, 14, { size: 10, align: 'right', color: '#f2a541' });
+    this.text(ctx, `WAVE ${d.waveNumber}/${d.totalWaves}`, this.W - 14, 14, { size: 10, align: 'right', color: '#f2a541' });
     const left = game.enemies.length + game.pendingSpawns + d.queue.length;
-    this.text(ctx, `ENEMIES ${left}`, 946, 32, { size: 8, align: 'right' });
+    this.text(ctx, `ENEMIES ${left}`, this.W - 14, 32, { size: 8, align: 'right' });
   },
 
   /**
@@ -958,10 +962,10 @@ const HUD = {
     const strips = (p) => Math.max(1, Math.ceil(Object.keys(p.upgradeLevels).length / perRow));
     const rowH = (p) => 30 + strips(p) * UPGRADE_TILE + 4;
     const h = 74 + players.reduce((a, p) => a + rowH(p), 0);
-    const x = 480 - w / 2;
-    const y = Math.max(40, 250 - h / 2);
+    const x = this.W / 2 - w / 2;
+    const y = Math.max(40, this.H / 2 - 20 - h / 2);
     ctx.fillStyle = 'rgba(8, 4, 14, 0.55)';
-    ctx.fillRect(0, 0, 960, 540);
+    ctx.fillRect(0, 0, this.W, this.H);
     this.panel(ctx, x, y, w, h);
     const run = game.run;
     const secs = Math.floor(game.time);
@@ -1287,9 +1291,9 @@ const HUD = {
     const a = clamp(Math.min(b.t, b.maxT - b.t) * 3, 0, 1);
     ctx.globalAlpha = a;
     ctx.fillStyle = 'rgba(10, 6, 18, 0.55)';
-    ctx.fillRect(0, 200, 960, b.sub ? 76 : 56);
-    this.text(ctx, b.text, 480, 214, { size: 20, align: 'center', color: '#f2a541' });
-    if (b.sub) this.text(ctx, b.sub, 480, 248, { size: 9, align: 'center' });
+    ctx.fillRect(0, this.H / 2 - 70, this.W, b.sub ? 76 : 56);
+    this.text(ctx, b.text, this.W / 2, this.H / 2 - 56, { size: 20, align: 'center', color: '#f2a541' });
+    if (b.sub) this.text(ctx, b.sub, this.W / 2, this.H / 2 - 22, { size: 9, align: 'center' });
     ctx.globalAlpha = 1;
   },
 

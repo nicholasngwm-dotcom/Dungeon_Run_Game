@@ -2740,10 +2740,10 @@ class DungeonRun {
 
   /** Top-right: theme + stage, the room objective, and the minimap. */
   drawHud(ctx) {
-    HUD.text(ctx, `${this.theme.name.toUpperCase()}  STAGE ${this.stage}/3`, 946, 14, { size: 9, align: 'right', color: '#f2a541' });
+    HUD.text(ctx, `${this.theme.name.toUpperCase()}  STAGE ${this.stage}/3`, CONFIG.screen.width - 14, 14, { size: 9, align: 'right', color: '#f2a541' });
     const goal = this.objectiveText();
-    if (goal) HUD.text(ctx, goal, 946, 30, { size: 7, align: 'right' });
-    this.drawMinimap(ctx, 946, 46);
+    if (goal) HUD.text(ctx, goal, CONFIG.screen.width - 14, 30, { size: 7, align: 'right' });
+    this.drawMinimap(ctx, CONFIG.screen.width - 14, 46);
     this.drawTimer(ctx);
   }
 
@@ -2760,7 +2760,7 @@ class DungeonRun {
     const urgent = left <= 5;
     if (urgent && secs !== this.lastTick) Sound.play('uiClick');
     this.lastTick = secs;
-    const x = 480;
+    const x = CONFIG.screen.width / 2;
     const w = 190;
     const h = this.totem ? 58 : 46;
     const top = 40;

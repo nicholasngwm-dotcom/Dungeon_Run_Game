@@ -52,13 +52,15 @@ const Settings = {
     crosshair: 'both',   // cross | dot | circle | both (a circle with a crosshair) - see CROSSHAIR_TYPES
     crosshairSize: 1,    // crosshair scale
     crosshairLock: 0,    // 0 = off; else the crosshair stays this many px from the hero, the mouse turning it round them
-    display: 'default',   // default | fullscreen (see Display)
+    display: 'fullscreen',   // fullscreen | default (see Display)
+    displayV: 2,         // saves from before fullscreen was the default are moved onto it once (see load)
     screenShake: 1,      // camera shake strength (0 = off)
     othersFx: 1,         // multiplayer: how strongly teammates' effects show (0 = hidden); yours, enemies' and text stay full
     controls: 'auto',    // auto | touch | mouse - see CONTROL_MODES and Touch
     autoFire: true,      // touch: dragging the aim stick attacks; off, letting go of it fires one shot
     touchSize: 1,        // touch buttons' scale
     touchOpacity: 0.85,  // touch buttons' opacity
+    uiScale: 1.35,       // touch: interface size (HUD, buttons, text and menus), x a PC's
     keys: {
       up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',
       e: 'KeyE', f: 'KeyF', ult: 'KeyQ', dodge: 'ShiftLeft',
@@ -76,6 +78,8 @@ const Settings = {
     this.data = { ...this.defaults, ...saved, keys: { ...this.defaults.keys, ...(saved.keys || {}) } };
     // drop saved bindings for actions that no longer exist (the old free potion)
     for (const k of Object.keys(this.data.keys)) if (!(k in this.defaults.keys)) delete this.data.keys[k];
+    // a save from when the window was the default: fullscreen now is
+    if (!saved.displayV) this.data.display = 'fullscreen';
   },
 
   save() {

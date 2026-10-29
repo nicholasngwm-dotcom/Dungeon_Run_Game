@@ -53,6 +53,7 @@ const Menus = {
     slider('set-xlock', 'crosshairLock', Menus.lockLabel);
     slider('set-tsize', 'touchSize', (v) => `${Math.round(v * 100)}%`);
     slider('set-topac', 'touchOpacity', (v) => `${Math.round(v * 100)}%`);
+    slider('set-ui', 'uiScale', (v) => `${Math.round(v * 100)}%`, () => Display.layout());
     document.getElementById('set-controls').innerHTML = CONTROL_MODES
       .map(([mode, label]) => `<button class="toggle" data-action="controls:${mode}">${label.toUpperCase()}</button>`)
       .join('');
@@ -66,11 +67,6 @@ const Menus = {
     document.getElementById('set-display').innerHTML = DISPLAY_MODES
       .map(([mode, label]) => `<button class="toggle" data-action="display:${mode}">${label.toUpperCase()}</button>`)
       .join('');
-    // the browser left fullscreen by itself: already stored, so not an unsaved edit
-    Display.onChange = (mode) => {
-      if (this.savedSettings) this.savedSettings.display = mode;
-      if (this.settingsOpen) this.refreshSettings();
-    };
   },
 
   offOrPercent(v) { return v > 0 ? `${Math.round(v * 100)}%` : 'OFF'; },
@@ -98,6 +94,7 @@ const Menus = {
       btn.classList.toggle('off', btn.dataset.action !== `controls:${Settings.data.controls}`);
     }
     document.body.classList.toggle('touch', Touch.enabled);
+    Display.layout();   // (the interface size only applies to touch)
     const fire = document.getElementById('set-autofire');
     fire.textContent = Settings.data.autoFire ? 'ON' : 'OFF';
     fire.classList.toggle('off', !Settings.data.autoFire);
@@ -193,6 +190,7 @@ const Menus = {
     set('set-xlock', s.crosshairLock, Menus.lockLabel(s.crosshairLock));
     set('set-tsize', s.touchSize, `${Math.round(s.touchSize * 100)}%`);
     set('set-topac', s.touchOpacity, `${Math.round(s.touchOpacity * 100)}%`);
+    set('set-ui', s.uiScale, `${Math.round(s.uiScale * 100)}%`);
     this.controlsChanged();
     this.musicChanged(s.music, false);
     this.displayChanged();
