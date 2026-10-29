@@ -470,6 +470,7 @@ class Rogue extends Player {
 
   /** Ability outlines while a key is held: the parry's guard arc, the dagger storm's cone, where the clones appear. */
   abilityPreview(slot) {
+    if (slot === 'secondary') return { lane: { x: this.x, y: this.y, angle: this.aim, length: this.cfg.strike.distance, width: 24 } };   // (touch: while its button is held)
     if (slot === 'e') return { cone: { x: this.x, y: this.hy, angle: this.aim, arc: 2.2, range: 34 } };
     if (slot === 'f') {
       const d = this.cfg.dagger;

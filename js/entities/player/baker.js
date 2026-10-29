@@ -370,6 +370,11 @@ class Baker extends Player {
 
   /** Ability outlines while a key is held: the giant cake's landing zone. */
   abilityPreview(slot) {
+    if (slot === 'secondary') {   // (shown while the touch button is held) the flour sack's flight and its cloud
+      const c = this.cfg.flour;
+      const to = this.aimPoint(c.maxRange);
+      return { blast: { fromX: this.handX, fromY: this.handY, x: to.x, y: to.y, r: c.radius, rgb: '244, 240, 232' } };
+    }
     if (slot === 'q') {
       const pt = this.aimPoint(this.cfg.ult.maxRange);
       return { circle: { x: pt.x, y: pt.y, r: this.cfg.ult.radius, sy: 0.55 } };
