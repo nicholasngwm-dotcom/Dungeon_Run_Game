@@ -101,30 +101,46 @@ class FloorDecor {
         for (let i = 0; i < 2; i++) this.add('candles', this.spot(r, { clearMiddle: false }));
         return;
       case 'shop': {
-        this.add('rug', { x: r.cx, y: r.cy + 0.5 * T }, { w: 10 * T, h: 4 * T });
-        for (const dx of [-6, 6]) this.add('shelf', { x: r.cx + dx * T, y: (r.y0 + 0.7) * T });
-        for (let i = 0; i < 3; i++) this.add(choose(['barrel', 'barrel', 'crate']), this.spot(r, { clearMiddle: false, minGap: 34 }));
-        for (const dx of [-7, 7]) this.add('lampPost', { x: r.cx + dx * T, y: r.cy + 3 * T }, { warm: true });
-        // Mira's side: a bubbling cauldron; Bram's side: a banner and candles
-        this.add('prop', { x: r.cx - 6.4 * T, y: r.cy - 0.2 * T }, { name: 'cauldron' });
-        this.add('prop', { x: r.cx + 6.4 * T, y: r.cy - 0.6 * T }, { name: 'bannerBlue' });
-        this.add('prop', { x: r.cx + 5.4 * T, y: r.cy + 0.6 * T }, { name: 'candelabra' });
+        // three stalls side by side across the middle of the room (DungeonRun.addProps: Mira -6.5,
+        // Tobin 0, Bram +6.5, at dy +1), each dressed in its own corner; the floor in front of each
+        // counter stays clear so heroes can walk straight up to it
         const at = (kind, dx, dy, extra = {}) => this.add(kind, { x: r.cx + dx * T, y: r.cy + dy * T }, extra);
-        // Mira's corner: a tiered potion stand, a crate of bottles, herb baskets and plants
-        at('bottleStand', -4.8, -0.9);
-        at('bottleCrate', -1.4, -0.7);
-        at('herbBasket', -5.2, 1.3);
-        at('herbBasket', -7.4, 1.8);
-        at('prop', -7.3, -2.2, { name: 'sacks' });
-        for (const dx of [-4.3, -1.7]) at('prop', dx, -3.9, { name: 'plant' });
-        // Bram's corner: a glowing rune circle before his counter, a floating crystal,
-        // drifting spellbooks, bookshelves behind and candles
-        at('runeCircle', 3, 0.5);
-        at('crystal', 4.9, -0.9);
-        at('floatingBooks', 1.3, -1.4);
-        for (const dx of [1.7, 4.3]) at('prop', dx, -3.9, { name: 'bookshelf' });
-        at('candles', 7.3, -2.2);
-        at('candles', 1.4, 1.5);
+        const prop = (name, dx, dy) => at('prop', dx, dy, { name });
+        at('rug', 0, 3, { w: 19 * T, h: 2.5 * T });                    // a long runner in front of all three counters
+        for (const dx of [-6.5, 6.5]) this.add('shelf', { x: r.cx + dx * T, y: (r.y0 + 0.7) * T });
+        // warm lamps between the stalls, and two in the front corners
+        for (const dx of [-3.25, 3.25]) at('lampPost', dx, 1.2, { warm: true });
+        for (const dx of [-9.4, 9.4]) at('lampPost', dx, 5.2, { warm: true });
+        // Mira's potions: a bubbling cauldron and a tiered potion stand either side of her counter,
+        // crates of bottles, herb baskets, sacks of ingredients and potted herbs behind
+        prop('cauldron', -9, 1.3);
+        at('bottleStand', -4.2, 0.4);
+        at('bottleCrate', -9.2, 3.1);
+        at('herbBasket', -9.3, -0.8);
+        at('herbBasket', -4.4, 3.2);
+        prop('sacks', -9.2, -2.6);
+        prop('flowers', -5.2, -1.9);
+        for (const dx of [-8, -5]) prop('plant', dx, -3.9);
+        // Tobin's trade-ins: his cart piled with goods behind the stall, gold and a chest of
+        // bought-back wares on either side, crates and barrels of odds and ends
+        prop('cart', 0, -2.2);
+        prop('goldPile', -1.9, 1.5);
+        prop('chest', 1.9, 1.4);
+        prop('crate', -2.2, -0.6);
+        prop('barrel', 2.2, -0.7);
+        prop('sacks', -1.6, -3.6);
+        prop('bannerGreen', 1.6, -4.2);
+        // Bram's enchantments: a glowing rune circle before his counter, a floating crystal,
+        // drifting spellbooks, a globe, bookshelves and a banner behind, candles all round
+        at('runeCircle', 6.5, 3);
+        at('crystal', 4.2, 0.4);
+        at('floatingBooks', 8.8, -0.6);
+        prop('globe', 9.2, 1.4);
+        for (const dx of [5, 8]) prop('bookshelf', dx, -3.9);
+        prop('bannerBlue', 9.5, -2.4);
+        prop('candelabra', 4.3, -1.6);
+        at('candles', 9.2, 3.1);
+        at('candles', 4, 3.6);
         return;
       }
       case 'special': {

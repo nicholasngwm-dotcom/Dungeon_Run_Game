@@ -1402,11 +1402,11 @@ class DungeonRun {
     const T = this.floor.T;
     const add = (kind, dx, dy, label, color) => this.props.push({ kind, room: r, x: r.cx + dx * T, y: r.cy + dy * T, label, color });
     if (r.type === 'shop') {
-      // three stores: Mira's potions on the left, Bram's enchantments (upgrades) on the right,
-      // and Tobin's trade-in stall at the back, buying upgrades and potions back for a few coins
-      add('shopkeeper', -3, -1, 'POTIONS', '#ff8aa0');
-      add('enchanter', 3, -1, 'UPGRADES', '#8ab8ff');
-      add('pawn', 0, -3.3, 'SELL', '#ffd34a');
+      // three stalls in a row across the middle of the room: Mira's potions on the left,
+      // Tobin's trade-ins (buying upgrades and potions back) in the middle, Bram's enchantments on the right
+      add('shopkeeper', -6.5, 1, 'POTIONS', '#ff8aa0');
+      add('pawn', 0, 1, 'SELL', '#ffd34a');
+      add('enchanter', 6.5, 1, 'UPGRADES', '#8ab8ff');
       this.potionStock = rollPotionStock();
     } else if (r.type === 'special') {
       const info = SPECIAL_INFO[r.special];
