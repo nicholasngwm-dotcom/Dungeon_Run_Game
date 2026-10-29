@@ -277,6 +277,18 @@ const App = {
           { label: 'Not now', fn: () => Dialog.close() },
         ],
       });
+    } else if (kind === 'pawn') {
+      Dialog.open({
+        name: 'TOBIN', frames: Sprites.npcs.trader,
+        text: choose([
+          "Got more than you can carry? I'll take it off your hands. Can't pay what Mira and Bram charge, mind - a trader has to eat.",
+          'Upgrades you regret, potions you won\'t drink... everything has a price at my stall. A small one, but a price!',
+        ]),
+        options: [
+          { label: 'I have things to sell', fn: () => Shop.open(run, 'sell') },
+          { label: 'Not today', fn: () => Dialog.close() },
+        ],
+      });
     } else {
       Dialog.open({
         name: 'CHEF BRUNO', frames: Sprites.npcs.chef,
@@ -612,7 +624,7 @@ const App = {
       const free = Input.toggleFreeMouse();
       Menus.toast(free ? 'MOUSE: POINTER' : 'MOUSE: CROSSHAIR', '#ffe680');
     }
-    this.canvas.classList.toggle('free-cursor', Input.freeMouse);
+    this.canvas.classList.toggle('free-cursor', Input.freeMouse || Touch.editing);
 
     // the touch controls: this frame's moving, aiming and buttons (they stand in for the mouse and keys)
     Touch.update(this, dt);

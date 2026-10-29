@@ -13,7 +13,7 @@ const ROOM_INFO = {
   defend: { name: 'Defend', color: '#6ad8ff', desc: 'Doors lock. Keep the lantern alive until the timer runs out. The souls of slain enemies mend it. If it breaks, the defense starts over.' },
   survival: { name: 'Survival', color: '#ff8a1e', desc: 'Doors lock. Enemies keep coming: stay alive until the timer runs out.' },
   puzzle: { name: 'Puzzle', color: '#b67aff', desc: 'Touch the rune stone and it lights a pattern of colours: step on the matching floor plates in the same order. Get it right three times and every hero gets a free upgrade. Three mistakes and the stone blinks red, then blows up the whole room and sets it ablaze. Run!' },
-  shop: { name: 'Shop', color: '#ffd34a', desc: 'Two stores: pick an upgrade (or reroll) at the enchanter, buy potions from Mira.' },
+  shop: { name: 'Shop', color: '#ffd34a', desc: 'Three stalls: buy upgrades (or reroll) from Bram, potions from Mira, and sell them back to Tobin.' },
   special: { name: 'Special', color: '#c08aff', desc: 'Something unusual: a blacksmith, restaurant, wishing well, trader, treasure... The wishing well grants a wish for coins; the rest are coming soon.' },
   secret: { name: 'Secret', color: '#fff6c8', desc: 'Not connected to anything. Look for a glowing hole in a combat room floor and jump in. Three chests, open two: one is a mimic.' },
   boss: { name: 'Boss', color: '#ff3b30', desc: 'The theme\'s boss. Beat it to open the portal to the next stage.' },
@@ -616,6 +616,34 @@ class DungeonRun {
       hero.addItem(id);
     }
     this.world.events.onPurchase?.(hero, 'potion', ok);
+  }
+
+  /** Sell stall: what the stall pays for one of this potion (a share of its base price). */
+  potionSellPrice(id) {
+    return Math.max(1, Math.floor(POTIONS[id].price * CONFIG.run.shop.sell.potion));
+  }
+
+  /** Sell stall: hand back an upgrade for a few coins; its effect comes off. */
+  sellUpgrade(hero, id) {
+    const u = UPGRADE_BY_ID[id];
+    const ok = !!u && !!hero.upgradeLevels[id] && (!u.canSell || u.canSell(hero));
+    if (ok) {
+      delete hero.upgradeLevels[id];
+      u.remove?.(hero);
+      hero.coins += CONFIG.run.shop.sell.upgrade;
+    }
+    this.world.events.onPurchase?.(hero, 'sellUpgrade', ok);
+  }
+
+  /** Sell stall: sell one potion out of a bag slot. */
+  sellPotion(hero, slot) {
+    const s = hero.inventory[slot];
+    const ok = !!s && !!POTIONS[s.id];
+    if (ok) {
+      hero.coins += this.potionSellPrice(s.id);
+      if (--s.count <= 0) hero.inventory[slot] = null;
+    }
+    this.world.events.onPurchase?.(hero, 'sellPotion', ok);
   }
 
   /** Coins burst out of a point: fives for big amounts, ones for the rest. */
@@ -1374,9 +1402,11 @@ class DungeonRun {
     const T = this.floor.T;
     const add = (kind, dx, dy, label, color) => this.props.push({ kind, room: r, x: r.cx + dx * T, y: r.cy + dy * T, label, color });
     if (r.type === 'shop') {
-      // two stores: Mira's potions on the left, Bram's enchantments (upgrades) on the right
+      // three stores: Mira's potions on the left, Bram's enchantments (upgrades) on the right,
+      // and Tobin's trade-in stall at the back, buying upgrades and potions back for a few coins
       add('shopkeeper', -3, -1, 'POTIONS', '#ff8aa0');
       add('enchanter', 3, -1, 'UPGRADES', '#8ab8ff');
+      add('pawn', 0, -3.3, 'SELL', '#ffd34a');
       this.potionStock = rollPotionStock();
     } else if (r.type === 'special') {
       const info = SPECIAL_INFO[r.special];
@@ -1490,7 +1520,7 @@ class DungeonRun {
     if (pr.kind === 'puzzle') return this.startPattern(pr);
     if (pr.kind === 'hole') return this.descend(p);
     if (pr.kind === 'holeExit') return this.ascend(p);
-    if (pr.kind === 'shopkeeper' || pr.kind === 'chef' || pr.kind === 'enchanter') return w.events.onNpc?.(pr.kind, this, p);
+    if (pr.kind === 'shopkeeper' || pr.kind === 'chef' || pr.kind === 'enchanter' || pr.kind === 'pawn') return w.events.onNpc?.(pr.kind, this, p);
     if (pr.kind === 'restaurant5') return w.events.onNpc?.('chef', this, p);
     if (p === w.localPlayer) {
       w.events.onToast?.(`${pr.label}: COMING SOON`);
@@ -2263,13 +2293,15 @@ class DungeonRun {
     switch (pr.kind) {
       case 'shopkeeper':
       case 'enchanter':
+      case 'pawn':
       case 'chef': {
-        // the keeper stands behind a counter under a striped awning
-        const frames = Sprites.npcs[pr.kind].idle;
+        // the keeper stands behind a counter under a striped awning (Tobin, at the trade-in stall, is the travelling trader)
+        const frames = Sprites.npcs[pr.kind === 'pawn' ? 'trader' : pr.kind].idle;
         drawSprite(ctx, frames[Math.floor((this.time + x * 0.01) * CUTE.fps.idle) % frames.length].img, x, y - 8, HERO_ANCHOR.x, HERO_ANCHOR.y, pr.kind !== 'shopkeeper', 1);
         const enchant = pr.kind === 'enchanter';
-        box(56, 18, enchant ? '#3e5a96' : '#9c6c3e', enchant ? '#22325e' : '#5b3922');
-        ctx.fillStyle = enchant ? '#d4ac4c' : '#7d532f';
+        const pawn = pr.kind === 'pawn';
+        box(56, 18, enchant ? '#3e5a96' : pawn ? '#4a7a44' : '#9c6c3e', enchant ? '#22325e' : pawn ? '#2a4a2a' : '#5b3922');
+        ctx.fillStyle = enchant || pawn ? '#d4ac4c' : '#7d532f';
         ctx.fillRect(x - 28, y - 12, 56, 2);                       // counter trim
         ctx.fillStyle = '#5b3922';
         ctx.fillRect(x - 27, y - 66, 3, 50);
@@ -2301,6 +2333,27 @@ class DungeonRun {
           // runes on the counter cloth
           ctx.fillStyle = '#9ae6ff';
           for (let i = 0; i < 4; i++) ctx.fillRect(x - 20 + i * 12, y - 8 + (i % 2), 4, 2);
+        } else if (pawn) {
+          // a brass balance scale, gently tipping, and a stack of coins beside it
+          const tip = Math.round(Math.sin(this.time * 1.6) * 2);
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(x - 9, y - 36, 3, 18);
+          ctx.fillRect(x - 21, y - 37 + tip, 27, 3);
+          ctx.fillStyle = '#d4ac4c';
+          ctx.fillRect(x - 8, y - 35, 1, 16);
+          ctx.fillRect(x - 13, y - 20, 11, 2);                     // its foot
+          ctx.fillRect(x - 20, y - 36 + tip, 25, 1);
+          for (const [px, py] of [[x - 20, y - 32 + tip], [x + 2, y - 32 - tip]]) {
+            ctx.fillStyle = OUTLINE; ctx.fillRect(px - 1, py - 1, 9, 5);
+            ctx.fillStyle = '#d4ac4c'; ctx.fillRect(px, py, 7, 3);
+            ctx.fillStyle = '#fff2a0'; ctx.fillRect(px, py, 7, 1);
+          }
+          drawSprite(ctx, Sprites.potions['health-potion'], x - 16, y - 34 + tip, 14, 26, false, 0.5);   // a potion weighed against a coin
+          ctx.fillStyle = '#ffd34a'; ctx.fillRect(x + 3, y - 35 - tip, 5, 2);
+          for (let i = 0; i < 4; i++) {
+            ctx.fillStyle = OUTLINE; ctx.fillRect(x + 11, y - 21 - i * 3, 11, 4);
+            ctx.fillStyle = i % 2 ? '#d4ac4c' : '#ffd34a'; ctx.fillRect(x + 12, y - 20 - i * 3, 9, 2);
+          }
         } else {
           // a steaming pot
           ctx.fillStyle = OUTLINE; ctx.fillRect(x - 10, y - 30, 20, 13);
@@ -2480,7 +2533,7 @@ class DungeonRun {
     const y = Math.round(pr.y);
     if (pr.opened) return;
     const near = this.world.localPlayer.nearProp === pr;
-    const npc = ['shopkeeper', 'chef', 'enchanter', 'restaurant5'].includes(pr.kind);
+    const npc = ['shopkeeper', 'chef', 'enchanter', 'pawn', 'restaurant5'].includes(pr.kind);
     const labelY = npc || Scenes[pr.kind] ? y - 86 : pr.kind === 'rewardChest' || pr.kind === 'secretChest' || pr.kind === 'chest' || pr.kind === 'gemChest' ? y - 36 : y - 62;
     let label = near && npc ? 'TALK' : pr.label;
     if (pr.kind === 'wishingWell') {

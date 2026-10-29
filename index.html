@@ -12,8 +12,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Dungeon Run">
   <link rel="apple-touch-icon" href="assets/icon.png">
-  <link rel="stylesheet" href="css/alagard.css?v=20261029-4b4087">
-  <link rel="stylesheet" href="css/style.css?v=20261029-4b4087">
+  <link rel="stylesheet" href="css/alagard.css?v=20261030-1534c1">
+  <link rel="stylesheet" href="css/style.css?v=20261030-1534c1">
 </head>
 <body>
   <!-- touch controls held upright: the game is landscape only -->
@@ -311,7 +311,7 @@
 
     <!-- Dungeon shop (opened through the shopkeeper) -->
     <section id="screen-shop" class="screen dim hidden">
-      <!-- one window, two stores: Bram's upgrades (3 at a time, buy any, reroll), Mira's potions (6 on the shelf + your bag), or stage 1's free pick -->
+      <!-- one window, three stalls: Bram's upgrades (3 at a time, buy any, reroll), Mira's potions (6 on the shelf + your bag), Tobin's trade-ins (sell back), or a stage's free pick -->
       <div class="shop-head">
         <h2 id="shop-title">Shop</h2>
         <div class="shop-coins"><i></i><span id="shop-coins">0</span></div>
@@ -534,12 +534,27 @@
     <!-- Settings (from the main menu or the pause menu) -->
     <section id="screen-settings" class="screen dim hidden">
       <h2>Settings</h2>
-      <div class="settings-cols">
-        <div class="settings-col">
-          <div class="set-head mouse-only">MOUSE</div>
-          <label class="set-row mouse-only">Sensitivity <span id="set-sens-val">1.0x</span></label>
-          <input type="range" id="set-sens" class="mouse-only" min="0.2" max="3" step="0.1">
-          <div class="set-head">AUDIO</div>
+      <!-- one panel, the same on every device: four tabs, and under Controls a tab for each control style -->
+      <div class="settings-panel">
+        <div class="set-tabs">
+          <button class="set-tab" data-tab="general" data-action="setTab:general">GENERAL</button>
+          <button class="set-tab" data-tab="video" data-action="setTab:video">VIDEO</button>
+          <button class="set-tab" data-tab="audio" data-action="setTab:audio">AUDIO</button>
+          <button class="set-tab" data-tab="controls" data-action="setTab:controls">CONTROLS</button>
+        </div>
+        <div class="set-pane" data-pane="general">
+          <label class="set-row">Minimap size <span id="set-map-val">140%</span></label>
+          <input type="range" id="set-map" min="0.8" max="2.2" step="0.1">
+          <label class="set-row" title="How much of your teammates' attack effects you see">Teammate effects <span id="set-ofx-val">100%</span></label>
+          <input type="range" id="set-ofx" min="0" max="1" step="0.05">
+        </div>
+        <div class="set-pane" data-pane="video">
+          <div class="set-row">Window mode</div>
+          <div id="set-display" class="set-choices"></div>
+          <label class="set-row">Screen shake <span id="set-shake-val">100%</span></label>
+          <input type="range" id="set-shake" min="0" max="1" step="0.05">
+        </div>
+        <div class="set-pane" data-pane="audio">
           <div class="set-row">Music
             <button id="set-music" class="toggle" data-action="toggleMusic">ON</button>
           </div>
@@ -547,40 +562,46 @@
           <input type="range" id="set-mvol" min="0" max="1" step="0.05">
           <label class="set-row">Sound effects <span id="set-svol-val">80%</span></label>
           <input type="range" id="set-svol" min="0" max="1" step="0.05">
-          <div class="set-head">VIDEO</div>
-          <div class="set-row">Window mode</div>
-          <div id="set-display" class="set-choices"></div>
-          <label class="set-row">Minimap size <span id="set-map-val">140%</span></label>
-          <input type="range" id="set-map" min="0.8" max="2.2" step="0.1">
-          <label class="set-row">Screen shake <span id="set-shake-val">100%</span></label>
-          <input type="range" id="set-shake" min="0" max="1" step="0.05">
-          <label class="set-row">Teammate effects <span id="set-ofx-val">100%</span></label>
-          <input type="range" id="set-ofx" min="0" max="1" step="0.05">
         </div>
-        <div class="settings-col wide">
-          <div class="set-head">CONTROLS</div>
+        <div class="set-pane" data-pane="controls">
+          <div class="set-row">Control style <span class="set-sub">Auto: touch on phones and tablets, mouse + keys on computers</span></div>
           <div id="set-controls" class="set-choices"></div>
-          <div class="set-row touch-only" title="On: dragging the aim stick keeps attacking. Off: drag to aim, let go to fire one shot">Auto fire
-            <button id="set-autofire" class="toggle" data-action="toggleAutoFire">ON</button>
+          <div class="set-subtabs">
+            <button class="set-subtab" data-sub="touch" data-action="setSub:touch">TOUCH</button>
+            <button class="set-subtab" data-sub="mouse" data-action="setSub:mouse">MOUSE + KEYS</button>
           </div>
-          <label class="set-row touch-only">Interface size <span id="set-ui-val">135%</span></label>
-          <input type="range" id="set-ui" class="touch-only" min="1" max="1.8" step="0.05">
-          <label class="set-row touch-only">Button size <span id="set-tsize-val">100%</span></label>
-          <input type="range" id="set-tsize" class="touch-only" min="0.7" max="1.4" step="0.05">
-          <label class="set-row touch-only">Button opacity <span id="set-topac-val">85%</span></label>
-          <input type="range" id="set-topac" class="touch-only" min="0.3" max="1" step="0.05">
-          <button class="btn small touch-only set-layout-btn" data-action="editTouchLayout">Move / resize buttons</button>
-          <div class="set-head mouse-only">KEYBINDS <span class="set-sub">click, then press a key (LMB / RMB stay on the mouse buttons)</span></div>
-          <div id="set-keys" class="set-keys mouse-only"></div>
-          <div class="set-head mouse-only">CROSSHAIR</div>
-          <div class="xhair-row mouse-only">
-            <div id="set-xhair" class="set-choices"></div>
-            <canvas id="set-xhair-preview" width="64" height="64"></canvas>
+          <div class="set-subpane" data-subpane="touch">
+            <div class="set-row" title="On: dragging the aim stick keeps attacking. Off: drag to aim, let go to fire one shot">Auto fire
+              <button id="set-autofire" class="toggle" data-action="toggleAutoFire">ON</button>
+            </div>
+            <label class="set-row">Interface size <span id="set-ui-val">135%</span></label>
+            <input type="range" id="set-ui" min="1" max="1.8" step="0.05">
+            <label class="set-row">Button size <span id="set-tsize-val">100%</span></label>
+            <input type="range" id="set-tsize" min="0.7" max="1.4" step="0.05">
+            <label class="set-row">Button opacity <span id="set-topac-val">85%</span></label>
+            <input type="range" id="set-topac" min="0.3" max="1" step="0.05">
+            <button class="btn small set-layout-btn" data-action="editTouchLayout">Move / resize buttons</button>
           </div>
-          <label class="set-row mouse-only">Size <span id="set-xsize-val">100%</span></label>
-          <input type="range" id="set-xsize" class="mouse-only" min="0.5" max="2" step="0.1">
-          <label class="set-row mouse-only" title="Keeps the crosshair a set distance from your hero; moving the mouse turns it round them, so it can't get lost">Crosshair lock <span id="set-xlock-val">OFF</span></label>
-          <input type="range" id="set-xlock" class="mouse-only" min="0" max="240" step="20">
+          <div class="set-subpane set-split" data-subpane="mouse">
+           <div class="set-split-col">
+            <div class="set-head">KEYBINDS <span class="set-sub">click, then press a key (LMB / RMB stay on the mouse buttons)</span></div>
+            <div id="set-keys" class="set-keys"></div>
+           </div>
+           <div class="set-split-col">
+            <div class="set-head">MOUSE</div>
+            <label class="set-row">Sensitivity <span id="set-sens-val">1.0x</span></label>
+            <input type="range" id="set-sens" min="0.2" max="3" step="0.1">
+            <div class="set-head">CROSSHAIR</div>
+            <div class="xhair-row">
+              <div id="set-xhair" class="set-choices"></div>
+              <canvas id="set-xhair-preview" width="64" height="64"></canvas>
+            </div>
+            <label class="set-row">Size <span id="set-xsize-val">100%</span></label>
+            <input type="range" id="set-xsize" min="0.5" max="2" step="0.1">
+            <label class="set-row" title="Keeps the crosshair a set distance from your hero; moving the mouse turns it round them, so it can't get lost">Crosshair lock <span id="set-xlock-val">OFF</span></label>
+            <input type="range" id="set-xlock" min="0" max="240" step="20">
+           </div>
+          </div>
         </div>
       </div>
       <div class="menu-buttons row">
@@ -638,130 +659,130 @@
        on the same build. It's stamped automatically on every commit by tools/git-hooks/pre-commit
        (turn it on once per clone: git config core.hooksPath tools/git-hooks). -->
   <!-- Core -->
-  <script src="js/config.js?v=20261029-4b4087"></script>
-  <script src="js/core/settings.js?v=20261029-4b4087"></script>
-  <script src="js/core/display.js?v=20261029-4b4087"></script>
+  <script src="js/config.js?v=20261030-1534c1"></script>
+  <script src="js/core/settings.js?v=20261030-1534c1"></script>
+  <script src="js/core/display.js?v=20261030-1534c1"></script>
   <!-- multiplayer: PeerJS 1.5.4 for peer-to-peer connections, kept in js/lib so no CDN can block
        or break it (single player works without it) -->
-  <script src="js/lib/peerjs.min.js?v=20261029-4b4087"></script>
-  <script src="js/core/utils.js?v=20261029-4b4087"></script>
-  <script src="js/core/profiles.js?v=20261029-4b4087"></script>
-  <script src="js/core/input.js?v=20261029-4b4087"></script>
-  <script src="js/core/touch.js?v=20261029-4b4087"></script>
-  <script src="js/core/audio.js?v=20261029-4b4087"></script>
-  <script src="js/core/camera.js?v=20261029-4b4087"></script>
+  <script src="js/lib/peerjs.min.js?v=20261030-1534c1"></script>
+  <script src="js/core/utils.js?v=20261030-1534c1"></script>
+  <script src="js/core/profiles.js?v=20261030-1534c1"></script>
+  <script src="js/core/input.js?v=20261030-1534c1"></script>
+  <script src="js/core/touch.js?v=20261030-1534c1"></script>
+  <script src="js/core/audio.js?v=20261030-1534c1"></script>
+  <script src="js/core/camera.js?v=20261030-1534c1"></script>
 
   <!-- Graphics (procedural pixel art) -->
-  <script src="js/gfx/pixelArt.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/heroSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/heroes/cute.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/heroes/knight.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/heroes/archer.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/heroes/mage.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/heroes/rogue.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/heroes/priestess.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/heroes/bard.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/heroes/rocketeer.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/heroes/baker.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/pixelFx.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/enemies/undead.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/enemies/spirits.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/enemySprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/graveyardSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/enemies/castle.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/castleTiles.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/castleSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/enemies/ruins.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/ruinsTiles.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/ruinsSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/guardianSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/royalSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/npcSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/propSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/petSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/barrelSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/logoSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/obstacleSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/bossSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/phantomSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/deathbringerSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/manorSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/vaultSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/itemSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/iconSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/upgradeSprites.js?v=20261029-4b4087"></script>
-  <script src="js/gfx/tiles.js?v=20261029-4b4087"></script>
+  <script src="js/gfx/pixelArt.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/heroSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/heroes/cute.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/heroes/knight.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/heroes/archer.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/heroes/mage.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/heroes/rogue.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/heroes/priestess.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/heroes/bard.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/heroes/rocketeer.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/heroes/baker.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/pixelFx.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/enemies/undead.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/enemies/spirits.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/enemySprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/graveyardSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/enemies/castle.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/castleTiles.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/castleSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/enemies/ruins.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/ruinsTiles.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/ruinsSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/guardianSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/royalSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/npcSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/propSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/petSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/barrelSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/logoSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/obstacleSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/bossSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/phantomSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/deathbringerSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/manorSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/vaultSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/itemSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/iconSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/upgradeSprites.js?v=20261030-1534c1"></script>
+  <script src="js/gfx/tiles.js?v=20261030-1534c1"></script>
 
   <!-- World & entities -->
-  <script src="js/world/dungeon.js?v=20261029-4b4087"></script>
-  <script src="js/world/castle.js?v=20261029-4b4087"></script>
-  <script src="js/world/doors.js?v=20261029-4b4087"></script>
-  <script src="js/world/lighting.js?v=20261029-4b4087"></script>
-  <script src="js/world/floor.js?v=20261029-4b4087"></script>
-  <script src="js/entities/effects.js?v=20261029-4b4087"></script>
-  <script src="js/entities/entity.js?v=20261029-4b4087"></script>
-  <script src="js/entities/projectile.js?v=20261029-4b4087"></script>
-  <script src="js/entities/pickup.js?v=20261029-4b4087"></script>
-  <script src="js/entities/dummy.js?v=20261029-4b4087"></script>
-  <script src="js/entities/player/player.js?v=20261029-4b4087"></script>
-  <script src="js/entities/player/warrior.js?v=20261029-4b4087"></script>
-  <script src="js/entities/player/ranger.js?v=20261029-4b4087"></script>
-  <script src="js/entities/player/mage.js?v=20261029-4b4087"></script>
-  <script src="js/entities/player/rogue.js?v=20261029-4b4087"></script>
-  <script src="js/entities/pet.js?v=20261029-4b4087"></script>
-  <script src="js/entities/player/priestess.js?v=20261029-4b4087"></script>
-  <script src="js/entities/player/bard.js?v=20261029-4b4087"></script>
-  <script src="js/entities/player/rocketeer.js?v=20261029-4b4087"></script>
-  <script src="js/entities/player/baker.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/enemy.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/zombie.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/slime.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/wraith.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/skeleton.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/undeadKnight.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/clayMinion.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/gravestone.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/ghost.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/mimic.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/graveyard.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/castle.js?v=20261029-4b4087"></script>
-  <script src="js/entities/enemies/ruins.js?v=20261029-4b4087"></script>
-  <script src="js/entities/boss/golem.js?v=20261029-4b4087"></script>
-  <script src="js/entities/boss/guardian.js?v=20261029-4b4087"></script>
-  <script src="js/entities/boss/phantom.js?v=20261029-4b4087"></script>
-  <script src="js/entities/boss/deathbringer.js?v=20261029-4b4087"></script>
-  <script src="js/entities/boss/queen.js?v=20261029-4b4087"></script>
-  <script src="js/entities/boss/king.js?v=20261029-4b4087"></script>
-  <script src="js/entities/boss/prince.js?v=20261029-4b4087"></script>
-  <script src="js/entities/boss/princess.js?v=20261029-4b4087"></script>
+  <script src="js/world/dungeon.js?v=20261030-1534c1"></script>
+  <script src="js/world/castle.js?v=20261030-1534c1"></script>
+  <script src="js/world/doors.js?v=20261030-1534c1"></script>
+  <script src="js/world/lighting.js?v=20261030-1534c1"></script>
+  <script src="js/world/floor.js?v=20261030-1534c1"></script>
+  <script src="js/entities/effects.js?v=20261030-1534c1"></script>
+  <script src="js/entities/entity.js?v=20261030-1534c1"></script>
+  <script src="js/entities/projectile.js?v=20261030-1534c1"></script>
+  <script src="js/entities/pickup.js?v=20261030-1534c1"></script>
+  <script src="js/entities/dummy.js?v=20261030-1534c1"></script>
+  <script src="js/entities/player/player.js?v=20261030-1534c1"></script>
+  <script src="js/entities/player/warrior.js?v=20261030-1534c1"></script>
+  <script src="js/entities/player/ranger.js?v=20261030-1534c1"></script>
+  <script src="js/entities/player/mage.js?v=20261030-1534c1"></script>
+  <script src="js/entities/player/rogue.js?v=20261030-1534c1"></script>
+  <script src="js/entities/pet.js?v=20261030-1534c1"></script>
+  <script src="js/entities/player/priestess.js?v=20261030-1534c1"></script>
+  <script src="js/entities/player/bard.js?v=20261030-1534c1"></script>
+  <script src="js/entities/player/rocketeer.js?v=20261030-1534c1"></script>
+  <script src="js/entities/player/baker.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/enemy.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/zombie.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/slime.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/wraith.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/skeleton.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/undeadKnight.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/clayMinion.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/gravestone.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/ghost.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/mimic.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/graveyard.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/castle.js?v=20261030-1534c1"></script>
+  <script src="js/entities/enemies/ruins.js?v=20261030-1534c1"></script>
+  <script src="js/entities/boss/golem.js?v=20261030-1534c1"></script>
+  <script src="js/entities/boss/guardian.js?v=20261030-1534c1"></script>
+  <script src="js/entities/boss/phantom.js?v=20261030-1534c1"></script>
+  <script src="js/entities/boss/deathbringer.js?v=20261030-1534c1"></script>
+  <script src="js/entities/boss/queen.js?v=20261030-1534c1"></script>
+  <script src="js/entities/boss/king.js?v=20261030-1534c1"></script>
+  <script src="js/entities/boss/prince.js?v=20261030-1534c1"></script>
+  <script src="js/entities/boss/princess.js?v=20261030-1534c1"></script>
 
   <!-- Game -->
-  <script src="js/game/waves.js?v=20261029-4b4087"></script>
-  <script src="js/game/hud.js?v=20261029-4b4087"></script>
-  <script src="js/game/heroNooks.js?v=20261029-4b4087"></script>
-  <script src="js/game/lobby.js?v=20261029-4b4087"></script>
-  <script src="js/game/decor.js?v=20261029-4b4087"></script>
-  <script src="js/game/castleDecor.js?v=20261029-4b4087"></script>
-  <script src="js/game/ruinsDecor.js?v=20261029-4b4087"></script>
-  <script src="js/game/manorDecor.js?v=20261029-4b4087"></script>
-  <script src="js/game/scenes.js?v=20261029-4b4087"></script>
-  <script src="js/game/potions.js?v=20261029-4b4087"></script>
-  <script src="js/game/upgrades.js?v=20261029-4b4087"></script>
-  <script src="js/game/barrels.js?v=20261029-4b4087"></script>
-  <script src="js/game/run.js?v=20261029-4b4087"></script>
-  <script src="js/game/game.js?v=20261029-4b4087"></script>
-  <script src="js/game/cheats.js?v=20261029-4b4087"></script>
-  <script src="js/ui/heroGuide.js?v=20261029-4b4087"></script>
-  <script src="js/ui/menus.js?v=20261029-4b4087"></script>
-  <script src="js/ui/bestiary.js?v=20261029-4b4087"></script>
-  <script src="js/ui/potionGuide.js?v=20261029-4b4087"></script>
-  <script src="js/ui/upgradeGuide.js?v=20261029-4b4087"></script>
-  <script src="js/ui/dialog.js?v=20261029-4b4087"></script>
-  <script src="js/ui/chat.js?v=20261029-4b4087"></script>
-  <script src="js/net/net.js?v=20261029-4b4087"></script>
-  <script src="js/net/session.js?v=20261029-4b4087"></script>
-  <script src="js/net/bot.js?v=20261029-4b4087"></script>
-  <script src="js/ui/menuShowcase.js?v=20261029-4b4087"></script>
-  <script src="js/main.js?v=20261029-4b4087"></script>
+  <script src="js/game/waves.js?v=20261030-1534c1"></script>
+  <script src="js/game/hud.js?v=20261030-1534c1"></script>
+  <script src="js/game/heroNooks.js?v=20261030-1534c1"></script>
+  <script src="js/game/lobby.js?v=20261030-1534c1"></script>
+  <script src="js/game/decor.js?v=20261030-1534c1"></script>
+  <script src="js/game/castleDecor.js?v=20261030-1534c1"></script>
+  <script src="js/game/ruinsDecor.js?v=20261030-1534c1"></script>
+  <script src="js/game/manorDecor.js?v=20261030-1534c1"></script>
+  <script src="js/game/scenes.js?v=20261030-1534c1"></script>
+  <script src="js/game/potions.js?v=20261030-1534c1"></script>
+  <script src="js/game/upgrades.js?v=20261030-1534c1"></script>
+  <script src="js/game/barrels.js?v=20261030-1534c1"></script>
+  <script src="js/game/run.js?v=20261030-1534c1"></script>
+  <script src="js/game/game.js?v=20261030-1534c1"></script>
+  <script src="js/game/cheats.js?v=20261030-1534c1"></script>
+  <script src="js/ui/heroGuide.js?v=20261030-1534c1"></script>
+  <script src="js/ui/menus.js?v=20261030-1534c1"></script>
+  <script src="js/ui/bestiary.js?v=20261030-1534c1"></script>
+  <script src="js/ui/potionGuide.js?v=20261030-1534c1"></script>
+  <script src="js/ui/upgradeGuide.js?v=20261030-1534c1"></script>
+  <script src="js/ui/dialog.js?v=20261030-1534c1"></script>
+  <script src="js/ui/chat.js?v=20261030-1534c1"></script>
+  <script src="js/net/net.js?v=20261030-1534c1"></script>
+  <script src="js/net/session.js?v=20261030-1534c1"></script>
+  <script src="js/net/bot.js?v=20261030-1534c1"></script>
+  <script src="js/ui/menuShowcase.js?v=20261030-1534c1"></script>
+  <script src="js/main.js?v=20261030-1534c1"></script>
 </body>
 </html>

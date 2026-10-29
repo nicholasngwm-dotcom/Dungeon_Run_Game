@@ -456,9 +456,10 @@ h2 {
 .card.locked:hover { transform: none; border-color: var(--border); }
 
 /* ===== Settings ===== */
-.settings-cols { display: flex; gap: 28px; text-align: left; }
-.settings-col {
-  width: 330px;
+.settings-panel {
+  width: 800px;
+  height: 372px;
+  text-align: left;
   background: var(--panel);
   border: 3px solid var(--border);
   box-shadow: inset 2px 2px 0 var(--panel-light);
@@ -471,8 +472,8 @@ h2 {
 .set-sub { font-size: 8px; color: var(--muted); }
 .set-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text); }
 .set-row span { color: var(--accent); }
-.settings-col.wide { width: 440px; }
-.settings-col input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+
+#screen-settings input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
 .toggle {
   font-family: inherit;
   font-size: 12px;
@@ -1017,8 +1018,7 @@ h2 {
 .shop-line { font-size: 12px; color: #d8c8a0; min-height: 12px; }
 .shop-items { display: grid; gap: 10px; }
 .shop-items.upgrades { grid-template-columns: repeat(3, 220px); }
-.shop-items.potions { grid-template-columns: repeat(3, 250px); }
-.shop-items.potions.many { grid-template-columns: repeat(4, 214px); }
+.shop-items.potions { grid-template-columns: repeat(3, 280px); }
 /* a store card: icon, name, a readable description, then the price button at the bottom */
 .shop-card {
   display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
@@ -1026,7 +1026,16 @@ h2 {
   padding: 10px 8px;
 }
 .shop-items.upgrades .shop-card { min-height: 150px; }
-.shop-items.potions .shop-card { min-height: 150px; padding: 8px 6px; gap: 4px; }
+/* a potion card lies on its side: the bottle on the left, name and effect beside it, stock and price along the bottom */
+.shop-items.potions .shop-card {
+  display: grid; grid-template-columns: 46px 1fr auto; grid-template-rows: auto 1fr auto; column-gap: 8px; row-gap: 3px;
+  align-items: center; text-align: left; padding: 8px 10px;
+}
+.shop-items.potions .shop-card canvas { grid-column: 1; grid-row: 1 / span 3; align-self: center; }
+.shop-items.potions .shop-card b, .shop-items.potions .shop-card span { grid-column: 2 / span 2; }
+.shop-items.potions .shop-card span { align-self: start; }
+.shop-items.potions .stock { grid-column: 2; }
+.shop-items.potions .buy { grid-column: 3; margin: 0; }
 .shop-card canvas { width: 60px; height: 60px; image-rendering: pixelated; flex: none; }
 .shop-card.potion canvas { width: 42px; height: 42px; }
 .shop-card b { font-size: 12px; }
@@ -1096,6 +1105,17 @@ h2 {
 .shop-extra { min-height: 34px; display: flex; align-items: center; justify-content: center; }
 .reroll em { display: inline-block; width: 8px; height: 8px; margin-left: 6px; vertical-align: -1px; background: #ffd34a; box-shadow: inset -2px -2px 0 #a07a24, 0 0 0 2px var(--border); }
 /* the potion store shows your bag underneath */
+/* Tobin's trade-in stall: two scrolling lists, what you own and what it sells for */
+.shop-items.sell { grid-template-columns: repeat(2, 330px); gap: 16px; }
+.sell-list { background: var(--panel); border: 3px solid var(--border); box-shadow: inset 2px 2px 0 var(--panel-light); padding: 8px 10px; text-align: left; }
+.sell-list h3 { font-size: 12px; color: var(--accent); margin-bottom: 6px; }
+.sell-list h3 span { font-size: 8px; color: var(--muted); margin-left: 6px; }
+.sell-rows { display: flex; flex-direction: column; gap: 4px; max-height: 236px; overflow-y: auto; scrollbar-width: thin; }
+.sell-row { display: flex; align-items: center; gap: 8px; padding: 3px 4px; background: rgba(0, 0, 0, 0.18); }
+.sell-row canvas { width: 28px; height: 28px; image-rendering: pixelated; flex: none; }
+.sell-row b { flex: 1; font-size: 12px; }
+.sell-row b i { font-style: normal; color: #ffffff; font-size: 8px; }
+.sell-row .buy { flex: none; min-width: 64px; padding: 4px 6px; }
 .bag { display: flex; align-items: center; gap: 6px; }
 .bag-label { font-size: 8px; color: var(--muted); margin-right: 4px; }
 .bag-slot {
@@ -1316,3 +1336,78 @@ body.touch .screen::-webkit-scrollbar { display: none; }
 body.touch .hero-sheet { height: 320px; }
 body.touch .tome-list, body.touch .pgx-list { max-height: 250px; }
 .set-layout-btn { margin-top: 10px; align-self: flex-start; }
+
+/* ===== Compact settings (fits a 960x540 stage with every section showing) ===== */
+#screen-settings { gap: 10px; }
+#screen-settings h2 { font-size: 26px; }
+#screen-settings .set-head { margin-top: 2px; }
+#screen-settings .set-choices .toggle { padding: 4px 2px; }
+#screen-settings .toggle { padding: 4px 10px; }
+#screen-settings .keybind { padding: 1px 4px; }
+#set-xhair .toggle { font-size: 10px; white-space: nowrap; }
+#screen-settings .set-keys { gap: 1px 8px; }
+#screen-settings .set-status { margin-top: -6px; }
+/* slim pixel sliders instead of the browser's chunky default */
+#screen-settings input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  margin: 0 0 2px;
+  background: transparent;
+}
+#screen-settings input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: #4a3424; border: 2px solid var(--border); }
+#screen-settings input[type="range"]::-moz-range-track { height: 6px; background: #4a3424; border: 2px solid var(--border); }
+#screen-settings input[type="range"]::-moz-range-progress { height: 6px; background: var(--accent-dark); }
+#screen-settings input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 14px;
+  margin-top: -6px;
+  background: var(--accent);
+  border: 2px solid var(--border);
+  box-shadow: inset -2px -2px 0 var(--accent-dark);
+}
+#screen-settings input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 14px;
+  border-radius: 0;
+  background: var(--accent);
+  border: 2px solid var(--border);
+  box-shadow: inset -2px -2px 0 var(--accent-dark);
+}
+/* touch: bigger thumbs to grab */
+body.touch #screen-settings input[type="range"] { height: 22px; }
+body.touch #screen-settings input[type="range"]::-webkit-slider-thumb { width: 18px; height: 22px; margin-top: -10px; }
+body.touch #screen-settings input[type="range"]::-moz-range-thumb { width: 18px; height: 22px; }
+
+/* any screen taller than the window scrolls instead of losing its title and buttons off the edges */
+.screen { overflow-y: auto; justify-content: safe center; scrollbar-width: none; }
+.screen::-webkit-scrollbar { display: none; }
+
+/* ===== Settings tabs ===== */
+.settings-panel { padding: 0 14px 12px; gap: 6px; max-width: calc(100vw - 32px); }
+.set-tabs { display: flex; gap: 4px; margin: 0 -14px 4px; padding: 0 8px; border-bottom: 3px solid var(--border); background: rgba(0, 0, 0, 0.2); }
+.set-tab, .set-subtab {
+  font-family: inherit; font-size: 12px; color: var(--muted); cursor: pointer;
+  background: transparent; border: none; padding: 10px 16px 8px;
+  border-bottom: 3px solid transparent; margin-bottom: -3px;
+}
+.set-tab:hover, .set-subtab:hover { color: var(--text); }
+.set-tab.on { color: var(--accent); border-bottom-color: var(--accent); background: var(--panel); }
+.set-pane, .set-subpane { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.set-pane { flex: 1; overflow-y: auto; scrollbar-width: thin; padding-right: 4px; }
+.set-pane > input[type="range"], .set-subpane input[type="range"] { width: 100%; }
+.set-subtabs { display: flex; gap: 4px; margin-top: 6px; border-bottom: 2px solid var(--border); }
+.set-subtab { font-size: 12px; padding: 6px 14px; background: rgba(0, 0, 0, 0.2); border: 2px solid var(--border); border-bottom: none; margin-bottom: 0; }
+.set-subtab.on { color: #0d0a14; background: var(--accent); }
+.set-split { flex-direction: row; gap: 18px; align-items: flex-start; }
+.set-split-col { display: flex; flex-direction: column; gap: 6px; }
+.set-split-col:first-child { flex: 1.35; }
+.set-split-col:last-child { flex: 1; }
+.set-row .set-sub { color: var(--muted); }
+/* touch: the stage is smaller, so the panel is shorter (each tab scrolls) and the two columns stack */
+body.touch .settings-panel { height: 250px; width: 680px; }
+body.touch .set-split { flex-direction: column; align-items: stretch; }
+#set-xhair .toggle { flex: 1 1 40%; }
+/* single-column tabs keep their sliders a comfortable length */
+.set-pane[data-pane="general"] > *, .set-pane[data-pane="video"] > *, .set-pane[data-pane="audio"] > *, .set-subpane[data-subpane="touch"] > * { max-width: 560px; }

@@ -845,7 +845,9 @@ const CONFIG = {
     // Upgrades: three on offer at a time, buy as many as you can; the first costs upgrade.base and each
     // one bought adds upgrade.step for the rest of the run. Rerolling the three costs reroll.base, + reroll.step
     // more each time, back to reroll.base at the next stage's shop. (Stage 1 also starts with a free pick of three.)
-    shop: { stagePrice: [1, 1.4, 1.8], upgrade: { base: 30, step: 10 }, reroll: { base: 10, step: 5 } },
+    // Sell stall (Tobin): an upgrade sells back for sell.upgrade coins (it doesn't lower the next upgrade's price),
+    // a potion for sell.potion of its base price (at least 1).
+    shop: { stagePrice: [1, 1.4, 1.8], upgrade: { base: 30, step: 10 }, reroll: { base: 10, step: 5 }, sell: { upgrade: 10, potion: 0.4 } },
     survival: { duration: [30, 40, 50], spawnEvery: [1.3, 1.2, 1.1], perSpawn: 2, maxAlive: [12, 13, 14] },
     // the rooms whose obstacles are laid out in a pattern (DungeonRun.addLayout); they block heroes, enemies and shots alike
     cover: { rooms: ['combat', 'survival'] },

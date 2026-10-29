@@ -11,7 +11,7 @@
 // even the few that only do something for some (mana, rockets, energy, followers or pets, a melee swing).
 // (`needs` can still keep an upgrade back, e.g. Resurrect is only offered in multiplayer.)
 //
-// Potion store: 6 different potions, 1-4 of each (see potions.js), shared by
+// Potion store: 6 different potions, 3-7 of each (see potions.js), shared by
 // the whole party. Potion prices rise with the stage (CONFIG.run.shop.stagePrice).
 
 const BEATDOWN = { max: 20, decay: 1 };   // Beatdown: most stacks, and seconds without a hit for one to fall off
@@ -22,11 +22,13 @@ const SHOP_UPGRADES = [
     id: 'vitalHeart', name: 'Vital Heart', color: '#e84a4a',
     desc: '+100 max HP. Your current HP stays the same.',
     apply(p) { p.maxHp += 100; },
+    remove(p) { p.maxHp -= 100; p.hp = Math.min(p.hp, p.maxHp); },
   },
   {
     id: 'revitalisingBlood', name: 'Revitalising Blood', color: '#ff5a6a',
     desc: 'Regenerate 3 HP per second, even in battle.',
     apply(p) { p.bonusRegen += 3; },
+    remove(p) { p.bonusRegen -= 3; },
     hud: (p) => ({ active: p.hp < p.maxHp }),
   },
   {
@@ -42,6 +44,7 @@ const SHOP_UPGRADES = [
     id: 'burstDodging', name: 'Burst Dodging', color: '#8ad8ff',
     desc: '2 dodges in a row, but each takes 60% longer to come back.',
     apply(p) { const s = Upgrades.state(p); s.dodges = 2; s.dodgeT = 0; p.maxCooldowns.dodge = Upgrades.burstCooldown(p); },
+    remove(p) { p.maxCooldowns.dodge = p.dodgeCooldown; p.cooldowns.dodge = Math.min(p.cooldowns.dodge, p.dodgeCooldown); },
     hud: (p) => { const s = Upgrades.state(p); return { count: s.dodges, cd: s.dodges < 2 ? s.dodgeT : 0, max: Upgrades.burstCooldown(p) }; },
   },
   {
@@ -52,6 +55,7 @@ const SHOP_UPGRADES = [
     id: 'fightingSpirit', name: 'Fighting Spirit', color: '#ff7a3a',
     desc: '+10% attack speed and +10% move speed.',
     apply(p) { p.attackSpeed *= 1.1; p.speed *= 1.1; },
+    remove(p) { p.attackSpeed /= 1.1; p.speed /= 1.1; },
   },
   {
     id: 'beatdown', name: 'Beatdown', color: '#ff5a3a',
@@ -61,12 +65,14 @@ const SHOP_UPGRADES = [
   {
     id: 'manaCrystal', name: 'Mana Crystal', color: '#4ad8ff',
     desc: 'Mana regenerates at 7 per second.',
-    apply(p) { if (p.resource?.name === 'MANA') p.resource.regen = Math.max(7, p.resource.regen + 2); },
+    apply(p) { const r = p.resource; if (r?.name !== 'MANA') return; const was = r.regen; r.regen = Math.max(7, r.regen + 2); Upgrades.state(p).crystalRegen = r.regen - was; },
+    remove(p) { if (p.resource?.name === 'MANA') p.resource.regen -= Upgrades.state(p).crystalRegen || 0; },
   },
   {
     id: 'celestialPeach', name: 'Celestial Peach', color: '#ffaac8',
     desc: '+50 max mana.',
     apply(p) { if (p.resource?.name === 'MANA') { p.resource.max += 50; p.resource.value += 50; } },
+    remove(p) { const r = p.resource; if (r?.name === 'MANA') { r.max -= 50; r.value = Math.min(r.value, r.max); } },
   },
   {
     id: 'totalLoyalty', name: 'Total Loyalty', color: '#ffb84a',
@@ -89,6 +95,7 @@ const SHOP_UPGRADES = [
     id: 'warDetermination', name: 'War Determination', color: '#c08aff',
     desc: 'Ability cooldowns (RMB, E, F) are 25% shorter.',
     apply(p) { p.abilityHaste *= 4 / 3; },
+    remove(p) { p.abilityHaste *= 3 / 4; },
   },
   {
     id: 'blazeborn', name: 'Blazeborn', color: '#ff8a1e',
@@ -110,7 +117,8 @@ const SHOP_UPGRADES = [
   {
     id: 'biggerMagazine', name: 'Bigger Magazine', color: '#ff9a3a',
     desc: '30% more ammo.',
-    apply(p) { const r = p.resource; if (r?.name !== 'AMMO') return; const more = Math.ceil(r.max * 1.3) - r.max; r.max += more; r.value += more; },
+    apply(p) { const r = p.resource; if (r?.name !== 'AMMO') return; const more = Math.ceil(r.max * 1.3) - r.max; r.max += more; r.value += more; Upgrades.state(p).magazine = more; },
+    remove(p) { const r = p.resource; if (r?.name !== 'AMMO') return; r.max -= Upgrades.state(p).magazine || 0; r.value = Math.min(r.value, r.max); },
   },
   {
     id: 'chestsOfAlchemy', name: 'Chests of Alchemy', color: '#ff6a7a',
@@ -129,6 +137,7 @@ const SHOP_UPGRADES = [
     id: 'teslaArmour', name: 'Tesla Armour', color: '#6ad8ff', cooldown: 10, zap: 1,
     desc: '+25 max HP. When you\'re hit, a static shock leaps out at whoever hit you and ZAPS them: stunned for 1 second, even bosses.',
     apply(p) { p.maxHp += 25; p.hp += 25; },
+    remove(p) { p.maxHp -= 25; p.hp = Math.min(p.hp, p.maxHp); },
     hud: (p) => ({ cd: Upgrades.cd(p, 'teslaArmour'), max: 10, active: Upgrades.cd(p, 'teslaArmour') <= 0 }),
   },
   {
@@ -157,6 +166,9 @@ const SHOP_UPGRADES = [
     id: 'backpack', name: 'Backpack', color: '#c8925a', slots: 7,
     desc: 'Your bag holds 2 more potions (7 slots, keys 6 and 7 for the new ones).',
     apply(p) { while (p.inventory.length < UPGRADE_BY_ID.backpack.slots) p.inventory.push(null); },
+    // (it can only be sold while its extra slots are empty: see canSell)
+    canSell: (p) => p.inventory.slice(BAG_SLOTS).every((s) => !s),
+    remove(p) { p.inventory.length = BAG_SLOTS; },
   },
   {
     id: 'potionDosage', name: 'Higher Potion Dosage', color: '#ff7a8a', scale: 1.5,
@@ -1246,9 +1258,9 @@ function pointInPolygon(x, y, poly) {
 }
 
 /**
- * The shop window, in one of three modes: 'upgrades' (Bram's enchantments: three at a time,
+ * The shop window, in one of four modes: 'upgrades' (Bram's enchantments: three at a time,
  * buy any you can afford, or reroll), 'potions' (Mira's potions: six on the shelf, plus your
- * bag) or 'pick' (the free upgrade chosen on entering each stage; it can't be left without
+ * bag), 'sell' (Tobin's trade-ins: sell upgrades and potions back) or 'pick' (the free upgrade chosen on entering each stage; it can't be left without
  * choosing). Buying sends a command (App.command) - in multiplayer it's applied a moment
  * later on every machine, so the window re-renders whenever anything it shows changes.
  */
@@ -1265,6 +1277,7 @@ const Shop = {
       potions: ['Fresh from the cauldron!', 'One sip and you\'ll feel brand new, dear.', 'Mind the fizzy ones.'],
       upgrades: ['Power has a price, adventurer. Take as much as you can carry.', 'Each enchantment I bind costs a little more than the last.', 'Not to your liking? The runes can show you others... for a fee.'],
       pick: ['Before you go deeper: the runes offer you one gift. Choose it well.', 'A new stage, a new gift. Take one.'],
+      sell: ['Let us see what you have got.', 'Everything has a price. Mine is just... smaller.', 'No haggling, friend. Tobin pays fair. Ish.'],
     };
     this.say(choose(lines[mode]));
     this.render();
@@ -1294,14 +1307,13 @@ const Shop = {
     this.shown = this.signature();
     const p = this.hero;
     document.getElementById('shop-coins').textContent = p.coins;
-    const titles = { potions: "Mira's Potions", upgrades: "Bram's Enchantments", pick: 'A Gift for the Journey' };
+    const titles = { potions: "Mira's Potions", upgrades: "Bram's Enchantments", pick: 'A Gift for the Journey', sell: "Tobin's Trade-ins" };
     document.getElementById('shop-title').textContent = titles[this.mode];
     document.getElementById('shop-leave').classList.toggle('hidden', this.mode === 'pick' && this.run.needsPick(p));
     const grid = document.getElementById('shop-items');
     grid.className = `shop-items ${this.mode === 'pick' ? 'upgrades' : this.mode}`;
-    // more than 6 potions on offer: four to a row, so they still fit in two rows
-    if (this.mode === 'potions' && this.run.potionStock.length > 6) grid.classList.add('many');
     if (this.mode === 'potions') this.renderPotions(grid, p);
+    else if (this.mode === 'sell') this.renderSell(grid, p);
     else if (this.mode === 'pick') this.renderPick(grid, p);
     else this.renderUpgrades(grid, p);
   },
@@ -1403,6 +1415,45 @@ const Shop = {
     document.getElementById('shop-hint').textContent = `Potions go in your bag (${p.inventory.length} slots, up to ${BAG_STACK} of a kind each). Drag to rearrange; drink with the slot keys during a fight.${this.run.stage > 1 ? ' Prices rise each stage.' : ''}`;
   },
 
+  /** Tobin's stall: every upgrade the hero owns and every potion in their bag, each with what it sells for. */
+  renderSell(grid, p) {
+    const sell = CONFIG.run.shop.sell;
+    const ups = Object.keys(p.upgradeLevels).map((id) => UPGRADE_BY_ID[id]).filter(Boolean);
+    const upRows = ups.map((u) => {
+      const blocked = u.canSell && !u.canSell(p);
+      return `<div class="sell-row">
+        <canvas data-icon="${u.id}"></canvas>
+        <b style="color:${u.color}">${u.name}</b>
+        <button class="buy" data-action="sellUpgrade:${u.id}" ${blocked ? 'disabled title="Empty the backpack\'s extra slots first"' : ''}>${blocked ? 'EMPTY SLOTS 6-7' : `+${sell.upgrade}<em></em>`}</button>
+      </div>`;
+    }).join('') || '<p class="shop-note">No upgrades yet.</p>';
+    const potRows = p.inventory.map((s, i) => {
+      if (!s) return '';
+      const pot = POTIONS[s.id];
+      return `<div class="sell-row">
+        <canvas width="28" height="28" data-potion="${pot.id}"></canvas>
+        <b style="color:${POTION_COLORS[pot.family][1]}">${pot.name}${s.count > 1 ? ` <i>x${s.count}</i>` : ''}</b>
+        <button class="buy" data-action="sellPotion:${i}">+${this.run.potionSellPrice(pot.id)}<em></em></button>
+      </div>`;
+    }).join('') || '<p class="shop-note">Your bag is empty.</p>';
+    grid.innerHTML = `<div class="sell-list"><h3>UPGRADES <span>${sell.upgrade} coins each</span></h3><div class="sell-rows">${upRows}</div></div>
+      <div class="sell-list"><h3>POTIONS <span>one at a time</span></h3><div class="sell-rows">${potRows}</div></div>`;
+    this.paintIcons(grid);
+    for (const c of grid.querySelectorAll('canvas[data-potion]')) c.getContext('2d').drawImage(Sprites.potions[c.dataset.potion], 0, 0);
+    document.getElementById('shop-extra').innerHTML = '';
+    document.getElementById('shop-hint').textContent = "Selling an upgrade takes its effect away for the rest of the run, and doesn't make Bram's next one any cheaper.";
+  },
+
+  sellUpgrade(id) {
+    if (!this.hero.upgradeLevels[id]) return;
+    App.command({ type: 'sellUpgrade', upgrade: id });
+  },
+
+  sellPotion(slot) {
+    if (!this.hero.inventory[slot]) return;
+    App.command({ type: 'sellPotion', slot });
+  },
+
   /** Drag a bag slot onto another to move, swap or stack it (same command as the in-game bag). */
   bindBagDrag(root) {
     for (const el of root.querySelectorAll('.bag-slot')) {
@@ -1462,7 +1513,7 @@ const Shop = {
   },
 
   /**
-   * A purchase went through (or didn't) - the keeper reacts if it was ours. what: 'upgrade' | 'pick' | 'reroll' | 'potion'.
+   * A purchase went through (or didn't) - the keeper reacts if it was ours. what: 'upgrade' | 'pick' | 'reroll' | 'potion' | 'sellUpgrade' | 'sellPotion'.
    * Runs inside the shared simulation but only on the buyer's screen, so it uses
    * the visual-only random (vchoose) to keep multiplayer in sync.
    */
@@ -1472,6 +1523,7 @@ const Shop = {
       Sound.play('buy');
       if (what === 'reroll') this.say(vchoose(['Hmm... how about these?', 'Fresh choices, fresh fortunes.', 'The runes shift...']));
       else if (what === 'potion') this.say(vchoose(['Drink it while it\'s fizzy!', 'Pleasure doing business.', 'Come back soon, dear!']));
+      else if (what === 'sellPotion' || what === 'sellUpgrade') this.say(vchoose(['A fine piece. Here is your coin.', 'Done! Pleasure doing business.', 'I know just the buyer for this.']));
       else {
         this.justChose = what === 'pick' ? true : this.buying;
         Sound.play('magic');

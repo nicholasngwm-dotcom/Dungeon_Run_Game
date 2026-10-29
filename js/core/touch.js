@@ -43,8 +43,10 @@ const Touch = {
   wasEnabled: null,        // Touch.enabled last frame (a change re-lays the screen out)
   picking: false,         // the hero is choosing a spot (lightning, volley, aegis...): the aim stick picks on letting go
 
-  /** Touch controls are on: chosen in Settings, or (auto) on a device whose main pointer is a finger. */
+  /** Touch controls are on: chosen in Settings, or (auto) on a device whose main pointer is a finger. (Also
+   * while the button editor is open, so on a computer it previews the phone layout.) */
   get enabled() {
+    if (this.editing) return true;
     const mode = Settings.data.controls;
     return mode === 'touch' || (mode !== 'mouse' && this.coarse);
   },

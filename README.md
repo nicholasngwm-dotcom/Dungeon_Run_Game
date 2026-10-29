@@ -86,13 +86,16 @@ enemies can be up at once.
 
 **Coins**: enemies drop coins (tougher ones drop more; summoned ones rarely), the boss
 drops a pile, and every cleared room leaves a chest worth 5 coins. Coins last for the
-whole run. Spend them in the **shop**: Mira sells potions (your bag holds 5 slots,
+whole run. Spend them in the **shop**: Mira sells six different potions, 3-7 of each and always
+at least one healing kind (your bag holds 5 slots,
 up to 10 of a kind each) and Bram the enchanter keeps three upgrades on his table at a
 time. Buy as many as you can afford: the first costs 30 coins and each one bought makes the
 next cost 10 more for the rest of the run; a bought card is replaced by a new one. Rerolling
 costs 10, then 5 more each time, back to 10 at the next stage's shop. Each upgrade can be
 owned once. Entering each stage you also choose one free upgrade from three, and a wishing
 well's wish is sometimes an upgrade instead of potions.
+Tobin's trade-in stall at the back of the shop buys them back for a little: 10 coins an upgrade
+(its effect comes off, and Bram's prices don't drop), 40% of a potion's base price each.
 
 **Upgrades**: 35 shared ones (Vital Heart, Tesla Armour, Silver Shield, Backpack, Nuclear Reactor, Last Hurrah...;
 every hero can be offered any of them, even the few that only help heroes with mana, rockets,
@@ -148,10 +151,13 @@ The game fills the whole window, whatever its shape (no black bars), and goes **
 on the first click or key press; leave it (Esc / F11) and the next click brings it back.
 Settings > Window mode switches to playing in the browser window instead.
 
-**Settings** (main menu or pause menu) has mouse sensitivity, music on/off,
-music and sound effect volume, and key bindings for movement, E, F, Q, dodge,
+**Settings** (main menu or pause menu) is the same on every device, in four tabs: **General**
+(minimap size, teammate effects), **Video** (window mode, screen shake), **Audio** (music on/off,
+music and sound effect volume) and **Controls**: the control style (Auto / Touch / Mouse + keys),
+then a **Touch** tab (auto fire, interface and button size, opacity, the button editor) and a
+**Mouse + keys** tab (mouse sensitivity, crosshair, and key bindings for movement, E, F, Q, dodge,
 the five bag slots, interact, the music toggle and the mouse / crosshair toggle (LMB / RMB
-stay on the mouse). Settings are saved in the browser. While playing, the game
+stay on the mouse)). Settings are saved in the browser. While playing, the game
 locks the mouse pointer so sensitivity can apply; press Esc to get the cursor
 back (this pauses), or press C to switch to the normal mouse pointer without
 pausing (C again brings the crosshair back; sensitivity only applies to the
@@ -198,8 +204,8 @@ Mouse + keys). The game is landscape only; held upright it asks you to turn the 
   or out of the bag to drop it.
 - Top left: pause, and in dungeon runs the scoreboard (a toggle).
 - Everything (HUD, buttons, text, menus) shows bigger than on a PC; **Interface size** in
-  Settings tunes it, alongside button size and opacity.
-- **Move / resize buttons** (Settings) opens the layout editor: drag any control (aim stick,
+  Settings > Controls > Touch tunes it, alongside button size and opacity.
+- **Move / resize buttons** (Settings > Controls > Touch; works on a computer too) opens the layout editor: drag any control (aim stick,
   skills, USE, HEAL, the bag, CANCEL, pause, scoreboard) where you like, tap one and use - / +
   to resize it, RESET for the default layout, DONE to go back (Save keeps it).
 - Skill buttons glow when ready, flash as they come off cooldown, show the seconds left big in

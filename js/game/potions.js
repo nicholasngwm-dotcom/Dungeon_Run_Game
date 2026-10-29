@@ -45,6 +45,9 @@ const POTION_DEFS = [
 /** How many of one potion fit in a bag slot. */
 const BAG_STACK = 10;
 
+/** Bag slots every hero starts with (the Backpack upgrade adds more). */
+const BAG_SLOTS = 5;
+
 /** Reach of the Inferno potion's ring of fire around the hero (px). */
 const INFERNO_RADIUS = 180;
 
@@ -176,19 +179,18 @@ function buildPotionSprites() {
   }
 }
 
-/** How many different potions a potion store has on offer: [fewest, most]. */
-const POTION_STOCK_KINDS = [3, 8];
+/** A potion store's shelf: how many different potions, and how many of each: [fewest, most]. */
+const POTION_STOCK = { kinds: 6, count: [3, 7] };
 
 /**
- * A potion store's stock: 3-8 different potions (POTION_STOCK_KINDS), 1-4 of each, at least one
+ * A potion store's stock: six different potions (POTION_STOCK), 3-7 of each, at least one
  * of them heal-type. Runs inside the shared simulation (Math.random is seeded).
  */
 function rollPotionStock() {
   const all = Object.values(POTIONS);
   const heals = all.filter((p) => HEAL_FAMILIES.includes(p.family));
   const picked = [choose(heals)];
-  const kinds = randInt(POTION_STOCK_KINDS[0], POTION_STOCK_KINDS[1]);
-  while (picked.length < kinds) {
+  while (picked.length < POTION_STOCK.kinds) {
     const p = choose(all);
     if (!picked.includes(p)) picked.push(p);
   }
@@ -197,7 +199,7 @@ function rollPotionStock() {
     const j = Math.floor(Math.random() * (i + 1));
     [picked[i], picked[j]] = [picked[j], picked[i]];
   }
-  return picked.map((p) => ({ id: p.id, left: randInt(1, 4) }));
+  return picked.map((p) => ({ id: p.id, left: randInt(POTION_STOCK.count[0], POTION_STOCK.count[1]) }));
 }
 
 /** Short label for a potion's effect while it's active (HUD). */

@@ -55,7 +55,7 @@ const Menus = {
     slider('set-topac', 'touchOpacity', (v) => `${Math.round(v * 100)}%`);
     slider('set-ui', 'uiScale', (v) => `${Math.round(v * 100)}%`, () => Display.layout());
     document.getElementById('set-controls').innerHTML = CONTROL_MODES
-      .map(([mode, label]) => `<button class="toggle" data-action="controls:${mode}">${label.toUpperCase()}</button>`)
+      .map(([mode, label]) => `<button class="toggle" data-action="controlMode:${mode}">${label.toUpperCase()}</button>`)
       .join('');
     document.getElementById('set-xhair').innerHTML = CROSSHAIR_TYPES
       .map(([type, label]) => `<button class="toggle" data-action="crosshair:${type}">${label.toUpperCase()}</button>`)
@@ -91,7 +91,7 @@ const Menus = {
   /** Highlights the control mode and shows its options (touch buttons, or keybinds and crosshair). */
   controlsChanged() {
     for (const btn of document.querySelectorAll('#set-controls .toggle')) {
-      btn.classList.toggle('off', btn.dataset.action !== `controls:${Settings.data.controls}`);
+      btn.classList.toggle('off', btn.dataset.action !== `controlMode:${Settings.data.controls}`);
     }
     document.body.classList.toggle('touch', Touch.enabled);
     Display.layout();   // (the interface size only applies to touch)
@@ -117,7 +117,33 @@ const Menus = {
     this.settingsReturn = open ? open[0] : 'menu';
     this.savedSettings = Settings.copy();
     this.refreshSettings();
+    this.setSettingsTab(this.settingsTab || 'general');
+    // the controls tab opens on the style in use until another is picked
+    this.setControlsTab(this.controlsTab || (Touch.enabled ? 'touch' : 'mouse'));
     this.show('settings');
+  },
+
+  /** Drops a half-finished "PRESS A KEY" (switching tabs). */
+  stopKeyCapture() {
+    if (!Input.onKeyCapture) return;
+    Input.onKeyCapture = null;
+    this.refreshSettings();
+  },
+
+  /** Shows one settings tab: general, video, audio or controls. */
+  setSettingsTab(tab) {
+    this.settingsTab = tab;
+    this.stopKeyCapture();
+    for (const b of document.querySelectorAll('#screen-settings .set-tab')) b.classList.toggle('on', b.dataset.tab === tab);
+    for (const p of document.querySelectorAll('#screen-settings .set-pane')) p.classList.toggle('hidden', p.dataset.pane !== tab);
+  },
+
+  /** Under Controls: the touch tab or the mouse + keys tab (which settings to edit, not which style is in use). */
+  setControlsTab(sub) {
+    this.controlsTab = sub;
+    this.stopKeyCapture();
+    for (const b of document.querySelectorAll('#screen-settings .set-subtab')) b.classList.toggle('on', b.dataset.sub === sub);
+    for (const p of document.querySelectorAll('#screen-settings .set-subpane')) p.classList.toggle('hidden', p.dataset.subpane !== sub);
   },
 
   get settingsDirty() { return !!this.savedSettings && Settings.differsFrom(this.savedSettings); },
@@ -299,6 +325,8 @@ const Menus = {
       case 'dialogSkip': Dialog.finish(); break;
       case 'buy': Shop.buy(arg); break;
       case 'buyPotion': Shop.buyPotion(arg); break;
+      case 'sellUpgrade': Shop.sellUpgrade(arg); break;
+      case 'sellPotion': Shop.sellPotion(Number(arg)); break;
       case 'reroll': Shop.reroll(); break;
       case 'pick': Shop.pick(arg); break;
       case 'settings': this.openSettings(); break;
@@ -317,11 +345,13 @@ const Menus = {
         this.displayChanged();
         this.updateSaveState();
         break;
-      case 'controls':
+      case 'controlMode':
         Settings.data.controls = arg;
         this.controlsChanged();
         this.updateSaveState();
         break;
+      case 'setTab': this.setSettingsTab(arg); break;
+      case 'setSub': this.setControlsTab(arg); break;
       case 'editTouchLayout': Touch.openEditor(); break;
       case 'toggleAutoFire':
         Settings.data.autoFire = !Settings.data.autoFire;

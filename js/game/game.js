@@ -776,6 +776,12 @@ class Game {
       case 'buyPotion':
         if (this.run && hero) this.run.buyPotion(hero, cmd.id);
         return;
+      case 'sellUpgrade':
+        if (this.run && hero) this.run.sellUpgrade(hero, cmd.upgrade);
+        return;
+      case 'sellPotion':
+        if (this.run && hero && Number.isInteger(cmd.slot)) this.run.sellPotion(hero, cmd.slot);
+        return;
       case 'moveItem':
         if (hero) hero.moveItem(cmd.from, cmd.to);
         return;
