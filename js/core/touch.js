@@ -56,6 +56,7 @@ const Touch = {
   init(app, canvas) {
     this.app = app;
     this.canvas = canvas;
+    document.body.classList.toggle('touch', this.enabled);   // from the first paint, so a phone never flashes the PC menus
     canvas.addEventListener('pointerdown', (e) => {
       if (this.editing) {
         e.preventDefault();

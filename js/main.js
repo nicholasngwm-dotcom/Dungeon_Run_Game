@@ -118,7 +118,10 @@ const App = {
   applyDevShortcuts() {
     const params = new URLSearchParams(location.search);
     // ?touch: the phone controls on this computer (not saved)
-    if (params.has('touch')) Settings.data.controls = 'touch';
+    if (params.has('touch')) {
+      Settings.data.controls = 'touch';
+      document.body.classList.add('touch');
+    }
     const classId = params.get('class');
     if (classId && CONFIG.classes[classId]) this.classId = classId;
     if (params.has('lobby')) {

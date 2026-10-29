@@ -1446,3 +1446,80 @@ body.touch .screen > * { flex-shrink: 0; }
 body.touch .shop-items.potions .shop-card { padding: 6px 8px; row-gap: 2px; }
 body.touch .shop-items.potions .shop-card span { font-size: 10px; line-height: 1.3; }
 body.touch .shop-card.potion canvas { width: 36px; height: 36px; }
+
+/* ===== Main menu on phones: a mobile title screen ===== */
+/* the showcase fight fills the screen; the logo top left, darkened corners behind the buttons */
+body.touch #screen-menu.menu-side {
+  justify-content: flex-start;
+  padding: 14px 0 0 22px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(10, 6, 16, 0.85) 0%, rgba(10, 6, 16, 0) 42%),
+    radial-gradient(ellipse at 100% 100%, rgba(10, 6, 16, 0.85) 0%, rgba(10, 6, 16, 0) 48%),
+    linear-gradient(0deg, rgba(10, 6, 16, 0.5) 0%, rgba(10, 6, 16, 0) 30%);
+}
+body.touch #screen-menu .menu-links,
+body.touch #screen-menu .menu-ornament { display: none; }
+body.touch #screen-menu .title .logo { width: 220px; margin-left: -14px; }
+body.touch #screen-menu .menu-scene { left: 22px; right: auto; bottom: 24px; align-items: flex-start; }
+body.touch #screen-menu .hint.credit { left: 22px; right: auto; bottom: 6px; }
+
+.menu-m { position: absolute; inset: 0; pointer-events: none; }
+.menu-m button { pointer-events: auto; font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.menu-m svg { display: block; image-rendering: pixelated; }
+
+/* the corner tiles: settings and controls */
+.menu-m-corner { position: absolute; top: 14px; right: 16px; display: flex; gap: 8px; animation: menu-drop 0.7s ease-out both; }
+.m-tile {
+  width: 62px; height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  color: #f4ead7; background: #6a4428; border: 3px solid #2a1a10;
+  box-shadow: inset -3px -3px 0 #4a2e1c, inset 3px 3px 0 #8c5e36, 0 0 0 1px #a07a24, 0 3px 0 #1a100a;
+}
+.m-tile svg { width: 26px; height: 26px; color: #ffd34a; filter: drop-shadow(1px 1px 0 #2a1a10); }
+.m-tile span { font-size: 8px; text-shadow: 1px 1px 0 #2a1a10; }
+.m-tile:active { transform: translateY(2px); box-shadow: inset -3px -3px 0 #4a2e1c, inset 3px 3px 0 #8c5e36, 0 0 0 1px #a07a24, 0 1px 0 #1a100a; }
+
+/* the big buttons, under the right thumb */
+.menu-m-actions {
+  position: absolute; right: 26px; bottom: 26px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 10px; width: 236px;
+  animation: menu-rise 0.7s ease-out both;
+}
+.m-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  font-size: 16px; color: #f4ead7; text-shadow: 2px 2px 0 #2a1a10; padding: 11px 16px;
+  background: #6a4428; border: 3px solid #2a1a10;
+  box-shadow: inset -3px -3px 0 #4a2e1c, inset 3px 3px 0 #8c5e36, 0 0 0 1px #a07a24, 0 4px 0 #1a100a;
+}
+.m-btn:active { transform: translateY(3px); box-shadow: inset -3px -3px 0 #4a2e1c, inset 3px 3px 0 #8c5e36, 0 0 0 1px #a07a24, 0 1px 0 #1a100a; }
+/* PLAY: a big gold button with a slow shine, the obvious thing to tap */
+.m-play {
+  position: relative; overflow: hidden;
+  font-size: 30px; padding: 14px 16px; color: #2a1a10; text-shadow: 0 2px 0 #fff2a0;
+  background: linear-gradient(180deg, #ffe680 0%, #ffd34a 40%, #f2a541 75%, #b8692a 100%);
+  box-shadow: inset -3px -4px 0 #8a4a1c, inset 3px 3px 0 #fff6c8, 0 0 0 1px #6a4a10, 0 5px 0 #1a100a, 0 0 22px rgba(255, 200, 80, 0.35);
+  animation: play-glow 2.4s ease-in-out infinite;
+}
+.m-play svg { width: 26px; height: 26px; }
+.m-play::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 40px; left: -60px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  transform: skewX(-20deg); animation: play-shine 3.2s ease-in-out infinite 1s; pointer-events: none;
+}
+.m-play:active { transform: translateY(3px); box-shadow: inset -3px -4px 0 #8a4a1c, inset 3px 3px 0 #fff6c8, 0 0 0 1px #6a4a10, 0 2px 0 #1a100a; }
+@keyframes play-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
+}
+@keyframes play-shine {
+  0%, 60% { left: -60px; }
+  100% { left: 110%; }
+}
+@keyframes menu-rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes menu-drop {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: none; }
+}
