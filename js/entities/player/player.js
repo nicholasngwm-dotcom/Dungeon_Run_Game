@@ -297,12 +297,15 @@ class Player extends Entity {
   /** The held ability's outline on the floor (this screen's hero only). */
   drawAbilityPreview(ctx) {
     // a held key's ability, or on a phone the secondary while its button is held (it casts on letting go)
-    const slot = this.aimHold?.slot || (Touch.holding('secondary') ? 'secondary' : null);
+    const slot = this.aimHold?.slot || (Touch.holding('secondary') || Touch.holding('ice') ? 'secondary' : null);
     let shape = slot && this.abilityPreview(slot);
     // a phone's dodge button being dragged: the dash it will make
     if (!shape && Touch.holding('dodge') && this.cooldowns.dodge <= 0) {
       shape = { lane: { x: this.x, y: this.y, angle: this.aim, length: CONFIG.player.dodge.distance, width: 22, arrow: true }, rgb: '200, 230, 255' };
     }
+    // a thrower's attack (the Priestess's ray): its arc and landing spot while it's aimed (a phone's aim
+    // stick dragged; on a PC, wherever the cursor is)
+    if (!shape && this.throwPreview && !this.dead && (Touch.enabled ? Touch.throwAiming : !Input.freeMouse)) shape = this.throwPreview();
     if (!shape || Touch.cancelArmed) return;   // (a touch skill held on a cancel spot won't land)
     // each kind of ability has its own look, in its own colour (shape.rgb):
     //   circle  placed on a spot: a ring with a mark in the middle, no line (self: true - round the hero, no mark)
@@ -373,7 +376,20 @@ class Player extends Entity {
       // a thrown ball: its path, and the blast where it bursts (filled, so the area reads at a glance)
       const b = shape.blast;
       const brgb = b.rgb || rgb;
-      PFX.line(ctx, b.fromX, b.fromY, b.x, b.y, `rgba(${brgb}, ${pulse})`, 2, [4, 3], -this.animTime * 20);
+      if (b.arc) {
+        // lobbed: a dotted arc rising and falling to the spot (like a thrower's aim), dots drifting along it
+        const len = dist(b.fromX, b.fromY, b.x, b.y);
+        const h = Math.min(70, len * 0.3);
+        const n = Math.max(4, Math.round(len / 14));
+        const drift = (this.animTime * 2) % 1;
+        ctx.fillStyle = `rgba(${brgb}, ${pulse})`;
+        for (let i = 0; i < n; i++) {
+          const t = (i + drift) / n;
+          const px = lerp(b.fromX, b.x, t);
+          const py = lerp(b.fromY, b.y, t) - Math.sin(t * Math.PI) * h;
+          ctx.fillRect(Math.round(px) - 2, Math.round(py) - 2, 4, 4);
+        }
+      } else PFX.line(ctx, b.fromX, b.fromY, b.x, b.y, `rgba(${brgb}, ${pulse})`, 2, [4, 3], -this.animTime * 20);
       ctx.save();
       ctx.globalAlpha = 0.18 * pulse;
       ctx.fillStyle = `rgb(${brgb})`;

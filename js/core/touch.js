@@ -22,18 +22,21 @@ const TOUCH_SKILLS = [
   { id: 'f', angle: 270 },
   { id: 'ult', angle: 308, big: true },
 ];
-const TOUCH_AIMED = ['dodge', 'secondary', 'e', 'f', 'ult'];   // buttons that aim while dragged (dodge too: it dashes that way)
+const TOUCH_AIMED = ['dodge', 'secondary', 'ice', 'e', 'f', 'ult'];   // buttons that aim while dragged (dodge too: it dashes that way)
 const TOUCH_AIM_LOCK = 0.3;      // s a let-go skill's aim holds (and on until the hero's ability is done), so walking can't swing it
 // What each hero's buttons do on a phone, beyond aim-and-let-go:
 //   taps   cast the moment they're tapped (they don't aim: a heal at her feet, a song, camouflage)
 //   pick   abilities that on a PC wait for a click to place them (lightning, the volley, the barrage...):
 //          letting go of the dragged button makes that click there ('left' / 'right' mouse button)
 //   drop   dragged onto someone (the Priestess's Aegis: drop it on a teammate; a tap shields herself)
-//   arrows the button that tap-swaps fire / ice, and shoots the chosen arrow when dragged (the Archer)
+//   thrower the aim stick throws on letting go, reaching the attack's whole range (reach: each button's range)
+//   ice    an extra ICE button beside the secondary (the Archer: secondary shoots fire, ICE shoots ice; one shared cooldown)
 const TOUCH_HERO = {
-  priestess: { taps: ['e'], drop: 'f' },
+  // a thrower (Brawl Stars style): the aim stick's drag reaches her ray's whole range, shows the arc and where it
+  // lands, and throws on letting go (a still hold throws at the nearest enemy); her light bomb reaches its full range too
+  priestess: { taps: ['e'], drop: 'f', thrower: true, reach: { aim: (p) => p.cfg.ray.maxRange, ult: (p) => p.cfg.ult.maxRange } },
   bard: { taps: ['secondary', 'e', 'f'] },
-  ranger: { taps: ['e', 'f'], pick: { ult: 'left' }, arrows: 'secondary' },
+  ranger: { taps: ['e', 'f'], pick: { ult: 'left', secondary: 'left', ice: 'right' }, ice: true },
   mage: { pick: { e: 'left', ult: 'left' } },
   rocketeer: { pick: { e: 'left' } },
 };
@@ -53,7 +56,6 @@ const Touch = {
   released: null,          // a skill just let go: where it casts this frame ({ x, y, dist }, or 'auto' = the auto target)
   locked: null,            // that skill's aim, held while it plays out (a charge's windup, a dash): { x, y, dist, t }
   pendingPick: null,       // a let-go "pick" ability's click, made once the hero is picking: { button: 'left' | 'right', t }
-  arrowIce: false,         // the Archer's fire / ice button is set to ice
 
   /** This hero's phone button rules (TOUCH_HERO). */
   heroRules(p) { return (p && TOUCH_HERO[p.classId]) || {}; },
@@ -149,6 +151,12 @@ const Touch = {
       return place(s.id, ax + Math.cos(a) * R, ay + Math.sin(a) * R, (s.big ? 31 : 24) * k);
     });
     buttons.push(place('interact', ax - 190 * k, ay - 118 * k, 21 * k));
+    // the Archer's ICE arrow: its own button just outside the arc, beside the secondary (fire)
+    const hero = this.app?.game?.localPlayer?.classId || App.classId;
+    if (TOUCH_HERO[hero]?.ice) {
+      const a = (195 * Math.PI) / 180;
+      buttons.push(place('ice', ax + Math.cos(a) * 165 * k, ay + Math.sin(a) * 165 * k, 22 * k));
+    }
     buttons.push(place('heal', 294, H - 32, 17));
     const square = (id, x, y) => {
       const c = place(id, x + 13, y + 13, 13);
@@ -236,7 +244,7 @@ const Touch = {
       if (t.role === 'secondary' && !t.deferred) {
         // a held shield / jump just ends; a dragged one keeps its aim (the rocket jump lands where it was aimed)
         m.right = false;
-        if (d && !this.cancelling(t)) this.released = { x: d.x, y: d.y, dist: this.skillRange(d.k) };
+        if (d && !this.cancelling(t)) this.released = { x: d.x, y: d.y, dist: this.reachOf(this.app.game?.localPlayer, t.role, d.k) };
       } else if (this.cancelling(t)) {
         if (!t.deferred) Input.touchPressed.add('cancelAim');
         Sound.play('uiClick');
@@ -246,10 +254,6 @@ const Touch = {
           Input.touchPressed.add('dodgeAim');
           this.released = { x: d.x, y: d.y, dist: 60 };
         } else Input.touchPressed.add('dodge');
-      } else if (t.role === rules.arrows && !d) {
-        // the Archer's fire / ice button, tapped: swap which arrow it shoots
-        this.arrowIce = !this.arrowIce;
-        Sound.play('uiClick');
       } else if (t.role === rules.drop) {
         // the Aegis: dropped on someone shields them (the click lands where the thumb let go); tapped, herself
         if (t.deferred) Input.touchPressed.add(t.role);
@@ -258,12 +262,13 @@ const Touch = {
           this.pendingPick = { button: 'left', t: TOUCH_AIM_LOCK };
         } else this.pendingPick = { button: 'right', t: TOUCH_AIM_LOCK };
       } else {
-        if (t.deferred && t.role === 'secondary') m.rightPressed = true;
+        // (the ICE button is the secondary too: it opens the arrow choice, then picks ice)
+        if (t.deferred && (t.role === 'secondary' || t.role === 'ice')) m.rightPressed = true;
         else if (t.deferred) Input.touchPressed.add(t.role);
         // it casts where it was dragged, or at the auto target if it was only tapped
-        this.released = d ? { x: d.x, y: d.y, dist: this.skillRange(d.k) } : 'auto';
+        this.released = d ? { x: d.x, y: d.y, dist: this.reachOf(this.app.game?.localPlayer, t.role, d.k) } : 'auto';
         // an ability that waits for a click to place it: the click is made for it, where it was aimed
-        const pick = t.role === rules.arrows ? (this.arrowIce ? 'right' : 'left') : rules.pick?.[t.role];
+        const pick = rules.pick?.[t.role];
         if (pick) this.pendingPick = { button: pick, t: TOUCH_AIM_LOCK };
       }
     }
@@ -273,7 +278,12 @@ const Touch = {
       if (this.picking) {
         this.shot = { dir: d, dist: d ? this.aimRange(d.k) : null, t: 0.1 };
         m.leftPressed = true;
-      } else if (!Settings.data.autoFire && d) this.shot = { dir: d, dist: this.aimRange(d.k), t: 0.12 };
+      } else if (this.heroRules(this.app.game?.localPlayer).thrower) {
+        // a thrower: dragged, it lands where it was aimed; tapped, at the nearest enemy
+        this.shot = d ? { dir: d, dist: this.reachOf(this.app.game?.localPlayer, 'aim', d.k), t: 0.12 } : { dir: null, dist: null, t: 0.12 };
+      } else if (!Settings.data.autoFire && d) {
+        this.shot = { dir: d, dist: this.aimRange(d.k), t: 0.12 };
+      }
     }
     if (t.role === 'bag') {
       const p = this.app.game?.localPlayer;
@@ -295,6 +305,17 @@ const Touch = {
   },
 
   aimRange(k) { return 50 + k * 190; },
+
+  /**
+   * How far a drag of k (0-1) aims, for this hero's button (role 'aim' is the aim stick): the hero's own
+   * reach for it if it has one (a full drag lands at the ability's whole range, like a thrower's aim in
+   * Brawl Stars), else the usual distances.
+   */
+  reachOf(p, role, k) {
+    const fn = this.heroRules(p).reach?.[role];
+    if (fn && p) return Math.max(30, k * fn(p));
+    return role === 'aim' ? this.aimRange(k) : this.skillRange(k);
+  },
 
   /** A dropped skill (the Aegis) aims at the spot under the thumb itself: as an aim { x, y (unit), dist (world px) }. */
   dropAim(t) {
@@ -425,10 +446,10 @@ const Touch = {
     if (skill) {
       const d = this.drag(skill, skill.home, this.skillReach());
       // (a dropped skill aims at the spot under the thumb)
-      if (!this.cancelArmed) want = d ? (skill.role === this.heroRules(me).drop ? this.dropAim(skill) : { x: d.x, y: d.y, dist: this.skillRange(d.k) }) : toward();
+      if (!this.cancelArmed) want = d ? (skill.role === this.heroRules(me).drop ? this.dropAim(skill) : { x: d.x, y: d.y, dist: this.reachOf(me, skill.role, d.k) }) : toward();
     } else if (aim) {
       aimDrag = this.drag(aim, L.aim);
-      want = aimDrag ? { x: aimDrag.x, y: aimDrag.y, dist: this.aimRange(aimDrag.k) } : toward();
+      want = aimDrag ? { x: aimDrag.x, y: aimDrag.y, dist: this.reachOf(me, 'aim', aimDrag.k) } : toward();
     } else if (this.released) {
       want = this.released === 'auto' ? toward() : this.released;
       // the skill's aim holds while it plays out (a charge's windup, a dash), whichever way the hero walks
@@ -478,7 +499,11 @@ const Touch = {
       } else if (pp.t <= 0) this.pendingPick = null;
     }
     const was = m.left;
-    let fire = !!aim && !this.picking && (!aimDrag || Settings.data.autoFire);
+    // (a thrower never fires while its stick is held: it throws on letting go - where it was dragged, or
+    // a quick tap throws at the nearest enemy)
+    const thrower = this.heroRules(me).thrower;
+    this.throwAiming = !!(aim && aimDrag && thrower && !this.picking);
+    let fire = !!aim && !this.picking && !thrower && (!aimDrag || Settings.data.autoFire);
     if (this.shot) {
       fire = true;
       this.shot.t -= dt;
@@ -752,8 +777,8 @@ const Touch = {
     ctx.fillStyle = 'rgba(8, 5, 14, 0.72)';
     ctx.fillRect(0, 0, W, H);
     const icons = Sprites.icons[App.game?.localPlayer?.classId || App.classId];
-    const glyphs = { aim: icons.primary, dodge: Sprites.icons.dodge, secondary: icons.secondary, e: icons.e, f: icons.f, ult: icons.q };
-    const names = { aim: 'ATTACK', stick: 'JOYSTICK', dodge: 'DODGE', secondary: 'SECONDARY', e: 'E', f: 'F', ult: 'ULTIMATE', interact: 'USE', heal: 'HEAL', cancel: 'CANCEL', pause: 'PAUSE', score: 'SCORES', bag: 'BAG' };
+    const glyphs = { aim: icons.primary, dodge: Sprites.icons.dodge, secondary: icons.fire || icons.secondary, ice: icons.ice, e: icons.e, f: icons.f, ult: icons.q };
+    const names = { aim: 'ATTACK', stick: 'JOYSTICK', dodge: 'DODGE', secondary: 'SECONDARY', ice: 'ICE ARROW', e: 'E', f: 'F', ult: 'ULTIMATE', interact: 'USE', heal: 'HEAL', cancel: 'CANCEL', pause: 'PAUSE', score: 'SCORES', bag: 'BAG' };
     for (const it of this.editorItems()) {
       const sel = it.id === this.editSel;
       if (it.rect) {
@@ -883,22 +908,27 @@ const Touch = {
       HUD.text(ctx, 'HEAL', at.x, at.y + r + 4, { size: 5, align: 'center', color: '#d8c8a0' });
       return;
     }
-    const cd = p.cooldowns[b.id];
-    const short = b.id !== 'dodge' && !p.canAfford(b.id);
+    // (the Archer's ICE button is the secondary's: it shares its cooldown)
+    const slot = b.id === 'ice' ? 'secondary' : b.id;
+    const cd = p.cooldowns[slot];
+    const short = b.id !== 'dodge' && !p.canAfford(slot);
     const ready = cd <= 0 && !short;
     if (ready && !thumb) this.glow(ctx, at.x, at.y, r);
-    const icon = b.id === 'dodge' ? Sprites.icons.dodge : icons[b.id];
+    const split = this.heroRules(p).ice;   // the Archer: the secondary is the fire arrow, beside its own ICE button
+    const icon = b.id === 'dodge' ? Sprites.icons.dodge
+      : b.id === 'ice' ? icons.ice
+        : b.id === 'secondary' && split ? icons.fire : icons[b.id];
     this.icon(ctx, icon, at.x, at.y, r * 1.5, cd > 0 ? 0.45 : 1);
-    this.cooldown(ctx, at.x, at.y, r, cd, p.maxCooldowns[b.id]);
+    this.cooldown(ctx, at.x, at.y, r, cd, p.maxCooldowns[slot]);
     if (short) {
       // not enough mana / energy / light: a red wash, and what's missing underneath
       this.circle(ctx, at.x, at.y, r - 2, 'rgba(120, 10, 16, 0.55)');
       HUD.text(ctx, `NO ${p.resource.name}`, at.x, at.y + r + 4, { size: 5, align: 'center', color: '#ff6a6a' });
     }
     this.readyFlash(ctx, b.id, ready, at.x, at.y, r);
-    // the Archer's fire / ice button: which arrow it shoots (tap swaps)
-    if (b.id === this.heroRules(p).arrows) {
-      const ice = this.arrowIce;
+    // the Archer's two arrow buttons: a FIRE and an ICE tag on them
+    if (split && (b.id === 'secondary' || b.id === 'ice')) {
+      const ice = b.id === 'ice';
       const tw = 26;
       const ty = at.y + r - 4;
       ctx.fillStyle = OUTLINE;

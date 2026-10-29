@@ -498,7 +498,7 @@ class Ranger extends Player {
   /** Rapid fire: round himself. Volley: a green rain zone placed on a spot. Fire / ice arrow (touch): a dash of fire or frost. */
   abilityPreview(slot) {
     if (slot === 'secondary' && Touch.enabled) {
-      const ice = Touch.arrowIce;
+      const ice = Touch.holding('ice');
       return { lane: { x: this.pivotX, y: this.pivotY, angle: this.aim, length: 320, width: 10, arrow: true }, rgb: ice ? '150, 210, 255' : '255, 130, 60' };
     }
     if (slot === 'e') return { self: true, rgb: '255, 220, 120' };

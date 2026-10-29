@@ -204,7 +204,9 @@ Mouse + keys). The game is landscape only; held upright it asks you to turn the 
 - Abilities that wait for a click on a PC (the Mage's lightning and drain circle, the Archer's volley, the
   Rocketeer's barrage) cast where the button was dragged when you let go. Some buttons cast on a tap with
   nothing to aim: the Priestess's healing rune, the Bard's tune, Inspire and Lullaby, the Archer's rapid fire
-  and camouflage. The Archer's fire / ice button swaps on a tap and shoots when dragged; the Priestess's Aegis
+  and camouflage. The Archer has separate FIRE and ICE buttons on one shared cooldown. The Priestess's attack is
+  aimed like a thrower's: drag the aim stick (a full drag is her full range) to see the arc and where it lands, and
+  let go to throw (a quick tap throws at the nearest enemy; on a PC the arc follows the cursor). Her Aegis
   is dragged onto a teammate (a tap shields herself). Each ability's indicator has its own shape and colour:
   a line and a circle for something thrown, a circle for something placed, a ring round you, an arrow for a
   dash, a beam, a cone.

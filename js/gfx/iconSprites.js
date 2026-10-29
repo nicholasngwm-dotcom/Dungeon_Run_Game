@@ -137,6 +137,15 @@ function buildIconSprites() {
         arrow(p, 3, 25, 19, 17, { head: '#9ad0ff', shaft: L[4], fletch: '#e6f6ff' });
         snowflake(p, 23, 19, 4);
       }),
+      // on a phone the two arrows get a button each: a fire arrow, and an ice arrow
+      fire: icon((p) => {
+        arrow(p, 4, 24, 21, 7, { head: '#ff8a1e', shaft: L[4], fletch: '#ffd34a' });
+        flame(p, 22, 7, 4);
+      }),
+      ice: icon((p) => {
+        arrow(p, 4, 24, 21, 7, { head: '#9ad0ff', shaft: L[4], fletch: '#e6f6ff' });
+        snowflake(p, 22, 7, 4);
+      }),
       // arrow volley
       q: icon((p) => {
         arrow(p, 7, 2, 7, 18, { fletch: FLETCH });
