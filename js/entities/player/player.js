@@ -389,7 +389,7 @@ class Player extends Entity {
           const py = lerp(b.fromY, b.y, t) - Math.sin(t * Math.PI) * h;
           ctx.fillRect(Math.round(px) - 2, Math.round(py) - 2, 4, 4);
         }
-      } else PFX.line(ctx, b.fromX, b.fromY, b.x, b.y, `rgba(${brgb}, ${pulse})`, 2, [4, 3], -this.animTime * 20);
+      } else if (!b.noLine) PFX.line(ctx, b.fromX, b.fromY, b.x, b.y, `rgba(${brgb}, ${pulse})`, 2, [4, 3], -this.animTime * 20);
       ctx.save();
       ctx.globalAlpha = 0.18 * pulse;
       ctx.fillStyle = `rgb(${brgb})`;

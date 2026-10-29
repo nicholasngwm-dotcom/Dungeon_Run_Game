@@ -573,14 +573,14 @@ class Priestess extends Player {
 
   /** Ability outlines while a key is held: who gets the aegis, the light bomb's blast (the rune casts on the press). */
   /**
-   * Her ray, aimed like a thrower's shot: a dotted arc from her staff to a circle where it will land
+   * Her ray, aimed like a thrower's shot: the circle where it will land (no line to it)
    * (shown while a phone's aim stick is dragged).
    */
   throwPreview() {
     if (!this.world) return null;
     const c = this.cfg.ray;
     const pt = this.aimPoint(this.world, c.maxRange);
-    return { blast: { fromX: this.tipX, fromY: this.tipY, x: pt.x, y: pt.y, r: c.radius, rgb: PRIESTESS_FX.gold, arc: true } };
+    return { blast: { fromX: this.tipX, fromY: this.tipY, x: pt.x, y: pt.y, r: c.radius, rgb: PRIESTESS_FX.gold, noLine: true } };
   }
 
   /** Aegis: a silver ring round whoever it would shield. Light bomb: a golden circle on its spot (no line). */

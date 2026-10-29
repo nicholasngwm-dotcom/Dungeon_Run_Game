@@ -115,6 +115,14 @@ class Baker extends Player {
    * Where a cake lobbed at the cursor comes down: at the cursor, at most `range` away. It flies
    * over walls and obstacles alike; only its landing spot has to be clear of walls and shut doors.
    */
+  /** On a phone, while her aim stick is dragged: the arc her cake will fly, and the splash where it lands. */
+  throwPreview() {
+    const world = this.lastWorld;
+    if (!world) return null;
+    const to = this.lobTarget(world);
+    return { blast: { fromX: this.handX, fromY: this.handY, x: to.x, y: to.y, r: this.cfg.cake.radius, rgb: '255, 160, 210', arc: true } };
+  }
+
   lobTarget(world) {
     const c = this.cfg.cake;
     const to = this.aimPoint(c.range);

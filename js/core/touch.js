@@ -35,6 +35,8 @@ const TOUCH_HERO = {
   // a thrower (Brawl Stars style): the aim stick's drag reaches her ray's whole range, shows the arc and where it
   // lands, and throws on letting go (a still hold throws at the nearest enemy); her light bomb reaches its full range too
   priestess: { taps: ['e'], drop: 'f', thrower: true, reach: { aim: (p) => p.cfg.ray.maxRange, ult: (p) => p.cfg.ult.maxRange } },
+  // the Baker lobs her cakes the same way (and her preview shows the arc they fly)
+  baker: { thrower: true, reach: { aim: (p) => p.cfg.cake.range } },
   bard: { taps: ['secondary', 'e', 'f'] },
   ranger: { taps: ['e', 'f'], pick: { ult: 'left', secondary: 'left', ice: 'right' }, ice: true },
   mage: { pick: { e: 'left', ult: 'left' } },
@@ -608,8 +610,10 @@ const Touch = {
     // the scoreboard is open: only pause and its own button show over it
     if (game.run && this.scoreboard) { this.drawCorner(ctx, L, game); ctx.restore(); return; }
 
-    // the aim line from the hero while a thumb aims
-    const aiming = held('aim') || TOUCH_AIMED.some((r) => held(r));
+    // the basic attack aims like the PC's: a crosshair where it goes (a thrower shows where it lands instead)
+    if (held('aim') && !this.heroRules(p).thrower) HUD.drawCrosshair(ctx, Input._mouse.x, Input._mouse.y);
+    // a skill's aim line from the hero while a thumb drags it
+    const aiming = TOUCH_AIMED.some((r) => held(r));
     if (aiming && !this.cancelArmed) {
       const h = game.camera.worldToScreen(p.pivotX, p.pivotY);
       ctx.strokeStyle = 'rgba(255, 236, 170, 0.7)';
