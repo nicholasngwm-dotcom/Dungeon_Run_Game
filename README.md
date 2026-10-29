@@ -151,13 +151,12 @@ The game fills the whole window, whatever its shape (no black bars), and goes **
 on the first click or key press; leave it (Esc / F11) and the next click brings it back.
 Settings > Window mode switches to playing in the browser window instead.
 
-**Settings** (main menu or pause menu) is the same on every device, in four tabs: **General**
-(minimap size, teammate effects), **Video** (window mode, screen shake), **Audio** (music on/off,
-music and sound effect volume) and **Controls**: the control style (Auto / Touch / Mouse + keys),
-then a **Touch** tab (auto fire, interface and button size, opacity, the button editor) and a
-**Mouse + keys** tab (mouse sensitivity, crosshair, and key bindings for movement, E, F, Q, dodge,
+**Settings** (main menu or pause menu) is the same on every device, in four tabs, each
+setting with a short recommended value: **General** (control style Auto / Touch / Mouse + keys,
+window mode, minimap size, music and sound), **Phone** (auto fire, interface and button size,
+opacity, the button editor), **PC** (mouse sensitivity, crosshair, and key bindings for movement, E, F, Q, dodge,
 the five bag slots, interact, the music toggle and the mouse / crosshair toggle (LMB / RMB
-stay on the mouse)). Settings are saved in the browser. While playing, the game
+stay on the mouse)) and **Multiplayer** (teammate effects, screen shake). Settings are saved in the browser. While playing, the game
 locks the mouse pointer so sensitivity can apply; press Esc to get the cursor
 back (this pauses), or press C to switch to the normal mouse pointer without
 pausing (C again brings the crosshair back; sensitivity only applies to the
@@ -186,7 +185,7 @@ spends light orbs (bar under HP).
 
 ### Touch controls (phones and tablets)
 
-Phones and tablets get on-screen controls automatically (Settings > Controls: Auto / Touch /
+Phones and tablets get on-screen controls automatically (Settings > General: Auto / Touch /
 Mouse + keys). The game is landscape only; held upright it asks you to turn the phone.
 
 - **Left thumb**: a movement joystick appears wherever you touch the left half of the screen.
@@ -204,8 +203,8 @@ Mouse + keys). The game is landscape only; held upright it asks you to turn the 
   or out of the bag to drop it.
 - Top left: pause, and in dungeon runs the scoreboard (a toggle).
 - Everything (HUD, buttons, text, menus) shows bigger than on a PC; **Interface size** in
-  Settings > Controls > Touch tunes it, alongside button size and opacity.
-- **Move / resize buttons** (Settings > Controls > Touch; works on a computer too) opens the layout editor: drag any control (aim stick,
+  Settings > Phone tunes it, alongside button size and opacity.
+- **Move / resize buttons** (Settings > Phone; works on a computer too) opens the layout editor: drag any control (aim stick,
   skills, USE, HEAL, the bag, CANCEL, pause, scoreboard) where you like, tap one and use - / +
   to resize it, RESET for the default layout, DONE to go back (Save keeps it).
 - Skill buttons glow when ready, flash as they come off cooldown, show the seconds left big in

@@ -118,8 +118,6 @@ const Menus = {
     this.savedSettings = Settings.copy();
     this.refreshSettings();
     this.setSettingsTab(this.settingsTab || 'general');
-    // the controls tab opens on the style in use until another is picked
-    this.setControlsTab(this.controlsTab || (Touch.enabled ? 'touch' : 'mouse'));
     this.show('settings');
   },
 
@@ -130,20 +128,12 @@ const Menus = {
     this.refreshSettings();
   },
 
-  /** Shows one settings tab: general, video, audio or controls. */
+  /** Shows one settings tab: general, phone, pc or multiplayer. */
   setSettingsTab(tab) {
     this.settingsTab = tab;
     this.stopKeyCapture();
     for (const b of document.querySelectorAll('#screen-settings .set-tab')) b.classList.toggle('on', b.dataset.tab === tab);
     for (const p of document.querySelectorAll('#screen-settings .set-pane')) p.classList.toggle('hidden', p.dataset.pane !== tab);
-  },
-
-  /** Under Controls: the touch tab or the mouse + keys tab (which settings to edit, not which style is in use). */
-  setControlsTab(sub) {
-    this.controlsTab = sub;
-    this.stopKeyCapture();
-    for (const b of document.querySelectorAll('#screen-settings .set-subtab')) b.classList.toggle('on', b.dataset.sub === sub);
-    for (const p of document.querySelectorAll('#screen-settings .set-subpane')) p.classList.toggle('hidden', p.dataset.subpane !== sub);
   },
 
   get settingsDirty() { return !!this.savedSettings && Settings.differsFrom(this.savedSettings); },
@@ -351,7 +341,6 @@ const Menus = {
         this.updateSaveState();
         break;
       case 'setTab': this.setSettingsTab(arg); break;
-      case 'setSub': this.setControlsTab(arg); break;
       case 'editTouchLayout': Touch.openEditor(); break;
       case 'toggleAutoFire':
         Settings.data.autoFire = !Settings.data.autoFire;

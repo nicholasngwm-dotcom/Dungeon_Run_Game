@@ -1387,27 +1387,26 @@ body.touch #screen-settings input[type="range"]::-moz-range-thumb { width: 18px;
 /* ===== Settings tabs ===== */
 .settings-panel { padding: 0 14px 12px; gap: 6px; max-width: calc(100vw - 32px); }
 .set-tabs { display: flex; gap: 4px; margin: 0 -14px 4px; padding: 0 8px; border-bottom: 3px solid var(--border); background: rgba(0, 0, 0, 0.2); }
-.set-tab, .set-subtab {
+.set-tab {
   font-family: inherit; font-size: 12px; color: var(--muted); cursor: pointer;
   background: transparent; border: none; padding: 10px 16px 8px;
   border-bottom: 3px solid transparent; margin-bottom: -3px;
 }
-.set-tab:hover, .set-subtab:hover { color: var(--text); }
+.set-tab:hover { color: var(--text); }
 .set-tab.on { color: var(--accent); border-bottom-color: var(--accent); background: var(--panel); }
-.set-pane, .set-subpane { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.set-pane { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
 .set-pane { flex: 1; overflow-y: auto; scrollbar-width: thin; padding-right: 4px; }
-.set-pane > input[type="range"], .set-subpane input[type="range"] { width: 100%; }
-.set-subtabs { display: flex; gap: 4px; margin-top: 6px; border-bottom: 2px solid var(--border); }
-.set-subtab { font-size: 12px; padding: 6px 14px; background: rgba(0, 0, 0, 0.2); border: 2px solid var(--border); border-bottom: none; margin-bottom: 0; }
-.set-subtab.on { color: #0d0a14; background: var(--accent); }
+#screen-settings .set-pane input[type="range"] { width: 100%; }
 .set-split { flex-direction: row; gap: 18px; align-items: flex-start; }
 .set-split-col { display: flex; flex-direction: column; gap: 6px; }
-.set-split-col:first-child { flex: 1.35; }
-.set-split-col:last-child { flex: 1; }
+.set-pane[data-pane="pc"] .set-split-col:first-child { flex: 1.35; }
+.set-split-col { flex: 1; min-width: 0; }
 .set-row .set-sub { color: var(--muted); }
 /* touch: the stage is smaller, so the panel is shorter (each tab scrolls) and the two columns stack */
 body.touch .settings-panel { height: 250px; width: 680px; }
 body.touch .set-split { flex-direction: column; align-items: stretch; }
 #set-xhair .toggle { flex: 1 1 40%; }
 /* single-column tabs keep their sliders a comfortable length */
-.set-pane[data-pane="general"] > *, .set-pane[data-pane="video"] > *, .set-pane[data-pane="audio"] > *, .set-subpane[data-subpane="touch"] > * { max-width: 560px; }
+.set-pane[data-pane="multiplayer"] > * { max-width: 560px; }
+.set-note { font-size: 8px; line-height: 1.5; color: var(--muted); margin: -2px 0 4px; }
+.set-split-col .set-layout-btn { margin-top: 4px; }
