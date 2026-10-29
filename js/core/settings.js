@@ -36,6 +36,9 @@ const CROSSHAIR_TYPES = [
 ];
 
 // How the game is played, in the order the settings screen lists them (auto: touch on phones and tablets).
+// the touch buttons' names, for prompts like "[USE] OPEN" on a phone (Settings.prompt)
+const TOUCH_PROMPTS = { interact: 'USE', scoreboard: 'SCORE', quickHeal: 'HEAL', dodge: 'DODGE', ult: 'ULT' };
+
 const CONTROL_MODES = [
   ['auto', 'Auto'],
   ['touch', 'Touch'],
@@ -139,6 +142,9 @@ const Settings = {
 
   /** Label for an action's current key. */
   label(action) { return this.keyName(this.data.keys[action]); },
+
+  /** What to press for an action in on-screen prompts: its key, or on a phone the touch button's name. */
+  prompt(action) { return (Touch.enabled && TOUCH_PROMPTS[action]) || this.label(action); },
 };
 
 Settings.load();

@@ -13,10 +13,11 @@
 const CHUNK = 16;                 // tiles per chunk side
 const ZONE = { WALL: 0, ROOM: 1, HALL: 2 };
 
-// floor size (tiles) per room type: [w, h] or [[wMin, wMax], [hMin, hMax]]
+// floor size (tiles) per room type: [w, h] or [[wMin, wMax], [hMin, hMax]]; odd, so the hallways meet
+// rooms dead centre (see placeRoom)
 const ROOM_SIZES = {
-  start: [16, 12], boss: [30, 21], shop: [21, 13], special: [16, 12], secret: [15, 11], puzzle: [18, 14], vault: [18, 13],
-  combat: [[23, 28], [16, 19]], defend: [[27, 30], [19, 21]], survival: [[28, 30], [19, 21]],
+  start: [17, 13], boss: [31, 21], shop: [21, 13], special: [17, 13], secret: [15, 11], puzzle: [19, 15], vault: [19, 13],
+  combat: [[23, 29], [17, 19]], defend: [[27, 31], [19, 21]], survival: [[29, 31], [19, 21]],
 };
 const MAX_CHUNKS = 48;            // painted chunks kept around (the least recently drawn go first)
 
@@ -189,21 +190,26 @@ class FloorMap extends Dungeon {
     return depth;
   }
 
-  /** Sizes the room inside its cell (centred, so hallways along the cell's middle always reach it) and carves it. */
+  /**
+   * Sizes the room inside its cell and carves it. Its middle tile sits exactly on the cell's middle
+   * row and column (midX, midY), which the hallways run along, so every hallway (an odd number of
+   * tiles wide) meets the room dead centre: rooms are an odd number of tiles each way (an even size
+   * rolls up by one).
+   */
   placeRoom(r) {
     const g = CONFIG.run.grid;
     const size = ROOM_SIZES[r.type];
-    const roll = (v) => (Array.isArray(v) ? randInt(v[0], v[1]) : v);
+    const roll = (v) => (Array.isArray(v) ? randInt(v[0], v[1]) : v) | 1;
     const w = roll(size[0]);
     const h = roll(size[1]);
     const ox = 1 + r.gx * g.cellW;
     const oy = 1 + r.gy * g.cellH;
-    r.x0 = ox + Math.floor((g.cellW - w) / 2);
-    r.y0 = oy + Math.floor((g.cellH - h) / 2) + 1;   // a little lower: the top wall face is 2 tiles tall
+    r.midX = ox + Math.floor(g.cellW / 2);
+    r.midY = oy + Math.floor(g.cellH / 2) + 1;   // (a little low in the cell: the top wall face is 2 tiles tall)
+    r.x0 = r.midX - (w - 1) / 2;
+    r.y0 = r.midY - (h - 1) / 2;
     r.x1 = r.x0 + w - 1;
     r.y1 = r.y0 + h - 1;
-    r.midX = ox + Math.floor(g.cellW / 2);
-    r.midY = oy + Math.floor(g.cellH / 2) + 1;
     const T = this.T;
     r.cx = (r.x0 + r.x1 + 1) / 2 * T;
     r.cy = (r.y0 + r.y1 + 1) / 2 * T;

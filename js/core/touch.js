@@ -461,6 +461,8 @@ const Touch = {
     const icons = Sprites.icons[p.classId];
     ctx.save();
     ctx.globalAlpha = Settings.data.touchOpacity ?? 0.85;
+    // the scoreboard is open: only pause and its own button show over it
+    if (game.run && this.scoreboard) { this.drawCorner(ctx, L, game); ctx.restore(); return; }
 
     // the aim line from the hero while a thumb aims
     const aiming = held('aim') || TOUCH_AIMED.some((r) => held(r));
@@ -519,7 +521,20 @@ const Touch = {
       HUD.text(ctx, 'CANCEL', c.x, c.y + c.r + 4, { size: 6, align: 'center', color: on ? '#ff6a6a' : '#d8c8a0' });
     }
 
-    // pause, and the scoreboard (dungeon runs)
+    this.drawCorner(ctx, L, game);
+    ctx.restore();
+
+    // a potion being dragged out of the bag follows the thumb
+    const bd = held('bag');
+    if (bd?.moved && p.inventory[bd.slot]) {
+      const img = Sprites.potions[p.inventory[bd.slot].id];
+      ctx.drawImage(img, bd.x - img.width / 2, bd.y - img.height / 2);
+      if (!HUD.inBag(bd.x, bd.y)) HUD.text(ctx, 'DROP', bd.x, bd.y + 16, { size: 6, align: 'center', color: '#ffe680' });
+    }
+  },
+
+  /** Pause, and the scoreboard toggle (dungeon runs). */
+  drawCorner(ctx, L, game) {
     this.squareButton(ctx, L.pause, false, (x, y) => {
       ctx.fillStyle = '#f4ead7';
       ctx.fillRect(x - 5, y - 6, 3, 12);
@@ -530,15 +545,6 @@ const Touch = {
         ctx.fillStyle = '#f4ead7';
         for (let i = 0; i < 3; i++) ctx.fillRect(x - 6, y - 5 + i * 4, 12, 2);
       });
-    }
-    ctx.restore();
-
-    // a potion being dragged out of the bag follows the thumb
-    const bd = held('bag');
-    if (bd?.moved && p.inventory[bd.slot]) {
-      const img = Sprites.potions[p.inventory[bd.slot].id];
-      ctx.drawImage(img, bd.x - img.width / 2, bd.y - img.height / 2);
-      if (!HUD.inBag(bd.x, bd.y)) HUD.text(ctx, 'DROP', bd.x, bd.y + 16, { size: 6, align: 'center', color: '#ffe680' });
     }
   },
 

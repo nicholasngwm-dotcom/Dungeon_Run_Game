@@ -278,7 +278,7 @@ const HUD = {
         this.text(ctx, `${helper.name.toUpperCase()} IS REVIVING YOU`, this.W / 2, 120, { size: 7, align: 'center', color: '#8cff9a' });
         this.bar(ctx, this.W / 2 - 80, 136, 160, 6, me.reviveProgress / CONFIG.multiplayer.revive.time, '#8cff9a', '#1a2a1e');
       } else {
-        const how = `A teammate can revive you: hold ${Settings.label('interact')} by your body for ${CONFIG.multiplayer.revive.time}s`;
+        const how = `A teammate can revive you: hold ${Settings.prompt('interact')} by your body for ${CONFIG.multiplayer.revive.time}s`;
         this.text(ctx, game.run ? `${how} (or you get up at the next stage)` : how, this.W / 2, 120, { size: 7, align: 'center', color: '#d8c8a0' });
       }
     }
@@ -890,7 +890,7 @@ const HUD = {
     if (game.run) return game.run.drawHud(ctx);
     if (game.lobby) {
       this.text(ctx, 'LOBBY', this.W - 14, 14, { size: 10, align: 'right', color: '#f2a541' });
-      this.text(ctx, `WALK TO A STATION, PRESS ${Settings.label('interact')}`, this.W - 14, 32, { size: 6, align: 'right', color: '#d8c8a0' });
+      this.text(ctx, `WALK TO A STATION, ${Touch.enabled ? 'TAP' : 'PRESS'} ${Settings.prompt('interact')}`, this.W - 14, 32, { size: 6, align: 'right', color: '#d8c8a0' });
       if (game.multiplayer) {
         // the room code, big enough to read out to friends
         this.panel(ctx, this.W - 174, 48, 160, 40);
@@ -1006,7 +1006,7 @@ const HUD = {
       else this.text(ctx, 'NO UPGRADES YET', x + 48, ry + 36, { size: 5, color: '#6a5a7e' });
       ry += rowH(p);
     });
-    this.text(ctx, `HOLD ${Settings.label('scoreboard')}`, x + w / 2, y + h - 12, { size: 5, align: 'center', color: '#8a7660' });
+    this.text(ctx, Touch.enabled ? 'TAP THE SCORE BUTTON TO CLOSE' : `HOLD ${Settings.label('scoreboard')}`, x + w / 2, y + h - 12, { size: 5, align: 'center', color: '#8a7660' });
     if (hover) this.upgradeTooltip(ctx, hover);
   },
 

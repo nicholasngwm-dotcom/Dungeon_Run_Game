@@ -1199,10 +1199,10 @@ class DungeonRun {
    */
   solidThrone(r) {
     const f = this.floor;
-    const mid = Math.round((r.x0 + r.x1 + 1) / 2);
-    for (let ty = r.y0; ty <= r.y0 + 3; ty++) for (let tx = mid - 2; tx < mid + 2; tx++) f.grid[ty][tx] = TILE.COVER;
+    const mid = (r.x0 + r.x1) / 2;   // the middle tile (rooms are an odd width): the throne is 5 tiles round it
+    for (let ty = r.y0; ty <= r.y0 + 3; ty++) for (let tx = mid - 2; tx <= mid + 2; tx++) f.grid[ty][tx] = TILE.COVER;
     // (no art of its own: the throne decor draws it; fixed, so no blast knocks it down)
-    this.cover.push({ kind: 'throne', tx: mid - 2, ty: r.y0, w: 4, h: 4, x: (mid - 2) * f.T, y: r.y0 * f.T, seed: 0, room: r, fixed: true, item: null, hidden: true });
+    this.cover.push({ kind: 'throne', tx: mid - 2, ty: r.y0, w: 5, h: 4, x: (mid - 2) * f.T, y: r.y0 * f.T, seed: 0, room: r, fixed: true, item: null, hidden: true });
   }
 
   /**
@@ -1211,15 +1211,16 @@ class DungeonRun {
    */
   manorStairs(r) {
     const f = this.floor;
-    const mid = Math.round((r.x0 + r.x1 + 1) / 2);
+    const mid = (r.x0 + r.x1) / 2;   // the middle tile (rooms are an odd width)
     const solid = (tx, ty, w, h) => {
       for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) f.grid[ty + j][tx + i] = TILE.COVER;
       this.cover.push({ kind: 'stairs', tx, ty, w, h, x: tx * f.T, y: ty * f.T, seed: 0, room: r, fixed: true, item: null, hidden: true });
     };
     const L = MANOR_STAIRS.landingTiles;
     const F = MANOR_STAIRS.flightTiles;
-    solid(mid - L / 2, r.y0, L, 1);
-    solid(mid - F / 2, r.y0 + 1, F, 3);
+    // (an odd number of tiles each, centred on the middle tile: one wider than the art)
+    solid(mid - L / 2, r.y0, L + 1, 1);
+    solid(mid - F / 2, r.y0 + 1, F + 1, 3);
   }
 
   /**
@@ -2272,7 +2273,7 @@ class DungeonRun {
     ctx.fillRect(x - 40, y - 40, 80, 80);
     ctx.restore();
     const near = this.world.localPlayer.nearProp === P;
-    if (near) HUD.text(ctx, `[${Settings.label('interact')}] ${P.label}`, x, y - 50, { size: 8, align: 'center', color: '#ffe680' });
+    if (near) HUD.text(ctx, `[${Settings.prompt('interact')}] ${P.label}`, x, y - 50, { size: 8, align: 'center', color: '#ffe680' });
     else HUD.text(ctx, this.practiceBoss ? 'PRACTICE RANGE' : P.vault ? 'GEM VAULT' : this.stage < 3 && !P.exit ? 'NEXT STAGE' : 'EXIT', x, y - 46, { size: 7, align: 'center', color: blue ? '#bfe0ff' : '#e0c0ff' });
   }
 
@@ -2546,7 +2547,7 @@ class DungeonRun {
       if (near) label = pr.wins || pr.strikes ? 'TRY A NEW PATTERN' : 'SHOW THE PATTERN';
     }
     if (pr.kind === 'rewardChest' && !near) return;
-    HUD.text(ctx, near ? `[${Settings.label('interact')}] ${label}` : label, x, labelY, { size: near ? 7 : 6, align: 'center', color: near ? '#ffe680' : pr.color });
+    HUD.text(ctx, near ? `[${Settings.prompt('interact')}] ${label}` : label, x, labelY, { size: near ? 7 : 6, align: 'center', color: near ? '#ffe680' : pr.color });
   }
 
   /**
@@ -2623,7 +2624,7 @@ class DungeonRun {
       if (i % 2 && s < 0.5) { ctx.fillRect(sx - 1, sy + 0.5, 4, 1); }
     }
     const near = this.world.localPlayer.nearProp === pr;
-    if (near) HUD.text(ctx, `[${Settings.label('interact')}] ${pr.label}`, x, y - 40, { size: 7, align: 'center', color: '#ffe680' });
+    if (near) HUD.text(ctx, `[${Settings.prompt('interact')}] ${pr.label}`, x, y - 40, { size: 7, align: 'center', color: '#ffe680' });
   }
 
   /**

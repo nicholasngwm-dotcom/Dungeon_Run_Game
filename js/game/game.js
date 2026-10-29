@@ -1459,7 +1459,7 @@ class Game {
     if (body) {
       const helping = body.reviveProgress > 0;
       const text = helping ? `REVIVING ${body.name.toUpperCase()}... ${Math.floor((body.reviveProgress / CONFIG.multiplayer.revive.time) * 100)}%`
-        : Upgrades.canResurrect(me) ? `[${Settings.label('interact')}] RESURRECT` : `HOLD [${Settings.label('interact')}] TO REVIVE`;
+        : Upgrades.canResurrect(me) ? `[${Settings.prompt('interact')}] RESURRECT` : `HOLD [${Settings.prompt('interact')}] TO REVIVE`;
       HUD.text(ctx, text, Math.round(body.x), Math.round(body.y + 14), { size: 7, align: 'center', color: '#8cff9a' });
     }
     for (const p of this.players) {

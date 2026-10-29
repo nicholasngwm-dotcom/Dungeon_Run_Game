@@ -1412,7 +1412,7 @@ const Shop = {
       <div class="bag-slot" data-slot="${i}"${s ? ` draggable="true" title="${POTIONS[s.id].name}"` : ''}><i>${Settings.label(`item${i + 1}`)}</i>${s ? `<canvas width="28" height="28" data-bag="${s.id}"></canvas><b>${s.count > 1 ? `x${s.count}` : ''}</b>` : ''}</div>`).join('')}</div>`;
     for (const c of extra.querySelectorAll('canvas')) c.getContext('2d').drawImage(Sprites.potions[c.dataset.bag], 0, 0);
     this.bindBagDrag(extra);
-    document.getElementById('shop-hint').textContent = `Potions go in your bag (${p.inventory.length} slots, up to ${BAG_STACK} of a kind each). Drag to rearrange; drink with the slot keys during a fight.${this.run.stage > 1 ? ' Prices rise each stage.' : ''}`;
+    document.getElementById('shop-hint').textContent = `Potions go in your bag (${p.inventory.length} slots, up to ${BAG_STACK} of a kind each). ${Touch.enabled ? 'Tap a bag slot during a fight to drink it.' : 'Drag to rearrange; drink with the slot keys during a fight.'}${this.run.stage > 1 ? ' Prices rise each stage.' : ''}`;
   },
 
   /** Tobin's stall: every upgrade the hero owns and every potion in their bag, each with what it sells for. */

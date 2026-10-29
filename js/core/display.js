@@ -70,7 +70,14 @@ const Display = {
   /** Sizes the game space to the window's shape, and the stage and canvas to fill it. */
   layout() {
     this.ui = Touch.enabled ? Settings.data.uiScale || 1.35 : 1;
-    const aspect = window.innerWidth / window.innerHeight;
+    // the screen minus its safe area (an iPhone's notch and home bar; zero elsewhere), so nothing hides under them
+    const css = getComputedStyle(document.documentElement);
+    const inset = (side) => parseFloat(css.getPropertyValue(`--safe-${side}`)) || 0;
+    const left = inset('l');
+    const top = inset('t');
+    const availW = Math.max(1, window.innerWidth - left - inset('r'));
+    const availH = Math.max(1, window.innerHeight - top - inset('b'));
+    const aspect = availW / availH;
     let w = 960;
     let h = 540;
     if (aspect > w / h) w = h * aspect;
@@ -80,10 +87,12 @@ const Display = {
     CONFIG.screen.width = w;
     CONFIG.screen.height = h;
     this.zoom = Touch.enabled ? h / TOUCH_VIEW_HEIGHT : 1;
-    this.scale = Math.min(window.innerWidth / w, window.innerHeight / h);
+    this.scale = Math.min(availW / w, availH / h);
     this.renderScale = clamp(this.scale * (window.devicePixelRatio || 1), 1, 2);
     this.stage.style.width = `${w}px`;
     this.stage.style.height = `${h}px`;
+    this.stage.style.left = `${left + availW / 2}px`;
+    this.stage.style.top = `${top + availH / 2}px`;
     this.stage.style.transform = `translate(-50%, -50%) scale(${this.scale})`;
     const cw = Math.round(w * this.renderScale);
     const ch = Math.round(h * this.renderScale);

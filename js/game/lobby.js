@@ -833,12 +833,12 @@ class LobbyHub {
     const me = this.world.localPlayer;
     const bob = Math.sin(this.time * 5) * 2;
     if (me.seat) {
-      HUD.text(ctx, `[${Settings.label('interact')}] ${me.seat.bed ? 'GET UP' : 'STAND UP'}`, me.x, me.y - (me.seat.bed ? 70 : 64) + bob, { size: 7, align: 'center', color: '#ffe680' });
+      HUD.text(ctx, `[${Settings.prompt('interact')}] ${me.seat.bed ? 'GET UP' : 'STAND UP'}`, me.x, me.y - (me.seat.bed ? 70 : 64) + bob, { size: 7, align: 'center', color: '#ffe680' });
     } else if (me.nearCat && !me.nearStation) {
       const s = this.catState(me.nearCat);
-      HUD.text(ctx, `[${Settings.label('interact')}] PET ${me.nearCat.name}`, s.x, s.y - 30 + bob, { size: 7, align: 'center', color: '#ffe680' });
+      HUD.text(ctx, `[${Settings.prompt('interact')}] PET ${me.nearCat.name}`, s.x, s.y - 30 + bob, { size: 7, align: 'center', color: '#ffe680' });
     } else if (me.nearSeat && !me.nearStation) {
-      HUD.text(ctx, `[${Settings.label('interact')}] ${me.nearSeat.bed ? 'SLEEP' : 'SIT'}`, me.nearSeat.x, me.nearSeat.y - (me.nearSeat.bed ? 56 : 30) + bob, { size: 7, align: 'center', color: '#ffe680' });
+      HUD.text(ctx, `[${Settings.prompt('interact')}] ${me.nearSeat.bed ? 'SLEEP' : 'SIT'}`, me.nearSeat.x, me.nearSeat.y - (me.nearSeat.bed ? 56 : 30) + bob, { size: 7, align: 'center', color: '#ffe680' });
     }
     for (const s of this.stations) {
       if (s.kind === 'hero') {
@@ -849,7 +849,7 @@ class LobbyHub {
     const s = this.near;
     if (!s) return;
     const h = { hero: 78, pets: 62, tome: 74, workshop: 80, practice: 70, gate: -6, legend: 74, bestiary: 54, potions: 58, clock: 86, hourglass: 72 }[s.kind];
-    HUD.text(ctx, `[${Settings.label('interact')}] ${s.prompt}`, s.x, s.y - h + bob, { size: 8, align: 'center', color: '#ffe680' });
+    HUD.text(ctx, `[${Settings.prompt('interact')}] ${s.prompt}`, s.x, s.y - h + bob, { size: 8, align: 'center', color: '#ffe680' });
   }
 
   // ---------- station art ----------
