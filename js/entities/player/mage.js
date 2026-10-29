@@ -573,8 +573,21 @@ class Mage extends Player {
     ctx.fillRect(Math.round(this.x - 10), Math.round(this.y - 35), Math.round(20 * r), 2);
   }
 
-  /** Ability outlines while a key is held: the lightning's pick radius, bird form on herself, the drain circle. */
+  /**
+   * Ability outlines while a key is held: the lightning's pick radius, bird form on herself, the drain circle.
+   * The frostfire ball (shown while its touch button is held): its flight, and its blast where it will burst
+   * (where the aim point is, at most maxRange away, or short of a wall in the way).
+   */
   abilityPreview(slot) {
+    if (slot === 'secondary') {
+      const c = this.cfg.fireball;
+      const f = this.lastWorld?.dungeon;
+      const travel = Math.min(dist(this.tipX, this.tipY, this.cursor.x, this.cursor.y), c.maxRange);
+      let d = 0;
+      while (d < travel && !(f && f.blocksShotAt(this.tipX + Math.cos(this.aim) * (d + 4), this.tipY + Math.sin(this.aim) * (d + 4)))) d += 4;
+      d = Math.min(d, travel);
+      return { blast: { fromX: this.tipX, fromY: this.tipY, x: this.tipX + Math.cos(this.aim) * d, y: this.tipY + Math.sin(this.aim) * d, r: c.radius, rgb: '120, 235, 220' } };
+    }
     if (slot === 'e') return { circle: { x: this.cursor.x, y: this.cursor.y, r: this.cfg.lightning.selectRadius } };
     if (slot === 'f') return { self: true };
     if (slot === 'q') return { circle: { x: this.placePos.x, y: this.placePos.y, r: this.cfg.ult.radius, sy: MAGIC_CIRCLE_SY } };

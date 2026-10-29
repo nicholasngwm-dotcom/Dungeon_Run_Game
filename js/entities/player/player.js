@@ -295,7 +295,9 @@ class Player extends Entity {
 
   /** The held ability's outline on the floor (this screen's hero only). */
   drawAbilityPreview(ctx) {
-    const shape = this.aimHold && this.abilityPreview(this.aimHold.slot);
+    // a held key's ability, or on a phone the secondary while its button is held (it casts on letting go)
+    const slot = this.aimHold?.slot || (Touch.holding('secondary') ? 'secondary' : null);
+    const shape = slot && this.abilityPreview(slot);
     if (!shape || Touch.cancelArmed) return;   // (a touch skill held on a cancel spot won't land)
     const rgb = '255, 236, 170';
     const spin = this.animTime * 0.8;
@@ -312,6 +314,18 @@ class Player extends Entity {
       const a1 = c.angle + c.arc / 2;
       for (const r of [c.range * 0.5, c.range]) PFX.ring(ctx, c.x, c.y, r, r, `rgba(${rgb}, ${r === c.range ? pulse : 0.35})`, 2, { from: a0, to: a1, dash: r === c.range ? null : [3, 3] });
       for (const a of [a0, a1]) PFX.line(ctx, c.x, c.y, c.x + Math.cos(a) * c.range, c.y + Math.sin(a) * c.range, `rgba(${rgb}, ${pulse})`, 2, [3, 2], -this.animTime * 10);
+    } else if (shape.blast) {
+      // a thrown ball: its path, and the blast where it bursts (filled, so the area reads at a glance)
+      const b = shape.blast;
+      PFX.line(ctx, b.fromX, b.fromY, b.x, b.y, `rgba(${b.rgb}, ${pulse})`, 2, [4, 3], -this.animTime * 20);
+      ctx.save();
+      ctx.globalAlpha = 0.18 * pulse;
+      ctx.fillStyle = `rgb(${b.rgb})`;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+      PFX.zone(ctx, b.x, b.y, b.r, 0, b.rgb, { spin, alpha: pulse });
     } else if (shape.self) {
       PFX.ring(ctx, this.x, this.y + 4, 26, 12, `rgba(${rgb}, ${pulse})`, 2, { dash: [3, 2], spin: spin * 3 });
     }

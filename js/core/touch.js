@@ -533,6 +533,13 @@ const Touch = {
     }
   },
 
+  /** A thumb is on this touch button right now (and not letting go on a cancel spot). */
+  holding(role) {
+    if (!this.enabled || this.cancelArmed) return false;
+    for (const t of this.pointers.values()) if (t.role === role) return true;
+    return false;
+  },
+
   /** Pause, and the scoreboard toggle (dungeon runs). */
   drawCorner(ctx, L, game) {
     this.squareButton(ctx, L.pause, false, (x, y) => {
