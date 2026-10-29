@@ -61,6 +61,7 @@ const Settings = {
     touchSize: 1,        // touch buttons' scale
     touchOpacity: 0.85,  // touch buttons' opacity
     uiScale: 1.35,       // touch: interface size (HUD, buttons, text and menus), x a PC's
+    touchLayout: {},     // touch: buttons moved / resized in the layout editor: { id: { x, y, s } } (offsets from the default spot, scale)
     keys: {
       up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',
       e: 'KeyE', f: 'KeyF', ult: 'KeyQ', dodge: 'ShiftLeft',

@@ -16,11 +16,11 @@
 
 // the arc round the aim stick, from the bottom left up to the top (degrees; 0 = right, 90 = down)
 const TOUCH_SKILLS = [
-  { id: 'dodge', angle: 160 },
-  { id: 'secondary', angle: 193 },
-  { id: 'e', angle: 226 },
-  { id: 'f', angle: 259 },
-  { id: 'ult', angle: 295, big: true },
+  { id: 'dodge', angle: 165 },
+  { id: 'secondary', angle: 200 },
+  { id: 'e', angle: 235 },
+  { id: 'f', angle: 270 },
+  { id: 'ult', angle: 308, big: true },
 ];
 const TOUCH_AIMED = ['secondary', 'e', 'f', 'ult'];   // buttons that aim while dragged
 const TOUCH_DEAD = 10;            // px a thumb moves before it counts as a drag
@@ -53,12 +53,18 @@ const Touch = {
     this.app = app;
     this.canvas = canvas;
     canvas.addEventListener('pointerdown', (e) => {
+      if (this.editing) {
+        e.preventDefault();
+        this.editorDown(e.pointerId, this.toGame(e));
+        return;
+      }
       if (e.pointerType === 'mouse' || !this.enabled) return;
       e.preventDefault();   // no made-up mouse events, no zoom or scroll
       try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* already gone */ }
       this.down(e.pointerId, this.toGame(e));
     });
     window.addEventListener('pointermove', (e) => {
+      if (this.editDrag?.pointerId === e.pointerId) this.editorMove(this.toGame(e));
       const t = this.pointers.get(e.pointerId);
       if (!t) return;
       Object.assign(t, this.toGame(e));
@@ -67,6 +73,7 @@ const Touch = {
       if (t.home && Math.hypot(t.x - t.home.x, t.y - t.home.y) > t.home.r * 1.4) t.away = true;
     });
     const up = (e) => {
+      if (this.editDrag?.pointerId === e.pointerId) this.editDrag = null;
       const t = this.pointers.get(e.pointerId);
       if (!t) return;
       this.pointers.delete(e.pointerId);
@@ -87,30 +94,50 @@ const Touch = {
 
   // ---------- layout (game pixels, anchored to the screen's corners) ----------
 
+  /**
+   * Where everything goes: the default spots (in from the corner, where a thumb rests comfortably:
+   * phone edges curve and are hard to reach), each moved and resized by the layout editor
+   * (Settings touchLayout: offsets from the default spot, so a layout fits any screen size).
+   */
   layout() {
     const k = Settings.data.touchSize || 1;
     const { width: W, height: H } = CONFIG.screen;
-    const aim = { x: W - 92 * k, y: H - 92 * k, r: 44 * k };
+    const custom = Settings.data.touchLayout || {};
+    const place = (id, x, y, r) => {
+      const o = custom[id] || {};
+      const rr = r * (o.s || 1);
+      return { id, x: clamp(x + (o.x || 0), rr, W - rr), y: clamp(y + (o.y || 0), rr, H - rr), r: rr };
+    };
+    const ax = W - 128 * k;
+    const ay = H - 100 * k;
     const buttons = TOUCH_SKILLS.map((s) => {
-      const R = (s.big ? 94 : 84) * k;
+      const R = (s.big ? 110 : 102) * k;
       const a = (s.angle * Math.PI) / 180;
-      return { id: s.id, x: aim.x + Math.cos(a) * R, y: aim.y + Math.sin(a) * R, r: (s.big ? 27 : 21) * k };
+      return place(s.id, ax + Math.cos(a) * R, ay + Math.sin(a) * R, (s.big ? 31 : 24) * k);
     });
-    buttons.push({ id: 'interact', x: aim.x - 140 * k, y: aim.y - 104 * k, r: 18 * k });
-    buttons.push({ id: 'heal', x: 294, y: H - 32, r: 16 });
+    buttons.push(place('interact', ax - 190 * k, ay - 118 * k, 21 * k));
+    buttons.push(place('heal', 294, H - 32, 17));
+    const square = (id, x, y) => {
+      const c = place(id, x + 13, y + 13, 13);
+      return { id, x: c.x - c.r, y: c.y - c.r, w: c.r * 2, h: c.r * 2 };
+    };
     return {
-      aim,
-      cancel: { x: aim.x + 20 * k, y: aim.y - 178 * k, r: 24 * k },   // shown while a skill is dragged
+      aim: place('aim', ax, ay, 48 * k),
+      cancel: place('cancel', ax - 150 * k, ay - 200 * k, 26 * k),   // shown while a skill is dragged
       moveR: 40 * k,
       buttons,
       // past the coin / gem counter beside the health bar
-      pause: { x: 314, y: 12, w: 26, h: 26 },
-      score: { x: 346, y: 12, w: 26, h: 26 },
+      pause: square('pause', 314, 12),
+      score: square('score', 346, 12),
     };
   },
 
   /** Screen rect of bag slot i with the touch controls (the bag moves to the bottom middle). */
-  bagSlotRect(i) { return { x: 320 + i * 44, y: CONFIG.screen.height - 52, s: 40 }; },
+  bagSlotRect(i) {
+    const o = Settings.data.touchLayout?.bag || {};
+    const s = Math.round(40 * (o.s || 1));
+    return { x: 320 + (o.x || 0) + i * (s + 4), y: CONFIG.screen.height - 12 - s + (o.y || 0), s };
+  },
 
   // ---------- touches ----------
 
@@ -350,21 +377,54 @@ const Touch = {
 
   // ---------- drawing (screen space, after the HUD) ----------
 
-  /** A round button in the keep's style: outline, gold rim, dark walnut, lit along the top. */
-  disc(ctx, x, y, r, lit = false) {
-    const circle = (rr, color) => {
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x, y, rr, 0, Math.PI * 2);
-      ctx.fill();
-    };
-    circle(r + 2, OUTLINE);
-    circle(r + 1, lit ? '#ffd34a' : '#8a6a26');
-    circle(r, lit ? '#4e3524' : '#2e1f17');
-    ctx.strokeStyle = 'rgba(255, 220, 170, 0.16)';
-    ctx.lineWidth = 2;
+  circle(ctx, x, y, r, fill) {
+    ctx.fillStyle = fill;
     ctx.beginPath();
-    ctx.arc(x, y, r - 3, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  },
+
+  /**
+   * A round button in the keep's style: an outline, a bevelled gold rim lit from the top left,
+   * and a dark walnut face shaded toward its edge. lit: brighter, for a pressed or held button.
+   */
+  disc(ctx, x, y, r, lit = false) {
+    this.circle(ctx, x, y, r + 3, OUTLINE);
+    const rim = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+    rim.addColorStop(0, lit ? '#fff2a0' : '#e0bc5c');
+    rim.addColorStop(0.5, lit ? '#ffd34a' : '#a8822e');
+    rim.addColorStop(1, lit ? '#b8801c' : '#5a3e16');
+    this.circle(ctx, x, y, r + 2, rim);
+    this.circle(ctx, x, y, r - 1, OUTLINE);
+    const face = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
+    face.addColorStop(0, lit ? '#6e4c32' : '#4e3524');
+    face.addColorStop(1, lit ? '#2e1f17' : '#160e0a');
+    this.circle(ctx, x, y, r - 2, face);
+  },
+
+  /** A soft ring of light round a ready button (stronger for the ultimate). */
+  glow(ctx, x, y, r, strength = 1) {
+    const a = (0.35 + Math.sin(performance.now() / 260) * 0.15) * strength;
+    ctx.strokeStyle = `rgba(255, 214, 110, ${a})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+    ctx.stroke();
+  },
+
+  /** The moment a button comes off cooldown, a bright ring bursts out of it. */
+  readyFlash(ctx, id, ready, x, y, r) {
+    const now = performance.now();
+    const fl = (this.flashes ||= {});
+    if (ready && fl[id] === false) fl[id] = now;   // just became ready
+    if (!ready) fl[id] = false;
+    else if (fl[id] === undefined) fl[id] = 0;     // ready from the start: no flash
+    const t = (now - (fl[id] || 0)) / 350;
+    if (!fl[id] || t >= 1) return;
+    ctx.strokeStyle = `rgba(255, 245, 190, ${1 - t})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 2 + t * 14, 0, Math.PI * 2);
     ctx.stroke();
   },
 
@@ -376,17 +436,19 @@ const Touch = {
     ctx.globalAlpha /= alpha;
   },
 
-  /** A dark sweep over a button for what's left of its cooldown, with the seconds. */
+  /** A dark sweep over a button for what's left of its cooldown, with the seconds big in the middle. */
   cooldown(ctx, x, y, r, cd, max) {
     if (cd <= 0) return;
     const k = clamp(cd / (max || 1), 0, 1);
-    ctx.fillStyle = 'rgba(10, 6, 18, 0.65)';
+    ctx.fillStyle = 'rgba(10, 6, 18, 0.7)';
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
+    ctx.arc(x, y, r - 2, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
     ctx.closePath();
     ctx.fill();
-    if (max >= 1) HUD.text(ctx, (Math.ceil(cd * 10) / 10).toFixed(1), x, y - 4, { size: 8, align: 'center', color: '#ffffff' });
+    if (max < 1) return;
+    const label = cd >= 10 ? `${Math.ceil(cd)}` : (Math.ceil(cd * 10) / 10).toFixed(1);
+    HUD.text(ctx, label, x, y, { size: r >= 22 ? 10 : 8, align: 'center', baseline: 'middle', color: '#ffffff' });
   },
 
   draw(ctx, game) {
@@ -425,9 +487,9 @@ const Touch = {
     const am = held('aim');
     this.ring(ctx, L.aim.x, L.aim.y, L.aim.r);
     const ak = am ? this.clampTo(am, L.aim, L.aim.r) : L.aim;
-    const kr = L.aim.r * 0.62;
+    const kr = L.aim.r * 0.66;
     this.disc(ctx, ak.x, ak.y, kr, !!am);
-    this.icon(ctx, icons.primary, ak.x, ak.y, kr * 1.3);
+    this.icon(ctx, icons.primary, ak.x, ak.y, kr * 1.45);
     this.cooldown(ctx, ak.x, ak.y, kr, p.cooldowns.primary, p.maxCooldowns.primary);
     if (!Settings.data.autoFire) HUD.text(ctx, 'AIM', L.aim.x, L.aim.y + L.aim.r + 2, { size: 5, align: 'center', color: '#d8c8a0' });
 
@@ -478,6 +540,136 @@ const Touch = {
     }
   },
 
+  // ---------- layout editor (Settings > Move / resize buttons) ----------
+  //
+  // The controls over a dimmed screen: drag any of them to move it, tap one and use - / + to
+  // resize it. It edits Settings touchLayout like any other setting (Save in Settings keeps it).
+
+  editing: false,
+  editSel: null,     // the selected item's id
+  editDrag: null,    // the item being dragged: { id, pointerId, lx, ly }
+
+  /** Everything the editor can move: circles { id, x, y, r }, and the bag as a rect. */
+  editorItems() {
+    const L = this.layout();
+    const items = [L.aim, ...L.buttons, L.cancel];
+    for (const sq of [L.pause, L.score]) items.push({ id: sq.id, x: sq.x + sq.w / 2, y: sq.y + sq.h / 2, r: sq.w / 2, square: sq });
+    const a = this.bagSlotRect(0);
+    const b = this.bagSlotRect(4);
+    items.push({ id: 'bag', rect: { x: a.x, y: a.y, w: b.x + b.s - a.x, h: a.s } });
+    return items;
+  },
+
+  /** The toolbar across the top (under the pause and scoreboard buttons, so they can be moved too): [-] [+] [RESET] [DONE]. */
+  editorTools() {
+    const widths = [['smaller', 40], ['bigger', 40], ['reset', 76], ['done', 76]];
+    let x = CONFIG.screen.width / 2 - (widths.reduce((s, [, w]) => s + w, 0) + 8 * 3) / 2;
+    return widths.map(([id, w]) => {
+      const r = { id, x, y: 58, w, h: 26 };
+      x += w + 8;
+      return r;
+    });
+  },
+
+  openEditor() {
+    this.editing = true;
+    this.editSel = null;
+    this.editDrag = null;
+    Menus.show(null);
+  },
+
+  closeEditor() {
+    this.editing = false;
+    this.editDrag = null;
+    Menus.show('settings');
+    Menus.updateSaveState();
+  },
+
+  editorDown(pointerId, pos) {
+    const custom = (Settings.data.touchLayout ||= {});
+    const tool = this.editorTools().find((r) => pos.x >= r.x && pos.x < r.x + r.w && pos.y >= r.y && pos.y < r.y + r.h);
+    if (tool) {
+      Sound.play('uiClick');
+      if (tool.id === 'done') return this.closeEditor();
+      if (tool.id === 'reset') { Settings.data.touchLayout = {}; this.editSel = null; return; }
+      if (!this.editSel) return;
+      const o = (custom[this.editSel] ||= {});
+      o.s = Math.round(clamp((o.s || 1) + (tool.id === 'bigger' ? 0.1 : -0.1), 0.6, 1.8) * 10) / 10;
+      return;
+    }
+    const hit = this.editorItems().reverse().find((it) => (it.rect
+      ? pos.x >= it.rect.x && pos.x < it.rect.x + it.rect.w && pos.y >= it.rect.y && pos.y < it.rect.y + it.rect.h
+      : Math.hypot(pos.x - it.x, pos.y - it.y) <= it.r * 1.2));
+    this.editSel = hit ? hit.id : null;
+    this.editDrag = hit ? { id: hit.id, pointerId, lx: pos.x, ly: pos.y } : null;
+  },
+
+  editorMove(pos) {
+    const d = this.editDrag;
+    const o = ((Settings.data.touchLayout ||= {})[d.id] ||= {});
+    o.x = Math.round((o.x || 0) + pos.x - d.lx);
+    o.y = Math.round((o.y || 0) + pos.y - d.ly);
+    d.lx = pos.x;
+    d.ly = pos.y;
+  },
+
+  drawEditor(ctx) {
+    const { width: W, height: H } = CONFIG.screen;
+    ctx.fillStyle = 'rgba(8, 5, 14, 0.72)';
+    ctx.fillRect(0, 0, W, H);
+    const icons = Sprites.icons[App.game?.localPlayer?.classId || App.classId];
+    const glyphs = { aim: icons.primary, dodge: Sprites.icons.dodge, secondary: icons.secondary, e: icons.e, f: icons.f, ult: icons.q };
+    const names = { aim: 'ATTACK', dodge: 'DODGE', secondary: 'SECONDARY', e: 'E', f: 'F', ult: 'ULTIMATE', interact: 'USE', heal: 'HEAL', cancel: 'CANCEL', pause: 'PAUSE', score: 'SCORES', bag: 'BAG' };
+    for (const it of this.editorItems()) {
+      const sel = it.id === this.editSel;
+      if (it.rect) {
+        for (let i = 0; i < 5; i++) {
+          const s = this.bagSlotRect(i);
+          HUD.panel(ctx, s.x, s.y, s.s, s.s);
+        }
+        HUD.text(ctx, names.bag, it.rect.x + it.rect.w / 2, it.rect.y - 12, { size: 6, align: 'center', color: sel ? '#ffe680' : '#d8c8a0' });
+        if (sel) this.selection(ctx, it.rect.x - 4, it.rect.y - 4, it.rect.w + 8, it.rect.h + 8);
+        continue;
+      }
+      if (it.square) {
+        this.squareButton(ctx, it.square, sel, () => {});
+      } else {
+        this.disc(ctx, it.x, it.y, it.r, sel);
+        if (glyphs[it.id]) this.icon(ctx, glyphs[it.id], it.x, it.y, it.r * 1.5);
+        else if (it.id === 'cancel') HUD.text(ctx, 'X', it.x, it.y, { size: 10, align: 'center', baseline: 'middle', color: '#ff6a6a' });
+      }
+      HUD.text(ctx, names[it.id], it.x, it.y + it.r + 5, { size: 5, align: 'center', color: sel ? '#ffe680' : '#d8c8a0' });
+      if (sel) {
+        ctx.strokeStyle = '#ffe680';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.arc(it.x, it.y, it.r + 7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+    // the toolbar, and what to do
+    const labels = { smaller: '-', bigger: '+', reset: 'RESET', done: 'DONE' };
+    for (const r of this.editorTools()) {
+      const off = (r.id === 'smaller' || r.id === 'bigger') && !this.editSel;
+      HUD.panel(ctx, r.x, r.y, r.w, r.h);
+      HUD.text(ctx, labels[r.id], r.x + r.w / 2, r.y + r.h / 2, { size: r.w < 50 ? 12 : 8, align: 'center', baseline: 'middle', color: off ? '#6a5a4a' : r.id === 'done' ? '#8cff9a' : '#ffe680' });
+    }
+    const s = this.editSel && (Settings.data.touchLayout?.[this.editSel]?.s || 1);
+    const hint = this.editSel ? `${names[this.editSel]}: SIZE ${Math.round(s * 100)}%   (DRAG TO MOVE, - / + TO RESIZE)` : 'DRAG A BUTTON TO MOVE IT - TAP ONE, THEN - / + TO RESIZE IT';
+    HUD.text(ctx, hint, W / 2, 92, { size: 6, align: 'center', color: '#d8c8a0' });
+  },
+
+  /** The editor's dashed outline round a selected rect. */
+  selection(ctx, x, y, w, h) {
+    ctx.strokeStyle = '#ffe680';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+  },
+
   /** A point pulled back to within r of a base. */
   clampTo(t, base, r) {
     const dx = t.x - base.x;
@@ -524,38 +716,60 @@ const Touch = {
       ctx.fill();
     }
     if (b.id === 'ult') {
+      // the charge fills a gold ring round it; full, it glows and its icon lights up
       const fill = clamp(p.ult / p.ultMax, 0, 1);
       const ready = p.ultReady;
-      ctx.strokeStyle = ready ? `rgba(255, 210, 90, ${0.75 + Math.sin(performance.now() / 150) * 0.25})` : '#f2a541';
+      if (ready) this.glow(ctx, at.x, at.y, r, 1.8);
+      ctx.strokeStyle = 'rgba(14, 8, 22, 0.8)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(at.x, at.y, r + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = ready ? '#ffe680' : '#f2a541';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(at.x, at.y, r + 4, -Math.PI / 2, -Math.PI / 2 + fill * Math.PI * 2);
+      ctx.arc(at.x, at.y, r + 5, -Math.PI / 2, -Math.PI / 2 + fill * Math.PI * 2);
       ctx.stroke();
-      this.icon(ctx, icons.q, at.x, at.y, r * 1.3, ready ? 1 : 0.5);
-      if (!ready) HUD.text(ctx, `${Math.floor(fill * 100)}%`, at.x, at.y + r - 9, { size: 6, align: 'center', color: '#f4ead7' });
+      this.icon(ctx, icons.q, at.x, at.y, r * 1.5, ready ? 1 : 0.4);
+      if (!ready) HUD.text(ctx, `${Math.floor(fill * 100)}%`, at.x, at.y, { size: 9, align: 'center', baseline: 'middle', color: '#f4ead7' });
+      this.readyFlash(ctx, 'ult', ready, at.x, at.y, r);
       return;
     }
     if (b.id === 'interact') {
-      HUD.text(ctx, 'USE', at.x, at.y - 4, { size: 7, align: 'center', color: '#ffe680' });
+      HUD.text(ctx, 'USE', at.x, at.y, { size: 8, align: 'center', baseline: 'middle', color: '#ffe680' });
       return;
     }
     if (b.id === 'heal') {
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(at.x - 4, at.y - 9, 9, 15);
+      ctx.fillRect(at.x - 8, at.y - 5, 17, 7);
       ctx.fillStyle = '#e84a4a';
       ctx.fillRect(at.x - 2, at.y - 7, 5, 11);
-      ctx.fillRect(at.x - 6, at.y - 4, 13, 5);
-      HUD.text(ctx, 'HEAL', at.x, at.y + r + 3, { size: 5, align: 'center', color: '#d8c8a0' });
+      ctx.fillRect(at.x - 6, at.y - 3, 13, 3);
+      HUD.text(ctx, 'HEAL', at.x, at.y + r + 4, { size: 5, align: 'center', color: '#d8c8a0' });
       return;
     }
+    const cd = p.cooldowns[b.id];
+    const short = b.id !== 'dodge' && !p.canAfford(b.id);
+    const ready = cd <= 0 && !short;
+    if (ready && !thumb) this.glow(ctx, at.x, at.y, r);
     const icon = b.id === 'dodge' ? Sprites.icons.dodge : icons[b.id];
-    this.icon(ctx, icon, at.x, at.y, r * 1.35);
-    this.cooldown(ctx, at.x, at.y, r, p.cooldowns[b.id], p.maxCooldowns[b.id]);
-    if (b.id !== 'dodge' && !p.canAfford(b.id)) {
-      ctx.fillStyle = 'rgba(120, 10, 16, 0.55)';
-      ctx.beginPath();
-      ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
-      ctx.fill();
+    this.icon(ctx, icon, at.x, at.y, r * 1.5, cd > 0 ? 0.45 : 1);
+    this.cooldown(ctx, at.x, at.y, r, cd, p.maxCooldowns[b.id]);
+    if (short) {
+      // not enough mana / energy / light: a red wash, and what's missing underneath
+      this.circle(ctx, at.x, at.y, r - 2, 'rgba(120, 10, 16, 0.55)');
+      HUD.text(ctx, `NO ${p.resource.name}`, at.x, at.y + r + 4, { size: 5, align: 'center', color: '#ff6a6a' });
     }
+    this.readyFlash(ctx, b.id, ready, at.x, at.y, r);
+    // stored uses: a little gold badge on the rim
     const charges = b.id === 'dodge' ? Upgrades.dodgeCharges(p) : p.slotCharges?.[b.id];
-    if (charges) HUD.text(ctx, `x${charges.count}`, at.x + r - 2, at.y - r, { size: 6, align: 'center', color: charges.count ? '#ffe680' : '#8a7660' });
+    if (charges) {
+      const bx = at.x + r * 0.72;
+      const by = at.y - r * 0.72;
+      this.circle(ctx, bx, by, 8, OUTLINE);
+      this.circle(ctx, bx, by, 7, charges.count ? '#d4ac4c' : '#5a4a3a');
+      HUD.text(ctx, `${charges.count}`, bx, by + 1, { size: 7, align: 'center', baseline: 'middle', color: charges.count ? '#2e1f17' : '#a99a88', shadow: false });
+    }
   },
 };

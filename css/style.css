@@ -1315,3 +1315,4 @@ body.touch .screen::-webkit-scrollbar { display: none; }
 /* the tallest lobby panels fit the touch screen (their lists scroll inside) */
 body.touch .hero-sheet { height: 320px; }
 body.touch .tome-list, body.touch .pgx-list { max-height: 250px; }
+.set-layout-btn { margin-top: 10px; align-self: flex-start; }

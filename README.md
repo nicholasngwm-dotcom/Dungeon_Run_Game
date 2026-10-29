@@ -198,7 +198,12 @@ Mouse + keys). The game is landscape only; held upright it asks you to turn the 
   or out of the bag to drop it.
 - Top left: pause, and in dungeon runs the scoreboard (a toggle).
 - Everything (HUD, buttons, text, menus) shows bigger than on a PC; **Interface size** in
-  Settings tunes it, alongside button size and opacity. Touch and PC players send the same
+  Settings tunes it, alongside button size and opacity.
+- **Move / resize buttons** (Settings) opens the layout editor: drag any control (aim stick,
+  skills, USE, HEAL, the bag, CANCEL, pause, scoreboard) where you like, tap one and use - / +
+  to resize it, RESET for the default layout, DONE to go back (Save keeps it).
+- Skill buttons glow when ready, flash as they come off cooldown, show the seconds left big in
+  the middle, a gold badge for stored charges, and what's missing when you're short of mana. Touch and PC players send the same
   input, so they play together in multiplayer like any other machines.
 - **Fullscreen** starts on the first tap (Android). iPhones don't allow it in the browser: use
   Share > **Add to Home Screen**, and the game opens from there fullscreen and sideways.

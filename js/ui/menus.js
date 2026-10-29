@@ -322,6 +322,7 @@ const Menus = {
         this.controlsChanged();
         this.updateSaveState();
         break;
+      case 'editTouchLayout': Touch.openEditor(); break;
       case 'toggleAutoFire':
         Settings.data.autoFire = !Settings.data.autoFire;
         this.controlsChanged();

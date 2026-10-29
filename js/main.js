@@ -589,7 +589,8 @@ const App = {
     this.lastTime = now;
 
     if (Input.wasPressed('Escape')) {
-      if (Menus.settingsOpen) {
+      if (Touch.editing) Touch.closeEditor();
+      else if (Menus.settingsOpen) {
         if (Menus.confirmOpen) Menus.hideConfirm();
         else Menus.requestCloseSettings();
       }
@@ -663,6 +664,7 @@ const App = {
       MenuShowcase.render(this.ctx);
     }
     Menus.drawPreviews(now / 1000);
+    if (Touch.editing) Touch.drawEditor(this.ctx);
     const g = this.state === 'playing' && this.game;
     this.practicePanel.classList.toggle('hidden', !(g && g.cheats));
     this.practicePanel.classList.toggle('arena', !!(g && g.cheats && !g.practice));
