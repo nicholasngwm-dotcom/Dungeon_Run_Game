@@ -26,7 +26,7 @@ const UpgradeGuide = {
       if (list.length) out.push([`${c.name.toUpperCase()} ONLY`, '#ffd34a', list]);
     }
     // the dark trader's own: never in the shops
-    if (this.filter === 'all' || this.filter === 'general') out.push([`ONLY FROM THE DARK TRADER (FOR ${CONFIG.run.darkTrader.hp} HP)`, '#b45aff', SHOP_UPGRADES.filter((u) => u.dark)]);
+    if (this.filter === 'all' || this.filter === 'general') out.push([`ONLY FROM THE DARK TRADER (FOR ${CONFIG.run.darkTrader.maxHp} MAX HP)`, '#b45aff', SHOP_UPGRADES.filter((u) => u.dark)]);
     return out;
   },
 

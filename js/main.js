@@ -310,14 +310,14 @@ const App = {
     } else if (kind === 'darkTrader') {
       const p = this.game.localPlayer;
       const c = CONFIG.run.darkTrader;
-      const can = p.hp > c.hp;
+      const can = Specials.canDarkTrade(p);
       Dialog.open({
         name: 'THE DARK TRADER', frames: Sprites.npcs.darkTrader,
         text: can
-          ? `Mmm... so much life in you. Give me ${c.hp} of it, and I will give you something... interesting. A bottle, a power - perhaps one no one else dares to sell.`
-          : `Too little life left in you for my tastes. Come back when you have more than ${c.hp} to spare.`,
+          ? `Mmm... so much life in you. Give me ${c.maxHp} of your MAX health - for good, mind - and I will give you something... interesting. A bottle, a power - perhaps one no one else dares to sell.`
+          : `There is too little of you left for my tastes. I will not take you below ${c.minMax} max health.`,
         options: [
-          can && { label: `Offer ${c.hp} HP`, fn: () => { Dialog.close(); this.command({ type: 'darkTrade' }); } },
+          can && { label: `Offer ${c.maxHp} max HP`, fn: () => { Dialog.close(); this.command({ type: 'darkTrade' }); } },
           { label: 'Leave', fn: () => Dialog.close() },
         ].filter(Boolean),
       });
@@ -361,20 +361,19 @@ const App = {
       const hire = pr?.hire || 'knight';
       const c = CONFIG.run.helpers[hire];
       const price = Specials.price(run, p, c.price);
-      const hired = !!pr?.hired?.[p.netId || 'solo'];
-      const who = {
-        knight: 'a knight with a sword and shield. Blocks what comes at him and hits back hard.',
-        archer: 'an archer. Keeps back and shoots whatever is coming for you.',
-        priest: `a priest, with two acolytes. He heals you every ${c.healEvery} seconds, and they shoot beams of light at your enemies - mind, the acolytes are frail.`,
+      // the hireling speaks for themselves
+      const pitch = {
+        knight: `Need a shield at your side? ${price} coins and my sword is yours. I'll block what comes at you and hit back hard - all the way down, till I fall.`,
+        archer: `Looking for a sharp eye? ${price} coins and I'll stay back and shoot whatever comes for you. I'll follow you from stage to stage, till I fall.`,
+        priest: `Bless you, traveller. For ${price} coins my acolytes and I will walk with you. I'll heal you every ${c.healEvery} seconds, and they'll strike your foes with light - though they're frail, so mind them.`,
       }[hire];
       Dialog.open({
-        name: 'PIP', frames: Sprites.npcs.helper,
-        text: hired ? "They're with you now! They'll follow you all the way down - till they fall, anyway. Look after them!"
-          : `Hello! Need a hand down there? For ${price} coins I'll send ${who} They'll follow you from stage to stage until they fall.`,
+        name: c.name.toUpperCase(), frames: Sprites.npcs[`hired${hire[0].toUpperCase()}${hire.slice(1)}`],
+        text: pitch,
         options: [
-          !hired && { label: `Hire the ${hire} (${price} coins)`, fn: () => { Dialog.close(); this.command({ type: 'hire' }); } },
-          { label: hired ? 'Thanks, Pip!' : 'No thanks', fn: () => Dialog.close() },
-        ].filter(Boolean),
+          { label: `Hire me (${price} coins)`, fn: () => { Dialog.close(); this.command({ type: 'hire' }); } },
+          { label: 'Not now', fn: () => Dialog.close() },
+        ],
       });
     } else {
       Dialog.open({
@@ -397,7 +396,7 @@ const App = {
     }
     Sound.play('denied');
     const why = {
-      dark: 'NOT ENOUGH HP TO TRADE',
+      dark: 'NOT ENOUGH MAX HP TO TRADE',
       stand: 'THAT TRADE IS OFF',
       horse: hero.horse ? 'YOU ALREADY HAVE A HORSE' : 'NOT ENOUGH COINS',
       hire: 'NOT ENOUGH COINS',

@@ -158,6 +158,7 @@ class DungeonRun {
         // the special rooms' gifts: the forge's enhancement, soul health, the horse and the hirelings
         forged: p.forged ? { ...p.forged } : null,
         soul: p.soulHp || 0,
+        maxHpLost: p.maxHpLost || 0,
         horse: p.horse ? { hp: p.horse.hp, riding: !!p.riding } : null,
         helpers: w.helpers.filter((h) => h.owner === p && !h.dead && h instanceof Hireling).map((h) => ({
           kind: h.kind, hp: h.hp, acolytes: w.helpers.filter((a) => a.priest === h && !a.dead).length,
@@ -182,6 +183,9 @@ class DungeonRun {
       p.coins = h.coins;
       p.upgradesBought = h.bought;
       p.inventory = h.inventory.map((s) => s && { ...s });
+      // max health sold to the dark trader stays gone
+      p.maxHpLost = Math.max(0, Number(h.maxHpLost) || 0);
+      p.maxHp -= p.maxHpLost;
       p.hp = Math.max(1, Math.round(p.maxHp * h.hp));
       p.ult = h.ult;
       if (h.forged && FORGE_ITEMS[h.forged.item] && FORGE_RARITIES[h.forged.rarity]) Forge.equip(p, h.forged);
@@ -1469,7 +1473,11 @@ class DungeonRun {
         }
       } else add(r.special, 0, -0.5, info.name, info.color);
       // the helper camp has one kind of hireling waiting to be hired
-      if (r.special === 'helper') this.props[this.props.length - 1].hire = choose(['knight', 'archer', 'priest']);
+      if (r.special === 'helper') {
+        const camp = this.props[this.props.length - 1];
+        camp.hire = choose(['knight', 'archer', 'priest']);
+        camp.label = CONFIG.run.helpers[camp.hire].name.toUpperCase();   // (the hireling is the one you talk to)
+      }
     } else if (r.type === 'puzzle') {
       // Simon's stone, and a row of its four coloured floor plates in front of it
       add('puzzle', 0, -1.5, 'RUNE STONE', ROOM_INFO.puzzle.color);
@@ -1562,6 +1570,7 @@ class DungeonRun {
     else for (const pr of this.props) {
       if (pr.opened || pr.ground) continue;
       if (pr.kind === 'puzzle' && pr.state !== 'idle') continue;   // busy with a pattern
+      if (pr.kind === 'helper' && pr.hired?.[p.netId || 'solo']) continue;   // they're already following this hero
       if (pr.kind === 'hole' && (pr.reveal || 0) < 1) continue;   // still under its trapdoor
       const reach = pr.kind === 'hole' || pr.kind === 'holeExit' ? dist(p.x, p.y, pr.x, pr.y) < 40 : dist(p.x, p.y, pr.x, pr.y + 10) < 44;
       if (reach) { p.nearProp = pr; break; }
@@ -2655,10 +2664,11 @@ class DungeonRun {
     const x = Math.round(pr.x);
     const y = Math.round(pr.y);
     if (pr.opened) return;
+    if (pr.kind === 'helper' && pr.hired?.[this.world.localPlayer.netId || 'solo']) return;   // the camp's empty: they're with you
     const near = this.world.localPlayer.nearProp === pr;
     const npc = ['shopkeeper', 'chef', 'enchanter', 'pawn', 'restaurant5', ...SPECIAL_KEEPERS].includes(pr.kind);
     const labelY = npc || Scenes[pr.kind] ? y - 86 : pr.kind === 'rewardChest' || pr.kind === 'secretChest' || pr.kind === 'chest' || pr.kind === 'gemChest' ? y - 36 : y - 62;
-    let label = near && npc ? 'TALK' : pr.label;
+    let label = near && npc ? 'TALK' : pr.kind === 'helper' && pr.hire ? CONFIG.run.helpers[pr.hire].name.toUpperCase() : pr.label;
     if (pr.kind === 'wishingWell') {
       const st = pr.wishes?.[this.world.localPlayer.netId || 'solo'];
       if (st?.granted) label = 'WISH GRANTED';

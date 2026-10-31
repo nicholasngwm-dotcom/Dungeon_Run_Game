@@ -618,57 +618,67 @@ const Scenes = {
   },
 
   /**
-   * The helper's camp: a tent, a weapon rack and a cosy fire, and the hireling who's for hire
-   * (extra: { hire: 'knight' | 'archer' | 'priest', hired: true once this screen's hero hired them)
-   * waiting by it with a "FOR HIRE" sign.
+   * The helper's camp: a tent, a weapon rack and a cosy fire, and the hireling themselves standing in the
+   * middle of it, weapon in hand: the one you talk to and hire (the priest with his two acolytes either
+   * side). extra: { hire: 'knight' | 'archer' | 'priest', hired: true once this screen's hero hired them,
+   * and then the camp stands empty for them).
    */
   helper(x, y, t, extra = {}) {
     const pieces = [];
     const kind = extra.hire;
     if (kind && !extra.hired) {
-      const name = `hired${kind[0].toUpperCase()}${kind.slice(1)}`;
-      const hx = x + 96;
-      const hy = y + 24;
-      pieces.push(npcPiece(name, hx, hy, t, true));
-      if (kind === 'priest') {
-        pieces.push({
-          y: hy + 12,
-          draw: (ctx) => {
-            for (const dx of [-22, 22]) {
-              const f = Sprites.npcs.acolyte.idle;
-              drawShadow(ctx, hx + dx, hy + 20, 9, 3);
-              ctx.save();
-              ctx.translate(hx + dx, hy + 12);
-              ctx.scale(-0.82, 0.82);
-              drawSprite(ctx, f[Math.floor((t + dx + 50) * CUTE.fps.idle) % f.length].img, 0, 0, HERO_ANCHOR.x, HERO_ANCHOR.y);
-              ctx.restore();
-            }
-          },
-        });
-      }
-      // the sign
+      const frames = Sprites.npcs[`hired${kind[0].toUpperCase()}${kind.slice(1)}`].idle;
+      const frame = () => frames[Math.floor((t + 50) * CUTE.fps.idle) % frames.length].img;
       pieces.push({
-        y: hy - 20,
+        y,
         draw: (ctx) => {
-          const sx = hx + 30;
-          const sy = hy;
-          ctx.fillStyle = OUTLINE;
-          ctx.fillRect(sx - 1, sy - 20, 4, 22);
-          ctx.fillStyle = '#7d532f';
-          ctx.fillRect(sx, sy - 19, 2, 20);
-          ctx.fillStyle = OUTLINE;
-          ctx.fillRect(sx - 17, sy - 31, 36, 12);
-          ctx.fillStyle = '#e8dcc0';
-          ctx.fillRect(sx - 16, sy - 30, 34, 10);
-          HUD.text(ctx, 'FOR HIRE', sx + 1, sy - 28, { size: 5, align: 'center', color: '#3a2416', shadow: false });
+          drawShadow(ctx, x, y + 9, 13, 5);
+          const W = Sprites.weapons;
+          if (kind === 'knight') {
+            // shield on the off arm, sword resting point-down at his side
+            drawRotated(ctx, W.heaterShield.img, x - 7, y - 10, W.heaterShield.pivotX, W.heaterShield.pivotY, 0, false);
+            drawSprite(ctx, frame(), x, y, HERO_ANCHOR.x, HERO_ANCHOR.y);
+            drawRotated(ctx, W.sword.img, x + 9, y - 12, W.sword.pivotX, W.sword.pivotY, 1.3, false);
+          } else if (kind === 'archer') {
+            drawSprite(ctx, frame(), x, y, HERO_ANCHOR.x, HERO_ANCHOR.y);
+            drawRotated(ctx, W.bow.img, x + 9, y - 14, W.bow.pivotX, W.bow.pivotY, 0.25, false);
+          } else {
+            drawSprite(ctx, frame(), x, y, HERO_ANCHOR.x, HERO_ANCHOR.y);
+            drawRotated(ctx, W.crosier.img, x + 9, y - 10, W.crosier.pivotX, W.crosier.pivotY, -Math.PI / 2 + 0.15, false);
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            PFX.glow(ctx, x + 9, y - 46, 14, '255, 230, 128', 0.3 + Math.sin(t * 2) * 0.1);
+            ctx.restore();
+          }
         },
       });
+      if (kind === 'priest') {
+        // his two acolytes, one either side of him, staffs up
+        for (const dx of [-26, 26]) {
+          pieces.push({
+            y: y + 6,
+            draw: (ctx) => {
+              const f = Sprites.npcs.acolyte.idle;
+              const ax = x + dx;
+              const ay = y + 6;
+              drawShadow(ctx, ax, ay + 8, 9, 3);
+              ctx.save();
+              ctx.translate(ax, ay);
+              ctx.scale(dx < 0 ? 0.82 : -0.82, 0.82);
+              drawSprite(ctx, f[Math.floor((t + dx + 50) * CUTE.fps.idle) % f.length].img, 0, 0, HERO_ANCHOR.x, HERO_ANCHOR.y);
+              ctx.restore();
+              const st = Sprites.weapons.acolyteStaff;
+              const s = dx < 0 ? 1 : -1;
+              drawRotated(ctx, st.img, ax + s * 6, ay - 12, st.pivotX, st.pivotY, -Math.PI / 2 + s * 0.2, false);
+            },
+          });
+        }
+      }
     }
     pieces.push(propPiece('weaponRack', x - 86, y - 12));
     pieces.push(propPiece('bench', x + 14, y + 44));
     return pieces.concat([
-      propPiece('tent', x - 44, y - 6),
-      npcPiece('helper', x, y, t),
+      propPiece('tent', x - 52, y - 10),
       {
         y: y + 12,
         draw: (ctx) => {

@@ -282,7 +282,7 @@ const SHOP_UPGRADES = [
   },
   {
     // radius / damage / knockback of the wave of darkness a hit sets off
-    id: 'darklash', name: 'Darklash', color: '#8a3aff', dark: true, cooldown: 10, radius: 120, damage: 45, knockback: 340,
+    id: 'darklash', name: 'Darklash', color: '#8a3aff', dark: true, cooldown: 10, radius: 180, damage: 45, knockback: 340,
     desc: 'Taking damage releases a wave of darkness around you, knocking enemies back and hurting them.',
     hud: (p) => ({ cd: Upgrades.cd(p, 'darklash'), max: 10, active: Upgrades.cd(p, 'darklash') <= 0 }),
   },

@@ -874,9 +874,10 @@ const CONFIG = {
     specials: ['blacksmith', 'wishingWell', 'heroStatue', 'restaurant5', 'mountTrader', 'darkTrader',
                'friendlyTrader', 'treasure', 'helper'],
     // Every special room price below is in coins, x the stage's shop price (shop.stagePrice) and Discount Cards.
-    // dark trader: give up `hp` health (never your last of it) for a gift: an upgrade upgradeChance of the time
-    // (a dark one, only he has, darkChance of those while any are left), otherwise potions[0]-potions[1] of one kind
-    darkTrader: { hp: 25, upgradeChance: 0.6, darkChance: 0.45, potions: [1, 3], tierWeights: [5, 3, 2] },
+    // dark trader: give up `maxHp` of your MAX health (for the rest of the run; your health drops as much, and he
+    // never takes you under `minMax`) for a gift: an upgrade upgradeChance of the time (a dark one, only he has,
+    // darkChance of those while any are left), otherwise potions[0]-potions[1] of one kind
+    darkTrader: { maxHp: 20, minMax: 50, upgradeChance: 0.6, darkChance: 0.45, potions: [1, 3], tierWeights: [5, 3, 2] },
     // blacksmith: each forge costs `price`; the rarity is rolled from `rarity` weights (see FORGE_RARITIES)
     blacksmith: { price: 35, rarity: { rare: 50, epic: 30, legendary: 15, mythical: 5 } },
     // mount trader's horse: moves the rider speed x faster, takes the rider's hits on its own hp, rests at 0

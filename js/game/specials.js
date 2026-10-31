@@ -2,7 +2,7 @@
 // (App.command -> Game.applyCommand), so in multiplayer every machine applies it on the same tick;
 // it acts on the keeper in the room the hero stands in. World events tell the hero's screen how it
 // went (onSpecial: the keeper reacts; the dialogue closes before it's sent).
-//   dark trader:     25 hp for a random gift: an upgrade (maybe one of his own dark ones) or potions
+//   dark trader:     20 max hp for a random gift: an upgrade (maybe one of his own dark ones) or potions
 //   friendly trader: three stands of upgrades; give one of yours for one on a stand (once per stand)
 //   mount trader:    a horse, for coins (one per hero)
 //   helper room:     hire the camp's hireling (one per hero per room)
@@ -24,17 +24,25 @@ const Specials = {
 
   // ---------- the dark trader ----------
 
+  /** True while the dark trader will still deal: a trade wouldn't take the hero's max health under minMax. */
+  canDarkTrade(hero) {
+    const c = CONFIG.run.darkTrader;
+    return hero.maxHp - c.maxHp >= c.minMax;
+  },
+
   darkTrade(run, hero) {
     const c = CONFIG.run.darkTrader;
     const w = run.world;
     const pr = this.propHere(run, hero, 'darkTrader');
-    const ok = !!pr && !hero.dead && hero.hp > c.hp;
+    const ok = !!pr && !hero.dead && this.canDarkTrade(hero);
     if (!ok) { w.events.onSpecial?.(hero, 'dark', false); return; }
-    hero.hp -= c.hp;
+    // the price: max health, gone for the rest of the run (current health drops as much, never to 0)
+    hero.maxHp -= c.maxHp;
+    hero.maxHpLost = (hero.maxHpLost || 0) + c.maxHp;
+    hero.hp = Math.max(1, Math.min(hero.maxHp, hero.hp - c.maxHp));
     hero.sinceHurt = 0;
     hero.flashTime = 0.15;
-    Game.statsOf(hero).taken += c.hp;
-    w.effects.text(hero.hx, hero.hy - 30, `-${c.hp} HP`, { color: '#c04aff', size: 10 });
+    w.effects.text(hero.hx, hero.hy - 30, `-${c.maxHp} MAX HP`, { color: '#c04aff', size: 10 });
     this.drainFx(w, hero, pr);
     // the gift: an upgrade (dark ones only he sells) or a bottle or few of something
     const pending = this.pendingGifts(w, hero);
@@ -173,7 +181,7 @@ const Specials = {
     if (ok) {
       hero.coins -= price;
       (pr.hired || (pr.hired = {}))[key] = true;
-      const [lead] = hireHelper(w, pr.hire, hero, pr.x + 44, pr.y + 18);
+      const [lead] = hireHelper(w, pr.hire, hero, pr.x, pr.y + 4);
       w.effects.text(lead.hx, lead.hy - 40, `${c.name.toUpperCase()} JOINS YOU!`, { color: c.color, size: 8, life: 2 });
       w.effects.burst(lead.hx, lead.hy, { count: 26, colors: [c.color, '#ffffff', '#ffd34a'], speed: [50, 160], life: [0.4, 0.8], up: 60 });
       Sound.play('buy');

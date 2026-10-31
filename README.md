@@ -115,7 +115,7 @@ enemies chase you once they spot you and go back for the lantern if you outrun t
   speed; mythical fires 2 weaker shots at a diagonal). Mage: Gemstone (missiles cost 1-3 less mana;
   every 5th mythical one bursts). Priestess and Bard: Holy Tome (every 7th / 6th / 5th attack stuns;
   mythical slows after the stun). Baker: Whisks (every 3rd attack throws one for 20-40; mythical ices them).
-- **Dark trader**: 25 HP (never your last) for a random gift: potions or an upgrade, sometimes one only he
+- **Dark trader**: 20 of your MAX health (gone for the run; never below 50) for a random gift: potions or an upgrade, sometimes one only he
   has: Dark Minions (every 5th attack raises a shadow with a dagger, up to 3), Darklash (getting hit sends
   out a wave of darkness, 10s cooldown) or Soulreap (hits drop soul fragments: 10 HP each, or 10 soul health
   past full, up to 50).
@@ -125,7 +125,7 @@ enemies chase you once they spot you and go back for the lantern if you outrun t
 - **Mount trader** (Dusty): a horse (45 coins, 50 HP) that's faster and takes your hits; at 0 it lies down
   to rest, and every new stage gives it 30 HP back. R (RIDE on a phone) gets on and off; no ultimates in
   the saddle, and in a locked room you can get off but not back on.
-- **Helper camp** (Pip): hire the knight (sword and shield, blocks), the archer, or the priest (heals you
+- **Helper camp**: the hireling waits by the fire and you talk to them to hire them: the knight (sword and shield, blocks), the archer, or the priest (heals you
   every 10 seconds; his two frail acolytes shoot light). They follow you from stage to stage until they fall.
 - The wishing well grants a wish for coins and the treasure room has three chests; the hero statue and
   the 5 star restaurant (its chef just chats for now) aren't in yet.
