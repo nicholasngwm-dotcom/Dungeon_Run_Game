@@ -353,7 +353,6 @@ class FlamewormBody {
     if (this.t >= this.digFor) {
       this.setState('surface');
       Sound.play('graveRumble', 0.12);
-      Sound.play('wormRoar', 0.3);
     }
   }
 
@@ -403,7 +402,7 @@ class FlamewormBody {
     world.effects.smoke(x, y - 8, { count: 8, radius: r * 0.6, life: 1, rise: 30, colors: ['#2a1a18', '#4a3430', '#6a5048'] });
     world.shake(8 * this.scale, 0.35);
     Sound.play('rockErupt');
-    Sound.play('wormShriek', 0.25);
+    Sound.play('bossRoar', 0.1);
     this.holeBorn = this.boss.time;
     this.rise = 0;
     this.setState('emerge');
@@ -496,7 +495,6 @@ class FlamewormBody {
     this.facing = end.x >= this.x ? 1 : -1;
     this.setState('plunge');
     Sound.play('graveRumble', 0.1);
-    Sound.play('wormShriek', 0.25);
   }
 
   /** A leap out of the floor at the hero: up `from` px short of them, in an arc, and down where they stood. */
@@ -554,7 +552,6 @@ class FlamewormBody {
         world.effects.burst(f.x, f.y - 6, { count: 18, colors: [...FORT_ROCK_GIBS, ...FORT_LAVA_GIBS], speed: [60, 220], life: [0.3, 0.7], up: 120, gravity: 400 });
         world.shake(4 * s, 0.2);
         Sound.play('rockErupt', 0.08);
-        Sound.play('wormShriek', 0.25);
       }
     }
     if (!this.struck && this.sHead >= this.hitS) {
@@ -574,7 +571,6 @@ class FlamewormBody {
       world.effects.burst(e.x, e.y - 6, { count: 26, colors: [...FORT_ROCK_GIBS, ...FORT_LAVA_GIBS], speed: [80, 260], life: [0.4, 0.8], up: 140, gravity: 400, size: [2, 5] });
       world.shake(7 * s, 0.3);
       Sound.play('rockErupt');
-      Sound.play('wormRoar', 0.3);
     }
     // all of it gone into the floor: on with the dive
     if (this.sHead - this.bodyLen > this.hitS + 10 * s) {
@@ -993,7 +989,7 @@ class Flameworm {
     wormRocks(world, spot.x, spot.y, 22, 1.4, 1);
     enemyBlastFx(world, spot.x, spot.y, 120);
     world.shake(12, 0.6);
-    Sound.play('wormShriek');
+    Sound.play('bossRoar');
     Sound.play('rockErupt');
   }
 
@@ -1039,10 +1035,11 @@ class Flameworm {
         wormRocks(world, this.x, this.y, 20, 1.4, 1);
         world.shake(12, 0.6);
         Sound.play('rockErupt');
+        Sound.play('wormShriek');   // it shrieks as it bursts up through the floor...
       }
       const k = Math.min(1, (at - FLAMEWORM_INTRO.burst) / (FLAMEWORM_INTRO.rise - FLAMEWORM_INTRO.burst));
       w.rise = 1 - (1 - k) ** 3;
-      if (!this.roared && at >= FLAMEWORM_INTRO.rise) { this.roared = true; Sound.play('bossRoar'); }
+      if (!this.roared && at >= FLAMEWORM_INTRO.rise) { this.roared = true; Sound.play('bossRoar'); Sound.play('wormRoar'); }   // ...and roars, reared up
     }
     w.sway += dt * 1.6;
     w.jaw += ((at >= FLAMEWORM_INTRO.rise ? 0.95 : 0.4) - w.jaw) * Math.min(1, dt * 10);
