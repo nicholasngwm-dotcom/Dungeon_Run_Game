@@ -157,6 +157,7 @@ class DungeonRun {
         ult: p.ult,
         // the special rooms' gifts: the forge's enhancement, soul health, the horse and the hirelings
         forged: p.forged ? { ...p.forged } : null,
+        forgePending: p.forgePending ? { ...p.forgePending } : null,
         soul: p.soulHp || 0,
         maxHpLost: p.maxHpLost || 0,
         horse: p.horse ? { hp: p.horse.hp, riding: !!p.riding } : null,
@@ -189,6 +190,7 @@ class DungeonRun {
       p.hp = Math.max(1, Math.round(p.maxHp * h.hp));
       p.ult = h.ult;
       if (h.forged && FORGE_ITEMS[h.forged.item] && FORGE_RARITIES[h.forged.rarity]) Forge.equip(p, h.forged);
+      if (h.forgePending && FORGE_ITEMS[h.forgePending.item] && FORGE_RARITIES[h.forgePending.rarity]) p.forgePending = { ...h.forgePending };
       p.soulHp = Math.max(0, Number(h.soul) || 0);
       if (h.horse) {
         p.horse = new Horse(p, clamp(Number(h.horse.hp) || 0, 0, CONFIG.run.mount.hp));

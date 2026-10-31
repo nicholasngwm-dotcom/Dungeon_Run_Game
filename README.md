@@ -110,7 +110,8 @@ enemies chase you once they spot you and go back for the lantern if you outrun t
 **Special rooms** (one or two a floor; their prices rise with the stage like the shop's):
 - **Blacksmith** (Borin): forges an enhancement for your weapon (35 coins) for the rest of the run, in
   a random rarity: rare (blue), epic (purple), legendary (gold) or mythical (shining red: legendary's boost
-  plus a perk). One at a time; forging again lets you keep either. Knight and Rogue: Sharpening Stone
+  plus a perk). After the reveal, TAKE IT (it goes in the slot over your attack button; an old one drops by
+  the anvil) or DENY (it's destroyed). Drag it out of the slot to drop it; at most 3 lie on the floor (the oldest goes). Knight and Rogue: Sharpening Stone
   (+2-4 damage per basic hit; mythical makes them bleed). Archer and Rocketeer: Quiver (+5-15% attack
   speed; mythical fires 2 weaker shots at a diagonal). Mage: Gemstone (missiles cost 1-3 less mana;
   every 5th mythical one bursts). Priestess and Bard: Holy Tome (every 7th / 6th / 5th attack stuns;

@@ -2,10 +2,11 @@
 // Each hero has one kind (FORGE_ITEMS) in four rarities: rare (blue), epic (purple), legendary
 // (gold) and mythical (shining red): the same boost as legendary plus a perk of its own.
 // The forge window only shows what Borin can make; forging plays a hammering animation and then
-// reveals the rarity (gacha style), and the attachment goes straight onto the weapon. A weapon holds
-// one: an old one drops on the floor by the anvil. It sits in a slot over the weapon's HUD button
-// (HUD.drawForgeSlot / Touch), and dragging it out of the slot drops it (a ForgePickup, which any
-// hero whose weapon takes that kind can pick up into an empty slot).
+// reveals the rarity (gacha style); then the hero takes it (it goes onto the weapon, and an old one
+// drops on the floor by the anvil) or denies it (it's destroyed: nothing drops). It sits in a slot over
+// the weapon's HUD button (HUD.drawForgeSlot / Touch), and dragging it out of the slot drops it (a
+// ForgePickup, which any hero whose weapon takes that kind can pick up into an empty slot). At most
+// FLOOR_MAX lie on the floor at once: a new drop deletes the oldest.
 //
 // Basic attacks: every hero's primary() is wrapped (createHero -> Forge.attack), so each basic
 // attack is counted and carries a tag ({ owner, n, ... }) to whatever it hits: the swing itself,
@@ -105,16 +106,33 @@ const Forge = {
   forge(run, hero) {
     const price = this.price(run, hero);
     const smith = Specials.propHere(run, hero, 'blacksmith');
-    const ok = !!smith && !hero.dead && hero.coins >= price;
+    const ok = !!smith && !hero.dead && !hero.forgePending && hero.coins >= price;
     if (ok) {
       hero.coins -= price;
-      const f = { item: this.itemFor(hero.classId), rarity: this.rollRarity() };
-      if (hero.forged) this.dropAt(run.world, hero.forged, smith.x - 30, smith.y + 34);
-      this.unequip(hero);
-      this.bind(run, hero, f);
-      this.anvilFx(run, hero, f);
+      // it waits on the anvil until the hero takes it or turns it down (keep)
+      hero.forgePending = { item: this.itemFor(hero.classId), rarity: this.rollRarity() };
+      this.anvilFx(run, hero, hero.forgePending);
     }
     run.world.events.onPurchase?.(hero, 'forge', ok);
+  },
+
+  /**
+   * The choice after a forge: 'take' attaches it (the old one drops by the anvil); 'deny' destroys it
+   * (nothing drops, and the weapon keeps what it had).
+   */
+  keep(run, hero, take) {
+    const f = hero.forgePending;
+    if (!f) return;
+    hero.forgePending = null;
+    if (take) {
+      const smith = Specials.propHere(run, hero, 'blacksmith');
+      if (hero.forged) this.dropAt(run.world, hero.forged, (smith || hero).x - 30, (smith || hero).y + 34);
+      this.unequip(hero);
+      this.bind(run, hero, f);
+    } else {
+      run.world.effects.smoke(hero.x, hero.y - 20, { count: 5, radius: 10, life: 0.5, rise: 16 });
+    }
+    run.world.events.onPurchase?.(hero, take ? 'forgeTake' : 'forgeDeny', true);
   },
 
   /** The attachment dragged out of its slot: it comes off the weapon and lands on the floor at the hero's feet. */
@@ -129,6 +147,13 @@ const Forge = {
 
   /** An attachment lying on the floor (ForgePickup), clear of walls. */
   dropAt(world, f, x, y) {
+    // at most FLOOR_MAX lying about the floor: the oldest goes to make room
+    const lying = world.pickups.filter((k) => k instanceof ForgePickup && !k.dead);
+    for (let i = 0; i <= lying.length - this.FLOOR_MAX; i++) {
+      const old = lying[i];
+      old.dead = true;
+      world.effects.smoke(old.x, old.y - 10, { count: 4, radius: 8, life: 0.4, rise: 12 });
+    }
     const pt = world.dungeon.freePoint(x, y, 6, 4);
     const k = new ForgePickup(pt.x, pt.y, f);
     k.cooldown = 1;   // (so walking about where it fell doesn't snatch it straight back)
@@ -296,24 +321,28 @@ const Forge = {
 
   // ---------- the forge window (Shop, mode 'forge') ----------
 
+  /** The most attachments lying on the floor at once (a new drop deletes the oldest). */
+  FLOOR_MAX: 3,
+
   /** Seconds of hammering before the rarity is revealed, and before "TAKE IT" shows. */
   REVEAL_AT: 2.1,
   DONE_AT: 2.7,
 
   /**
-   * Just the attachment Borin can forge for this hero and its price. While a forge plays out
-   * (shop.forgeReveal = { f }), the hammering and then the gacha-style reveal of what came out.
+   * Just the attachment Borin can forge for this hero and its price. With one fresh off the anvil
+   * (hero.forgePending), its reveal and the choice: take it or deny it. A forge just paid for
+   * (shop.forgeReveal) plays the hammering first; reopening the window with one still waiting shows it straight away.
    */
   render(shop, grid, p) {
     const extra = document.getElementById('shop-extra');
     const hint = document.getElementById('shop-hint');
-    const r = shop.forgeReveal;
-    const id = r ? r.f.item : this.itemFor(p.classId);
+    const f = p.forgePending;
+    const id = f ? f.item : this.itemFor(p.classId);
     const item = FORGE_ITEMS[id];
-    if (r) {
-      grid.innerHTML = this.revealHtml(r.f);
+    if (f) {
+      grid.innerHTML = this.revealHtml(f, p, !shop.forgeReveal);
       extra.innerHTML = '';
-      hint.textContent = 'It goes straight onto your weapon: see the slot over your attack button.';
+      hint.textContent = 'TAKE IT puts it on your weapon (the slot over your attack button). DENY destroys it: nothing drops, and your weapon keeps what it has.';
     } else {
       const price = this.price(shop.run, p);
       const full = Math.round(CONFIG.run.blacksmith.price * shop.run.priceScale);
@@ -324,8 +353,8 @@ const Forge = {
         <span>${item.blurb}</span>
         <button class="buy" data-action="forge" ${p.coins < price ? 'disabled' : ''}>FORGE &nbsp;${shop.priceTag(price, full)}</button>
       </div>`;
-      extra.innerHTML = p.forged ? `<p class="shop-note">Your ${this.title(p.forged)} drops by the anvil when the new one goes on.</p>` : '';
-      hint.textContent = 'Every forge comes out a surprise. It attaches to your weapon by itself; drag it out of its slot to drop it.';
+      extra.innerHTML = '';
+      hint.textContent = 'Every forge comes out a surprise: take it or turn it down. Drag an attachment out of its slot to drop it.';
     }
     for (const c of grid.querySelectorAll('canvas[data-forge]')) {
       const img = Sprites.forge[c.dataset.forge];
@@ -337,14 +366,16 @@ const Forge = {
 
   /**
    * The forge playing out (CSS-timed): the attachment glowing hot on the anvil under hammer blows,
-   * sparks flying, then a flash and the card flips up in its rarity's colour, rays wheeling behind it.
+   * sparks flying, then a flash and the card flips up in its rarity's colour, rays wheeling behind it,
+   * with TAKE IT and DENY. instant: skip straight to the card (reopening the window with one still waiting).
    */
-  revealHtml(f) {
+  revealHtml(f, p, instant = false) {
     const R = FORGE_RARITIES[f.rarity];
     const I = FORGE_ITEMS[f.item];
     const perk = f.rarity === 'mythical' ? `<span class="forge-perk">${I.perk}</span>` : '';
     const sparks = Array.from({ length: 16 }, (_, k) => `<i class="forge-spark" style="--a:${(k * 137) % 360}deg;--d:${(k % 4) * 0.5 + 0.35}s"></i>`).join('');
-    return `<div class="forge-reveal rarity-${f.rarity}" style="--glow:${R.color};--reveal:${this.REVEAL_AT}s;--done:${this.DONE_AT}s">
+    const swap = p.forged ? `Taking it drops your ${this.title(p.forged)} by the anvil.` : 'Taking it puts it on your weapon.';
+    return `<div class="forge-reveal rarity-${f.rarity}${instant ? ' instant' : ''}" style="--glow:${R.color};--reveal:${instant ? 0 : this.REVEAL_AT}s;--done:${instant ? 0 : this.DONE_AT}s">
       <div class="forge-anvil">
         <canvas data-forge="${f.item}"></canvas>
         <i class="forge-hammer"></i>${sparks}
@@ -355,8 +386,11 @@ const Forge = {
         <canvas data-forge="${f.item}"></canvas>
         <b style="color:${R.color}">${this.title(f)}</b>
         <span>${I.stat(this.value(f))}</span>${perk}
-        <em class="forge-equipped">ATTACHED TO YOUR WEAPON</em>
-        <button class="buy" data-action="forgeDone">TAKE IT</button>
+        <em class="forge-equipped">${swap}</em>
+        <div class="forge-choice">
+          <button class="buy" data-action="forgeKeep:take">TAKE IT</button>
+          <button class="buy deny" data-action="forgeKeep:deny">DENY</button>
+        </div>
       </div>
     </div>`;
   },

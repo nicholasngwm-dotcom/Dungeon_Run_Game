@@ -276,7 +276,7 @@ const Menus = {
         break;
       }
       case 'forge': Shop.forge(); break;
-      case 'forgeDone': Shop.forgeDone(); break;
+      case 'forgeKeep': Shop.forgeKeep(arg === 'take'); break;
       case 'standTrade': Shop.standTrade(arg); break;
       case 'multiplayer': this.showProfiles('mp'); break;
       case 'profileCreate': this.createProfile(); break;

@@ -797,6 +797,9 @@ class Game {
       case 'forge':
         if (this.run && hero) Forge.forge(this.run, hero);
         return;
+      case 'forgeKeep':
+        if (this.run && hero) Forge.keep(this.run, hero, !!cmd.take);
+        return;
       case 'dropForge':
         if (hero) Forge.drop(this, hero);
         return;

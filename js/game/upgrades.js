@@ -1428,7 +1428,7 @@ const Shop = {
   /** Everything the window shows, to notice changes. */
   signature() {
     const p = this.hero;
-    return JSON.stringify([this.mode, p.coins, p.upgradeLevels, p.inventory, this.run.shopState(p), this.run.potionStock, this.run.startPicks, p.forged, this.forgeReveal]);
+    return JSON.stringify([this.mode, p.coins, p.upgradeLevels, p.inventory, this.run.shopState(p), this.run.potionStock, this.run.startPicks, p.forged, p.forgePending, this.forgeReveal]);
   },
 
   /** Re-renders if anything shown changed since last time. */
@@ -1659,7 +1659,7 @@ const Shop = {
   /** The blacksmith: forge a new attachment for the hero's weapon. */
   forge() {
     const p = this.hero;
-    if (this.forgeReveal) return;
+    if (this.forgeReveal || p.forgePending) return;
     if (p.coins < Forge.price(this.run, p)) {
       this.say("Coin first, then the fire. That's how it works.");
       Sound.play('denied');
@@ -1668,10 +1668,10 @@ const Shop = {
     App.command({ type: 'forge' });
   },
 
-  /** The forge's reveal is done with: back to what Borin can make. */
-  forgeDone() {
-    this.forgeReveal = null;
-    this.render();
+  /** After a forge: take the new attachment (true) or deny it (false). */
+  forgeKeep(take) {
+    if (!this.hero.forgePending) return;
+    App.command({ type: 'forgeKeep', take });
   },
 
   reroll() {
@@ -1708,7 +1708,7 @@ const Shop = {
       else if (what === 'sellPotion' || what === 'sellUpgrade') this.say(vchoose(['A fine piece. Here is your coin.', 'Done! Pleasure doing business.', 'I know just the buyer for this.']));
       else if (what === 'forge') {
         // the window hammers away, then reveals what came out (Forge.revealHtml); Borin reacts to it after
-        const f = { ...hero.forged };
+        const f = { ...hero.forgePending };
         this.forgeReveal = { f };
         this.say(vchoose(['Stand back...', 'Let the anvil decide...', 'Heat, hammer, and a little luck...']));
         Forge.revealSounds(f);
@@ -1716,8 +1716,12 @@ const Shop = {
           if (this.forgeReveal?.f !== f) return;
           this.say(f.rarity === 'mythical' ? 'By my beard... it SHINES. I\'ve not seen one like that in years.'
             : f.rarity === 'legendary' ? 'Now that is fine work, if I say so myself.'
-              : f.rarity === 'epic' ? 'Ha! A good one. It\'s on your weapon already.' : 'Solid work. It\'s on your weapon already.');
+              : f.rarity === 'epic' ? 'Ha! A good one. Want it?' : 'Solid work. Yours, if you want it.');
         }, Forge.REVEAL_AT * 1000);
+      } else if (what === 'forgeTake' || what === 'forgeDeny') {
+        this.forgeReveal = null;
+        this.say(what === 'forgeTake' ? vchoose(['There. Feel the weight of that.', 'She\'ll serve you well.', 'Fitted and ready.'])
+          : vchoose(['Into the slag it goes.', 'Not to your taste? Fair enough.', 'Back in the fire with it.']));
       } else {
         this.justChose = what === 'pick' ? true : this.buying;
         Sound.play('magic');
