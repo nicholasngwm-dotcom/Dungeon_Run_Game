@@ -569,16 +569,24 @@ class Player extends Entity {
   /** Set alight (flaming catapults): burnDps hp per second for `duration`s. Blocked hits don't burn. */
   burn(dps, duration, world) { if (!Upgrades.blocksBurn(this, world)) this.ailment('burn', dps, duration, world, 'BURNING', '#ff8a3a'); }
 
+  /**
+   * Standing in lava (the Fiery Fortress): not fire's slow burn - it sears for dps hp a second in quick
+   * ticks (every `every` s) and clings for `duration` s after you step out.
+   */
+  lavaBurn(dps, duration, world, every = CONFIG.run.lava.every) {
+    this.ailment('lava', dps, duration, world, 'MELTING', '#ffb02e', every);
+  }
+
   /** Cut open (the jester's daggers): bleeds dps hp per second for `duration`s. */
   bleed(dps, duration, world) { this.ailment('bleed', dps, duration, world, 'BLEEDING', '#ff5a6a'); }
 
   /** Burns and bleeding work like poison: a new dose refreshes it and the stronger dps wins. */
-  ailment(kind, dps, duration, world, label, color) {
+  ailment(kind, dps, duration, world, label, color, every = 0.5) {
     if (this.dead || this.guard > 0 || this.iframes > 0 || this.brews.purity) return;
     this.ailments ??= {};
     const a = this.ailments[kind];
     if (!a) world?.effects.text(this.hx, this.hy - 36, label, { color, size: 7 });
-    this.ailments[kind] = { dps: a ? Math.max(a.dps, dps) : dps, t: Math.max(a ? a.t : 0, duration), tick: a ? a.tick : 0.5, color };
+    this.ailments[kind] = { dps: a ? Math.max(a.dps, dps) : dps, t: Math.max(a ? a.t : 0, duration), tick: a ? a.tick : every, color, every };
   }
 
   updateAilments(dt, world) {
@@ -588,14 +596,18 @@ class Player extends Entity {
       a.tick -= dt;
       if (kind === 'burn' && Math.random() < dt * 14) {
         world.effects.flames(this.x + rand(-7, 7), this.y - rand(2, 14), { count: 1, height: rand(12, 20), width: rand(6, 9), life: rand(0.25, 0.4), colors: ENEMY_FIRE_COLORS });
+      } else if (kind === 'lava' && Math.random() < dt * 18) {
+        // molten drops clinging and spitting off the feet and legs
+        world.effects.burst(this.x + rand(-8, 8), this.y - rand(0, 12), { count: 1, colors: ['#ffc23a', '#ff8a1e', '#e0461e'], speed: [10, 40], life: [0.3, 0.5], up: 30, gravity: 300, size: [2, 3] });
       } else if (kind === 'bleed' && Math.random() < dt * 7) {
         world.effects.burst(this.x + rand(-6, 6), this.y - rand(8, 22), { count: 1, colors: ['#c43a44', '#6a1622'], speed: [0, 10], life: [0.3, 0.5], gravity: 300, drag: 0, size: [2, 2] });
       }
       if (a.t <= 0) { delete this.ailments[kind]; continue; }
       if (a.tick > 0) continue;
-      a.tick = 0.5;
+      const every = a.every || 0.5;
+      a.tick = every;
       if (world.cheats?.god) continue;
-      const dmg = a.dps * 0.5;
+      const dmg = a.dps * every;
       this.hp -= dmg;
       this.sinceHurt = 0;
       world.effects.text(this.hx, this.hy - 24, `-${Math.round(dmg)}`, { color: a.color, size: 8 });

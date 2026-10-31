@@ -74,8 +74,12 @@ class Projectile {
     }
     if (this.fx) this.fx(this, dt, world);
 
-    if (this.friendly) this.hitEnemies(world);
-    else this.hitPlayer(world);
+    if (this.friendly) {
+      // anything a shot does (its hit, its burst) counts as ranged: a flying elite demon can only be hit like this
+      world.rangedHit = true;
+      this.hitEnemies(world);
+      world.rangedHit = false;
+    } else this.hitPlayer(world);
   }
 
   bounce(world, px, py) {
@@ -125,7 +129,12 @@ class Projectile {
   destroy(world, target) {
     if (this.dead) return;
     this.dead = true;
-    if (this.onHit) this.onHit(this, world, target);
+    if (this.onHit && this.friendly) {
+      const was = world.rangedHit;
+      world.rangedHit = true;
+      this.onHit(this, world, target);
+      world.rangedHit = was;
+    } else if (this.onHit) this.onHit(this, world, target);
     else world.effects.burst(this.x, this.y, { count: 5, colors: this.trail || ['#ffffff', '#cccccc'], speed: [30, 90], life: [0.1, 0.3] });
   }
 

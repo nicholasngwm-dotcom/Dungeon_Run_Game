@@ -54,7 +54,7 @@ There is also a training dummy in the lobby to try abilities on. After a run,
 
 The gate offers:
 
-- **Set Dungeon**: pick a theme (only the **Graveyard** so far) and clear its 3 stages.
+- **Set Dungeon**: pick a theme (the **Graveyard**, the **Castle**, the **Ancient Ruins** or the **Fiery Fortress**) and clear its 3 stages.
 - **Random Dungeon**: each stage rolls a theme; repeats are very rare (with one theme it is always the Graveyard).
 - **Test Dungeon**: pick a boss, then play one floor with every kind of room on it (combat, defend, survival,
   puzzle, shop, all nine special rooms, the secret room and the gem vault) at the stage that boss is met. You
@@ -78,13 +78,28 @@ a ring of magic (its reach glows on the floor first) before charging a giant che
 stops it until half health, when it smashes through), and slams the ground
 four times (six at half health, with bigger spikes) for massive rock spikes, at you and then
 ahead of you in turn. The power crystals slowly heal it while they stand, so break them; at
-half health broken ones reform out of the magic, but only once. Beating the boss
+half health broken ones reform out of the magic, but only once. In the Fiery Fortress each
+stage's boss is the Decronic Flameworm, a giant sandworm of molten rock: below ground it can't be
+hurt and its mound of broken floor chases you, then the floor cracks and glows where it bursts up to
+bite and spray fireballs; above ground it sprays fireballs in every direction, wave after wave, or
+looses a giant flaming magic arrow that bursts near you and leaves the area in flames, then dives
+again. Below half health it splits into three smaller worms, each with its own health bar (together
+what it had left). Beating the boss
 opens a portal to the next stage, and after stage 3 the run is won. Later stages
 make enemies tougher (more hp and damage, a little faster) rather than sending
 many more of them, and add stage-exclusive enemies (necromancer, reaper
 and minigunner from stage 2; zombie soldier and skeleton sorcerer in stage 3).
 Summoners (tombstones, necromancers, sorcerers) share a cap on how many raised
 enemies can be up at once.
+
+**The Fiery Fortress**: a fortress of black nether brick over a sea of lava (the lava flows past
+the ramparts, and the hallways are brick bridges). Lava and fire are different: open flames burn
+up out of vents in the fight rooms' floors (a dashed orange ring marks each) and set you on fire,
+the same slow, light burn as any fire attack; lava, in pools or channels crossed by stone bridges
+(and left by magma slimes, the molten elemental's waves and the baby dragon's fireballs), burns you
+far faster while you stand in it and clings for a moment after. There are no frost barrels here.
+Its demons, living fire and molten things are all in the bestiary; the elite demon can't be reached
+by melee while it flies (shots, burns and far-off attacks still hit it).
 
 **Coins**: enemies drop coins (tougher ones drop more; summoned ones rarely), the boss
 drops a pile, and every cleared room leaves a chest worth 5 coins. Coins last for the
@@ -293,6 +308,7 @@ js/
     boss/guardian.js    The Guardian (the ruins' floating rock boss: slowing ring + chest beam, spike slams, healing crystals)
     boss/phantom.js     Phantom King (dash, eye lasers, vanish + pull shockwaves)
     boss/deathbringer.js The Deathbringer (scythes, tendrils, darkness, the shade)
+    boss/flameworm.js   The Decronic Flameworm (the fortress's burrowing worm: bite, fireball waves, flaming arrow, splits in three)
   game/                 Game world, wave director, lobby hub, dungeon run (rooms + objectives), HUD
   ui/menus.js           DOM menus + lobby panels (hero, workshop, dungeon, legend)
   ui/bestiary.js        bestiary book (entries, filters, page flips)

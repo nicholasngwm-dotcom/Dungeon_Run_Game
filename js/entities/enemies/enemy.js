@@ -615,6 +615,10 @@ function createEnemy(type, x, y) {
     clayBud: ClayBud, rockShell: RockShell, rockBowler: RockBowler, rockWizard: RockWizard, ruinedTurret: RuinedTurret,
     stonePillar: StonePillar, rockGolem: RockGolem, ancientPortal: AncientPortal, magicPillar: MagicPillar, lightTotem: LightTotem,
     ancientLight: AncientLight, ancientRotator: AncientRotator,
+    // the fiery fortress
+    skeleflame: Skeleflame, magmaSlime: MagmaSlime, magmaSlimeTiny: MagmaSlime, magmaBat: MagmaBat, demonWarrior: DemonWarrior,
+    magicDemon: MagicDemon, eliteDemon: EliteDemon, magmaDen: MagmaDen, meteorCrab: MeteorCrab, wildfire: Wildfire,
+    blazingTurret: BlazingTurret, moltenKnight: MoltenKnight, moltenElemental: MoltenElemental, babyDragon: BabyDragon,
   };
   return new classes[type](x, y, type);
 }

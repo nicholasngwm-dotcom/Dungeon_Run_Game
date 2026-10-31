@@ -69,6 +69,23 @@ const BESTIARY = {
     { boss: 'golem', name: 'The Clay Golem', role: 'boss', from: 1, stage: 'EVERY STAGE', desc: 'Guardian of the ruins, rising out of the floor. Its head throws bouncing orbs of magic and its fists rocket-punch down red lanes. Break the head and it floats free, firing beams and bursts of orbs while the body opens up. Break both fists and it lumbers after you, stomping out rings that slow. Near the end it curls into a ball and rolls. Clay minions keep coming throughout.' },
     { boss: 'guardian', name: 'The Guardian', role: 'boss', from: 1, stage: 'EVERY STAGE', desc: 'A towering figure of rock held together by the magic of the great crystals round its cavern: the giant rocks lying in its room rise and come together to form it. It floats over everything in its way. Before each beam it raises its arms and the floor round it glows: a moment later a ring of magic sweeps out across that area, slowing anyone it passes. Then its chest crystal charges for 3 seconds and it fires a giant beam that turns slowly after you: hide behind cover. The crystals slowly heal it while they stand: break them! It also slams the ground four times: massive rock spikes erupt where you stand, then ahead of you, in turn. Below half health it slams six times with bigger spikes, its beam smashes straight through cover, and broken crystals slowly reform out of the magic - once: break one again and it is gone for good.' },
   ],
+  fortress: [
+    { type: 'skeleflame', name: 'Skeleflame', role: 'ranged', desc: 'A skeleton archer charred black, its skull ablaze. Keeps its distance; a red line shows its aim, locks, then a burning arrow flies down it and sets you on fire.' },
+    { type: 'magmaSlime', name: 'Magma Slime', role: 'melee', desc: 'Molten rock under a cracked crust. Leaps onto you, and splits into three little ones when it dies. Each little one bursts into a small pool of lava: step out of it fast, lava burns far quicker than fire.' },
+    { type: 'magmaSlimeTiny', name: 'Little Magma Slime', role: 'melee', from: 1, note: 'FROM MAGMA SLIMES', desc: 'Quick and small. Leaves a pool of lava where it dies.' },
+    { type: 'magmaBat', name: 'Magma Bat', role: 'melee', desc: 'A little bat of black rock and lava. Zigzags about and flits aside from a third of your hits. Swoops in along a short red lane to bite and set you on fire.' },
+    { type: 'demonWarrior', name: 'Demon Warrior', role: 'melee', desc: 'Stabs its pitchfork down a narrow lane up close. From further off the fork spits a fan of three small fireballs that set you on fire (orange lines show where).' },
+    { type: 'magicDemon', name: 'Magic Demon', role: 'ranged', desc: 'A demon sorcerer. Gathers a ring of violet orbs round its staff, then launches the whole circle at you: it widens as it flies. Slip through a gap, or let it pass round you.' },
+    { type: 'eliteDemon', name: 'Elite Demon', role: 'special', desc: 'Flies on great wings, too high for swords and fists: only shots, burns and far-off attacks reach it. It marks where you stand and dives down with two great swords, then fights on the ground for a moment, where anything can hit it, before it takes off again.' },
+    { type: 'magmaDen', name: 'Magma Den', role: 'summoner', desc: 'A heap of black rock round a cave of lava. Every 7 seconds its mouth flares and lets out three magma bats or three magma slimes. It cannot move or fight back: break it.' },
+    { type: 'meteorCrab', name: 'Meteorite Crab', role: 'ranged', desc: 'A crab carrying a meteorite for a shell, which soaks a quarter of every hit. It raises its claws and calls a meteor down on you: its shadow grows on the red circle, then it crashes for massive damage, sets you on fire and leaves the ground burning.' },
+    { type: 'wildfire', name: 'Wildfire', role: 'melee', desc: 'Living fire. Rushes straight at you; touching it sets you on fire, and it leaves a trail of burning ground behind it.' },
+    { type: 'blazingTurret', name: 'Blazing Turret', role: 'ranged', desc: 'Never moves. Aims down an orange line, then pours fireballs at you for two seconds, following you as you run. Each one sets you on fire. Get behind cover, or close in while it rests.' },
+    { type: 'moltenKnight', name: 'Molten Knight', role: 'melee', desc: 'An old royal knight\'s armour, lava dripping from every joint. Easier to bring down than a royal guard, but its sword swings set you on fire - and so does touching it.' },
+    { type: 'moltenElemental', name: 'Molten Elemental', role: 'special', desc: 'A body of lava under plates of black rock, its fists floating beside it. It always stands in a pool of lava: keep out of it. It pours a wave of lava along the ground at you (an orange lane shows where) that leaves lava behind, and shoots beams of lava.' },
+    { type: 'babyDragon', name: 'Blazing Baby Dragon', role: 'ranged', desc: 'Flies over walls and cover alike. Spits massive fireballs that burst into pools of lava, and charges you down a red lane, setting you on fire.' },
+    { boss: 'flameworm', name: 'The Decronic Flameworm', role: 'boss', from: 1, stage: 'EVERY STAGE', desc: 'A giant sandworm of molten rock that lives under the fortress floor. Below ground it cannot be hurt: its mound of broken floor rushes after you, then the floor cracks and glows where it will burst up and bite - get off the circle! - and it sprays waves of fireballs. Above ground it either sprays fireballs in every direction, wave after wave, or looses a giant flaming magic arrow that bursts near you and leaves the area in flames. Then it dives back under. Below half health it splits into three worms, each with its own health bar, all doing the same.' },
+  ],
 };
 
 // portrait scale per enemy (default 1.5) so the big ones still fit the page
@@ -76,6 +93,7 @@ const BESTIARY_SCALE = {
   undeadKnight: 1.15, minigunner: 1.05, gravestone: 1.4, reaper: 1.3, flyingSkull: 2.4, ghost: 1.3, wraith: 1.3,
   cavalry: 1.0, catapult: 1.2, flamingCatapult: 1.2, executioner: 1.05, royalGuard: 1.3,
   rockGolem: 1.05, rockShell: 1.3, ancientPortal: 1.6, magicPillar: 1.1, lightTotem: 1.2, stonePillar: 1.2, claySlime: 2, claySlimeTiny: 2.4,
+  magmaSlime: 2, magmaSlimeTiny: 2.4, magmaBat: 2, eliteDemon: 1.05, magmaDen: 1.4, meteorCrab: 1.25, blazingTurret: 1.3, moltenElemental: 0.95, babyDragon: 1.2, wildfire: 1.6,
 };
 
 const BESTIARY_ROLES = ['all', 'melee', 'ranged', 'summoner', 'special', 'boss'];
@@ -218,7 +236,18 @@ const Bestiary = {
       rows.forEach((row, j) => [...row].forEach((ch, i) => { if (colors[ch]) { ctx.fillStyle = colors[ch]; ctx.fillRect(i * 2, j * 2 + 1, 2, 2); } }));
       return c.toDataURL();
     };
-    this.emblems ??= { boss: emblem('boss'), puzzle: emblem('puzzle'), castle: crown(), ruins: glyphStone() };
+    // the fortress's: a flame
+    const flame = () => {
+      const c = document.createElement('canvas');
+      c.width = 16;
+      c.height = 16;
+      const ctx = c.getContext('2d');
+      const rows = ['...r....', '..rr..r.', '..ror.rr', '.roorror', '.rooyorr', 'rooyyoor', 'royyyyor', '.kkkkkk.'];
+      const colors = { r: '#d63c16', o: '#ff8a1e', y: '#ffd34a', k: OUTLINE };
+      rows.forEach((row, j) => [...row].forEach((ch, i) => { if (colors[ch]) { ctx.fillStyle = colors[ch]; ctx.fillRect(i * 2, j * 2 + 1, 2, 2); } }));
+      return c.toDataURL();
+    };
+    this.emblems ??= { boss: emblem('boss'), puzzle: emblem('puzzle'), castle: crown(), ruins: glyphStone(), fortress: flame() };
     const theme = (name, icon, on, locked, id = '') => `<button class="bookmark dungeon${on ? ' on' : ''}${locked ? ' locked' : ''}"${locked ? ' disabled' : ` data-action="bestiaryTheme:${id}"`}>`
       + `<img src="${icon}" alt=""><span>${name}</span></button>`;
     document.getElementById('bestiary-themes').innerHTML = Object.keys(BESTIARY)
@@ -340,7 +369,7 @@ const Bestiary = {
     let stats;
     if (e.boss) {
       const c = CONFIG[e.boss];
-      const dmg = { phantom: c.dashDamage, guardian: c.beam?.damage, deathbringer: c.slash?.damage, queen: c.homing?.damage, king: c.sword?.damage, princeBoss: c.dash?.damage, princessBoss: c.sky?.damage }[e.boss];
+      const dmg = { phantom: c.dashDamage, guardian: c.beam?.damage, flameworm: c.bite?.damage, deathbringer: c.slash?.damage, queen: c.homing?.damage, king: c.sword?.damage, princeBoss: c.dash?.damage, princessBoss: c.sky?.damage }[e.boss];
       stats = `HP ${c.hp} &nbsp; DMG ${dmg}`;
     } else {
       const c = CONFIG.enemies[e.type];
@@ -631,7 +660,7 @@ const Bestiary = {
         continue;
       }
       // each boss's idle loop (the King on his throne)
-      const list = { golem: Sprites.golem.body.walk, guardian: Sprites.guardian.idle, phantom: Sprites.phantom.walk || Sprites.phantom.idle, deathbringer: Sprites.deathbringer.body, queen: Sprites.queen.idle, king: Sprites.king.sit, princeBoss: Sprites.enemies.prince.idle, princessBoss: Sprites.enemies.princess.idle }[entry.boss];
+      const list = { golem: Sprites.golem.body.walk, guardian: Sprites.guardian.idle, flameworm: [{ img: Sprites.flameworm.head }], phantom: Sprites.phantom.walk || Sprites.phantom.idle, deathbringer: Sprites.deathbringer.body, queen: Sprites.queen.idle, king: Sprites.king.sit, princeBoss: Sprites.enemies.prince.idle, princessBoss: Sprites.enemies.princess.idle }[entry.boss];
       const frame = list[Math.floor(time * (entry.boss === 'phantom' ? 8 : 4)) % list.length].img;
       const s = Math.min(3, Math.floor(Math.min(canvas.width / frame.width, canvas.height / frame.height) * 4) / 4);
       const w = frame.width * s;

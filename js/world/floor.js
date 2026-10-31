@@ -51,6 +51,8 @@ class FloorMap extends Dungeon {
     this.rooms = [];
     this.links = [];              // { a, b }: hallways between neighbouring rooms
     this.torches = [];
+    this.lava = new Set();        // the Fiery Fortress: floor tiles that are lava (pools, channels; see DungeonRun.addLava)
+    this.bridges = new Map();     // ...and the lava tiles a stone bridge crosses: idx -> { across, side }
     this.chunks = new Map();
     this.generate();
     const s = this.startRoom;
@@ -428,6 +430,7 @@ class FloorMap extends Dungeon {
     const grave = this.themeId === 'graveyard';
     const castle = this.themeId === 'castle';
     const ruins = this.themeId === 'ruins';
+    const fort = this.themeId === 'fortress';
     const deep = grave && this.bossType === 'deathbringer';
     for (let ty = cy * CHUNK; ty < (cy + 1) * CHUNK && ty < this.rows; ty++) {
       for (let tx = cx * CHUNK; tx < (cx + 1) * CHUNK && tx < this.cols; tx++) {
@@ -439,6 +442,8 @@ class FloorMap extends Dungeon {
             VaultTiles.floor(p, x, y, rng, tx, ty);
           } else if (ruins) {
             this.ruinsFloor(p, tx, ty, zone, rng);
+          } else if (fort) {
+            this.fortressFloor(p, tx, ty, zone, rng);
           } else if (castle) {
             this.castleFloor(p, tx, ty, zone, rng);
           } else if (this.manor && this.nearRoom(this.bossRoom, tx, ty)) {
@@ -471,6 +476,8 @@ class FloorMap extends Dungeon {
         if (ruins) {
           if (below1 || below2) RuinsTiles.wallFace(p, x, y, below1 ? 1 : 0, rng);
           else RuinsTiles.wallTop(p, x, y, rng, edges);
+        } else if (fort) {
+          this.fortressWall(p, tx, ty, below1 ? 1 : below2 ? 0 : -1, edges, rng);
         } else if (castle) {
           this.castleWall(p, tx, ty, below1 ? 1 : below2 ? 0 : -1, edges, rng);
         } else if (this.manor && this.nearRoom(this.bossRoom, tx, ty, 1, 1)) {
@@ -559,6 +566,87 @@ class FloorMap extends Dungeon {
       const cy = (boss.y0 + boss.y1 + 1) / 2 * T;
       RuinsTiles.circle(p, x, y, cx, cy, 6.5 * T);
     }
+  }
+
+  // ---------- the Fiery Fortress's look (see FortressTiles) ----------
+
+  /** True if tile (tx, ty) is lava (a pool or channel in a room; bridges included). */
+  isLavaTile(tx, ty) { return this.lava.has(this.idx(tx, ty)); }
+
+  /** True if any lava tile (bridges included) lies within pad px of the point. */
+  nearLava(x, y, pad) {
+    if (!this.lava.size) return false;
+    const T = this.T;
+    for (let ty = Math.floor((y - pad) / T); ty <= Math.floor((y + pad) / T); ty++) {
+      for (let tx = Math.floor((x - pad) / T); tx <= Math.floor((x + pad) / T); tx++) if (this.lava.has(this.idx(tx, ty))) return true;
+    }
+    return false;
+  }
+
+  /** True if the point is on open lava (not a bridge over it). */
+  lavaAt(x, y) {
+    const tx = Math.floor(x / this.T);
+    const ty = Math.floor(y / this.T);
+    const i = this.idx(tx, ty);
+    return this.lava.has(i) && !this.bridges.has(i);
+  }
+
+  /**
+   * True if wall tile (tx, ty) is out in the lava sea under the fortress: nothing walkable beside it, nor in
+   * the few tiles below it (where a wall's face and its top would stand). Cached per tile.
+   */
+  isSea(tx, ty) {
+    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return true;
+    this.seaCache ??= new Int8Array(this.cols * this.rows).fill(-1);
+    const i = this.idx(tx, ty);
+    if (this.seaCache[i] >= 0) return this.seaCache[i] === 1;
+    let sea = this.baseTile(tx, ty) === TILE.WALL;
+    for (let y = ty - 1; sea && y <= ty + 3; y++) {
+      for (let x = tx - 1; x <= tx + 1; x++) if (this.baseTile(x, y) !== TILE.WALL) { sea = false; break; }
+    }
+    this.seaCache[i] = sea ? 1 : 0;
+    return sea;
+  }
+
+  /** Nether brick in the rooms (a great sigil in the worm's arena), brick bridges in the halls, lava where it's been poured. */
+  fortressFloor(p, tx, ty, zone, rng) {
+    const T = this.T;
+    const x = tx * T;
+    const y = ty * T;
+    const i = this.idx(tx, ty);
+    if (this.lava.has(i)) {
+      const b = this.bridges.get(i);
+      if (b) return FortressTiles.bridge(p, x, y, rng, b.across, b.side);
+      const lava = (ax, ay) => this.lava.has(this.idx(ax, ay));
+      return FortressTiles.lava(p, x, y, rng, { up: !lava(tx, ty - 1), down: !lava(tx, ty + 1), left: !lava(tx - 1, ty), right: !lava(tx + 1, ty) }, tx, ty);
+    }
+    if (zone === ZONE.HALL) {
+      const l = this.hallAt(x + T / 2, y + T / 2);
+      if (l) {
+        let a = this.rooms[l.a];
+        let b = this.rooms[l.b];
+        if (a.gx > b.gx || a.gy > b.gy) [a, b] = [b, a];
+        const along = a.gy === b.gy;
+        FortressTiles.hall(p, x, y, rng, along, along ? ty - a.midY : tx - a.midX);
+        return;
+      }
+    }
+    FortressTiles.floor(p, x, y, rng);
+    const boss = this.bossRoom;
+    if (boss && this.nearRoom(boss, tx, ty)) {
+      FortressTiles.sigil(p, x, y, (boss.x0 + boss.x1 + 1) / 2 * T, (boss.y0 + boss.y1 + 1) / 2 * T, 7 * T);
+    }
+  }
+
+  /** row: 0 upper wall face, 1 lower wall face, -1 the wall's top - or, out past the ramparts, the lava sea. */
+  fortressWall(p, tx, ty, row, edges, rng) {
+    const T = this.T;
+    const x = tx * T;
+    const y = ty * T;
+    if (row < 0 && this.isSea(tx, ty)) return FortressTiles.lava(p, x, y, rng, {}, tx, ty);
+    if (row >= 0) return FortressTiles.wallFace(p, x, y, row, rng, row === 0 && this.tileHash(tx, ty) % 9 === 0 && !this.torches.some((t) => Math.abs(t.tx - tx) <= 1 && t.ty === ty));
+    FortressTiles.wallTop(p, x, y, rng, edges);
+    FortressTiles.rampartEdge(p, x, y, { down: this.isSea(tx, ty + 1), left: this.isSea(tx - 1, ty), right: this.isSea(tx + 1, ty), up: this.isSea(tx, ty - 1) });
   }
 
   /** Glyph tablets set into the ruins' walls here and there (the upper tile of a two-tile wall face). */

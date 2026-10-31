@@ -310,7 +310,9 @@ class Game {
       if (d.tick <= 0) {
         d.tick += 0.5;
         const flame = d.kind === 'burn' || d.kind === 'frostfire';
+        this.rangedHit = true;   // a burn or bleed still reaches a flying elite demon
         this.damageTarget(d.target, d.dps * 0.5, { sound: null, noCrit: true, color: d.color, source: d.source, fire: flame });
+        this.rangedHit = false;
         const colors = d.kind === 'burn' ? ['#ffd34a', '#ff8a1e', '#e0461e'] : d.kind === 'frostfire' ? ['#9cf0d8', '#3fc2a8', '#e6f6ff'] : [d.color, '#7a1010'];
         this.effects.burst(d.target.hx, d.target.hy, { count: flame ? 5 : 2, colors, speed: [10, 40], life: [0.2, 0.4], up: flame ? 40 : 0 });
       }
@@ -549,7 +551,7 @@ class Game {
       this.weakenScale = Game.weakenOf(e, this);
       for (const a of this.allies) {
         if (a.contactImmune) continue;
-        if (dist(e.x, e.y, a.x, a.y) < e.radius + a.radius) a.hurt(damage, this, e.x, e.y, { contact: true });
+        if (dist(e.x, e.y, a.x, a.y) < e.radius + a.radius && a.hurt(damage, this, e.x, e.y, { contact: true })) e.onContact?.(a, this);
       }
     }
     this.weakenScale = 1;
@@ -706,6 +708,7 @@ class Game {
     if (type === 'phantom') return new PhantomKing(center.x, center.y);
     if (type === 'deathbringer') return new Deathbringer(center.x, center.y);
     if (type === 'guardian') return new Guardian(center.x, center.y);
+    if (type === 'flameworm') return new Flameworm(center.x, center.y);
     if (type === 'queen') return new Queen(center.x, center.y);
     if (type === 'king') return new King(center.x, center.y);
     if (type === 'prince') return new RoyalPrince(center.x, center.y);
@@ -912,7 +915,7 @@ class Game {
   }
 
   /** The bosses the practice range's portals lead to. */
-  static practiceBosses = ['golem', 'guardian', 'phantom', 'deathbringer', 'prince', 'princess', 'queen', 'king'];
+  static practiceBosses = ['golem', 'guardian', 'flameworm', 'phantom', 'deathbringer', 'prince', 'princess', 'queen', 'king'];
 
   /**
    * A button on the practice panel, pressed by `hero`'s player (a command, so in multiplayer
@@ -948,7 +951,7 @@ class Game {
     this.practice.portal = { boss, x: pt.x, y: pt.y, t: 0, used: false };
     this.effects.burst(pt.x, pt.y - 20, { count: 30, colors: ['#b45aff', '#e0c0ff', '#ffffff'], speed: [40, 160], life: [0.3, 0.7] });
     Sound.play('phantomAppear');
-    const name = { golem: 'THE CLAY GOLEM', guardian: 'THE GUARDIAN', phantom: 'THE PHANTOM KING', deathbringer: 'THE DEATHBRINGER', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[boss] || boss.toUpperCase();
+    const name = { golem: 'THE CLAY GOLEM', guardian: 'THE GUARDIAN', flameworm: 'THE DECRONIC FLAMEWORM', phantom: 'THE PHANTOM KING', deathbringer: 'THE DEATHBRINGER', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[boss] || boss.toUpperCase();
     this.banner('A PORTAL OPENS', `Step in to face ${name}`, 2.4);
   }
 
@@ -982,7 +985,7 @@ class Game {
     }
     PFX.glow(ctx, x, y, 40 * grow, '200, 140, 255', 0.8, 2, 24 * grow);
     ctx.restore();
-    const name = { golem: 'CLAY GOLEM', guardian: 'THE GUARDIAN', phantom: 'PHANTOM KING', deathbringer: 'DEATHBRINGER', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[P.boss] || P.boss.toUpperCase();
+    const name = { golem: 'CLAY GOLEM', guardian: 'THE GUARDIAN', flameworm: 'FLAMEWORM', phantom: 'PHANTOM KING', deathbringer: 'DEATHBRINGER', queen: 'THE QUEEN', king: 'THE KING', prince: 'THE PRINCE', princess: 'THE PRINCESS' }[P.boss] || P.boss.toUpperCase();
     HUD.text(ctx, `TO ${name}`, Math.round(x), Math.round(y - 50), { size: 7, align: 'center', color: '#e0c0ff' });
     HUD.text(ctx, 'STEP IN', Math.round(x), Math.round(y - 40), { size: 5, align: 'center', color: '#ffe680' });
   }

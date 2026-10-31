@@ -711,6 +711,110 @@ const CONFIG = {
       laserWindup: 0.9, laserDamage: 24, laserWidth: 10, rushSpeed: 330, pellets: 7, spreadDegrees: 50, pelletSpeed: 240,
       knockbackResist: 0.7, stunResist: 0.4, heartChance: 0.2,
     },
+
+    // ---------- the Fiery Fortress: demons, living fire and molten things, above a sea of lava ----------
+    // Fire (burnDps for burnTime) is the slow, light burn every theme uses; lava (CONFIG.run.lava) burns far faster.
+    // Skeleflame: a charred skeleton archer; its burning arrows set you on fire (red aim line, which locks before it looses)
+    skeleflame: {
+      hp: 80, speed: 62, radius: 12, damage: 14,
+      preferredMin: 170, preferredMax: 300, windup: 0.75, aimLockAt: 0.25, cooldown: 1.6, arrowSpeed: 430, burnDps: 8, burnTime: 3,
+    },
+    // Magma slime: hops, leaps onto you, and splits into splitCount little ones; each little one leaves a small
+    // pool of lava where it dies (poolRadius, lasting poolTime) that burns you fast
+    magmaSlime: {
+      hp: 90, speed: 58, radius: 13, damage: 16,
+      leapTrigger: 120, leapMaxDistance: 130, landRadius: 38,
+      windup: 0.55, leapTime: 0.45, recovery: 0.6, cooldown: 1.5,
+      splitCount: 3,
+    },
+    magmaSlimeTiny: {
+      hp: 24, speed: 84, radius: 8, damage: 8,
+      leapTrigger: 90, leapMaxDistance: 100, landRadius: 22,
+      windup: 0.45, leapTime: 0.35, recovery: 0.45, cooldown: 1.1,
+      splitCount: 0, poolRadius: 30, poolTime: 3.5,
+    },
+    // Magma bat: small, quick and erratic; flits aside from dodgeChance of your hits. Swoops in to bite (sets you on fire)
+    magmaBat: {
+      hp: 34, speed: 140, radius: 8, damage: 10, contactDamage: 0,
+      attackRange: 120, windup: 0.3, swoopSpeed: 380, swoopTime: 0.32, cooldown: 1.4, dodgeChance: 0.35, dodgeDistance: 26,
+      burnDps: 7, burnTime: 3,
+    },
+    // Demon warrior: stabs its pitchfork down a lane; from further off the fork spits a fan of `fireballs` small
+    // fireballs (fanDegrees wide) that set you on fire
+    demonWarrior: {
+      hp: 180, speed: 64, radius: 14, damage: 26,
+      attackRange: 84, thrustReach: 108, thrustWidth: 26, windup: 0.55, recovery: 0.5, cooldown: 1.2,
+      fireEvery: 4.5, fireRange: [130, 380], fireWindup: 0.6, fireballs: 3, fanDegrees: 36, fireSpeed: 260, fireDamage: 12,
+      burnDps: 8, burnTime: 3, knockbackResist: 0.3,
+    },
+    // Magic demon: gathers a ring of ringCount magic orbs round its staff, then launches the whole circle at you:
+    // it flies at ringSpeed, widening from ringRadius to ringWiden as it goes (step through a gap, or let it pass round you)
+    magicDemon: {
+      hp: 130, speed: 54, radius: 13, damage: 16,
+      preferredMin: 200, preferredMax: 330, windup: 1.1, cooldown: 3.4, ringCount: 14, ringRadius: 26, ringWiden: 96, ringSpeed: 160, ringLife: 3.2,
+    },
+    // Elite demon: flies hover px up on great wings, where melee can't reach it (shots can). Every diveEvery s it
+    // marks where you stand and dives (diveWindup), landing with both swords (landRadius); it then fights on the
+    // ground for groundTime s - slashing (attackReach, attackArcDegrees) - and can be hit by anything, then flies up
+    // again. meleeRange: in the air, hits from heroes closer than this (that aren't shots) can't reach it
+    eliteDemon: {
+      hp: 260, speed: 100, radius: 15, damage: 34,
+      hover: 56, diveEvery: [2.4, 3.6], diveWindup: 0.8, diveTime: 0.35, landRadius: 54, groundTime: 2.2,
+      slashRange: 70, attackReach: 88, attackArcDegrees: 150, slashWindup: 0.45, slashCooldown: 0.8, liftTime: 0.5, meleeRange: 120,
+      knockbackResist: 0.5, stunResist: 0.4, heartChance: 0.2,
+    },
+    // Magma den: never moves; every summonEvery s its mouth glows for openTime s and lets out three magma bats or three
+    // magma slimes. It keeps at most summonMax of its own alive and lets out summonTotal in all (and shares the summon cap)
+    magmaDen: {
+      hp: 300, speed: 0, radius: 20, damage: 0, contactDamage: 0,
+      summonEvery: 7, openTime: 1.2, batChance: 0.5, summonMax: 6, summonTotal: 12,
+      knockbackResist: 1, stunResist: 1, heartChance: 0.2,
+    },
+    // Meteorite crab: its shell is armoured. Every meteorEvery s it raises its claws (castTime) and calls a meteor
+    // down on you: its shadow grows for fallTime s, then it crashes (meteorRadius), setting you on fire and leaving
+    // the ground burning for fireTime s
+    meteorCrab: {
+      hp: 210, speed: 44, radius: 15, damage: 46, armor: 0.25,
+      preferredMin: 180, preferredMax: 320, meteorEvery: 4.5, castTime: 0.7, fallTime: 1.5, meteorRadius: 62,
+      burnDps: 10, burnTime: 3, fireTime: 3, knockbackResist: 0.6, stunResist: 0.3,
+    },
+    // stage 2+: Wildfire: living fire that rushes at you (touching it sets you on fire) and leaves burning ground
+    // behind (a patch every trailEvery s, trailRadius, lasting trailLife)
+    wildfire: {
+      hp: 70, speed: 118, radius: 11, damage: 10, contactDamage: 10,
+      trailEvery: 0.2, trailRadius: 18, trailLife: 2.4, burnDps: 8, burnTime: 3,
+    },
+    // stage 2+: Blazing turret: never moves; aims (windup), then pours fireballs at you for burstTime s (one every
+    // fireEvery s, wobbling spreadDegrees), each setting you on fire; then rests for cooldown
+    blazingTurret: {
+      hp: 220, speed: 0, radius: 16, damage: 12, contactDamage: 0,
+      range: 560, windup: 0.8, burstTime: 2, fireEvery: 0.13, spreadDegrees: 14, fireSpeed: 320, cooldown: 2.6,
+      burnDps: 7, burnTime: 2.5, knockbackResist: 1, stunResist: 0.5, heartChance: 0.15,
+    },
+    // stage 2+: Molten knight: an old suit of royal armour dripping lava. Less hp than a royal guard, but touching it
+    // or taking its sword sets you on fire
+    moltenKnight: {
+      hp: 300, speed: 56, radius: 16, damage: 32, contactDamage: 16,
+      attackRange: 62, attackReach: 86, attackArcDegrees: 130, windup: 0.6, recovery: 0.5, cooldown: 1.2,
+      burnDps: 9, burnTime: 3, knockbackResist: 0.6, stunResist: 0.4,
+    },
+    // stage 3: Molten elemental: always stands in its own pool of lava (auraRadius); pours a wave of lava along the
+    // ground at you (waveWidth wide, out to waveReach, the lava it leaves lasting waveLife s) and shoots beams of lava
+    moltenElemental: {
+      hp: 520, speed: 40, radius: 19, damage: 30,
+      preferredMin: 150, preferredMax: 300, auraRadius: 50,
+      waveEvery: 6, waveWindup: 1.0, waveSpeed: 240, waveReach: 400, waveWidth: 64, waveLife: 2.5,
+      beamEvery: 3.4, beamWindup: 0.9, aimLockAt: 0.3, beamTime: 0.35, beamWidth: 16,
+      knockbackResist: 0.9, stunResist: 0.6, heartChance: 0.2,
+    },
+    // stage 3: Blazing baby dragon: flies, over walls and cover alike. Spits massive fireballs that burst into lava
+    // (poolRadius, lasting poolTime), and charges you down a lane (chargeDamage)
+    babyDragon: {
+      hp: 360, speed: 90, radius: 16, damage: 30,
+      preferredMin: 180, preferredMax: 320, fireEvery: 2.8, fireWindup: 0.7, fireSpeed: 240, blastRadius: 50, poolRadius: 46, poolTime: 3,
+      chargeEvery: 5.5, chargeWindup: 0.7, chargeSpeed: 430, chargeDistance: 300, chargeWidth: 40, chargeDamage: 34,
+      burnDps: 9, burnTime: 3, knockbackResist: 0.6, stunResist: 0.4, heartChance: 0.2,
+    },
   },
 
   // ---------------------------------------------------------
@@ -792,6 +896,29 @@ const CONFIG = {
       heavy: { rockShell: 1, ruinedTurret: 1, stonePillar: 2, rockGolem: 1, ancientPortal: 1, magicPillar: 1, ancientLight: 1, ancientRotator: 1 },
       stageLines: ['Clear the rooms and wake the guardian', 'The old stones stir', 'The magic grows restless'],
     },
+    fortress: {
+      name: 'Fiery Fortress',
+      blurb: 'A fortress of black brick over a sea of lava. Demons, living fire and molten things guard it.',
+      // a hot, dim red haze; the lava (FortressDecor) and the open fires light it, no fog
+      night: { dark: 0.16, color: '30, 8, 4' },
+      fog: false,
+      layout: { small: 'fortRubble', pillar: 'fortPillar', long: 'fortStatue', wallH: 'fortWallH', wallV: 'fortWallV', block: 'fortBlock' },
+      bosses: ['flameworm'],
+      // no frost barrels here: the heat would melt them
+      barrels: ['explosive', 'poison'],
+      enemies: {
+        1: [['skeleflame', 4], ['magmaSlime', 3], ['magmaBat', 3], ['demonWarrior', 3], ['magicDemon', 2], ['eliteDemon', 1],
+            ['magmaDen', 1], ['meteorCrab', 1]],
+        2: [['skeleflame', 3], ['magmaSlime', 2], ['magmaBat', 3], ['demonWarrior', 3], ['magicDemon', 2], ['eliteDemon', 1],
+            ['magmaDen', 1], ['meteorCrab', 1], ['wildfire', 2], ['blazingTurret', 1], ['moltenKnight', 2]],
+        3: [['skeleflame', 3], ['magmaSlime', 2], ['magmaBat', 2], ['demonWarrior', 3], ['magicDemon', 2], ['eliteDemon', 2],
+            ['magmaDen', 1], ['meteorCrab', 1], ['wildfire', 2], ['blazingTurret', 1], ['moltenKnight', 2],
+            ['moltenElemental', 1], ['babyDragon', 1]],
+      },
+      summons: ['skeleflame', 'magmaBat', 'demonWarrior'],
+      heavy: { eliteDemon: 1, magmaDen: 1, meteorCrab: 1, blazingTurret: 1, moltenKnight: 2, moltenElemental: 1, babyDragon: 1 },
+      stageLines: ['Cross the fortress and find what burrows beneath', 'The fires burn hotter', 'The fortress itself is alight'],
+    },
   },
 
   // ---------------------------------------------------------
@@ -858,7 +985,7 @@ const CONFIG = {
     // a pad's spikes peek out (warn) then shoot up together
     spikes: { period: 4, up: 0.8, warn: 0.6, damage: 16, pads: [2, 4], bigChance: 0.3 },
     // barrels (every dungeon theme): perRoom[0]-perRoom[1] of them stand about each of the `rooms`, each one of `kinds`
-    // at random. Heroes' attacks burst them (hp), and a burst sets off any other barrel within its radius.
+    // at random (a theme's own `barrels` list replaces `kinds`: the Fiery Fortress has no frost barrels). Heroes' attacks burst them (hp), and a burst sets off any other barrel within its radius.
     //   explosive: a blast (damage to heroes, enemyDamage to enemies and bosses) that sets everyone in it on fire
     //   poison: a cloud that hangs for cloudTime; heroes in it are poisoned for dps per second over `time` seconds,
     //           enemies take enemyDps over the same time
@@ -870,6 +997,14 @@ const CONFIG = {
       poison: { radius: 80, cloudTime: 4, dps: 5, time: 8, enemyDps: 15 },
       frost: { radius: 75, damage: 10, enemyDamage: 25, freeze: 1.5, iceRadius: 70, iceTime: 8, refreeze: 1.2 },
     },
+    // The Fiery Fortress's hazards (x the stage's enemy damage). Lava and fire are different:
+    //   lava: standing in it burns FAST - dps, hurt every `every` s - and it clings for `linger` s after you step out.
+    //         Fight rooms get pools[0]-pools[1] pools (or, channelChance of the time, a channel across the room with
+    //         stone bridges over it); enemy attacks leave lava too. The fortress's fire creatures don't mind it.
+    //   fire: the open flames burning up out of cracks in the floor (fires[0]-fires[1] in the fight rooms, radius
+    //         px) set you on fire: the ordinary slow, light burn (burnDps for burnTime), like any fire attack
+    lava: { dps: 40, every: 0.2, linger: 0.6, rooms: ['combat', 'survival', 'defend', 'boss'], pools: [1, 3], channelChance: 0.4 },
+    fire: { fires: [2, 4], radius: 18, burnDps: 8, burnTime: 3 },
     // special rooms (one or two per floor); the hero statue and the restaurant aren't in yet
     specials: ['blacksmith', 'wishingWell', 'heroStatue', 'restaurant5', 'mountTrader', 'darkTrader',
                'friendlyTrader', 'treasure', 'helper'],
@@ -1081,6 +1216,34 @@ const CONFIG = {
     // (both phases). Heroes can break them (`hp` each). In phase 2 a broken one reforms out of the magic, once
     // only, over `reform` s (healing it again once whole); broken a second time, it's gone for good
     crystals: { hp: 500, heal: 14, reform: 9 },
+  },
+
+  // ---------------------------------------------------------
+  //  THE DECRONIC FLAMEWORM (the Fiery Fortress's boss, any stage): a giant sandworm of molten rock and lava.
+  //  It takes turns: up out of the ground (it can be hurt), then down below it (it can't).
+  //    Surfacing: the floor cracks and glows where it will burst up (bite.windup s), then it bites up through
+  //      it (bite.radius) and sprays its fireball waves.
+  //    Above ground it waits surfaceTime s, then (a coin toss) sprays fireballs in all directions in `waves`
+  //      waves, or draws a giant flaming magic arrow and looses it at you: it bursts near you (blastRadius) and
+  //      leaves the area in flames (fireRadius, for fireTime s). Then it dives back under.
+  //    Below ground it digs about for digTime s (a mound of rubble rushing after you), then surfaces again.
+  //  Below splitAt of its health it splits into splitCount worms (each splitScale x its size). They all do the
+  //  same, out of step; each has its own health bar, sharing out what was left between them.
+  //  Fire (burnDps for burnTime) is the slow, light burn; its bite and blasts do the damage.
+  // ---------------------------------------------------------
+  flameworm: {
+    hp: 6600,
+    splitAt: 0.5,
+    splitCount: 3,
+    splitScale: 0.7,
+    contactDamage: 18,     // touching it while it's up
+    surfaceTime: [1.2, 1.4],   // seconds up before its attack [phase 1, phase 2 (each worm)]
+    digTime: [2.8, 3.6],       // seconds below ground [min, max]
+    digSpeed: 190,             // how fast its mound chases you
+    diveTime: 0.9,
+    bite: { windup: 1.1, radius: 84, damage: 46 },
+    fireballs: { waves: 3, count: [16, 11], every: 0.45, speed: 210, damage: 22, burnDps: 8, burnTime: 3 },
+    arrow: { windup: 1.3, speed: 360, damage: 48, blastRadius: 100, fireRadius: 120, fireTime: 5, burnDps: 10, burnTime: 3 },
   },
 
   phantom: {

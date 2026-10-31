@@ -648,7 +648,7 @@ const Menus = {
 
   /** The test dungeon's boss picker: a card per boss, with the theme and stage it's fought at. */
   renderTestBosses() {
-    const names = { golem: 'The Clay Golem', guardian: 'The Guardian', phantom: 'The Phantom King', deathbringer: 'The Deathbringer', prince: 'The Prince', princess: 'The Princess', queen: 'The Queen', king: 'The King' };
+    const names = { golem: 'The Clay Golem', guardian: 'The Guardian', flameworm: 'The Decronic Flameworm', phantom: 'The Phantom King', deathbringer: 'The Deathbringer', prince: 'The Prince', princess: 'The Princess', queen: 'The Queen', king: 'The King' };
     document.getElementById('dungeon-boss-cards').innerHTML = Game.practiceBosses.map((b) => `
       <div class="card dungeon-card boss-card" data-action="testBoss:${b}">
         <h3>${names[b] || b}</h3>

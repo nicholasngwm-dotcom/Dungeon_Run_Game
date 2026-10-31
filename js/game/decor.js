@@ -9,7 +9,7 @@
 // simulation; the idle animation (crows, embers, mist) is visual only.
 
 // Lights: the half-size of the small solid post at the base of each [hw, hh] (px)
-const DECOR_POSTS = { lampPost: [6, 4], brazier: [8, 5], campfire: [12, 6], soulTree: [6, 4], magicBrazier: [8, 5], runeStone: [8, 4], ruinTree: [5, 4], powerCrystal: [14, 6], guardianRock: [13, 6] };
+const DECOR_POSTS = { lampPost: [6, 4], brazier: [8, 5], campfire: [12, 6], soulTree: [6, 4], magicBrazier: [8, 5], runeStone: [8, 4], ruinTree: [5, 4], powerCrystal: [14, 6], guardianRock: [13, 6], fortBrazier: [8, 5], lavafall: [16, 5] };
 const PROP_POSTS = { candelabra: [5, 4] };
 // the two soul lanterns hanging off a soulTree, from its foot (px; mirrored when it faces left)
 const SOUL_LANTERNS = [[-20, -40], [22, -44]];
@@ -72,6 +72,7 @@ class FloorDecor {
       if (this.run.props.some((p) => p.room === r && dist(p.x, p.y, pt.x, pt.y) < 80)) continue;
       if (this.items.some((d) => dist(d.x, d.y, pt.x, pt.y) < minGap)) continue;
       if (this.run.nearCover?.(pt.x, pt.y, 40)) continue;   // not on or against cover
+      if (f.nearLava?.(pt.x, pt.y, 30)) continue;           // nor in or on the edge of lava
       return pt;
     }
     return null;
@@ -93,6 +94,7 @@ class FloorDecor {
     }
     if (this.floor.themeId === 'castle' && CastleDecor.decorate(this, r)) return;
     if (this.floor.themeId === 'ruins' && RuinsDecor.decorate(this, r)) return;
+    if (this.floor.themeId === 'fortress' && FortressDecor.decorate(this, r)) return;
     const T = this.floor.T;
     switch (r.type) {
       case 'start':
@@ -281,6 +283,7 @@ class FloorDecor {
     if (this.run.spikes.some((s) => Math.abs(s.x + 16 - pt.x) < 34 && Math.abs(s.y + 16 - pt.y) < 34)) return false;
     if (this.run.props.some((p) => p.room === r && dist(p.x, p.y, pt.x, pt.y) < 80)) return false;
     if (this.run.nearCover?.(pt.x, pt.y, 26)) return false;
+    if (f.nearLava?.(pt.x, pt.y, 24)) return false;
     return !this.items.some((d) => dist(d.x, d.y, pt.x, pt.y) < minGap);
   }
 
@@ -292,6 +295,7 @@ class FloorDecor {
     const castle = this.floor.themeId === 'castle';
     if (castle) CastleDecor.update(this, dt, world);
     if (this.floor.themeId === 'ruins') RuinsDecor.update(this, dt, world);
+    if (this.floor.themeId === 'fortress') FortressDecor.update(this, dt, world);
     for (const d of this.items) {
       if (d.kind === 'crow') this.updateCrow(d, dt, p);
       else if (d.kind === 'campfire' && nativeRandom() < dt * 8) {
@@ -343,6 +347,7 @@ class FloorDecor {
       if (!this.visible(d, cam, 200)) continue;
       if (this.floor.themeId === 'castle') CastleDecor.drawGround(this, ctx, d);
       else if (RuinsDecor.draws(d.kind)) RuinsDecor.drawGround(this, ctx, d);
+      else if (FortressDecor.draws(d.kind)) FortressDecor.drawGround(this, ctx, d);
       else if (ManorDecor.draws(d.kind)) ManorDecor.drawGround(this, ctx, d);
       if (d.kind === 'rug') this.drawRug(ctx, d);
       if (d.kind === 'runeCircle') this.drawRuneCircle(ctx, d);
@@ -374,6 +379,7 @@ class FloorDecor {
     if (d.kind === 'manorPhantom') return ManorDecor.phantomAt(d, this.time).y;
     if (ManorDecor.draws(d.kind)) return ManorDecor.sortY(d);
     if (RuinsDecor.draws(d.kind)) return RuinsDecor.sortY(d);
+    if (FortressDecor.draws(d.kind)) return FortressDecor.sortY(d);
     return CastleDecor.sortY(d);
   }
 
@@ -402,6 +408,7 @@ class FloorDecor {
     if (CastleDecor.draws(d.kind)) return CastleDecor.drawItem(this, ctx, d);
     if (ManorDecor.draws(d.kind)) return ManorDecor.drawItem(this, ctx, d);
     if (RuinsDecor.draws(d.kind)) return RuinsDecor.drawItem(this, ctx, d);
+    if (FortressDecor.draws(d.kind)) return FortressDecor.drawItem(this, ctx, d);
     const x = Math.round(d.x);
     const y = Math.round(d.y);
     const R = (rx, ry, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x + rx, y + ry, w, h); };

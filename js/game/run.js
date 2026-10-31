@@ -225,6 +225,7 @@ class DungeonRun {
   /** The dungeon theme whose boss room a boss fights in (the castle's royals, or the graveyard). */
   static bossTheme(type) {
     if (type === 'golem' || type === 'guardian') return 'ruins';
+    if (type === 'flameworm') return 'fortress';
     return ['queen', 'king', 'prince', 'princess'].includes(type) ? 'castle' : 'graveyard';
   }
 
@@ -265,6 +266,7 @@ class DungeonRun {
     this.extraLights = [];       // short-lived lights (burning ground, ice), until world time `until`
     this.sleepers = [];          // combat rooms' first waves, already standing about in them (see populate)
     this.hole = null;            // the glowing hole down to the secret room
+    this.lavaPools = [];         // the Fiery Fortress: where the rooms' lava lies ({ x, y, r }, for its glow; see addLava)
     // this stage's shop: the potion shelf (shared) and each hero's upgrade store state
     this.shopSeed = Math.floor(Math.random() * 2 ** 31);
     this.stageTime = 0;          // seconds since this stage began (the free pick waits a moment)
@@ -279,9 +281,11 @@ class DungeonRun {
       if (r.type === 'boss' && this.bossType === 'deathbringer') this.cryptTombs(r);
       if (r.type === 'boss' && this.bossType === 'golem') this.guardianCover(r);
       if (r.type === 'boss' && this.bossType === 'guardian') this.crystalCover(r);
+      if (r.type === 'boss' && this.bossType === 'flameworm') this.wormCover(r);
       if (r.type === 'boss' && this.bossType === 'king') this.throneHallPillars(r);
       if (r.type === 'combat') this.addSpikes(r);
       this.addProps(r);
+      if (this.themeId === 'fortress' && CONFIG.run.lava.rooms.includes(r.type)) this.addLava(r);
     }
     this.addSecretHole(f);
     // swinging doors at both ends of every hallway (each room door knows its pair of leaves)
@@ -289,7 +293,7 @@ class DungeonRun {
     for (const r of f.rooms) for (const d of r.doors) { d.swing = leaves.length; leaves.push({ ...d.leaf, tiles: d.tiles }); }
     // the graveyard's are creaking wrought-iron gates, the ruins' stone pillars the magic raises and sinks
     // (the castle keeps heavy oak doors)
-    const iron = this.themeId === 'graveyard';
+    const iron = this.themeId === 'graveyard' || this.themeId === 'fortress';   // (the fortress's are black iron portcullis gates)
     const stone = this.themeId === 'ruins';
     this.doors = new SwingDoors(leaves, iron
       ? { reach: 72, height: 70, edge: 8, style: 'iron', sounds: { open: 'gateCreak', shut: 'gateShut', slam: 'gateClang' } }
@@ -394,6 +398,7 @@ class DungeonRun {
     this.updateProps(dt);
     for (const pr of this.props) if (pr.kind === 'puzzle') this.updateStone(pr, dt);
     Barrels.update(this, dt);
+    if (this.themeId === 'fortress') FortressDecor.hazards(this, dt);   // open fires and lava
     this.decor.update(dt, w);
     this.doors.update(dt, w);
     if (this.totem) this.totem.update(dt, w);
@@ -1345,6 +1350,84 @@ class DungeonRun {
   }
 
   /**
+   * The Flameworm's arena: four brick pillars well out from the middle (it bursts up anywhere, so the
+   * middle stays open), something to put between you and its fireballs and its arrow.
+   */
+  wormCover(r) {
+    this.bossCover(r, [
+      ['fortPillar', -8, -3, 1, 1], ['fortPillar', 7, -3, 1, 1], ['fortPillar', -8, 4, 1, 1], ['fortPillar', 7, 4, 1, 1],
+      ['fortRubble', -12, 0, 1, 1], ['fortRubble', 11, 0, 1, 1],
+    ]);
+  }
+
+  /**
+   * The Fiery Fortress: lava in a room's floor (FloorMap.lava). Either a channel right across the room above and
+   * below its middle, crossed by stone bridges where the paths in from the doors run (channelChance of the
+   * fight rooms), or pools - mirrored pairs - out in its quarters (the worm's arena: one in each corner). The
+   * cross through the middle, the doorways, cover and spike pads always stay clear, so there's a way round.
+   */
+  addLava(r) {
+    const L = CONFIG.run.lava;
+    const f = this.floor;
+    const T = f.T;
+    const cx = Math.floor((r.x0 + r.x1 + 1) / 2);
+    const cy = Math.floor((r.y0 + r.y1 + 1) / 2);
+    const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ tx: t % f.cols, ty: Math.floor(t / f.cols) }));
+    const free = (tx, ty) => {
+      if (tx < r.x0 + 1 || tx > r.x1 - 1 || ty < r.y0 + 2 || ty > r.y1 - 1) return false;
+      if (Math.abs(ty - cy) <= 2) return false;   // the way across the middle
+      if (doors.some((d) => Math.abs(d.tx - tx) <= 3 && Math.abs(d.ty - ty) <= 3)) return false;
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if (f.baseTile(tx + i, ty + j) === TILE.COVER) return false;
+      if (this.spikes.some((s) => Math.abs(s.tx - tx) <= 1 && Math.abs(s.ty - ty) <= 1)) return false;
+      if (this.props.some((p) => p.room === r && dist(p.x, p.y, (tx + 0.5) * T, (ty + 0.5) * T) < 2 * T)) return false;
+      return f.baseTile(tx, ty) === TILE.FLOOR;
+    };
+    const lay = (tx, ty) => { f.lava.add(f.idx(tx, ty)); };
+    const H = r.y1 - r.y0 + 1;
+    if (r.type !== 'boss' && r.type !== 'defend' && H >= 17 && Math.random() < L.channelChance) {
+      // a channel across the room, two tiles deep, above and below the middle; bridges where the middle column crosses it
+      for (const band of [[cy - 5, cy - 4], [cy + 4, cy + 5]]) {
+        for (const ty of band) {
+          for (let tx = r.x0 + 1; tx <= r.x1 - 1; tx++) {
+            const bridge = Math.abs(tx - cx) <= 2;
+            if (bridge) {
+              if (ty < r.y0 + 2 || ty > r.y1 - 1) continue;
+              lay(tx, ty);
+              f.bridges.set(f.idx(tx, ty), { across: true, side: tx === cx - 2 ? -1 : tx === cx + 2 ? 1 : 0 });
+            } else if (free(tx, ty)) lay(tx, ty);
+          }
+        }
+        this.lavaPools.push({ x: (r.x0 + 4) * T, y: (band[0] + 1) * T, r: 140 }, { x: (r.x1 - 3) * T, y: (band[0] + 1) * T, r: 140 });
+      }
+      return;
+    }
+    // pools: blobs in mirrored pairs (the worm's arena: four, one in each corner)
+    const W = r.x1 - r.x0 + 1;
+    const pairs = r.type === 'boss' ? 1 : randInt(L.pools[0], L.pools[1]);
+    for (let n = 0; n < pairs; n++) {
+      const rx = r.type === 'boss' ? 3 : rand(1.6, 2.8);
+      const ry = r.type === 'boss' ? 2.2 : rand(1.2, 2);
+      const px = r.type === 'boss' ? r.x0 + 4.5 : r.x0 + rand(3.5, W / 2 - 4);
+      const py = r.type === 'boss' ? r.y0 + 4.5 : (Math.random() < 0.5 ? r.y0 + rand(4, cy - r.y0 - 3) : cy + rand(3, r.y1 - cy - 2));
+      const centres = [[px, py], [r.x0 + r.x1 + 1 - px, py]];
+      if (r.type === 'boss') centres.push([px, r.y0 + r.y1 + 1 - py], [r.x0 + r.x1 + 1 - px, r.y0 + r.y1 + 1 - py]);
+      for (const [bx, by] of centres) {
+        let laid = 0;
+        for (let ty = Math.floor(by - ry); ty <= Math.ceil(by + ry); ty++) {
+          for (let tx = Math.floor(bx - rx); tx <= Math.ceil(bx + rx); tx++) {
+            const dx = (tx + 0.5 - bx) / rx;
+            const dy = (ty + 0.5 - by) / ry;
+            if (dx * dx + dy * dy > 1 || !free(tx, ty)) continue;
+            lay(tx, ty);
+            laid++;
+          }
+        }
+        if (laid) this.lavaPools.push({ x: bx * T, y: by * T, r: (rx + 1.5) * T * 1.6 });
+      }
+    }
+  }
+
+  /**
    * The Deathbringer's room: four obsidian sarcophagi in a ring round the middle, where its portal
    * opens. They stand in the way of its waves of darkness (cover to duck behind); it floats over them.
    */
@@ -1520,9 +1603,10 @@ class DungeonRun {
       if (Math.abs(pt.x - r.cx) < 3 * T && Math.abs(pt.y - r.cy) < 2 * T) continue;
       if (this.spikes.some((s) => Math.abs(s.x + 16 - pt.x) < 48 && Math.abs(s.y + 16 - pt.y) < 48)) continue;
       if (this.nearCover(pt.x, pt.y, 48)) continue;
+      if (f.nearLava(pt.x, pt.y, 40)) continue;
       const doors = r.doors.flatMap((d) => d.tiles).map((t) => ({ x: (t % f.cols + 0.5) * T, y: (Math.floor(t / f.cols) + 0.5) * T }));
       if (doors.some((d) => dist(d.x, d.y, pt.x, pt.y) < 3 * T)) continue;
-      this.hole = { kind: 'hole', room: r, x: pt.x, y: pt.y, label: 'JUMP IN', color: '#fff6c8' };
+      this.hole ={ kind: 'hole', room: r, x: pt.x, y: pt.y, label: 'JUMP IN', color: '#fff6c8' };
       this.props.push(this.hole);
       return;
     }
@@ -2085,6 +2169,7 @@ class DungeonRun {
 
   drawGround(ctx) {
     const T = this.floor.T;
+    if (this.themeId === 'fortress') FortressDecor.drawLava(this, ctx, this.world.camera);   // the lava flowing
     this.drawRubble(ctx);
     this.decor.drawGround(ctx, this.world.camera);
     for (const e of this.sleepers) e.drawGround(ctx);
@@ -2856,6 +2941,7 @@ class DungeonRun {
     }
     if (this.themeId === 'castle') CastleDecor.lights(this.decor, out, t);
     if (this.themeId === 'ruins') RuinsDecor.lights(this.decor, out, t);
+    if (this.themeId === 'fortress') FortressDecor.lights(this.decor, out, t);
     if (this.bossType === 'phantom') ManorDecor.lights(this.decor, out, t);
     this.extraLights = this.extraLights.filter((l) => l.until > this.world.time);
     out.push(...this.extraLights);

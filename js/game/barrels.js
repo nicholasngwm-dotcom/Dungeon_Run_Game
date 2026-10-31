@@ -71,9 +71,10 @@ const Barrels = {
         if (run.nearCover(x, y, 28)) continue;
         if (run.spikes.some((s) => x > s.x - 20 && x < s.x + T + 20 && y > s.y - 20 && y < s.y + T + 20)) continue;
         if (run.hole && dist(run.hole.x, run.hole.y, x, y) < 70) continue;
+        if (f.nearLava(x, y, 24)) continue;
         if (run.decor.items.some((d) => dist(d.x, d.y, x, y) < 44)) continue;
         if (out.some((b) => dist(b.x, b.y, x, y) < 44)) continue;
-        const b = new Barrel(x, y, choose(c.kinds));
+        const b = new Barrel(x, y, choose(run.theme.barrels || c.kinds));   // (no frost barrels in the Fiery Fortress)
         b.room = r;
         b.post = f.addPost(x, y - 3, 9, 6);
         out.push(b);
