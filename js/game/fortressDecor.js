@@ -2,7 +2,7 @@
 // obsidian spikes, bones, lavafalls pouring down the walls into basins, and the open fires that
 // burn up out of vents in the floor. The braziers and basins have small solid bases (DECOR_POSTS);
 // the rest is walkable - the open fires too, which is what makes them dangerous, so each is drawn
-// to be seen: tall roaring flames over a glowing grate, a dashed ring of warning round it, a pool
+// to be seen: tall roaring flames over a glowing grate, a pool
 // of firelight, embers and smoke.
 //
 // Hazards (simulation, every step; see DungeonRun.update): an open fire sets whoever stands in it
@@ -198,18 +198,12 @@ const FortressDecor = {
     for (const pl of fd.run.lavaPools || []) out.push({ x: pl.x, y: pl.y, r: pl.r, s: 0.85, rgb: FORT_LAVA });
   },
 
-  /** Pools of firelight on the floor under the braziers and fires; the open fires' vents and their warning rings. */
+  /** Pools of firelight on the floor under the braziers and fires, and the open fires' vents. */
   drawGround(fd, ctx, d) {
     const t = fd.time;
     if (d.kind === 'openFire') {
-      const R = CONFIG.run.fire.radius;
       const img = Sprites.fortressDecor.vent;
       ctx.drawImage(img, Math.round(d.x - img.width / 2), Math.round(d.y - img.height / 2));
-      // a dashed ring of warning, turning, so nobody wanders in without seeing it
-      ctx.save();
-      ctx.globalAlpha = 0.75 + Math.sin(t * 5 + d.seed) * 0.2;
-      PFX.ring(ctx, d.x, d.y, R + 8, (R + 8) * 0.55, '#ff8a1e', 2, { dash: [4, 3], spin: t * 1.2 });
-      ctx.restore();
     }
     if (!['fortBrazier', 'openFire', 'lavafall'].includes(d.kind)) return;
     const flick = 1 + Math.sin(t * 9 + d.seed) * 0.06;
