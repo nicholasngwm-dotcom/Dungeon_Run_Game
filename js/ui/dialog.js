@@ -15,8 +15,11 @@ const Dialog = {
     this.options = opts.options;
     this.full = opts.text;
     this.shown = 0;
+    this.selected = 0;   // PC: the highlighted choice (W / S or the mouse move it, E picks it)
     document.getElementById('dialog-name').textContent = opts.name;
     document.getElementById('dialog-options').innerHTML = '';
+    document.getElementById('dialog-more').classList.remove('hidden');
+    document.getElementById('dialog-keys').textContent = `[${Settings.label('interact')}] skip   [Esc] leave`;
     clearInterval(this.timer);
     this.timer = setInterval(() => this.type(), 28);
     Menus.show('dialog');
@@ -33,15 +36,51 @@ const Dialog = {
     document.getElementById('dialog-text').textContent = this.full.slice(0, this.shown);
   },
 
-  /** Shows the whole line and the choices. */
+  /** Shows the whole line and the choices (on PC a numbered list, the highlighted one marked). */
   finish() {
     clearInterval(this.timer);
     this.timer = null;
     this.shown = this.full.length;
     document.getElementById('dialog-text').textContent = this.full;
+    document.getElementById('dialog-more').classList.add('hidden');
     const box = document.getElementById('dialog-options');
     if (!box.children.length) {
-      box.innerHTML = this.options.map((o, i) => `<button class="btn small" data-action="dialogOption:${i}">${o.label}</button>`).join('');
+      box.innerHTML = this.options.map((o, i) => `<button class="btn small" data-action="dialogOption:${i}" data-index="${i}"><em class="dialog-num">${i + 1}</em>${o.label}</button>`).join('');
+      // the mouse moves the highlight too
+      for (const b of box.children) b.addEventListener('mouseenter', () => this.select(Number(b.dataset.index)));
+      this.select(this.selected);
+      const n = this.options.length;
+      document.getElementById('dialog-keys').textContent = `[1${n > 1 ? `-${n}` : ''}] choose   [W/S] move   [${Settings.label('interact')}] pick   [Esc] leave`;
+    }
+  },
+
+  /** PC: highlights choice i. */
+  select(i) {
+    const box = document.getElementById('dialog-options');
+    this.selected = clamp(i, 0, Math.max(0, this.options.length - 1));
+    [...box.children].forEach((b, k) => b.classList.toggle('selected', k === this.selected));
+  },
+
+  /**
+   * PC keys while it's open (App.frame): the interact key finishes the line, then picks the highlighted
+   * choice; W / S (or the arrows) move the highlight; 1-9 pick a choice straight away.
+   */
+  keys() {
+    if (Input.pressed('interact')) {
+      if (this.shown < this.full.length) this.finish();
+      else if (!Touch.enabled) this.choose(this.selected);   // (phones pick with the buttons, as before)
+      return;
+    }
+    if (this.shown < this.full.length || Touch.enabled) return;
+    const n = this.options.length;
+    if (Input.pressed('up') || Input.wasPressed('ArrowUp')) { this.select((this.selected + n - 1) % n); Sound.play('uiHover', 0.05); }
+    if (Input.pressed('down') || Input.wasPressed('ArrowDown')) { this.select((this.selected + 1) % n); Sound.play('uiHover', 0.05); }
+    for (let i = 0; i < Math.min(9, n); i++) {
+      if (Input.wasPressed(`Digit${i + 1}`) || Input.wasPressed(`Numpad${i + 1}`)) {
+        Sound.play('uiClick');
+        this.choose(i);
+        return;
+      }
     }
   },
 

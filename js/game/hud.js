@@ -315,42 +315,107 @@ const HUD = {
     this.text(ctx, `${hero.coins}`, x + 54, y + 3, { size: 8, align: 'right', color: hero.coinFlash > 0 ? '#fff2a0' : '#ffd34a' });
   },
 
+  // ---------- the weapon's attachment slot (the forge), over the weapon's button ----------
+
+  forgeDrag: null,   // { } while this screen's attachment is being dragged out of its slot with the mouse
+
+  /** Screen rect of the attachment slot: over the basic attack's button (with touch controls, over the attack stick). */
+  forgeSlotRect(p) {
+    if (Touch.enabled) return Touch.forgeSlotRect();
+    const s = this.abilitySlots(p).find((o) => o.slot === 'primary');
+    return { x: Math.round(s.x + s.w / 2 - 13), y: s.y - 32, s: 26 };
+  },
+
+  /** True inside the slot (with a small margin): letting go of a drag here keeps the attachment on. */
+  inForgeSlot(p, mx, my) {
+    const r = this.forgeSlotRect(p);
+    return mx >= r.x - 6 && mx < r.x + r.s + 6 && my >= r.y - 6 && my < r.y + r.s + 6;
+  },
+
   /**
-   * Under the coins: the forge's weapon enhancement (its icon in its rarity's colour; mythical ones
-   * shimmer) and the horse's health, when the hero has them. Hovering the enhancement says what it does.
+   * Mouse on the attachment slot, run before the hero reads its input (like the bag): press on the
+   * attachment and drag it out of the slot to drop it on the floor (a command, so every machine applies it).
+   */
+  handleForgeMouse(p) {
+    const m = Input._mouse;
+    if (!p || p.dead || Touch.enabled || !p.lastWorld?.run) { this.forgeDrag = null; return; }
+    if (this.forgeDrag) {
+      m.left = m.leftPressed = false;
+      if (m.leftReleased) {
+        if (p.forged && !this.inForgeSlot(p, m.x, m.y)) App.command({ type: 'dropForge' });
+        this.forgeDrag = null;
+      }
+      return;
+    }
+    if (m.leftPressed && this.inForgeSlot(p, m.x, m.y)) {
+      m.left = m.leftPressed = false;
+      if (p.forged && !m.leftReleased) this.forgeDrag = {};
+    }
+  },
+
+  /**
+   * The slot: the attachment's icon framed in its rarity's colour (mythical ones shimmer), or, empty, a
+   * faint outline of what the blacksmith could forge for this weapon. Hovering it says what it does;
+   * while it's dragged it follows the mouse, with a "DROP" note once it's out of the slot.
+   * at: { x, y, s } (the HUD's or the touch controls' spot); drag: { x, y } where it's being dragged to.
+   */
+  drawForgeSlot(ctx, p, at, drag = null) {
+    const { x, y, s } = at;
+    const f = p.forged;
+    const img = Sprites.forge[f ? f.item : Forge.itemFor(p.classId)];
+    this.panel(ctx, x, y, s, s);
+    const ix = Math.round(x + (s - img.width) / 2);
+    const iy = Math.round(y + (s - img.height) / 2);
+    if (!f) {
+      ctx.globalAlpha = 0.22;
+      ctx.drawImage(img, ix, iy);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(216, 200, 160, 0.35)';
+      ctx.setLineDash([2, 2]);
+      ctx.strokeRect(x + 2.5, y + 2.5, s - 5, s - 5);
+      ctx.setLineDash([]);
+      return;
+    }
+    const R = FORGE_RARITIES[f.rarity];
+    ctx.fillStyle = R.color;
+    ctx.fillRect(x - 1, y - 1, s + 2, 1);
+    ctx.fillRect(x - 1, y + s, s + 2, 1);
+    ctx.fillRect(x - 1, y, 1, s);
+    ctx.fillRect(x + s, y, 1, s);
+    if (drag) {
+      ctx.globalAlpha = 0.25;
+      ctx.drawImage(img, ix, iy);
+      ctx.globalAlpha = 1;
+      const out = !this.inForgeSlot(p, drag.x, drag.y);
+      ctx.drawImage(img, Math.round(drag.x - img.width / 2), Math.round(drag.y - img.height / 2));
+      if (out) this.text(ctx, 'DROP', drag.x, drag.y + 12, { size: 6, align: 'center', color: '#ff8a6a' });
+      return;
+    }
+    ctx.drawImage(img, ix, iy);
+    if (f.rarity === 'mythical') {
+      // a band of light sweeping across it
+      const k = (performance.now() / 900) % 1.6;
+      if (k < 1) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = 'rgba(255, 140, 140, 0.45)';
+        ctx.fillRect(Math.round(x + k * s) - 2, y, 3, s);
+        ctx.restore();
+      }
+    }
+    const m = Input._mouse;
+    if (!Touch.enabled && m.x >= x && m.x < x + s && m.y >= y && m.y < y + s) {
+      const I = FORGE_ITEMS[f.item];
+      this.tooltip(ctx, x + s / 2, y - 6, Forge.title(f), R.color, `${I.stat(Forge.value(f))}${f.rarity === 'mythical' ? ` ${I.perk}` : ''} Drag it out of the slot to drop it.`);
+    }
+  },
+
+  /**
+   * Under the coins: the horse's health, when the hero has one.
    */
   drawSpecials(ctx, p) {
     const y = 34;
-    let x = 244;
-    const m = Input._mouse;
-    const f = p.forged;
-    if (f) {
-      const R = FORGE_RARITIES[f.rarity];
-      const s = 22;
-      this.panel(ctx, x, y, s, s);
-      ctx.fillStyle = R.color;
-      ctx.fillRect(x - 1, y - 1, s + 2, 1);
-      ctx.fillRect(x - 1, y + s, s + 2, 1);
-      ctx.fillRect(x - 1, y, 1, s);
-      ctx.fillRect(x + s, y, 1, s);
-      ctx.drawImage(Sprites.forge[f.item], x + 1, y + 1);
-      if (f.rarity === 'mythical') {
-        // a band of light sweeping across it
-        const k = (performance.now() / 900) % 1.6;
-        if (k < 1) {
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          ctx.fillStyle = 'rgba(255, 140, 140, 0.45)';
-          ctx.fillRect(Math.round(x + k * s) - 2, y, 3, s);
-          ctx.restore();
-        }
-      }
-      if (!Touch.enabled && m.x >= x && m.x < x + s && m.y >= y && m.y < y + s) {
-        const I = FORGE_ITEMS[f.item];
-        this.tooltip(ctx, x + s / 2, y + s + 30, Forge.title(f), R.color, I.stat(Forge.value(f)) + (f.rarity === 'mythical' ? ` ${I.perk}` : ''));
-      }
-      x += s + 6;
-    }
+    const x = 244;
     const h = p.horse;
     if (h) {
       const w = 40;
@@ -419,6 +484,8 @@ const HUD = {
       const charges = s.slot === 'dodge' ? Upgrades.dodgeCharges(p) : s.slot ? p.slotCharges?.[s.slot] : null;   // (Burst Dodging: two dodges)
       this.abilitySlot(ctx, s.x, s.y, s.key, s.name, cd, max, icon, charges, armed, s.slot || s.name, short);
     }
+    // in a dungeon run: the weapon's attachment slot over the basic attack's button (the touch controls draw their own)
+    if (!Touch.enabled && p.lastWorld?.run) this.drawForgeSlot(ctx, p, this.forgeSlotRect(p), this.forgeDrag ? Input._mouse : null);
     this.drawInventory(ctx, p);
   },
 

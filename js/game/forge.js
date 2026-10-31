@@ -1,7 +1,11 @@
-// The blacksmith's forge: an enhancement for the hero's weapon, kept for the rest of the run.
+// The blacksmith's forge: an attachment for the hero's weapon, kept for the rest of the run.
 // Each hero has one kind (FORGE_ITEMS) in four rarities: rare (blue), epic (purple), legendary
 // (gold) and mythical (shining red): the same boost as legendary plus a perk of its own.
-// A weapon holds one enhancement at a time; forging another lets the hero keep either.
+// The forge window only shows what Borin can make; forging plays a hammering animation and then
+// reveals the rarity (gacha style), and the attachment goes straight onto the weapon. A weapon holds
+// one: an old one drops on the floor by the anvil. It sits in a slot over the weapon's HUD button
+// (HUD.drawForgeSlot / Touch), and dragging it out of the slot drops it (a ForgePickup, which any
+// hero whose weapon takes that kind can pick up into an empty slot).
 //
 // Basic attacks: every hero's primary() is wrapped (createHero -> Forge.attack), so each basic
 // attack is counted and carries a tag ({ owner, n, ... }) to whatever it hits: the swing itself,
@@ -20,30 +24,35 @@ const FORGE_ORDER = ['rare', 'epic', 'legendary', 'mythical'];
 const FORGE_ITEMS = {
   stone: {
     name: 'Sharpening Stone', heroes: ['warrior', 'rogue'], values: [2, 3, 4, 4],
+    blurb: 'Hones your blade: every basic attack hit deals extra damage.',
     stat: (v) => `+${v} damage on every basic attack hit.`,
     perk: 'So sharp it cuts deep: basic attacks make enemies bleed.',
     bleed: { dps: 12, time: 3 },
   },
   quiver: {
     name: 'Quiver', heroes: ['ranger', 'rocketeer'], values: [0.05, 0.1, 0.15, 0.15],
+    blurb: 'A better draw: your basic attacks come faster.',
     stat: (v) => `+${Math.round(v * 100)}% attack speed.`,
     perk: 'Every shot also fires 2 weaker shots at a diagonal to it.',
     spread: 0.42, weak: 0.5,
   },
   gemstone: {
     name: 'Gemstone', heroes: ['mage'], values: [1, 2, 3, 3],
+    blurb: 'Set into your staff: magic missiles cost less mana.',
     stat: (v) => `Magic missiles cost ${v} less mana.`,
     perk: 'Every 5th magic missile bursts with magic, hurting everything round where it lands.',
     burst: { every: 5, radius: 64, damage: 30 },
   },
   tome: {
     name: 'Holy Tome', heroes: ['priestess', 'bard'], values: [7, 6, 5, 5],
+    blurb: 'Blessed words: every few basic attacks stun what they hit.',
     stat: (v) => `Every ${v}th basic attack stuns what it hits for a moment.`,
     perk: 'Enemies it stuns are slowed for 3 seconds after the stun wears off.',
     stun: 0.6, slow: { amount: 0.4, time: 3 },
   },
   whisk: {
     name: 'Whisks', heroes: ['baker'], values: [20, 30, 40, 40],
+    blurb: 'A spare whisk: every 3rd attack also throws one straight ahead.',
     stat: (v) => `Every 3rd attack also throws a whisk straight ahead for ${v} damage.`,
     perk: 'Iced whisks: enemies they hit are slowed for 3 seconds.',
     every: 3, speed: 470, slow: { amount: 0.45, time: 3 },
@@ -89,30 +98,42 @@ const Forge = {
 
   // ---------- the blacksmith's commands (every machine applies them on the same tick) ----------
 
-  /** Pays for a forge: the first enhancement goes straight on; with one on already, the hero chooses which to keep. */
+  /**
+   * Pays for a forge: the new attachment goes straight onto the weapon (the forge window plays its
+   * hammering and reveal meanwhile); one already on it drops on the floor by the anvil.
+   */
   forge(run, hero) {
     const price = this.price(run, hero);
-    const ok = !hero.forgePending && hero.coins >= price;
+    const smith = Specials.propHere(run, hero, 'blacksmith');
+    const ok = !!smith && !hero.dead && hero.coins >= price;
     if (ok) {
       hero.coins -= price;
       const f = { item: this.itemFor(hero.classId), rarity: this.rollRarity() };
-      if (hero.forged) hero.forgePending = f;
-      else this.bind(run, hero, f);
+      if (hero.forged) this.dropAt(run.world, hero.forged, smith.x - 30, smith.y + 34);
+      this.unequip(hero);
+      this.bind(run, hero, f);
       this.anvilFx(run, hero, f);
     }
     run.world.events.onPurchase?.(hero, 'forge', ok);
   },
 
-  /** The choice after a forge: keep the new enhancement ('new') or the one already on the weapon. */
-  keep(run, hero, which) {
-    const f = hero.forgePending;
-    if (!f) return;
-    hero.forgePending = null;
-    if (which === 'new') {
-      this.unequip(hero);
-      this.bind(run, hero, f);
-    }
-    run.world.events.onPurchase?.(hero, 'forgeKeep', true);
+  /** The attachment dragged out of its slot: it comes off the weapon and lands on the floor at the hero's feet. */
+  drop(world, hero) {
+    const f = hero.forged;
+    if (!f || hero.dead) return;
+    this.unequip(hero);
+    this.dropAt(world, f, hero.x + hero.facing * 22, hero.y + 6);
+    world.effects.text(hero.hx, hero.hy - 36, `${this.title(f).toUpperCase()} DROPPED`, { color: FORGE_RARITIES[f.rarity].color, size: 7 });
+    Sound.play('blockClang', 0.1);
+  },
+
+  /** An attachment lying on the floor (ForgePickup), clear of walls. */
+  dropAt(world, f, x, y) {
+    const pt = world.dungeon.freePoint(x, y, 6, 4);
+    const k = new ForgePickup(pt.x, pt.y, f);
+    k.cooldown = 1;   // (so walking about where it fell doesn't snatch it straight back)
+    world.pickups.push(k);
+    world.effects.burst(pt.x, pt.y - 8, { count: 12, colors: [FORGE_RARITIES[f.rarity].color, '#ffffff'], speed: [30, 100], life: [0.2, 0.45], up: 30 });
   },
 
   bind(run, hero, f) {
@@ -275,51 +296,36 @@ const Forge = {
 
   // ---------- the forge window (Shop, mode 'forge') ----------
 
-  /** One enhancement's card: its icon in a ring of its rarity's colour, the boost, and the mythical perk. */
-  card(f, i, label, button, cls = '') {
-    const R = FORGE_RARITIES[f.rarity];
-    const I = FORGE_ITEMS[f.item];
-    const perk = f.rarity === 'mythical' ? `<span class="forge-perk">${I.perk}</span>` : '';
-    return `<div class="shop-card magic forge-card rarity-${f.rarity}${cls}" style="--glow:${R.color};--delay:${i * 0.4}s">
-      <i class="hero-tag forge-tag">${label}</i><div class="rune-ring"></div>
-      <canvas data-forge="${f.item}"></canvas>
-      <b style="color:${R.color}">${this.title(f)}</b>
-      <span>${I.stat(this.value(f))}</span>${perk}
-      ${button}
-    </div>`;
-  },
+  /** Seconds of hammering before the rarity is revealed, and before "TAKE IT" shows. */
+  REVEAL_AT: 2.1,
+  DONE_AT: 2.7,
 
+  /**
+   * Just the attachment Borin can forge for this hero and its price. While a forge plays out
+   * (shop.forgeReveal = { f }), the hammering and then the gacha-style reveal of what came out.
+   */
   render(shop, grid, p) {
-    const run = shop.run;
     const extra = document.getElementById('shop-extra');
-    const item = FORGE_ITEMS[this.itemFor(p.classId)];
-    const pending = p.forgePending;
-    if (pending) {
-      const cards = [];
-      if (p.forged) cards.push(this.card(p.forged, 0, 'ON YOUR WEAPON', '<button class="buy" data-action="forgeKeep:old">KEEP THIS</button>'));
-      cards.push(this.card(pending, 1, 'FRESH FROM THE FORGE', '<button class="buy" data-action="forgeKeep:new">KEEP THIS</button>', ' enchant'));
-      grid.innerHTML = cards.join('');
-      extra.innerHTML = '<p class="shop-note">Your weapon can only hold one. Choose which to keep - the other is melted down.</p>';
-    } else {
-      const price = this.price(run, p);
-      const full = Math.round(CONFIG.run.blacksmith.price * run.priceScale);
-      const now = p.forged
-        ? this.card(p.forged, 0, 'ON YOUR WEAPON', '<button class="buy" disabled>EQUIPPED</button>')
-        : `<div class="shop-card magic faded forge-card"><span class="shop-empty">Your ${CONFIG.classes[p.classId].name}'s weapon has no enhancement yet.</span></div>`;
-      const w = CONFIG.run.blacksmith.rarity;
-      const total = FORGE_ORDER.reduce((s, k) => s + w[k], 0);
-      const odds = FORGE_ORDER.map((k) => `<em style="color:${FORGE_RARITIES[k].color}">${FORGE_RARITIES[k].name} ${Math.round((w[k] / total) * 100)}%</em>`).join('');
-      const forge = `<div class="shop-card magic forge-card forge-new" style="--glow:#ff9a3a;--delay:0.4s">
-        <i class="hero-tag forge-tag">FORGE</i><div class="rune-ring"></div>
-        <canvas data-forge="${this.itemFor(p.classId)}"></canvas>
-        <b style="color:#ffb84a">${item.name}</b>
-        <span>${item.stat(item.values[0])} Better at higher rarities.</span>
-        <span class="forge-odds">${odds}</span>
-        <span class="forge-perk">Mythical: ${item.perk}</span>
-        <button class="buy" data-action="forge" ${p.coins < price ? 'disabled' : ''}>${shop.priceTag(price, full)}</button>
-      </div>`;
-      grid.innerHTML = now + forge;
+    const hint = document.getElementById('shop-hint');
+    const r = shop.forgeReveal;
+    const id = r ? r.f.item : this.itemFor(p.classId);
+    const item = FORGE_ITEMS[id];
+    if (r) {
+      grid.innerHTML = this.revealHtml(r.f);
       extra.innerHTML = '';
+      hint.textContent = 'It goes straight onto your weapon: see the slot over your attack button.';
+    } else {
+      const price = this.price(shop.run, p);
+      const full = Math.round(CONFIG.run.blacksmith.price * shop.run.priceScale);
+      grid.innerHTML = `<div class="shop-card magic forge-card forge-offer" style="--glow:#ff9a3a">
+        <i class="hero-tag forge-tag">ATTACHMENT</i><div class="rune-ring"></div>
+        <canvas data-forge="${id}"></canvas>
+        <b style="color:#ffb84a">${item.name}</b>
+        <span>${item.blurb}</span>
+        <button class="buy" data-action="forge" ${p.coins < price ? 'disabled' : ''}>FORGE &nbsp;${shop.priceTag(price, full)}</button>
+      </div>`;
+      extra.innerHTML = p.forged ? `<p class="shop-note">Your ${this.title(p.forged)} drops by the anvil when the new one goes on.</p>` : '';
+      hint.textContent = 'Every forge comes out a surprise. It attaches to your weapon by itself; drag it out of its slot to drop it.';
     }
     for (const c of grid.querySelectorAll('canvas[data-forge]')) {
       const img = Sprites.forge[c.dataset.forge];
@@ -327,9 +333,89 @@ const Forge = {
       c.height = img.height;
       c.getContext('2d').drawImage(img, 0, 0);
     }
-    document.getElementById('shop-hint').textContent = 'An enhancement stays on your weapon for the rest of the run. Forging again lets you choose between the old one and the new. Mythical ones shine red and carry a perk of their own.';
+  },
+
+  /**
+   * The forge playing out (CSS-timed): the attachment glowing hot on the anvil under hammer blows,
+   * sparks flying, then a flash and the card flips up in its rarity's colour, rays wheeling behind it.
+   */
+  revealHtml(f) {
+    const R = FORGE_RARITIES[f.rarity];
+    const I = FORGE_ITEMS[f.item];
+    const perk = f.rarity === 'mythical' ? `<span class="forge-perk">${I.perk}</span>` : '';
+    const sparks = Array.from({ length: 16 }, (_, k) => `<i class="forge-spark" style="--a:${(k * 137) % 360}deg;--d:${(k % 4) * 0.5 + 0.35}s"></i>`).join('');
+    return `<div class="forge-reveal rarity-${f.rarity}" style="--glow:${R.color};--reveal:${this.REVEAL_AT}s;--done:${this.DONE_AT}s">
+      <div class="forge-anvil">
+        <canvas data-forge="${f.item}"></canvas>
+        <i class="forge-hammer"></i>${sparks}
+      </div>
+      <div class="forge-rays"></div>
+      <div class="shop-card magic forge-card forge-result rarity-${f.rarity}" style="--glow:${R.color}">
+        <i class="hero-tag forge-tag">${R.name.toUpperCase()}</i>
+        <canvas data-forge="${f.item}"></canvas>
+        <b style="color:${R.color}">${this.title(f)}</b>
+        <span>${I.stat(this.value(f))}</span>${perk}
+        <em class="forge-equipped">ATTACHED TO YOUR WEAPON</em>
+        <button class="buy" data-action="forgeDone">TAKE IT</button>
+      </div>
+    </div>`;
+  },
+
+  /** The forge window's sounds while it plays out: hammer blows, then a fanfare to suit the rarity. Looks only. */
+  revealSounds(f) {
+    const at = (s, fn) => setTimeout(fn, s * 1000);
+    for (const s of [0.3, 0.75, 1.2, 1.6]) at(s, () => Sound.play('blockClang'));
+    at(this.REVEAL_AT, () => {
+      Sound.play(f.rarity === 'rare' ? 'pickup' : 'magic');
+      if (FORGE_RARITIES[f.rarity].rank >= 2) Sound.play('victory');
+    });
   },
 };
+
+/**
+ * A weapon attachment lying on the floor (dropped from its slot, or knocked off by a new forge): it
+ * floats in a glow of its rarity's colour, and attaches itself to a hero whose weapon takes that kind
+ * and has an empty slot when they walk over it.
+ */
+class ForgePickup extends Pickup {
+  constructor(x, y, f) {
+    super(x, y);
+    this.f = { item: f.item, rarity: f.rarity };
+    this.magnet = 26;
+    this.lifetime = 99999;
+    this.sound = 'magic';
+    this.cooldown = 0;
+  }
+
+  update(dt, world) {
+    this.cooldown -= dt;
+    super.update(dt, world);
+  }
+
+  wanted(p) { return this.cooldown <= 0 && !p.forged && Forge.itemFor(p.classId) === this.f.item; }
+
+  collect(p, world) {
+    Forge.equip(p, this.f);
+    const R = FORGE_RARITIES[this.f.rarity];
+    world.effects.text(p.hx, p.hy - 40, `${Forge.title(this.f).toUpperCase()} ATTACHED`, { color: R.color, size: 8 });
+    world.effects.burst(p.hx, p.hy, { count: 16, colors: [R.color, '#ffffff'], speed: [30, 110], life: [0.3, 0.5], up: 40 });
+  }
+
+  draw(ctx) {
+    const R = FORGE_RARITIES[this.f.rarity];
+    const img = Sprites.forge[this.f.item];
+    const x = Math.round(this.x);
+    const cy = Math.round(this.y - 16 + Math.sin(this.age * 3) * 2);
+    drawShadow(ctx, this.x, this.y + 3, 9, 3);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, x, cy, 18 + Math.sin(this.age * 5) * 2, hexToRgb(R.color).join(', '), this.f.rarity === 'mythical' ? 1 : 0.7);
+    PFX.ring(ctx, x, this.y, 12, 5, R.color, 1, { dash: [3, 3], spin: this.age * 2 });
+    ctx.restore();
+    ctx.drawImage(img, x - img.width / 2, cy - img.height / 2);
+    HUD.text(ctx, Forge.title(this.f), x, cy - 20, { size: 5, align: 'center', color: R.color });
+  }
+}
 
 /** The forge's art: Sprites.forge (a 20x20 icon for each enhancement) and the Baker's whisk in flight. */
 function buildForgeSprites() {

@@ -276,7 +276,7 @@ const Menus = {
         break;
       }
       case 'forge': Shop.forge(); break;
-      case 'forgeKeep': Shop.forgeKeep(arg); break;
+      case 'forgeDone': Shop.forgeDone(); break;
       case 'multiplayer': this.showProfiles('mp'); break;
       case 'profileCreate': this.createProfile(); break;
       case 'profileSelect': {

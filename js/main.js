@@ -300,8 +300,8 @@ const App = {
       Dialog.open({
         name: 'BORIN', frames: Sprites.npcs.blacksmith,
         text: p.forged
-          ? `Back for another go? That ${Forge.title(p.forged)} isn't bad... but the anvil might give you better. Or worse. You keep whichever you like.`
-          : `A ${CONFIG.classes[p.classId].name}, eh? I can forge a ${item.name} for that weapon of yours. Rare, epic, legendary - and if the fire loves you, mythical.`,
+          ? `Back for another go? That ${Forge.title(p.forged)} isn't bad... but the anvil might give you better. The old one comes off and you can pick it up again if you like.`
+          : `A ${CONFIG.classes[p.classId].name}, eh? I can forge a ${item.name} for that weapon of yours. What comes out of the fire is up to the anvil - I'll fit it on for you.`,
         options: [
           { label: 'Show me the forge', fn: () => Shop.open(run, 'forge') },
           { label: 'Not now', fn: () => Dialog.close() },
@@ -767,8 +767,8 @@ const App = {
       else if (this.state === 'panel') this.closePanel();
     }
     if (Input.pressed('music')) Menus.handleAction('toggleMusic', this);
-    // the interact key finishes a dialogue line that's still typing
-    if (this.state === 'panel' && Dialog.isOpen && Input.pressed('interact')) Dialog.finish();
+    // the interact key finishes a dialogue line that's still typing, then picks the highlighted choice (PC: W / S, 1-9 too)
+    if (this.state === 'panel' && Dialog.isOpen) Dialog.keys();
     // bestiary pages: arrows, A / D, or the movement keys
     if (this.state === 'panel' && Bestiary.isOpen) {
       if (Input.wasPressed('ArrowLeft') || Input.pressed('left')) Bestiary.flip(-1);
@@ -798,6 +798,8 @@ const App = {
 
     // the bag takes mouse clicks on its slots before the hero sees them
     HUD.handleBagMouse(this.state === 'playing' && this.game ? this.game.localPlayer : null);
+    // and the weapon's attachment slot (drag it out to drop it)
+    HUD.handleForgeMouse(this.state === 'playing' && this.game ? this.game.localPlayer : null);
     // and in the lobby, the teleport button and its map of the keep
     HUD.handleTeleportMouse(this.state === 'playing' && this.game ? this.game : null);
 

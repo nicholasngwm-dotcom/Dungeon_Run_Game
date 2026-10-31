@@ -797,8 +797,8 @@ class Game {
       case 'forge':
         if (this.run && hero) Forge.forge(this.run, hero);
         return;
-      case 'forgeKeep':
-        if (this.run && hero) Forge.keep(this.run, hero, cmd.keep === 'new' ? 'new' : 'old');
+      case 'dropForge':
+        if (hero) Forge.drop(this, hero);
         return;
       case 'darkTrade':
         if (this.run && hero) Specials.darkTrade(this.run, hero);

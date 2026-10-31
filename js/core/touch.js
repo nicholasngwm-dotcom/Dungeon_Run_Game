@@ -166,7 +166,11 @@ const Touch = {
       const c = place(id, x + 13, y + 13, 13);
       return { id, x: c.x - c.r, y: c.y - c.r, w: c.r * 2, h: c.r * 2 };
     };
+    // the weapon's attachment slot (the forge): just below-left of the attack stick, beside DODGE
+    // (the F button already sits right over the stick)
+    const fa = (125 * Math.PI) / 180;
     return {
+      forge: place('forge', ax + Math.cos(fa) * 92 * k, ay + Math.sin(fa) * 92 * k, 15 * k),
       aim: place('aim', ax, ay, 48 * k),
       cancel: place('cancel', ax - 150 * k, ay - 200 * k, 26 * k),   // shown while a skill is dragged
       moveR: 40 * k,
@@ -176,6 +180,12 @@ const Touch = {
       pause: square('pause', 314, 12),
       score: square('score', 346, 12),
     };
+  },
+
+  /** Screen rect ({ x, y, s }) of the weapon's attachment slot with the touch controls. */
+  forgeSlotRect() {
+    const c = this.layout().forge;
+    return { x: Math.round(c.x - c.r), y: Math.round(c.y - c.r), s: Math.round(c.r * 2) };
   },
 
   /** Screen rect of bag slot i with the touch controls (the bag moves to the bottom middle). */
@@ -197,6 +207,12 @@ const Touch = {
     const t = { role: null, ...pos, sx: pos.x, sy: pos.y, moved: false, frames: 0 };
     if (inRect(L.pause)) { app.pause(); return; }
     if (game.run && inRect(L.score)) { this.scoreboard = !this.scoreboard; return; }
+    // the attachment slot: drag the attachment out of it to drop it, tap it to see what it is
+    if (game.run && HUD.inForgeSlot(game.localPlayer, pos.x, pos.y)) {
+      t.role = 'forge';
+      this.pointers.set(id, t);
+      return;
+    }
     if (HUD.teleportOpen || (game.lobby && inRect(HUD.teleportButtonRect(game)))) { this.click = pos; return; }
     const b = L.buttons.find((o) => Math.hypot(pos.x - o.x, pos.y - o.y) <= o.r * 1.2);
     const slot = b ? -1 : HUD.bagSlotAt(pos.x, pos.y);
@@ -288,6 +304,15 @@ const Touch = {
         this.shot = d ? { dir: d, dist: this.reachOf(this.app.game?.localPlayer, 'aim', d.k), t: 0.12 } : { dir: null, dist: null, t: 0.12 };
       } else if (!Settings.data.autoFire && d) {
         this.shot = { dir: d, dist: this.aimRange(d.k), t: 0.12 };
+      }
+    }
+    if (t.role === 'forge') {
+      const p = this.app.game?.localPlayer;
+      if (!p?.forged) return;
+      if (!HUD.inForgeSlot(p, t.x, t.y)) App.command({ type: 'dropForge' });
+      else {
+        const f = p.forged;
+        Menus.toast(`${Forge.title(f).toUpperCase()}: ${FORGE_ITEMS[f.item].stat(Forge.value(f)).toUpperCase()}`, FORGE_RARITIES[f.rarity].color);
       }
     }
     if (t.role === 'bag') {
@@ -640,6 +665,12 @@ const Touch = {
     this.disc(ctx, knob.x, knob.y, 18 * (Settings.data.touchSize || 1), !!mv);
     ctx.globalAlpha /= mv ? 1 : 0.45;
 
+    // the weapon's attachment slot (dragged: it follows the thumb)
+    if (game.run) {
+      const fd = held('forge');
+      HUD.drawForgeSlot(ctx, p, this.forgeSlotRect(), fd && Math.hypot(fd.x - fd.sx, fd.y - fd.sy) > 6 ? fd : null);
+    }
+
     // aim stick, with the primary attack's icon on its knob
     const am = held('aim');
     this.ring(ctx, L.aim.x, L.aim.y, L.aim.r);
@@ -787,7 +818,7 @@ const Touch = {
     ctx.fillRect(0, 0, W, H);
     const icons = Sprites.icons[App.game?.localPlayer?.classId || App.classId];
     const glyphs = { aim: icons.primary, dodge: Sprites.icons.dodge, secondary: icons.fire || icons.secondary, ice: icons.ice, e: icons.e, f: icons.f, ult: icons.q };
-    const names = { aim: 'ATTACK', stick: 'JOYSTICK', dodge: 'DODGE', secondary: 'SECONDARY', ice: 'ICE ARROW', e: 'E', f: 'F', ult: 'ULTIMATE', interact: 'USE', heal: 'HEAL', mount: 'HORSE', cancel: 'CANCEL', pause: 'PAUSE', score: 'SCORES', bag: 'BAG' };
+    const names = { aim: 'ATTACK', stick: 'JOYSTICK', dodge: 'DODGE', secondary: 'SECONDARY', ice: 'ICE ARROW', e: 'E', f: 'F', ult: 'ULTIMATE', interact: 'USE', heal: 'HEAL', mount: 'HORSE', forge: 'ATTACHMENT', cancel: 'CANCEL', pause: 'PAUSE', score: 'SCORES', bag: 'BAG' };
     for (const it of this.editorItems()) {
       const sel = it.id === this.editSel;
       if (it.rect) {

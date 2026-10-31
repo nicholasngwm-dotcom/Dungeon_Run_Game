@@ -1006,6 +1006,61 @@ h2 {
 .dialog-name { font-size: 16px; color: var(--accent); }
 .dialog-text { font-size: 12px; line-height: 1.8; min-height: 50px; cursor: pointer; }
 .dialog-options { display: flex; gap: 10px; }
+.dialog-num { display: none; }
+.dialog-keys { margin: 0; }
+
+/* PC: a classic RPG dialogue box along the bottom of the screen. The portrait stands over its left
+   corner in a gold frame, the name sits on a tab across the top edge, the choices are a numbered list
+   (1-9, W / S and E, or the mouse) and a blinking arrow says the line is still going. Phones keep the box above. */
+body:not(.touch) .dialog-screen {
+  justify-content: flex-end; gap: 0; padding-bottom: 22px;
+  background: linear-gradient(180deg, rgba(8, 5, 14, 0) 40%, rgba(8, 5, 14, 0.55) 100%);
+}
+body:not(.touch) .dialog-box {
+  position: relative; width: 900px; min-height: 150px; gap: 0;
+  padding: 26px 28px 16px 178px;
+  background: linear-gradient(180deg, rgba(52, 36, 26, 0.97), rgba(34, 23, 17, 0.97));
+  border: 3px solid #2a1a10;
+  box-shadow: inset 0 0 0 2px #a07a24, inset 0 0 0 4px #2a1a10, inset 4px 6px 0 4px rgba(255, 230, 160, 0.06), 0 6px 0 #140c08, 0 0 30px rgba(0, 0, 0, 0.5);
+}
+body:not(.touch) #dialog-portrait {
+  position: absolute; left: 16px; bottom: 14px; width: 146px; height: 146px;
+  background: radial-gradient(circle at 50% 40%, #4a3424, #1e140e 75%);
+  border: 3px solid #2a1a10; box-shadow: inset 0 0 0 2px #d4ac4c, 0 0 0 2px #6a4a1c, 0 4px 0 #140c08;
+}
+body:not(.touch) .dialog-name {
+  position: absolute; top: -17px; left: 176px;
+  padding: 5px 16px 4px; font-size: 14px; letter-spacing: 1px; color: #2a1a10; text-shadow: 0 1px 0 #fff2a0;
+  background: linear-gradient(180deg, #ffe680, #d4ac4c); border: 3px solid #2a1a10; box-shadow: 0 3px 0 #140c08;
+}
+body:not(.touch) .dialog-body { gap: 10px; }
+body:not(.touch) .dialog-text { font-size: 14px; line-height: 1.75; min-height: 50px; color: #f4ead7; }
+body:not(.touch) .dialog-more {
+  position: absolute; right: 18px; bottom: 14px; width: 0; height: 0;
+  border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid #ffd34a;
+  animation: dialogMore 0.8s steps(2) infinite;
+}
+@keyframes dialogMore { 50% { transform: translateY(3px); opacity: 0.4; } }
+body:not(.touch) .dialog-options { flex-direction: column; gap: 2px; align-items: stretch; }
+body:not(.touch) .dialog-options .btn {
+  min-width: 0; text-align: left; font-size: 13px; padding: 5px 10px 5px 24px; position: relative;
+  color: #d8c8a0; background: none; border: none; box-shadow: none; text-shadow: 1px 1px 0 #1a100a;
+}
+body:not(.touch) .dialog-options .btn:active { transform: none; }
+body:not(.touch) .dialog-options .btn.selected {
+  color: #ffe680; background: linear-gradient(90deg, rgba(255, 211, 74, 0.18), rgba(255, 211, 74, 0));
+}
+body:not(.touch) .dialog-options .btn.selected::before {
+  content: ''; position: absolute; left: 8px; top: 50%; margin-top: -5px;
+  border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid #ffd34a;
+  animation: dialogPoint 0.9s ease-in-out infinite;
+}
+@keyframes dialogPoint { 50% { transform: translateX(3px); } }
+body:not(.touch) .dialog-num {
+  display: inline-block; width: 16px; margin-right: 10px; font-style: normal; font-size: 10px; text-align: center;
+  color: #ffd34a; background: #2a1a10; box-shadow: 0 0 0 1px #a07a24; line-height: 16px;
+}
+body:not(.touch) .dialog-keys { margin-top: 8px; font-size: 10px; color: #b8a888; letter-spacing: 1px; text-shadow: 1px 1px 0 #1a100a; }
 
 /* ===== Pets (the keep's pet room) ===== */
 #screen-pets { gap: 12px; }
@@ -1547,3 +1602,63 @@ body.touch #screen-menu .hint.credit { left: 22px; right: auto; bottom: 6px; }
 .dungeon-card.continue { border-color: #8ac8ff; box-shadow: 0 0 14px rgba(138, 200, 255, 0.35); }
 .dungeon-card.continue .enter { color: #8ac8ff; }
 .dungeon-save { font-size: 11px; color: #ffd34a; margin: 6px 0 0; }
+
+/* the forge playing out (Forge.revealHtml): the attachment glowing hotter on the anvil under four hammer
+   blows, sparks flying, then a flash and the card pops up in its rarity's colour with rays wheeling behind */
+.forge-offer { min-width: 240px; grid-column: 1 / -1; justify-self: center; }
+.forge-offer canvas { width: 60px; height: 60px; image-rendering: pixelated; }
+.forge-reveal { grid-column: 1 / -1; justify-self: center; position: relative; width: 460px; height: 320px; display: flex; align-items: center; justify-content: center; }
+.forge-anvil {
+  position: absolute; left: 50%; top: 50%; width: 160px; height: 160px; margin: -80px 0 0 -80px;
+  display: flex; align-items: center; justify-content: center;
+  animation: forgeAnvilOut 0.25s ease-in var(--reveal) forwards;
+}
+.forge-anvil canvas {
+  width: 100px; height: 100px; image-rendering: pixelated;
+  animation: forgeHeat var(--reveal) linear forwards, forgeShake 0.45s ease-out 0.25s 4;
+}
+.forge-hammer {
+  position: absolute; left: 50%; top: -14px; width: 36px; height: 22px; margin-left: -4px;
+  background: linear-gradient(180deg, #8e8a9e, #4e4a5c); border: 3px solid #1a100a; transform-origin: -30px 70px;
+  animation: forgeSwing 0.45s ease-in 4;
+}
+.forge-hammer::after {
+  content: ''; position: absolute; left: -38px; top: 4px; width: 36px; height: 7px;
+  background: #7d532f; border: 2px solid #1a100a;
+}
+.forge-spark {
+  position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; background: #fff6c0;
+  box-shadow: 0 0 6px #ffb02e; opacity: 0; transform: rotate(var(--a)) translateY(0);
+  animation: forgeSpark 0.45s ease-out var(--d) 3;
+}
+.forge-rays {
+  position: absolute; left: 50%; top: 50%; width: 420px; height: 420px; margin: -210px 0 0 -210px; border-radius: 50%; opacity: 0;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--glow) 55%, transparent) 0deg 10deg, transparent 10deg 30deg);
+  mask: radial-gradient(circle, #000 20%, transparent 70%); -webkit-mask: radial-gradient(circle, #000 20%, transparent 70%);
+  animation: forgeRaysIn 0.4s ease-out var(--reveal) forwards, runeSpin 12s linear var(--reveal) infinite;
+}
+.forge-reveal .forge-result.shop-card {
+  position: relative; z-index: 1; min-width: 250px; opacity: 0; transform: scale(0.2);
+  animation: forgeReveal 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) var(--reveal) forwards, cardBreathe 2.4s ease-in-out calc(var(--reveal) + 0.5s) infinite;
+}
+.forge-reveal .forge-result canvas { width: 60px; height: 60px; image-rendering: pixelated; }
+.forge-result .forge-equipped { font-style: normal; font-size: 9px; color: #8cff9a; letter-spacing: 1px; }
+.forge-result .buy { opacity: 0; pointer-events: none; animation: forgeFadeIn 0.3s ease-out var(--done) forwards; }
+.forge-reveal.rarity-mythical .forge-result.shop-card { animation: forgeReveal 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) var(--reveal) forwards, mythicPulse 1.6s ease-in-out calc(var(--reveal) + 0.5s) infinite; }
+.forge-reveal::after {   /* the flash of the reveal */
+  content: ''; position: absolute; inset: -40px; background: radial-gradient(circle, #fff 0%, var(--glow) 35%, transparent 70%);
+  opacity: 0; pointer-events: none; animation: forgeFlash 0.6s ease-out var(--reveal) forwards;
+}
+@keyframes forgeHeat {
+  0% { filter: brightness(0.7) drop-shadow(0 0 2px #ff6a1e); }
+  100% { filter: brightness(1.8) sepia(0.6) saturate(3) hue-rotate(-20deg) drop-shadow(0 0 18px #ffb02e); }
+}
+@keyframes forgeShake { 0% { transform: translate(0, 3px) scale(1.05, 0.95); } 40% { transform: translate(-2px, 0); } 70% { transform: translate(2px, 0); } 100% { transform: none; } }
+@keyframes forgeSwing { 0% { transform: rotate(-55deg); } 55% { transform: rotate(-60deg); } 80% { transform: rotate(8deg); } 100% { transform: rotate(-55deg); } }
+@keyframes forgeSpark { 0% { opacity: 1; transform: rotate(var(--a)) translateY(0); } 100% { opacity: 0; transform: rotate(var(--a)) translateY(-90px); } }
+@keyframes forgeAnvilOut { to { opacity: 0; transform: scale(1.4); } }
+@keyframes forgeRaysIn { to { opacity: 1; } }
+@keyframes forgeReveal { to { opacity: 1; transform: scale(1); } }
+@keyframes forgeFadeIn { to { opacity: 1; pointer-events: auto; } }
+@keyframes forgeFlash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+body.touch .forge-reveal { width: 380px; height: 270px; }

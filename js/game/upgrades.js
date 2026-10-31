@@ -1403,12 +1403,13 @@ const Shop = {
     this.run = run;
     this.mode = mode;
     this.justChose = null;
+    this.forgeReveal = null;
     const lines = {
       potions: ['Fresh from the cauldron!', 'One sip and you\'ll feel brand new, dear.', 'Mind the fizzy ones.'],
       upgrades: ['Power has a price, adventurer. Take as much as you can carry.', 'Each enchantment I bind costs a little more than the last.', 'Not to your liking? The runes can show you others... for a fee.'],
       pick: ['Before you go deeper: the runes offer you one gift. Choose it well.', 'A new stage, a new gift. Take one.'],
       sell: ['Let us see what you have got.', 'Everything has a price. Mine is just... smaller.', 'No haggling, friend. Tobin pays fair. Ish.'],
-      forge: ['Hand me that weapon. I\'ll make it sing.', 'The fire\'s hot. What comes out of it... that\'s up to the anvil.', 'Rare, epic, legendary... and once in a blue moon, something that shines red.'],
+      forge: ['Hand me that weapon. I\'ll make it sing.', 'The fire\'s hot. What comes out of it... that\'s up to the anvil.', 'Every piece comes out different. Let\'s see what the fire gives you.'],
     };
     this.say(choose(lines[mode]));
     this.render();
@@ -1425,7 +1426,7 @@ const Shop = {
   /** Everything the window shows, to notice changes. */
   signature() {
     const p = this.hero;
-    return JSON.stringify([this.mode, p.coins, p.upgradeLevels, p.inventory, this.run.shopState(p), this.run.potionStock, this.run.startPicks, p.forged, p.forgePending]);
+    return JSON.stringify([this.mode, p.coins, p.upgradeLevels, p.inventory, this.run.shopState(p), this.run.potionStock, this.run.startPicks, p.forged, this.forgeReveal]);
   },
 
   /** Re-renders if anything shown changed since last time. */
@@ -1624,10 +1625,10 @@ const Shop = {
     App.command({ type: 'pickUpgrade', upgrade: id });
   },
 
-  /** The blacksmith: forge a new enhancement for the hero's weapon. */
+  /** The blacksmith: forge a new attachment for the hero's weapon. */
   forge() {
     const p = this.hero;
-    if (p.forgePending) return;
+    if (this.forgeReveal) return;
     if (p.coins < Forge.price(this.run, p)) {
       this.say("Coin first, then the fire. That's how it works.");
       Sound.play('denied');
@@ -1636,10 +1637,10 @@ const Shop = {
     App.command({ type: 'forge' });
   },
 
-  /** After a forge: keep the new enhancement ('new') or the old one. */
-  forgeKeep(which) {
-    if (!this.hero.forgePending) return;
-    App.command({ type: 'forgeKeep', keep: which });
+  /** The forge's reveal is done with: back to what Borin can make. */
+  forgeDone() {
+    this.forgeReveal = null;
+    this.render();
   },
 
   reroll() {
@@ -1675,13 +1676,18 @@ const Shop = {
       else if (what === 'potion') this.say(vchoose(['Drink it while it\'s fizzy!', 'Pleasure doing business.', 'Come back soon, dear!']));
       else if (what === 'sellPotion' || what === 'sellUpgrade') this.say(vchoose(['A fine piece. Here is your coin.', 'Done! Pleasure doing business.', 'I know just the buyer for this.']));
       else if (what === 'forge') {
-        Sound.play('blockClang');
-        const f = hero.forgePending || hero.forged;
-        this.say(f?.rarity === 'mythical' ? 'By my beard... it SHINES. I\'ve not seen one like that in years.'
-          : f?.rarity === 'legendary' ? 'Now that is fine work, if I say so myself.'
-            : hero.forgePending ? 'There. Keep this one, or what you had? Your call.' : 'There. Feel the weight of that.');
-      } else if (what === 'forgeKeep') this.say(vchoose(['A wise choice. Off you go.', 'Into the slag with the other one.', 'She\'ll serve you well.']));
-      else {
+        // the window hammers away, then reveals what came out (Forge.revealHtml); Borin reacts to it after
+        const f = { ...hero.forged };
+        this.forgeReveal = { f };
+        this.say(vchoose(['Stand back...', 'Let the anvil decide...', 'Heat, hammer, and a little luck...']));
+        Forge.revealSounds(f);
+        setTimeout(() => {
+          if (this.forgeReveal?.f !== f) return;
+          this.say(f.rarity === 'mythical' ? 'By my beard... it SHINES. I\'ve not seen one like that in years.'
+            : f.rarity === 'legendary' ? 'Now that is fine work, if I say so myself.'
+              : f.rarity === 'epic' ? 'Ha! A good one. It\'s on your weapon already.' : 'Solid work. It\'s on your weapon already.');
+        }, Forge.REVEAL_AT * 1000);
+      } else {
         this.justChose = what === 'pick' ? true : this.buying;
         Sound.play('magic');
         this.say(vchoose(['The runes accept you. It is yours.', 'Feel that? The enchantment takes hold...', 'Bound to your soul for this whole journey.']));
