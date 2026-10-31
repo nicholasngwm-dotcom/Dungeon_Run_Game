@@ -309,102 +309,153 @@ class SwingDoors {
     if (me && SwingDoors.distTo(dr, me.x, me.y) < 260) world.shake(now === 0 ? 3 : 2, 0.15);
   }
 
-  // ---------- the Fiery Fortress's doors: curtains of lava that stop pouring to let you through ----------
+  // ---------- the Fiery Fortress's doors: a sheet of lava that drains away to let you through ----------
 
   /**
-   * One spout of a lava curtain's lintel (built once): a block of nether brick across the top of the doorway
-   * with an iron spout in its underside that the lava pours out of. w px wide.
+   * The lava doors' texture (built once): blotches of molten orange, gold and deep red in chunky pixel squares,
+   * like a block of lava. It tiles seamlessly, and the sheet slides it slowly downward so the lava creeps.
    */
-  static lavaLintel(w) {
-    SwingDoors.lintels ??= {};
-    if (SwingDoors.lintels[w]) return SwingDoors.lintels[w];
-    const B = FF.brick;
-    const I = FF.iron;
-    const img = PixelArt.make(w, 16, (p) => {
-      p.rect(0, 1, w, 10, B[3]);
-      p.rect(0, 1, w, 1, B[5]);
-      for (let x = 0; x < w; x += 8) p.rect(x, 6, 1, 5, B[1]);
-      p.rect(0, 10, w, 1, B[0]);
-      // the spout: an iron mouth, a little lava glowing in it
-      const cx = Math.floor(w / 2);
-      p.rect(cx - 5, 10, 10, 4, I[3]);
-      p.rect(cx - 5, 10, 10, 1, I[5]);
-      p.rect(cx - 3, 12, 6, 2, '#1a0604');
-      p.px(cx - 1, 13, FF.lava[3]);
-    }, OUTLINE, 0.5);
-    return (SwingDoors.lintels[w] = img);
+  static lavaTexture() {
+    if (SwingDoors.lavaTex) return SwingDoors.lavaTex;
+    const S = 48;
+    const c = document.createElement('canvas');
+    c.width = S;
+    c.height = S;
+    const g = c.getContext('2d');
+    const L = ['#b3260c', '#d63c16', '#ee5a18', '#ff7a1a', '#ff9a24', '#ffb52e', '#ffd450'];
+    // smooth noise that wraps at the edges (sums of sines over whole periods), banded into the palette
+    for (let y = 0; y < S; y += 3) {
+      for (let x = 0; x < S; x += 3) {
+        const a = (x / S) * TAU;
+        const b = (y / S) * TAU;
+        const v = Math.sin(a * 2 + Math.sin(b) * 1.5) + Math.sin(b * 3 + a) * 0.8 + Math.sin(a * 5 - b * 2) * 0.45 + Math.cos(b * 2 - a * 3) * 0.5;
+        const i = clamp(Math.round((v + 2.5) / 5 * (L.length - 1)), 0, L.length - 1);
+        g.fillStyle = L[i];
+        g.fillRect(x, y, 3, 3);
+      }
+    }
+    // a few white-hot flecks
+    for (const [x, y] of [[6, 9], [27, 3], [39, 30], [15, 36], [33, 18]]) { g.fillStyle = '#fff2a0'; g.fillRect(x, y, 3, 3); }
+    return (SwingDoors.lavaTex = c);
   }
 
   /**
-   * A doorway hung with a curtain of lava: a lintel of brick and iron spouts over the opening, a stream pouring
-   * from each spout down into a glowing trough in the floor. As a hero walks up the spouts stop - the last of the
-   * lava falls away to the trough and the way is clear - and once everyone's gone it pours again, from the top
-   * down. Locked, it pours faster and brighter. It's visual only: it never hurts (the door's tiles block while it's shut).
+   * One solid sheet of lava, the shape (x0, y0)-(x1, y1) filled with the creeping lava texture: a dark cooling
+   * skin down its sides, its top and bottom edges sagging in slow heavy lumps while it drains or pours (lumpTop /
+   * lumpBottom), a soft hot glow over it all.
+   */
+  drawLavaSheet(ctx, x0, y0, x1, y1, t, { lumpTop = false, lumpBottom = false, sealed = false } = {}) {
+    if (y1 - y0 < 2 || x1 - x0 < 2) return;
+    const tex = SwingDoors.lavaTexture();
+    if (SwingDoors.lavaPatCtx !== ctx) { SwingDoors.lavaPat = ctx.createPattern(tex, 'repeat'); SwingDoors.lavaPatCtx = ctx; }
+    const pat = SwingDoors.lavaPat;
+    // anchored to the world, sliding slowly down: the lava creeps
+    pat.setTransform?.(new DOMMatrix().translate(0, Math.round((t * (sealed ? 7 : 4)) % tex.height)));
+    const w = x1 - x0;
+    const edge = (x, lumpy, phase) => (lumpy ? Math.sin(x * 0.09 + t * 0.9 + phase) * 4 + Math.sin(x * 0.23 - t * 0.6) * 2 : 0);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x0, y0 + Math.max(0, edge(x0, lumpTop, 0)));
+    for (let x = x0; x <= x1; x += 4) ctx.lineTo(x, y0 + Math.max(0, edge(x, lumpTop, 0)));
+    ctx.lineTo(x1, y1);
+    for (let x = x1; x >= x0; x -= 4) ctx.lineTo(x, y1 + (lumpBottom ? Math.abs(edge(x, true, 2)) : 0));
+    ctx.closePath();
+    ctx.fillStyle = pat;
+    ctx.fill();
+    ctx.clip();
+    // the cooling skin down its sides, and a glint of light down the left
+    ctx.fillStyle = 'rgba(90, 14, 4, 0.75)';
+    ctx.fillRect(x0, y0 - 6, 3, y1 - y0 + 12);
+    ctx.fillRect(x1 - 3, y0 - 6, 3, y1 - y0 + 12);
+    ctx.fillStyle = 'rgba(255, 230, 150, 0.35)';
+    ctx.fillRect(x0 + 3, y0 - 6, 2, y1 - y0 + 12);
+    if (sealed) { ctx.fillStyle = `rgba(255, 220, 120, ${0.1 + Math.sin(t * 2) * 0.06})`; ctx.fillRect(x0, y0 - 6, w, y1 - y0 + 12); }
+    ctx.restore();
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    PFX.glow(ctx, (x0 + x1) / 2, (y0 + y1) / 2, w * 0.6, sealed ? '255, 90, 40' : FORT_LAVA, sealed ? 0.4 : 0.25, 2, (y1 - y0) / 2 + 8);
+    ctx.restore();
+  }
+
+  /**
+   * A doorway sealed by a sheet of lava, set in a frame of nether brick built into the walls. As a hero walks up,
+   * the lava drains away - its top sinks, slowly, down into a glowing trough in the floor - and the way is clear;
+   * once everyone's gone it pours back down from the lintel, as one sheet, its leading edge heavy and lumpy.
+   * Locked, it glows hotter. It's visual only: it never hurts (the door's tiles block while it's shut).
    */
   lavaDrawables(dr) {
     const items = [];
-    const H = this.height;
-    const len = dr.b - dr.a;
-    const n = Math.max(1, Math.round(len / 24));
-    const w = Math.floor(len / n);
-    const lintel = SwingDoors.lavaLintel(w);
     const sealed = dr.locked && dr.open === 0;
     const k = dr.flow ?? dr.open;   // (drawn a little behind the door itself: thick lava drains and pours slowly)
-    // the stream's head and tail, as fractions of the drop from spout (0) to floor (1)
-    const top = dr.opening ? k : 0;          // stopping: its tail falls away from the spout
-    const bottom = dr.opening ? 1 : 1 - k;   // starting: its head pours down from the spout
+    // the sheet's top and bottom edges, as fractions of the drop from the lintel (0) to the floor (1)
+    const top = dr.opening ? k : 0;          // draining: its top sinks to the floor
+    const bottom = dr.opening ? 1 : 1 - k;   // pouring: its bottom edge comes down from the lintel
     if (dr.ns) {
       items.push({ y: dr.b + 7, draw: (ctx) => this.drawLavaSide(ctx, dr, top, bottom, sealed) });
       return items;
     }
-    // the frame first: brick posts either side of the opening and a lintel running right across onto the walls
+    const H = this.height;
+    const y = dr.y + 8;
     items.push({ y: dr.y + 6, draw: (ctx) => this.drawLavaFrame(ctx, dr) });
-    for (let i = 0; i < n; i++) {
-      const u = (i + 0.5) / n;
-      const x = lerp(dr.a, dr.b, u);
-      const y = dr.y + 8;
-      const sw = w - 6;
-      items.push({
-        y: y - 1,
-        draw: (ctx) => {
-          const t = performance.now() / 1000;
-          const spout = y - H;
-          // the trough in the floor: a slot of lava, glowing brighter while the curtain pours
-          const pour = bottom - top;
-          ctx.fillStyle = '#1a0a0a';
-          ctx.fillRect(Math.round(x - w / 2), Math.round(y - 3), Math.round(w), 6);
-          ctx.fillStyle = pour > 0.05 ? '#e0461e' : '#7a1206';
-          ctx.fillRect(Math.round(x - w / 2 + 1), Math.round(y - 2), Math.round(w - 2), 3);
-          // the stream: thick, slow lava
-          if (pour > 0.01) {
-            const y0 = Math.round(spout + 12 + top * (H - 12));
-            const y1 = Math.round(spout + 12 + bottom * (H - 12));
-            drawLavaStream(ctx, x, y0, y1, sw, t, { seed: i * 1.7, head: !dr.opening && bottom < 0.98, tail: dr.opening && top > 0.02, hot: sealed });
-            ctx.save();
-            ctx.globalCompositeOperation = 'lighter';
-            PFX.glow(ctx, x, (y0 + y1) / 2, sw * 0.9, sealed ? '255, 90, 40' : FORT_LAVA, (sealed ? 0.55 + Math.sin(t * 2 + i) * 0.1 : 0.35) * pour, 2, (y1 - y0) / 2 + 6);
-            ctx.restore();
-          }
-          // the lintel over the doorway, its spout glowing while it pours
-          const jolt = dr.slam > 0 ? Math.round(Math.sin(dr.slam * 60 + i) * dr.slam * 3) : 0;
-          ctx.drawImage(lintel, Math.round(x - lintel.width / 2), Math.round(spout - 2 + jolt));
-          if (pour > 0.05) {
-            ctx.save();
-            ctx.globalCompositeOperation = 'lighter';
-            PFX.glow(ctx, x, spout + 11, 7, FORT_LAVA, 0.6);
-            ctx.restore();
-          }
-        },
-      });
-    }
+    items.push({
+      y: y - 1,
+      draw: (ctx) => {
+        const t = performance.now() / 1000;
+        const pour = bottom - top;
+        // the trough along the floor of the doorway
+        ctx.fillStyle = '#1a0a0a';
+        ctx.fillRect(Math.round(dr.a), Math.round(y - 3), Math.round(dr.b - dr.a), 6);
+        ctx.fillStyle = pour > 0.05 ? '#e0461e' : '#7a1206';
+        ctx.fillRect(Math.round(dr.a + 1), Math.round(y - 2), Math.round(dr.b - dr.a - 2), 3);
+        // the sheet, filling the frame from the lintel down
+        const lintelY = y - H + 11;
+        if (pour > 0.01) {
+          this.drawLavaSheet(ctx, Math.round(dr.a), Math.round(lintelY + top * (y - lintelY)), Math.round(dr.b), Math.round(lintelY + bottom * (y - lintelY)), t,
+            { lumpTop: dr.opening && top > 0.02, lumpBottom: !dr.opening && bottom < 0.98, sealed });
+        }
+      },
+    });
     return items;
   }
 
   /**
-   * A lava curtain in a doorway on a room's side, seen edge-on: a beam of brick along the top of the opening,
-   * H px up, and the sheet of lava falling from it to a trough along the floor. top / bottom: the falling sheet's
-   * tail and head, as fractions of the drop (see lavaDrawables).
+   * A lava door in a doorway on a room's side, seen edge-on: a beam of brick along the top of the opening, H px up,
+   * and the sheet of lava falling from it to a trough along the floor. top / bottom: the sheet's top and bottom edges
+   * as fractions of the drop (see lavaDrawables).
    */
+  drawLavaSide(ctx, dr, top, bottom, sealed) {
+    const H = this.height;
+    const t = performance.now() / 1000;
+    const x = Math.round(dr.x);
+    const a = dr.a + 8;
+    const b = dr.b + 8;
+    const B = FF.brick;
+    // the trough along the floor
+    ctx.fillStyle = '#1a0a0a';
+    ctx.fillRect(x - 8, Math.round(a), 16, Math.round(b - a));
+    const pour = bottom - top;
+    ctx.fillStyle = pour > 0.05 ? '#e0461e' : '#7a1206';
+    ctx.fillRect(x - 6, Math.round(a + 1), 12, Math.round(b - a - 2));
+    // the sheet: from height H (1 - top) down to height H (1 - bottom) over every point of the doorway
+    if (pour > 0.01) {
+      const drop = H - 10;
+      this.drawLavaSheet(ctx, x - 7, Math.round(a - drop * (1 - top)), x + 7, Math.round(b - drop * (1 - bottom)), t,
+        { lumpTop: dr.opening && top > 0.02, lumpBottom: !dr.opening && bottom < 0.98, sealed });
+    }
+    // the lintel beam across the top
+    const jolt = dr.slam > 0 ? Math.round(Math.sin(dr.slam * 60) * dr.slam * 3) : 0;
+    const ty = Math.round(a - H) + jolt;
+    const len = Math.round(b - a);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 10, ty - 1, 20, len + 12);
+    ctx.fillStyle = B[3];
+    ctx.fillRect(x - 9, ty, 18, len + 10);
+    ctx.fillStyle = B[5];
+    ctx.fillRect(x - 9, ty, 2, len + 10);
+    ctx.fillStyle = B[1];
+    for (let yy = ty + 8; yy < ty + len + 10; yy += 8) ctx.fillRect(x - 9, yy, 18, 1);
+  }
+
   /**
    * A front-on lava curtain's frame: a post of nether brick standing against the wall at either side of the opening,
    * and the lintel running from one to the other and on over the walls, so the whole gate is built into them.
@@ -464,103 +515,6 @@ class SwingDoors {
     ctx.fillRect(kx - 2, top + 1 + jolt, 2, 2);
   }
 
-  /**
-   * A lava curtain in a doorway on a room's side. Seen straight edge-on it would be a sliver, so it's drawn turned
-   * to the viewer: its line across the floor runs on a slant (from the near wall's corner to the far one's), so the
-   * sheet of lava shows as a broad slanted face. Brick posts stand at both ends, a lintel beam joins them along the
-   * top, and the lava pours from the beam to a trough along the slant. top / bottom: the sheet's tail and head as
-   * fractions of the drop (see lavaDrawables).
-   */
-  drawLavaSide(ctx, dr, top, bottom, sealed) {
-    const H = this.height;
-    const t = performance.now() / 1000;
-    const B = FF.brick;
-    const S = 44;                    // the slant: the curtain's floor line runs from x - S (far end) to x + S (near end)
-    const xa = Math.round(dr.x - S);
-    const xb = Math.round(dr.x + S);
-    const ya = dr.a + 4;
-    const yb = dr.b + 8;
-    const drop = H - 12;
-    const along = (f, h) => ({ x: lerp(xa, xb, f), y: lerp(ya, yb, f) - h });   // a point on the curtain: f along it, h px up
-    const quad = (pts, color) => {
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-      ctx.closePath();
-      ctx.fill();
-    };
-    const jolt = dr.slam > 0 ? Math.round(Math.sin(dr.slam * 60) * dr.slam * 3) : 0;
-    const post = (p) => {
-      ctx.fillStyle = OUTLINE;
-      ctx.fillRect(Math.round(p.x) - 7, Math.round(p.y - H - 2) + jolt, 14, H + 6);
-      ctx.fillStyle = B[3];
-      ctx.fillRect(Math.round(p.x) - 6, Math.round(p.y - H - 1) + jolt, 12, H + 4);
-      ctx.fillStyle = B[1];
-      for (let yy = Math.round(p.y - H) + 5; yy < p.y + 3; yy += 6) ctx.fillRect(Math.round(p.x) - 6, yy + jolt, 12, 1);
-      ctx.fillStyle = B[5];
-      ctx.fillRect(Math.round(p.x) - 6, Math.round(p.y - H - 1) + jolt, 2, H + 4);
-    };
-    // the far post (behind the sheet), then the trough along the floor
-    post(along(0, 0));
-    const pour = bottom - top;
-    quad([along(0, -4), along(1, -4), along(1, 4), along(0, 4)], '#1a0a0a');
-    quad([along(0, -2), along(1, -2), along(1, 2), along(0, 2)], pour > 0.05 ? '#e0461e' : '#7a1206');
-    // the sheet of lava: a slanted face between the heights it's fallen to
-    if (pour > 0.01) {
-      const h1 = drop * (1 - top);      // its top edge, px up
-      const h0 = drop * (1 - bottom);   // its bottom edge
-      quad([along(0, h1), along(1, h1), along(1, h0), along(0, h0)], '#7a1606');
-      quad([along(0.04, h1 - 1), along(0.96, h1 - 1), along(0.96, h0 + 1), along(0.04, h0 + 1)], sealed ? '#ff7a1a' : '#e0461e');
-      // slow heavy folds sliding down its face
-      ctx.save();
-      ctx.lineWidth = 2;
-      const speed = sealed ? 9 : 5;
-      for (let j = 0; j < 8; j++) {
-        const h = h1 - (((t * speed + j * 9) % 72));
-        if (h <= h0 + 2 || h >= h1 - 2) continue;
-        const sag = Math.sin(t * 0.7 + j) * 2;
-        const p0 = along(0.06, h);
-        const pm = along(0.5, h - sag);
-        const p1 = along(0.94, h);
-        ctx.strokeStyle = j % 3 === 0 ? (sealed ? '#fff0a0' : '#ffd27a') : '#ffa030';
-        ctx.beginPath();
-        ctx.moveTo(p0.x, p0.y);
-        ctx.quadraticCurveTo(pm.x, pm.y + 2, p1.x, p1.y);
-        ctx.stroke();
-      }
-      // lit along the near edge, a dark skin cooling down the far one
-      ctx.strokeStyle = sealed ? '#ffc24a' : '#ff9a3a';
-      ctx.beginPath();
-      ctx.moveTo(along(0.96, h1).x, along(0.96, h1).y);
-      ctx.lineTo(along(0.96, h0).x, along(0.96, h0).y);
-      ctx.stroke();
-      ctx.restore();
-      // the leading edge while it pours down: a thick swollen lip
-      if (!dr.opening && bottom < 0.98) {
-        ctx.save();
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = '#ff7a1a';
-        ctx.beginPath();
-        ctx.moveTo(along(0, h0).x, along(0, h0).y);
-        ctx.lineTo(along(1, h0).x, along(1, h0).y);
-        ctx.stroke();
-        ctx.restore();
-      }
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const mid = along(0.5, (h0 + h1) / 2);
-      PFX.glow(ctx, mid.x, mid.y, S + 10, sealed ? '255, 90, 40' : FORT_LAVA, (sealed ? 0.55 : 0.35) * pour, 2, (yb - ya) / 2 + (h1 - h0) / 2);
-      ctx.restore();
-    }
-    // the lintel beam along the top, between the posts
-    const l0 = along(0, H);
-    const l1 = along(1, H);
-    quad([{ x: l0.x - 2, y: l0.y - 3 + jolt }, { x: l1.x + 2, y: l1.y - 3 + jolt }, { x: l1.x + 2, y: l1.y + 11 + jolt }, { x: l0.x - 2, y: l0.y + 11 + jolt }], OUTLINE);
-    quad([{ x: l0.x, y: l0.y - 2 + jolt }, { x: l1.x, y: l1.y - 2 + jolt }, { x: l1.x, y: l1.y + 10 + jolt }, { x: l0.x, y: l0.y + 10 + jolt }], B[3]);
-    quad([{ x: l0.x, y: l0.y - 2 + jolt }, { x: l1.x, y: l1.y - 2 + jolt }, { x: l1.x, y: l1.y + 1 + jolt }, { x: l0.x, y: l0.y + 1 + jolt }], B[5]);
-    // the near post, in front of it all
-    post(along(1, 0));
-  }
 
   /**
    * The lava curtains (visual only): spatters off the trough while one pours; a hiss of steam from the spouts as it
