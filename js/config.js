@@ -151,7 +151,7 @@ const CONFIG = {
       speed: 180,
       crit: { chance: 0.1, multiplier: 1.5 },
       resource:  { name: 'MANA', max: 200, regen: 5, color: '#3fc2a8' },
-      bolt:      { damage: 24, cost: 3, cooldown: 0.3, speed: 360, turnRate: 7, seekRange: 420, life: 2.2 },
+      bolt:      { damage: 24, cost: 3, cooldown: 0.34, speed: 360, turnRate: 7, seekRange: 420, life: 2.2 },
       // RMB: the frostfire ball; everything in its blast is ignited with frostfire for burnTime s: burning
       // (burnDps) and slowed by `slow` at once. Another hit refreshes it rather than stacking
       fireball:  { damage: 65, cost: 30, cooldown: 2, speed: 340, radius: 70, maxRange: 450, burnDps: 12, burnTime: 3, slow: 0.35 },
@@ -159,6 +159,7 @@ const CONFIG = {
       lightning: { damage: 240, cost: 120, cooldown: 3, delay: 1, selectRadius: 70,
                    arcRange: 240, arcDamage: 140, arcCount: 4 },
       // F: turn into a small, fast bird (tiny hitbox, can't cast). F again lands early.
+      // Its cooldown counts from the landing, not the cast.
       // F: bird form: flies over obstacles (cover, pillars, furniture, hedges) and spike traps; walls and doors still stop it
       bird:      { cost: 30, cooldown: 6, duration: 4, speedMultiplier: 1.8, radius: 5 },
       // Q: place a magic circle (LMB, RMB cancels) that drains enemies in it into mana (manaSteal of the damage).

@@ -373,6 +373,7 @@ class Mage extends Player {
     if ((b.t > 0 && Input.pressed('f')) || b.t >= this.cfg.bird.duration) return this.endBird(world);
     Upgrades.birdTrail(this, world);   // Birdie Trail
     b.t += dt;
+    this.cooldowns.f = this.cfg.bird.cooldown;   // the cooldown only starts counting down once she lands
     // the bird faces the way it flies (not the mouse), keeping its heading when hovering or flying straight up/down
     if (this.moving && this.moveDir.x) b.facing = this.moveDir.x > 0 ? 1 : -1;
     this.facing = b.facing;
@@ -384,6 +385,7 @@ class Mage extends Player {
   endBird(world) {
     this.bird = null;
     this.radius = 12;
+    this.cooldowns.f = this.cfg.bird.cooldown;   // (counted from the landing, not the cast)
     // landing on top of cover, furniture or a hedge: she flutters down beside it, onto open floor
     const f = world.dungeon;
     if (f.boxHitsWall(this.x, this.y, this.hw, this.hh)) {

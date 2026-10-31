@@ -64,7 +64,7 @@ const HERO_GUIDE = {
       { key: 'E', icon: 'e', name: 'Lightning', tags: [`${c.lightning.damage} dmg`, `${c.lightning.cost} mana`],
         desc: `Press E, then click an enemy. After ${sec(c.lightning.delay)} lightning strikes it, then jumps to up to ${c.lightning.arcCount} nearby enemies for ${c.lightning.arcDamage} each.` },
       { key: 'F', icon: 'f', name: 'Bird Form', tags: [`${c.bird.cost} mana`, `${sec(c.bird.cooldown)} cd`],
-        desc: `Turn into a tiny, very fast bird for ${sec(c.bird.duration)} to escape or reposition. It flies over obstacles (crates, pillars, tombs, furniture, hedges) and spike traps; walls and doors still stop it. You can't attack as a bird. Press F again to land early.` },
+        desc: `Turn into a tiny, very fast bird for ${sec(c.bird.duration)} to escape or reposition. It flies over obstacles (crates, pillars, tombs, furniture, hedges) and spike traps; walls and doors still stop it. You can't attack as a bird. Press F again to land early. The cooldown starts once you land.` },
       { key: 'Q', icon: 'q', name: 'Mana Drain', tags: [`charge: deal ${c.ult.charge} dmg`, `${c.ult.dps} dmg/s`],
         desc: `Press Q, then LMB to place a magic circle (RMB cancels). For ${sec(c.ult.duration)} it damages every enemy inside and turns ${pct(c.ult.manaSteal)} of it into mana. The fewer enemies caught, the harder it drains each (up to ${c.ult.focus}x on a lone target), and your RMB, E and F recharge in at most ${sec(c.ult.activeCooldown)}.` },
     ],
