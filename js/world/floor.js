@@ -35,7 +35,8 @@ class FloorMap extends Dungeon {
     this.themeId = themeId;
     this.bossType = opts.boss || null;
     this.practice = !!opts.practice;   // boss practice: just a small entrance room and the boss's room
-    this.hasVault = !!opts.vault && !this.practice;
+    this.test = !!opts.test;           // the test dungeon: a fixed floor with one of every room (see testLayout)
+    this.hasVault = (!!opts.vault || this.test) && !this.practice;
     this.seed = seed;
     this.T = CONFIG.tileSize;
     this.cols = g.cols * g.cellW + 2;
@@ -100,6 +101,8 @@ class FloorMap extends Dungeon {
       boss.type = 'boss';
       return true;
     }
+
+    if (this.test) return this.testLayout(addRoom, link);
 
     // grow a tree out from the middle cell, preferring rooms with few neighbours (long branches)
     const start = addRoom(Math.floor(g.cols / 2), Math.floor(g.rows / 2));
@@ -172,6 +175,46 @@ class FloorMap extends Dungeon {
       const [cx, cy] = choose(free);
       addRoom(cx, cy).type = 'vault';
     }
+    return true;
+  }
+
+  /**
+   * The test dungeon's floor (on the 5x5 grid): the start room in the middle with a puzzle room above,
+   * the shop to the right (and the boss room beyond it, entered from the side), a combat room (with the
+   * secret hole) and a survival room to the left, a defend room below, and the nine special rooms
+   * hanging off them. The secret room and the gem vault sit on their own in the corners.
+   *
+   *   (0,0) vault  (1,0)        (2,0) special  (3,0)          (4,0)
+   *   (0,1) special(1,1) special(2,1) PUZZLE   (3,1) special  (4,1)
+   *   (0,2) SURVIVE(1,2) COMBAT (2,2) START    (3,2) SHOP     (4,2) BOSS
+   *   (0,3) special(1,3) special(2,3) DEFEND   (3,3) special  (4,3)
+   *   (0,4)        (1,4) special(2,4) special  (3,4)          (4,4) secret
+   */
+  testLayout(addRoom, link) {
+    const at = {};
+    const room = (cx, cy, type, from = null, special = null) => {
+      const r = addRoom(cx, cy);
+      r.type = type;
+      if (special) r.special = special;
+      if (from) link(at[from], r);
+      at[`${cx},${cy}`] = r;
+      return r;
+    };
+    room(2, 2, 'start');
+    room(1, 2, 'combat', '2,2');
+    room(0, 2, 'survival', '1,2');
+    room(3, 2, 'shop', '2,2');
+    room(4, 2, 'boss', '3,2');
+    room(2, 1, 'puzzle', '2,2');
+    room(2, 3, 'defend', '2,2');
+    const specials = CONFIG.run.specials;
+    [['1,1', '1,2'], ['0,1', '0,2'], ['3,1', '3,2'], ['2,0', '2,1'], ['1,3', '1,2'], ['0,3', '0,2'], ['3,3', '3,2'], ['2,4', '2,3'], ['1,4', '1,3']]
+      .forEach(([cell, from], i) => {
+        const [cx, cy] = cell.split(',').map(Number);
+        room(cx, cy, 'special', from, specials[i % specials.length]);
+      });
+    room(4, 4, 'secret');
+    room(0, 0, 'vault');
     return true;
   }
 

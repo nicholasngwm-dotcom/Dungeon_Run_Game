@@ -1134,7 +1134,7 @@ const HUD = {
     const run = game.run;
     const secs = Math.floor(game.time);
     this.text(ctx, 'SCOREBOARD', x + 14, y + 10, { size: 12, color: '#f2a541' });
-    this.text(ctx, `${run.theme.name.toUpperCase()}  STAGE ${run.stage}/3   ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, x + w - 14, y + 14, { size: 7, align: 'right', color: '#d8c8a0' });
+    this.text(ctx, `${run.testBoss ? 'TEST DUNGEON' : `${run.theme.name.toUpperCase()}  STAGE ${run.stage}/3`}   ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, x + w - 14, y + 14, { size: 7, align: 'right', color: '#d8c8a0' });
     const colX = (i) => x + 250 + i * 72;
     cols.forEach(([label, , color], i) => this.text(ctx, label, colX(i), y + 40, { size: 6, align: 'center', color }));
     ctx.fillStyle = 'rgba(220, 180, 76, 0.35)';

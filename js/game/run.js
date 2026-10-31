@@ -120,9 +120,12 @@ class DungeonRun {
     this.world = world;
     this.mode = opts.mode;
     this.practiceBoss = opts.practiceBoss || null;
-    this.stage = this.practiceBoss ? DungeonRun.bossStage(this.practiceBoss) : 1;
+    // the test dungeon (mode 'test'): one fixed floor with every kind of room, the chosen boss at the stage it's
+    // normally met, plenty of coins, the practice cheats, and no gems or saved run
+    this.testBoss = opts.mode === 'test' ? opts.testBoss || 'golem' : null;
+    this.stage = this.practiceBoss || this.testBoss ? DungeonRun.bossStage(this.practiceBoss || this.testBoss) : 1;
     this.themes = [];
-    for (let s = 0; s < 3; s++) this.themes.push(opts.mode === 'set' ? opts.theme : this.rollTheme());
+    for (let s = 0; s < 3; s++) this.themes.push(opts.mode === 'random' ? this.rollTheme() : opts.theme);
     this.time = 0;
     this.startPicks = {};          // each stage's free upgrade: 'stage|hero key' -> the id chosen
     // a multiplayer resync carries the run on where it was (see snapshot / Session.resyncRun)
@@ -243,8 +246,8 @@ class DungeonRun {
     // the stage boss: the theme's own, or (the castle) its stage's: the Prince or the Princess, the Queen, the King
     const options = this.theme.stageBosses?.[this.stage] || this.theme.bosses || [this.theme.boss];
     const fresh = options.filter((b) => b !== this.bossType);
-    this.bossType = this.practiceBoss || this.lateBoss() || choose(fresh.length ? fresh : options);
-    w.dungeon = new FloorMap(this.stage, this.themeId, undefined, { boss: this.bossType, practice: !!this.practiceBoss, vault: this.stage === 3 });
+    this.bossType = this.practiceBoss || this.testBoss || this.lateBoss() || choose(fresh.length ? fresh : options);
+    w.dungeon = new FloorMap(this.stage, this.themeId, undefined, { boss: this.bossType, practice: !!this.practiceBoss, vault: this.stage === 3, test: !!this.testBoss });
     this.active = null;
     this.portal = null;
     this.totem = null;
@@ -308,6 +311,11 @@ class DungeonRun {
     this.populate();
     if (this.practiceBoss) {
       w.banner('BOSS PRACTICE', 'Its room lies through the door', 3);
+      return;
+    }
+    if (this.testBoss) {
+      for (const p of w.players) p.coins = Math.max(p.coins, 9999);
+      w.banner('TEST DUNGEON', 'Every kind of room is on this floor - the boss is past the shop', 3.5);
       return;
     }
     const lines = this.theme.stageLines || ['Clear the rooms and find the boss', 'The enemies grow stronger', 'The enemies grow stronger'];
@@ -1030,13 +1038,13 @@ class DungeonRun {
    */
   openGemChest(pr) {
     const w = this.world;
-    const n = CONFIG.gems.win;
+    const n = this.testBoss ? 0 : CONFIG.gems.win;   // (the test dungeon pays nothing)
     this.chestPop(pr, () => {
       w.gemsEarned = n;
-      w.events.onGems?.(n);
+      if (n > 0) w.events.onGems?.(n);
       this.gemFountain(pr.x, pr.y - 16, 36);
-      w.effects.text(pr.x, pr.y - 52, `+${n} GEMS`, { color: '#8ac8ff', size: 12, life: 2.4 });
-      w.banner('GEMS CLAIMED', 'Step into the portal to leave the dungeon', 3);
+      w.effects.text(pr.x, pr.y - 52, n > 0 ? `+${n} GEMS` : 'TEST RUN: NO GEMS', { color: '#8ac8ff', size: 12, life: 2.4 });
+      w.banner(n > 0 ? 'GEMS CLAIMED' : 'THE GEM VAULT', 'Step into the portal to leave the dungeon', 3);
       w.after(1.2, () => {
         const r = pr.room;
         this.portal = { kind: 'portal', x: r.cx, y: r.cy + 2.6 * this.floor.T, label: 'LEAVE THE DUNGEON', exit: true };
@@ -1082,7 +1090,7 @@ class DungeonRun {
    * Nothing for boss practice.
    */
   gemsForProgress() {
-    if (this.practiceBoss) return 0;
+    if (this.practiceBoss || this.testBoss) return 0;
     const G = CONFIG.gems;
     const rooms = this.floor.rooms.filter((r) => LOCKING_ROOMS.includes(r.type) && r.type !== 'boss');
     const cleared = rooms.filter((r) => r.state === 'cleared').length;
@@ -2837,7 +2845,7 @@ class DungeonRun {
 
   /** Top-right: theme + stage, the room objective, and the minimap. */
   drawHud(ctx) {
-    HUD.text(ctx, `${this.theme.name.toUpperCase()}  STAGE ${this.stage}/3`, CONFIG.screen.width - 14, 14, { size: 9, align: 'right', color: '#f2a541' });
+    HUD.text(ctx, this.testBoss ? `TEST DUNGEON  ${this.theme.name.toUpperCase()}` : `${this.theme.name.toUpperCase()}  STAGE ${this.stage}/3`, CONFIG.screen.width - 14, 14, { size: 9, align: 'right', color: '#f2a541' });
     const goal = this.objectiveText();
     if (goal) HUD.text(ctx, goal, CONFIG.screen.width - 14, 30, { size: 7, align: 'right' });
     this.drawMinimap(ctx, CONFIG.screen.width - 14, 46);

@@ -404,7 +404,7 @@ const App = {
   /** A solo dungeon run saves at the start of every stage (DungeonRun.start), on this profile. */
   saveRun(run) {
     const g = run.world;
-    if (this.mp || g.multiplayer || !Profiles.current || run.practiceBoss || !this.lastRun || this.lastRun.practiceBoss) return;
+    if (this.mp || g.multiplayer || !Profiles.current || run.practiceBoss || run.testBoss || !this.lastRun || this.lastRun.practiceBoss) return;
     RunSave.put({
       run: { mode: this.lastRun.mode, theme: this.lastRun.theme || null },
       classId: g.localPlayer.classId,
@@ -627,7 +627,7 @@ const App = {
 
   // ---------- runs ----------
 
-  /** The test dungeon: the original wave arena. */
+  /** The old wave arena (only the ?class= dev shortcuts still use it; the gate's Test Dungeon is startTestDungeon). */
   startRun() {
     if (this.mp) { if (this.mp.isHost) this.mp.startRun(null); return; }
     this.lastRun = null;
@@ -638,10 +638,19 @@ const App = {
   /** A dungeon run: { mode: 'set', theme } or { mode: 'random' }. */
   startDungeonRun(run) {
     if (this.mp) { if (this.mp.isHost) this.mp.startRun(run); return; }
-    this.abandonSavedRun();
+    if (run.mode !== 'test') this.abandonSavedRun();   // (the test dungeon leaves a saved run alone)
     this.lastRun = run;
     this.practiceMode = false;
     this.startGame(this.classId);
+  },
+
+  /**
+   * The gate's Test Dungeon: one floor with every kind of room (DungeonRun mode 'test'), the chosen boss
+   * in its theme at the stage it's normally met, 9999 coins and the practice cheat panel; no gems, no save.
+   */
+  startTestDungeon(boss) {
+    if (!Game.practiceBosses.includes(boss)) return;
+    this.startDungeonRun({ mode: 'test', theme: DungeonRun.bossTheme(boss), testBoss: boss });
   },
 
   /** End screen "Try Again": the same kind of run again. */
@@ -677,7 +686,7 @@ const App = {
     this.game = new Game(classId, this.events, {
       practice: this.practiceMode ? this.practiceOptions : null,
       // the practice cheats also work in a boss arena opened from the range
-      cheats: this.practiceMode || this.lastRun?.practiceBoss ? this.practiceOptions : null,
+      cheats: this.practiceMode || this.lastRun?.practiceBoss || this.lastRun?.mode === 'test' ? this.practiceOptions : null,
       run: this.practiceMode ? null : save ? { ...this.lastRun, resume: save.snapshot } : this.lastRun,
     });
     if (save) {
@@ -698,7 +707,7 @@ const App = {
   endGame(won, stats) {
     this.state = 'ended';
     // a finished solo run (won or wiped) has nothing left to continue
-    if (!this.mp && this.game?.run && !this.game.run.practiceBoss) RunSave.clear();
+    if (!this.mp && this.game?.run && !this.game.run.practiceBoss && !this.game.run.testBoss) RunSave.clear();
     Menus.showEnd(won, stats, this.mp ? (this.mp.isHost ? 'host' : 'client') : null);
   },
 

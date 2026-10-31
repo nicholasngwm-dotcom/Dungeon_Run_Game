@@ -1662,3 +1662,9 @@ body.touch #screen-menu .hint.credit { left: 22px; right: auto; bottom: 6px; }
 @keyframes forgeFadeIn { to { opacity: 1; pointer-events: auto; } }
 @keyframes forgeFlash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
 body.touch .forge-reveal { width: 380px; height: 270px; }
+
+/* the test dungeon's boss picker: eight small cards, four to a row */
+.cards.boss-cards { display: grid; grid-template-columns: repeat(4, 180px); gap: 12px; }
+.boss-card { min-height: 96px; }
+.boss-card h3 { font-size: 14px; }
+body.touch .cards.boss-cards { grid-template-columns: repeat(4, 150px); gap: 8px; }

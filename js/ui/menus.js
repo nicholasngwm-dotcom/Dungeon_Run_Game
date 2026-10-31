@@ -322,10 +322,11 @@ const Menus = {
       case 'mode':
         if (arg === 'set') this.showDungeonView('themes');
         else if (arg === 'random') app.startDungeonRun({ mode: 'random' });
-        else app.startRun();   // test dungeon
+        else this.showDungeonView('bosses');   // the test dungeon: pick its boss first
         break;
       case 'theme': app.startDungeonRun({ mode: 'set', theme: arg }); break;
       case 'dungeonBack': this.showDungeonView('modes'); break;
+      case 'testBoss': app.startTestDungeon(arg); break;
       case 'bestiaryFilter': Bestiary.setFilter(arg, arg2); break;
       case 'bestiaryTheme': Bestiary.setTheme(arg); break;
       case 'bestiaryFlip': Bestiary.flip(Number(arg)); break;
@@ -644,7 +645,18 @@ const Menus = {
     document.getElementById('ready-cancel').classList.toggle('hidden', !app.mp.isHost);
   },
 
-  /** Dungeon gate: 'modes' (Set / Random / Test) or 'themes' (Set Dungeon's theme list). */
+  /** The test dungeon's boss picker: a card per boss, with the theme and stage it's fought at. */
+  renderTestBosses() {
+    const names = { golem: 'The Clay Golem', guardian: 'The Guardian', phantom: 'The Phantom King', deathbringer: 'The Deathbringer', prince: 'The Prince', princess: 'The Princess', queen: 'The Queen', king: 'The King' };
+    document.getElementById('dungeon-boss-cards').innerHTML = Game.practiceBosses.map((b) => `
+      <div class="card dungeon-card boss-card" data-action="testBoss:${b}">
+        <h3>${names[b] || b}</h3>
+        <div class="stats">${CONFIG.themes[DungeonRun.bossTheme(b)].name.toUpperCase()} - STAGE ${DungeonRun.bossStage(b)}</div>
+        <div class="enter">ENTER</div>
+      </div>`).join('');
+  },
+
+  /** Dungeon gate: 'modes' (Set / Random / Test), 'themes' (Set Dungeon's theme list) or 'bosses' (the test dungeon's boss). */
   showDungeonView(view) {
     // a saved solo run: a card to continue it, and a warning that a new run gives it up (paying its gems)
     const save = !App.mp && RunSave.get();
@@ -659,6 +671,8 @@ const Menus = {
     }
     document.getElementById('dungeon-modes').classList.toggle('hidden', view !== 'modes');
     document.getElementById('dungeon-themes').classList.toggle('hidden', view !== 'themes');
+    document.getElementById('dungeon-bosses').classList.toggle('hidden', view !== 'bosses');
+    if (view === 'bosses') this.renderTestBosses();
     this.show('dungeon');
   },
 

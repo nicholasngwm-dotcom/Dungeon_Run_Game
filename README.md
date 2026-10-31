@@ -56,7 +56,9 @@ The gate offers:
 
 - **Set Dungeon**: pick a theme (only the **Graveyard** so far) and clear its 3 stages.
 - **Random Dungeon**: each stage rolls a theme; repeats are very rare (with one theme it is always the Graveyard).
-- **Test Dungeon**: the original 5-wave arena and random boss.
+- **Test Dungeon**: pick a boss, then play one floor with every kind of room on it (combat, defend, survival,
+  puzzle, shop, all nine special rooms, the secret room and the gem vault) at the stage that boss is met. You
+  start with 9999 coins and the practice cheat panel; it pays no gems and never touches your saved run.
 
 Each stage is a generated floor of rooms joined by hallways, with a minimap in
 the top-right. Combat, defend and survival rooms lock their doors until the

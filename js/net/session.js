@@ -321,7 +321,12 @@ class Session {
     this.queueScene('run', { mode: 'set', theme: DungeonRun.bossTheme(boss), practiceBoss: boss }, { ...this.game.cheats });
   }
 
-  startRun(run) { if (this.isHost) this.queueScene(run ? 'run' : 'test', run); }
+  /** Host: a dungeon run for everyone (the test dungeon comes with the practice cheat panel, all off to start). */
+  startRun(run) {
+    if (!this.isHost) return;
+    const cheats = run?.mode === 'test' ? { god: false, infiniteMana: false, infiniteEnergy: false, noCooldowns: false } : null;
+    this.queueScene(run ? 'run' : 'test', run, cheats);
+  }
   returnToLobby() { if (this.isHost) this.queueScene('lobby'); }
 
   /**
