@@ -3,7 +3,7 @@
 // it acts on the keeper in the room the hero stands in. World events tell the hero's screen how it
 // went (onSpecial: the keeper reacts; the dialogue closes before it's sent).
 //   dark trader:     25 hp for a random gift: an upgrade (maybe one of his own dark ones) or potions
-//   friendly trader: two random upgrades the hero owns for two others (once per hero per room)
+//   friendly trader: three stands of upgrades; give one of yours for one on a stand (once per stand)
 //   mount trader:    a horse, for coins (one per hero)
 //   helper room:     hire the camp's hireling (one per hero per room)
 
@@ -89,35 +89,52 @@ const Specials = {
   },
 
   // ---------- the friendly trader ----------
+  //
+  // His stall: three stands in front of his counter, each showing an upgrade he'll trade (each hero sees
+  // their own three, rolled for them). Walk up to a stand and choose one of your upgrades to give him for
+  // it; that stand then holds what you gave him and can't be traded at again.
 
   /** Upgrades this hero could hand over (not one that can't come off right now, like a full Backpack). */
   tradeable(hero) {
     return Object.keys(hero.upgradeLevels).map((id) => UPGRADE_BY_ID[id]).filter((u) => u && (!u.canSell || u.canSell(hero)));
   },
 
-  friendlyTrade(run, hero) {
-    const c = CONFIG.run.friendlyTrader;
-    const w = run.world;
-    const pr = this.propHere(run, hero, 'friendlyTrader');
+  /**
+   * This hero's three stands at the trader's (keeper: his prop): [{ id, traded }], rolled the first time
+   * they're needed (DungeonRun.update, as the hero walks in) from the run's seed, so every machine agrees.
+   */
+  stall(run, keeper, hero) {
     const key = hero.netId || 'solo';
-    const give = this.tradeable(hero);
-    const ok = !!pr && !hero.dead && !pr.traded?.[key] && give.length >= c.count;
-    if (!ok) { w.events.onSpecial?.(hero, 'friendly', false); return; }
-    (pr.traded || (pr.traded = {}))[key] = true;
-    const out = [];
-    for (let i = 0; i < c.count; i++) out.push(give.splice(randInt(0, give.length - 1), 1)[0]);
-    for (const u of out) {
-      delete hero.upgradeLevels[u.id];
-      u.remove?.(hero);
+    const all = keeper.stalls || (keeper.stalls = {});
+    if (!all[key]) {
+      const offers = seededStock(hero, `${run.shopSeed}|stall|${keeper.room.id}|${key}`).filter((u) => !hero.upgradeLevels[u.id]);
+      all[key] = [0, 1, 2].map((i) => ({ id: offers[i]?.id || null, traded: false }));
     }
-    const offers = shopStock(hero).filter((u) => !hero.upgradeLevels[u.id] && !out.includes(u));
-    const got = [];
-    for (let i = 0; i < c.count && offers.length; i++) got.push(offers.splice(randInt(0, offers.length - 1), 1)[0]);
-    got.forEach((u, i) => w.after(0.3 + i * 0.6, () => run.grantUpgrade(hero, u)));
-    w.effects.text(pr.x, pr.y - 52, `TRADED: ${out.map((u) => u.name.toUpperCase()).join(' + ')}`, { color: '#6cff7a', size: 7, life: 2.2 });
-    w.effects.burst(pr.x + 40, pr.y - 10, { count: 26, colors: ['#6cff7a', '#ffd34a', '#ffffff'], speed: [50, 160], life: [0.4, 0.8], up: 60 });
+    return all[key];
+  },
+
+  /** A trade at stand `i`: the hero gives upgrade `give` and takes the stand's. */
+  standTrade(run, hero, i, give) {
+    const w = run.world;
+    const keeper = this.propHere(run, hero, 'friendlyTrader');
+    const slot = keeper && Number.isInteger(i) && this.stall(run, keeper, hero)[i];
+    const u = slot && UPGRADE_BY_ID[slot.id];
+    const g = UPGRADE_BY_ID[give];
+    const ok = !!slot && !slot.traded && !!u && !!g && !hero.dead && !!hero.upgradeLevels[give]
+      && !hero.upgradeLevels[u.id] && (!g.canSell || g.canSell(hero));
+    if (!ok) { w.events.onSpecial?.(hero, 'stand', false); return; }
+    delete hero.upgradeLevels[give];
+    g.remove?.(hero);
+    run.grantUpgrade(hero, u);
+    slot.id = give;
+    slot.traded = true;
+    const stand = run.props.find((pr) => pr.kind === 'tradeStand' && pr.keeper === keeper && pr.i === i);
+    if (stand) {
+      w.effects.burst(stand.x, stand.y - 26, { count: 24, colors: ['#6cff7a', g.color, '#ffffff'], speed: [40, 140], life: [0.3, 0.7], up: 50 });
+      w.effects.text(stand.x, stand.y - 54, `${g.name.toUpperCase()} -> ${u.name.toUpperCase()}`, { color: '#6cff7a', size: 7, life: 2 });
+    }
     Sound.play('chestOpen');
-    w.events.onSpecial?.(hero, 'friendly', true, { out, got });
+    w.events.onSpecial?.(hero, 'stand', true, { got: u, gave: g });
   },
 
   // ---------- the mount trader ----------

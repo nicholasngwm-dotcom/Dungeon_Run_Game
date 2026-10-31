@@ -119,7 +119,9 @@ enemies chase you once they spot you and go back for the lantern if you outrun t
   has: Dark Minions (every 5th attack raises a shadow with a dagger, up to 3), Darklash (getting hit sends
   out a wave of darkness, 10s cooldown) or Soulreap (hits drop soul fragments: 10 HP each, or 10 soul health
   past full, up to 50).
-- **Friendly trader** (Wren): two random upgrades you own for two others, once a room.
+- **Friendly trader** (Wren): three stands in front of his counter, each showing an upgrade he will trade
+  (every hero gets their own three). Walk up to one and choose which of your upgrades to give him for it;
+  each stand trades once.
 - **Mount trader** (Dusty): a horse (45 coins, 50 HP) that's faster and takes your hits; at 0 it lies down
   to rest, and every new stage gives it 30 HP back. R (RIDE on a phone) gets on and off; no ultimates in
   the saddle, and in a locked room you can get off but not back on.

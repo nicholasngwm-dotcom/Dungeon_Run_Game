@@ -877,8 +877,6 @@ const CONFIG = {
     // dark trader: give up `hp` health (never your last of it) for a gift: an upgrade upgradeChance of the time
     // (a dark one, only he has, darkChance of those while any are left), otherwise potions[0]-potions[1] of one kind
     darkTrader: { hp: 25, upgradeChance: 0.6, darkChance: 0.45, potions: [1, 3], tierWeights: [5, 3, 2] },
-    // friendly trader: once per hero per room, `count` random upgrades the hero owns for `count` others
-    friendlyTrader: { count: 2 },
     // blacksmith: each forge costs `price`; the rarity is rolled from `rarity` weights (see FORGE_RARITIES)
     blacksmith: { price: 35, rarity: { rare: 50, epic: 30, legendary: 15, mythical: 5 } },
     // mount trader's horse: moves the rider speed x faster, takes the rider's hits on its own hp, rests at 0

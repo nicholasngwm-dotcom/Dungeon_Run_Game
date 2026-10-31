@@ -1399,7 +1399,8 @@ const Shop = {
   mode: 'upgrades',
   shown: '',
 
-  open(run, mode) {
+  open(run, mode, stand = null) {
+    this.stand = stand;   // 'trade': which of the friendly trader's stands
     this.run = run;
     this.mode = mode;
     this.justChose = null;
@@ -1409,6 +1410,7 @@ const Shop = {
       upgrades: ['Power has a price, adventurer. Take as much as you can carry.', 'Each enchantment I bind costs a little more than the last.', 'Not to your liking? The runes can show you others... for a fee.'],
       pick: ['Before you go deeper: the runes offer you one gift. Choose it well.', 'A new stage, a new gift. Take one.'],
       sell: ['Let us see what you have got.', 'Everything has a price. Mine is just... smaller.', 'No haggling, friend. Tobin pays fair. Ish.'],
+      trade: ['Good eye! What will you give me for it?', 'One of yours for one of mine. Fair\'s fair!', 'Ooh, that one\'s a beauty. What have you got?'],
       forge: ['Hand me that weapon. I\'ll make it sing.', 'The fire\'s hot. What comes out of it... that\'s up to the anvil.', 'Every piece comes out different. Let\'s see what the fire gives you.'],
     };
     this.say(choose(lines[mode]));
@@ -1439,12 +1441,13 @@ const Shop = {
     this.shown = this.signature();
     const p = this.hero;
     document.getElementById('shop-coins').textContent = p.coins;
-    const titles = { potions: "Mira's Potions", upgrades: "Bram's Enchantments", pick: 'A Gift for the Journey', sell: "Tobin's Trade-ins", forge: "Borin's Forge" };
+    const titles = { potions: "Mira's Potions", upgrades: "Bram's Enchantments", pick: 'A Gift for the Journey', sell: "Tobin's Trade-ins", forge: "Borin's Forge", trade: "Wren's Wares" };
     document.getElementById('shop-title').textContent = titles[this.mode];
     document.getElementById('shop-leave').classList.toggle('hidden', this.mode === 'pick' && this.run.needsPick(p));
     const grid = document.getElementById('shop-items');
-    grid.className = `shop-items ${this.mode === 'pick' || this.mode === 'forge' ? 'upgrades' : this.mode}`;
+    grid.className = `shop-items ${this.mode === 'pick' || this.mode === 'forge' ? 'upgrades' : this.mode === 'trade' ? 'sell' : this.mode}`;
     if (this.mode === 'forge') Forge.render(this, grid, p);
+    else if (this.mode === 'trade') this.renderTrade(grid, p);
     else if (this.mode === 'potions') this.renderPotions(grid, p);
     else if (this.mode === 'sell') this.renderSell(grid, p);
     else if (this.mode === 'pick') this.renderPick(grid, p);
@@ -1546,6 +1549,34 @@ const Shop = {
     for (const c of extra.querySelectorAll('canvas')) c.getContext('2d').drawImage(Sprites.potions[c.dataset.bag], 0, 0);
     this.bindBagDrag(extra);
     document.getElementById('shop-hint').textContent = `Potions go in your bag (${p.inventory.length} slots, up to ${BAG_STACK} of a kind each). ${Touch.enabled ? 'Tap a bag slot during a fight to drink it.' : 'Drag to rearrange; drink with the slot keys during a fight.'}${this.run.stage > 1 ? ' Prices rise each stage.' : ''}`;
+  },
+
+  /** Wren's stand: the upgrade on it, and every upgrade the hero could give him for it. */
+  renderTrade(grid, p) {
+    const slot = this.run.props.find((pr) => pr.kind === 'tradeStand' && pr.i === this.stand && pr.room === this.run.floor.roomAt(p.x, p.y));
+    const st = slot && slot.keeper.stalls?.[p.netId || 'solo']?.[this.stand];
+    const u = st && UPGRADE_BY_ID[st.id];
+    const extra = document.getElementById('shop-extra');
+    if (!u || st.traded) {
+      grid.innerHTML = '<p class="shop-note">That stand is done trading.</p>';
+      extra.innerHTML = '';
+      return;
+    }
+    const rows = Specials.tradeable(p).map((g) => `<div class="sell-row">
+        <canvas data-icon="${g.id}"></canvas>
+        <b style="color:${g.color}">${g.name}</b>
+        <button class="buy" data-action="standTrade:${g.id}">GIVE</button>
+      </div>`).join('') || '<p class="shop-note">You have no upgrades to trade.</p>';
+    grid.innerHTML = `<div class="sell-list trade-offer"><h3>ON THE STAND</h3>${this.card(u, 0, '')}</div>
+      <div class="sell-list"><h3>GIVE ONE OF YOURS <span>it comes off for good</span></h3><div class="sell-rows">${rows}</div></div>`;
+    this.paintIcons(grid);
+    extra.innerHTML = '';
+    document.getElementById('shop-hint').textContent = 'Choose which of your upgrades to hand over: its effect comes off, and you get the one on the stand. Each stand trades once.';
+  },
+
+  standTrade(id) {
+    if (!this.hero.upgradeLevels[id]) return;
+    App.command({ type: 'standTrade', stand: this.stand, give: id });
   },
 
   /** Tobin's stall: every upgrade the hero owns and every potion in their bag, each with what it sells for. */

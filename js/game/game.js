@@ -803,8 +803,8 @@ class Game {
       case 'darkTrade':
         if (this.run && hero) Specials.darkTrade(this.run, hero);
         return;
-      case 'friendlyTrade':
-        if (this.run && hero) Specials.friendlyTrade(this.run, hero);
+      case 'standTrade':
+        if (this.run && hero) Specials.standTrade(this.run, hero, cmd.stand, cmd.give);
         return;
       case 'buyHorse':
         if (this.run && hero) Specials.buyHorse(this.run, hero);

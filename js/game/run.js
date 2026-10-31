@@ -372,6 +372,11 @@ class DungeonRun {
     for (const p of w.heroes) {
       const here = this.floor.roomAt(p.x, p.y);
       if (here) this.visit(here);
+      // walking into the friendly trader's: his three stands are filled for this hero
+      if (here?.special === 'friendlyTrader') {
+        const keeper = this.props.find((pr) => pr.kind === 'friendlyTrader' && pr.room === here);
+        if (keeper) Specials.stall(this, keeper, p);
+      }
       // only lock once the hero is clear of the doorway
       const inside = this.floor.roomAt(p.x, p.y, 1);
       if (inside && inside.state === 'idle' && !this.active) this.enter(inside, p);
@@ -1454,7 +1459,15 @@ class DungeonRun {
     } else if (r.type === 'special') {
       const info = SPECIAL_INFO[r.special];
       if (r.special === 'treasure') for (const dx of [-3, 0, 3]) add('chest', dx, 0, 'TREASURE CHEST', info.color);
-      else add(r.special, 0, -0.5, info.name, info.color);
+      else if (r.special === 'friendlyTrader') {
+        // the trader behind his counter, and three stands of wares in front of it (Specials.stall)
+        add(r.special, 0, -1.6, info.name, info.color);
+        const keeper = this.props[this.props.length - 1];
+        for (let i = 0; i < 3; i++) {
+          add('tradeStand', (i - 1) * 3.4, 1.9, 'TRADE', info.color);
+          Object.assign(this.props[this.props.length - 1], { i, keeper });
+        }
+      } else add(r.special, 0, -0.5, info.name, info.color);
       // the helper camp has one kind of hireling waiting to be hired
       if (r.special === 'helper') this.props[this.props.length - 1].hire = choose(['knight', 'archer', 'priest']);
     } else if (r.type === 'puzzle') {
@@ -1567,6 +1580,7 @@ class DungeonRun {
     if (pr.kind === 'holeExit') return this.ascend(p);
     if (pr.kind === 'shopkeeper' || pr.kind === 'chef' || pr.kind === 'enchanter' || pr.kind === 'pawn') return w.events.onNpc?.(pr.kind, this, p);
     if (pr.kind === 'restaurant5') return w.events.onNpc?.('chef', this, p);
+    if (pr.kind === 'tradeStand') return w.events.onNpc?.('tradeStand', this, p, pr);
     if (SPECIAL_KEEPERS.includes(pr.kind)) return w.events.onNpc?.(pr.kind, this, p);
     if (p === w.localPlayer) {
       w.events.onToast?.(`${pr.label}: COMING SOON`);
@@ -2454,6 +2468,7 @@ class DungeonRun {
         break;
       }
       case 'puzzle': this.drawStone(ctx, pr, x, y); break;
+      case 'tradeStand': this.drawTradeStand(ctx, pr, x, y); break;
       default: {
         // a stall: counter + striped awning in the prop's colour
         box(40, 16, '#9c6c3e', '#5b3922');
@@ -2578,6 +2593,63 @@ class DungeonRun {
     }
   }
 
+  /**
+   * One of the friendly trader's stands: a little patterned rug with a wooden plinth on it, and the upgrade
+   * this screen's hero is offered there floating over it in a glow of its colour (gold-framed if it's a
+   * hero upgrade). Once traded at, it holds what they gave him, dimmed.
+   */
+  drawTradeStand(ctx, pr, x, y) {
+    const rugs = [['#8a2a24', '#b8443a'], ['#2a4a8a', '#3e64b0'], ['#2a6a4a', '#3e8a5a']][pr.i % 3];
+    // the rug, with a gold border and a pattern down the middle
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 24, y - 8, 48, 20);
+    ctx.fillStyle = rugs[0];
+    ctx.fillRect(x - 23, y - 7, 46, 18);
+    ctx.fillStyle = '#d4ac4c';
+    ctx.fillRect(x - 21, y - 5, 42, 1);
+    ctx.fillRect(x - 21, y + 8, 42, 1);
+    ctx.fillStyle = rugs[1];
+    for (let i = 0; i < 5; i++) ctx.fillRect(x - 18 + i * 8, y - 2, 4, 6);
+    for (const dx of [-24, 22]) for (let k = 0; k < 4; k++) { ctx.fillStyle = '#e8dcc0'; ctx.fillRect(x + dx + (dx < 0 ? -2 : 2), y - 6 + k * 5, 2, 2); }   // tassels
+    // the plinth
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 13, y - 13, 26, 13);
+    ctx.fillStyle = '#5b3922';
+    ctx.fillRect(x - 12, y - 12, 24, 11);
+    ctx.fillStyle = '#9c6c3e';
+    ctx.fillRect(x - 12, y - 12, 24, 3);
+    ctx.fillStyle = '#d4ac4c';
+    ctx.fillRect(x - 12, y - 6, 24, 1);
+    // what's on it (for this screen's hero)
+    const me = this.world.localPlayer;
+    const slot = pr.keeper.stalls?.[me.netId || 'solo']?.[pr.i];
+    const u = slot && UPGRADE_BY_ID[slot.id];
+    const cy = Math.round(y - 32 + Math.sin(this.time * 2.4 + pr.i * 2) * 2);
+    if (!u) {
+      HUD.text(ctx, '?', x, cy - 6, { size: 10, align: 'center', color: '#d8c8a0' });
+      return;
+    }
+    const img = Sprites.upgrades[u.id];
+    if (!slot.traded) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, x, cy, 18 + Math.sin(this.time * 4 + pr.i) * 2, hexToRgb(u.color).join(', '), 0.8);
+      ctx.restore();
+    }
+    ctx.globalAlpha = slot.traded ? 0.45 : 1;
+    if (u.hero) {
+      ctx.fillStyle = '#ffd34a';
+      ctx.fillRect(x - img.width / 2 - 2, cy - img.height / 2 - 2, img.width + 4, img.height + 4);
+    }
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - img.width / 2 - 1, cy - img.height / 2 - 1, img.width + 2, img.height + 2);
+    ctx.fillStyle = '#2e1f17';
+    ctx.fillRect(x - img.width / 2, cy - img.height / 2, img.width, img.height);
+    ctx.drawImage(img, x - img.width / 2, cy - img.height / 2);
+    ctx.globalAlpha = 1;
+    HUD.text(ctx, slot.traded ? 'TRADED' : u.name, x, cy - 22, { size: 5, align: 'center', color: slot.traded ? '#8a7a6a' : u.color });
+  }
+
   /** The prop's name, or "[E] ..." when the local hero can use it. */
   drawPropLabel(ctx, pr) {
     const x = Math.round(pr.x);
@@ -2597,6 +2669,13 @@ class DungeonRun {
       if (near) label = pr.wins || pr.strikes ? 'TRY A NEW PATTERN' : 'SHOW THE PATTERN';
     }
     if (pr.kind === 'rewardChest' && !near) return;
+    if (pr.kind === 'tradeStand') {
+      // only a prompt, once you're at it (the stand shows its upgrade's name itself)
+      const slot = pr.keeper.stalls?.[this.world.localPlayer.netId || 'solo']?.[pr.i];
+      if (!near || !slot?.id || slot.traded) return;
+      HUD.text(ctx, `[${Settings.prompt('interact')}] TRADE FOR IT`, x, y + 26, { size: 6, align: 'center', color: '#ffe680' });
+      return;
+    }
     HUD.text(ctx, near ? `[${Settings.prompt('interact')}] ${label}` : label, x, labelY, { size: near ? 7 : 6, align: 'center', color: near ? '#ffe680' : pr.color });
   }
 
@@ -2850,6 +2929,11 @@ class DungeonRun {
     if (goal) HUD.text(ctx, goal, CONFIG.screen.width - 14, 30, { size: 7, align: 'right' });
     this.drawMinimap(ctx, CONFIG.screen.width - 14, 46);
     this.drawTimer(ctx);
+  }
+
+  /** Screen y just under the minimap's frame (the practice cheat panel sits below it in boss practice and the test dungeon). */
+  get minimapBottom() {
+    return 46 + CONFIG.run.grid.rows * Math.round(15 * (Settings.data.minimapSize || 1.4)) + 4;
   }
 
   /**

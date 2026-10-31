@@ -172,7 +172,7 @@ const App = {
       onInteract: (station, hero) => this.interact(station, hero),
       onToast: (text) => Menus.toast(text, '#ffe680'),
       onGems: (n) => Profiles.addGems(n),   // banked on this machine's profile (in multiplayer every machine gets the event)
-      onNpc: (kind, run, hero) => this.talkTo(kind, run, hero),
+      onNpc: (kind, run, hero, prop) => this.talkTo(kind, run, hero, prop),
       onPurchase: (hero, what, ok) => Shop.onPurchase(hero, what, ok),
       onSpecial: (hero, what, ok, info) => this.onSpecial(hero, what, ok, info),
       onStageStart: (run) => this.saveRun(run),
@@ -256,7 +256,7 @@ const App = {
   },
 
   /** Talking to a dungeon NPC: a dialogue first, which can lead on to the shop. */
-  talkTo(kind, run, hero) {
+  talkTo(kind, run, hero, stand = null) {
     if (hero && hero !== this.game.localPlayer) return;
     this.openPanel();
     if (kind === 'shopkeeper') {
@@ -322,21 +322,24 @@ const App = {
         ].filter(Boolean),
       });
     } else if (kind === 'friendlyTrader') {
-      const p = this.game.localPlayer;
-      const pr = Specials.propHere(run, p, 'friendlyTrader');
-      const n = CONFIG.run.friendlyTrader.count;
-      const done = !!pr?.traded?.[p.netId || 'solo'];
-      const can = !done && Specials.tradeable(p).length >= n;
       Dialog.open({
         name: 'WREN', frames: Sprites.npcs.trader,
-        text: done ? 'We already shook on it, friend! A deal is a deal. Safe travels!'
-          : can ? `Tired of what you've got? Hand me ${n} of your upgrades - I pick, mind - and I'll give you ${n} others in their place. Could be better, could be worse. That's trading!`
-            : `I'd love to trade, but you've only got ${Specials.tradeable(p).length} upgrade${Specials.tradeable(p).length === 1 ? '' : 's'} I can take. Come back with at least ${n}!`,
-        options: [
-          can && { label: `Trade ${n} upgrades`, fn: () => { Dialog.close(); this.command({ type: 'friendlyTrade' }); } },
-          { label: can ? 'Maybe later' : 'Bye!', fn: () => Dialog.close() },
-        ].filter(Boolean),
+        text: "Welcome, friend! See my wares on the stands? Walk up to one you fancy, and give me one of your upgrades for it - you choose which. Fair's fair!",
+        options: [{ label: "I'll have a look", fn: () => Dialog.close() }],
       });
+    } else if (kind === 'tradeStand') {
+      // one of Wren's stands: what's on it, and the hero's upgrades to choose from
+      const p = this.game.localPlayer;
+      const slot = stand && Specials.stall(run, stand.keeper, p)[stand.i];
+      const why = !slot?.id ? 'NOTHING ON THIS STAND' : slot.traded ? 'ALREADY TRADED HERE'
+        : p.upgradeLevels[slot.id] ? 'YOU ALREADY HAVE THAT ONE' : !Specials.tradeable(p).length ? 'YOU HAVE NO UPGRADES TO TRADE' : null;
+      if (why) {
+        Menus.toast(why, '#ffe680');
+        Sound.play('denied');
+        this.closePanel();
+        return;
+      }
+      Shop.open(run, 'trade', stand.i);
     } else if (kind === 'mountTrader') {
       const p = this.game.localPlayer;
       const c = CONFIG.run.mount;
@@ -386,13 +389,16 @@ const App = {
   onSpecial(hero, what, ok, info) {
     if (!this.game || hero !== this.game.localPlayer) return;
     if (ok) {
-      if (what === 'friendly' && info?.got?.length) Menus.toast(`NEW: ${info.got.map((u) => u.name.toUpperCase()).join(' + ')}`, '#6cff7a');
+      if (what === 'stand') {
+        Menus.toast(`TRADED ${info.gave.name.toUpperCase()} FOR ${info.got.name.toUpperCase()}`, '#6cff7a');
+        if (Shop.isOpen && Shop.mode === 'trade') this.closePanel();
+      }
       return;
     }
     Sound.play('denied');
     const why = {
       dark: 'NOT ENOUGH HP TO TRADE',
-      friendly: 'NOTHING TO TRADE',
+      stand: 'THAT TRADE IS OFF',
       horse: hero.horse ? 'YOU ALREADY HAVE A HORSE' : 'NOT ENOUGH COINS',
       hire: 'NOT ENOUGH COINS',
     }[what];
@@ -847,6 +853,9 @@ const App = {
     const g = this.state === 'playing' && this.game;
     this.practicePanel.classList.toggle('hidden', !(g && g.cheats));
     this.practicePanel.classList.toggle('arena', !!(g && g.cheats && !g.practice));
+    // in a dungeon (boss practice, the test dungeon) it sits under the minimap instead of over it
+    const top = g && g.cheats && g.run ? `${g.run.minimapBottom + 10}px` : '';
+    if (this.practicePanel.style.top !== top) this.practicePanel.style.top = top;
     if (g && g.cheats) Menus.refreshPractice(g.cheats);   // (in multiplayer a teammate may have toggled one)
 
     Input.endFrame();

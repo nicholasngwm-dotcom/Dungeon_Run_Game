@@ -497,32 +497,108 @@ const Scenes = {
     ];
   },
 
-  /** A friendly trader at a market stall: a cart piled with goods, a counter of wares, a sleepy cat. */
+  /**
+   * The friendly trader's shop: Wren behind a long wooden counter, a tall shelf of wares (bottles, jars,
+   * books, a crate) on the wall behind him, a TRADE sign and a sleepy cat. His three stands sit out in
+   * front of the counter (DungeonRun: 'tradeStand' props).
+   */
   friendlyTrader(x, y, t) {
     const cat = Sprites.props.catSit_ginger ? 'catSit_ginger' : null;
+    const W = 168;
     const pieces = [
-      propPiece('cart', x + 48, y + 4),
+      // the shelf behind him
+      {
+        y: y - 30,
+        draw: (ctx) => {
+          const sx = x - W / 2;
+          const top = y - 58;
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(sx - 1, top - 1, W + 2, 50);
+          ctx.fillStyle = '#3b2416';
+          ctx.fillRect(sx, top, W, 48);
+          for (const row of [0, 1]) {
+            const ry = top + 4 + row * 22;
+            ctx.fillStyle = '#22150e';
+            ctx.fillRect(sx + 3, ry, W - 6, 17);
+            ctx.fillStyle = '#7d532f';
+            ctx.fillRect(sx + 2, ry + 17, W - 4, 3);
+            ctx.fillStyle = '#9c6c3e';
+            ctx.fillRect(sx + 2, ry + 17, W - 4, 1);
+            // wares along it: bottles, jars and books in a seeded jumble
+            for (let i = 0; i < 15; i++) {
+              const k = (i * 7 + row * 5) % 6;
+              const wx = sx + 7 + i * 10.5;
+              const cols = ['#e84a4a', '#6cff7a', '#8ab8ff', '#ffd34a', '#c08aff', '#ff9a3a'];
+              ctx.fillStyle = OUTLINE;
+              if (k < 3) {           // a bottle
+                ctx.fillRect(wx - 1, ry + 5, 6, 12);
+                ctx.fillStyle = cols[(i + row) % 6];
+                ctx.fillRect(wx, ry + 8, 4, 8);
+                ctx.fillStyle = '#e8dcc0';
+                ctx.fillRect(wx + 1, ry + 6, 2, 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(wx, ry + 9, 1, 2);
+              } else if (k < 5) {    // a book standing up
+                ctx.fillRect(wx - 1, ry + 3, 6, 14);
+                ctx.fillStyle = cols[(i * 3 + row) % 6];
+                ctx.fillRect(wx, ry + 4, 4, 13);
+                ctx.fillStyle = '#d4ac4c';
+                ctx.fillRect(wx, ry + 7, 4, 1);
+              } else {               // a fat jar
+                ctx.fillRect(wx - 2, ry + 8, 8, 9);
+                ctx.fillStyle = '#c8b898';
+                ctx.fillRect(wx - 1, ry + 9, 6, 7);
+                ctx.fillStyle = '#7d532f';
+                ctx.fillRect(wx - 1, ry + 9, 6, 2);
+              }
+            }
+          }
+          drawGlints(ctx, [[sx + 30, top + 12], [sx + 100, top + 34], [sx + 140, top + 10]], t);
+        },
+      },
       npcPiece('trader', x, y, t),
-      propPiece('sacks', x - 34, y + 8),
-      propPiece('crate', x - 52, y - 2),
-      propPiece('barrel', x + 20, y + 30),
-      // his counter: coins and trinkets laid out, glinting
-      propPiece('table', x - 2, y + 44, false, (ctx) => {
-        ctx.fillStyle = '#ffd34a';
-        for (const [cx, cy] of [[-14, 24], [-10, 25], [12, 23]]) ctx.fillRect(x + cx, y + cy, 3, 2);
-        ctx.fillStyle = '#6cff7a';
-        ctx.fillRect(x - 2, y + 22, 4, 3);
-        ctx.fillStyle = '#8ab8ff';
-        ctx.fillRect(x + 4, y + 23, 3, 3);
-        drawGlints(ctx, [[x - 13, y + 23], [x + 13, y + 22], [x, y + 21]], t);
-      }),
-      propPiece('bannerGreen', x - 74, y - 20),
+      // the counter in front of him, coins and a scale on it
+      {
+        y: y + 18,
+        draw: (ctx) => {
+          const cx = x - W / 2 + 6;
+          const cw = W - 12;
+          const ty = y + 2;
+          drawShadow(ctx, x, y + 20, cw * 0.5, 5, 0.3);
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(cx - 1, ty - 1, cw + 2, 21);
+          ctx.fillStyle = '#5b3922';
+          ctx.fillRect(cx, ty, cw, 19);
+          ctx.fillStyle = '#9c6c3e';
+          ctx.fillRect(cx, ty, cw, 5);
+          ctx.fillStyle = '#c8925a';
+          ctx.fillRect(cx, ty, cw, 1);
+          ctx.fillStyle = '#4a7a44';
+          ctx.fillRect(cx + 4, ty + 8, cw - 8, 8);   // a green cloth hung down its front
+          ctx.fillStyle = '#d4ac4c';
+          for (let i = 0; i < 9; i++) ctx.fillRect(cx + 8 + i * 17, ty + 15, 5, 1);
+          ctx.fillStyle = '#ffd34a';
+          for (const [dx, dy] of [[-40, -2], [-36, -1], [-38, -4], [44, -2]]) ctx.fillRect(x + dx, ty + dy, 3, 2);
+          // a little brass scale
+          const tip = Math.round(Math.sin(t * 1.6) * 1.5);
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(x + 24, ty - 12, 1, 12);
+          ctx.fillRect(x + 17, ty - 12 + tip, 15, 1);
+          ctx.fillStyle = '#d4ac4c';
+          ctx.fillRect(x + 16, ty - 10 + tip, 5, 2);
+          ctx.fillRect(x + 28, ty - 10 - tip, 5, 2);
+          drawGlints(ctx, [[x - 37, ty - 2], [x + 30, ty - 9]], t);
+        },
+      },
+      propPiece('crate', x - W / 2 - 12, y + 18),
+      propPiece('sacks', x + W / 2 + 14, y + 16),
+      propPiece('bannerGreen', x - 74 - 30, y - 20),
       // a "TRADE" sign on a post
       {
         y: y - 6,
         draw: (ctx) => {
-          const sx = x - 72;
-          const sy = y + 10;
+          const sx = x + W / 2 + 22;
+          const sy = y - 6;
           ctx.fillStyle = OUTLINE;
           ctx.fillRect(sx - 1, sy - 22, 4, 24);
           ctx.fillStyle = '#7d532f';
@@ -537,7 +613,7 @@ const Scenes = {
         },
       },
     ];
-    if (cat) pieces.push(propPiece(cat, x + 30, y + 52, Math.sin(t * 0.2) > 0));
+    if (cat) pieces.push(propPiece(cat, x - 56, y + 2, Math.sin(t * 0.2) > 0));
     return pieces;
   },
 
