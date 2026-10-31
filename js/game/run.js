@@ -293,13 +293,17 @@ class DungeonRun {
     for (const r of f.rooms) for (const d of r.doors) { d.swing = leaves.length; leaves.push({ ...d.leaf, tiles: d.tiles }); }
     // the graveyard's are creaking wrought-iron gates, the ruins' stone pillars the magic raises and sinks
     // (the castle keeps heavy oak doors)
-    const iron = this.themeId === 'graveyard' || this.themeId === 'fortress';   // (the fortress's are black iron portcullis gates)
+    // (the fortress's are curtains of lava that stop pouring to let you through)
+    const iron = this.themeId === 'graveyard';
     const stone = this.themeId === 'ruins';
+    const lava = this.themeId === 'fortress';
     this.doors = new SwingDoors(leaves, iron
       ? { reach: 72, height: 70, edge: 8, style: 'iron', sounds: { open: 'gateCreak', shut: 'gateShut', slam: 'gateClang' } }
       : stone
         ? { reach: 72, height: 78, style: 'stone', sounds: { open: 'graveRumble', shut: 'stomp', slam: 'stomp' } }
-        : { reach: 72, height: 64, edge: 10 });
+        : lava
+          ? { reach: 72, height: 74, style: 'lava', sounds: { open: null, shut: null, slam: 'fireImpact' } }
+          : { reach: 72, height: 64, edge: 10 });
     this.decor = new FloorDecor(f, this);
     this.barrels = Barrels.place(this);   // explosive, poison and frost barrels in the fight rooms (after the decor, clear of it)
     this.fog = this.theme.night && this.theme.fog !== false ? this.placeFog(f) : [];
