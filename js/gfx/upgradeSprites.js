@@ -500,5 +500,40 @@ function buildUpgradeSprites() {
     upArrow(p, 17, 7, G[3]);
   });
 
+  // ---------- the dark trader's ----------
+  const SHADOW = ['#06040c', '#1e1430', '#342456', '#4a3478'];
+  U.darkMinions = icon((p) => {
+    // a little horned shadow rising out of a violet pool, a dagger in its hand
+    p.ellipse(10, 17, 8, 2.5, VIOLET[1]);
+    p.ellipse(10, 17, 5, 1.5, VIOLET[2]);
+    p.round(5, 6, 10, 11, SHADOW[2], 4);
+    p.round(6, 7, 4, 3, SHADOW[3], 1);
+    p.poly([[6, 7], [4, 2], [8, 5]], SHADOW[3]);
+    p.poly([[13, 5], [16, 1], [15, 7]], SHADOW[3]);
+    p.rect(7, 10, 2, 2, '#c48aff');
+    p.rect(11, 10, 2, 2, '#c48aff');
+    p.line(15, 13, 19, 9, VIOLET[3], 1);
+    p.rect(14, 13, 2, 2, SHADOW[1]);
+  });
+  U.darklash = icon((p) => {
+    // a ring of darkness bursting out round a dark core
+    for (let a = 0; a < TAU; a += TAU / 8) {
+      p.line(10 + Math.cos(a) * 4, 10 + Math.sin(a) * 4, 10 + Math.cos(a) * 9, 10 + Math.sin(a) * 9, VIOLET[2], 2);
+    }
+    p.circle(10, 10, 5, SHADOW[1]);
+    p.circle(10, 10, 3, VIOLET[1]);
+    p.rect(9, 9, 2, 2, VIOLET[3]);
+    for (const [x, y] of [[2, 3], [17, 4], [3, 16], [16, 17]]) p.rect(x, y, 1, 1, '#e0c8ff');
+  });
+  U.soulreap = icon((p) => {
+    // a scythe's blade over a violet soul flame
+    p.poly([[6, 18], [4, 12], [7, 6], [10, 10], [12, 4], [15, 11], [14, 18]], VIOLET[1]);
+    p.poly([[8, 17], [7, 12], [9, 9], [11, 12], [12, 8], [13, 13], [12, 17]], VIOLET[2]);
+    p.poly([[9, 16], [9, 13], [11, 12], [11, 16]], '#ffffff');
+    p.line(2, 2, 18, 14, L[2], 1);
+    p.poly([[2, 2], [9, 1], [14, 3], [8, 3.5], [3, 5]], S[4]);
+    p.rect(3, 2, 8, 1, S[5]);
+  });
+
   Sprites.upgrades = U;
 }

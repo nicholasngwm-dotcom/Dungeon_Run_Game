@@ -610,14 +610,23 @@ class MaceSpinner extends Enemy {
   draw(ctx) {
     const spinning = this.state === 'spin' || this.state === 'windup';
     const c = this.cfg;
+    const f = this.facing;
     const cy = this.hy + 2;
-    // the maces on their chains: hanging at its sides, or whirling round in a blur
-    const heads = [];
+    // a mace gripped by the haft in each fist: hanging head-down at its sides, or both arms flung
+    // out and whirling round it (the hands circling it, each mace pointing straight out)
+    const maces = [];
     if (spinning) {
-      const r = this.state === 'spin' ? c.spinRadius * 0.7 : 14 + 10 * (this.stateTime / c.spinWindup);
-      for (const k of [0, Math.PI]) heads.push({ x: this.x + Math.cos(this.spinAngle + k) * r, y: cy + Math.sin(this.spinAngle + k) * r * 0.45 });
+      const reach = this.state === 'spin' ? 12 : 8 + 4 * (this.stateTime / c.spinWindup);
+      for (const k of [0, Math.PI]) {
+        const a = this.spinAngle + k;
+        maces.push({ x: this.x + Math.cos(a) * reach, y: cy + Math.sin(a) * reach * 0.45, a, back: Math.sin(a) < 0 });
+      }
     } else {
-      for (const s of [-1, 1]) heads.push({ x: this.x + s * 14 + Math.sin(this.animTime * 3 + s) * 2, y: this.y - 6 });
+      // at rest they sway a little; dizzy, they wobble about
+      const sway = this.state === 'dizzy' ? Math.sin(this.animTime * 7) * 0.35 : Math.sin(this.animTime * 3) * 0.08;
+      const down = 0.95;   // radians below level
+      maces.push({ x: this.x + f * 9, y: this.hy + 9, a: (f > 0 ? down : Math.PI - down) + sway, back: false });
+      maces.push({ x: this.x - f * 6, y: this.hy + 8, a: (f > 0 ? Math.PI - down : down) - sway, back: true });
     }
     if (this.state === 'spin') {
       // a whirl of steel round it
@@ -630,20 +639,13 @@ class MaceSpinner extends Enemy {
       }
       ctx.restore();
     }
-    const back = heads.filter((h) => h.y < cy);
-    const front = heads.filter((h) => h.y >= cy);
-    const drawHead = (h) => {
-      ctx.strokeStyle = '#26232e';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(this.x + (h.x > this.x ? 8 : -8), this.hy + 4); ctx.lineTo(h.x, h.y); ctx.stroke();
-      const img = Sprites.weapons.mace.img;
-      ctx.drawImage(img, Math.round(h.x - 19), Math.round(h.y - 7), img.width, img.height);
-    };
+    const w = Sprites.weapons.mace;
+    const drawMace = (m) => drawRotated(ctx, w.img, m.x, m.y, w.pivotX, w.pivotY, m.a, Math.cos(m.a) < 0);
     ctx.globalAlpha = this.spawnAlpha;
-    back.forEach(drawHead);
+    maces.filter((m) => m.back).forEach(drawMace);
     this.drawFrame(ctx, this.currentFrame(), this.anchor, this.spawnAlpha);
     ctx.globalAlpha = this.spawnAlpha;
-    front.forEach(drawHead);
+    maces.filter((m) => !m.back).forEach(drawMace);
     ctx.globalAlpha = 1;
     if (this.state === 'dizzy') {
       // dizzy: little stars wobbling round its head

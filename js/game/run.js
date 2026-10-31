@@ -14,7 +14,7 @@ const ROOM_INFO = {
   survival: { name: 'Survival', color: '#ff8a1e', desc: 'Doors lock. Enemies keep coming: stay alive until the timer runs out.' },
   puzzle: { name: 'Puzzle', color: '#b67aff', desc: 'Touch the rune stone and it lights a pattern of colours: step on the matching floor plates in the same order. Get it right three times and every hero gets a free upgrade. Three mistakes and the stone blinks red, then blows up the whole room and sets it ablaze. Run!' },
   shop: { name: 'Shop', color: '#ffd34a', desc: 'Three stalls: buy upgrades (or reroll) from Bram, potions from Mira, and sell them back to Tobin.' },
-  special: { name: 'Special', color: '#c08aff', desc: 'Something unusual: a blacksmith, restaurant, wishing well, trader, treasure... The wishing well grants a wish for coins; the rest are coming soon.' },
+  special: { name: 'Special', color: '#c08aff', desc: 'Something unusual: a blacksmith who forges weapon enhancements, a wishing well, traders (dark, friendly, or one with horses), a camp of helpers for hire, treasure... The hero statue and the restaurant are coming soon.' },
   secret: { name: 'Secret', color: '#fff6c8', desc: 'Not connected to anything. Look for a glowing hole in a combat room floor and jump in. Three chests, open two: one is a mimic.' },
   boss: { name: 'Boss', color: '#ff3b30', desc: 'The theme\'s boss. Beat it to open the portal to the next stage.' },
   vault: { name: 'Gem Vault', color: '#7ac8ff', desc: 'Beat the last boss of a run and its blue portal leads here. Open the chest for your gems, then leave the dungeon.' },
@@ -65,7 +65,7 @@ function roomIconImage(type, state = 'cleared', here = false) {
   return c.toDataURL();
 }
 
-// special rooms: label + colour (placeholders until items / upgrades exist)
+// special rooms: label + colour
 const SPECIAL_INFO = {
   blacksmith: { name: 'BLACKSMITH', color: '#adb2c0' },
   wishingWell: { name: 'WISHING WELL', color: '#6ad8ff' },
@@ -77,6 +77,9 @@ const SPECIAL_INFO = {
   treasure: { name: 'TREASURE ROOM', color: '#ffd34a' },
   helper: { name: 'HELPER ROOM', color: '#8cff9a' },
 };
+
+// the special rooms' keepers you talk to (their dialogues and trades: App.talkTo, Specials, Forge)
+const SPECIAL_KEEPERS = ['blacksmith', 'darkTrader', 'friendlyTrader', 'mountTrader', 'helper'];
 
 // seconds a chest rattles before its lid bursts open (and the loot flies out)
 const CHEST_POP = 0.14;
@@ -141,6 +144,7 @@ class DungeonRun {
   snapshot() {
     const heroes = {};
     for (const p of this.world.players) {
+      const w = this.world;
       heroes[p.netId] = {
         upgrades: Object.keys(p.upgradeLevels),
         coins: p.coins,
@@ -148,6 +152,13 @@ class DungeonRun {
         inventory: p.inventory.map((s) => s && { ...s }),
         hp: p.dead ? 0.5 : p.hp / p.maxHp,
         ult: p.ult,
+        // the special rooms' gifts: the forge's enhancement, soul health, the horse and the hirelings
+        forged: p.forged ? { ...p.forged } : null,
+        soul: p.soulHp || 0,
+        horse: p.horse ? { hp: p.horse.hp, riding: !!p.riding } : null,
+        helpers: w.helpers.filter((h) => h.owner === p && !h.dead && h instanceof Hireling).map((h) => ({
+          kind: h.kind, hp: h.hp, acolytes: w.helpers.filter((a) => a.priest === h && !a.dead).length,
+        })),
       };
     }
     return { stage: this.stage, themes: [...this.themes], metLateBoss: !!this.metLateBoss, startPicks: { ...this.startPicks }, heroes };
@@ -155,7 +166,8 @@ class DungeonRun {
 
   /** The heroes of a resynced run take back what they had (their upgrades re-applied, without the fanfare). */
   restoreHeroes(R) {
-    for (const p of this.world.players) {
+    const w = this.world;
+    for (const p of w.players) {
       const h = R.heroes[p.netId];
       if (!h) continue;
       for (const id of h.upgrades) {
@@ -169,6 +181,18 @@ class DungeonRun {
       p.inventory = h.inventory.map((s) => s && { ...s });
       p.hp = Math.max(1, Math.round(p.maxHp * h.hp));
       p.ult = h.ult;
+      if (h.forged && FORGE_ITEMS[h.forged.item] && FORGE_RARITIES[h.forged.rarity]) Forge.equip(p, h.forged);
+      p.soulHp = Math.max(0, Number(h.soul) || 0);
+      if (h.horse) {
+        p.horse = new Horse(p, clamp(Number(h.horse.hp) || 0, 0, CONFIG.run.mount.hp));
+        w.horses.push(p.horse);
+        p.riding = !!h.horse.riding && p.horse.hp > 0;
+      }
+      for (const hl of h.helpers || []) {
+        if (!CONFIG.run.helpers[hl.kind]?.hp) continue;
+        const units = hireHelper(w, hl.kind, p, p.x, p.y, hl.hp);
+        for (const a of units.slice(1 + (hl.acolytes ?? 2))) a.die(w, true);   // acolytes that had already fallen
+      }
     }
   }
 
@@ -288,6 +312,10 @@ class DungeonRun {
     }
     const lines = this.theme.stageLines || ['Clear the rooms and find the boss', 'The enemies grow stronger', 'The enemies grow stronger'];
     w.banner(`${this.theme.name.toUpperCase()} - STAGE ${this.stage}`, this.byStage(lines), 3);
+    // the hirelings and the horse catch up with their heroes at the entrance
+    for (const h of w.helpers) h.catchUp(w);
+    for (const h of w.horses) if (!h.owner.riding) h.catchUp(w);
+    w.events.onStageStart?.(this);   // a solo run saves here (App.saveRun)
   }
 
   nextStage() {
@@ -303,6 +331,9 @@ class DungeonRun {
     w.hazards = [];
     w.clones = [];
     w.barriers = [];
+    w.minions = [];
+    // horses get back on their feet for the new stage (some of their health back)
+    for (const h of w.horses) h.stageHeal();
     w.boss = null;
     w.timers = w.timers.filter((t) => !t.spawn);
     w.pendingSpawns = 0;
@@ -1416,6 +1447,8 @@ class DungeonRun {
       const info = SPECIAL_INFO[r.special];
       if (r.special === 'treasure') for (const dx of [-3, 0, 3]) add('chest', dx, 0, 'TREASURE CHEST', info.color);
       else add(r.special, 0, -0.5, info.name, info.color);
+      // the helper camp has one kind of hireling waiting to be hired
+      if (r.special === 'helper') this.props[this.props.length - 1].hire = choose(['knight', 'archer', 'priest']);
     } else if (r.type === 'puzzle') {
       // Simon's stone, and a row of its four coloured floor plates in front of it
       add('puzzle', 0, -1.5, 'RUNE STONE', ROOM_INFO.puzzle.color);
@@ -1494,8 +1527,8 @@ class DungeonRun {
   /**
    * Runs for each hero before they update, so pressing E at something here is
    * used up by the interaction and never also fires the hero's E ability.
-   * Reward and secret chests open, the shopkeeper and chef talk, the wishing
-   * well takes coins, the hole takes you down; the other special rooms aren't in yet.
+   * Reward and secret chests open, the shopkeeper, chef and special rooms' keepers talk, the wishing
+   * well takes coins, the hole takes you down; the hero statue isn't in yet.
    * hero.nearProp is what that hero could use right now (prompts show the local hero's).
    */
   preUpdate(hero) {
@@ -1526,6 +1559,7 @@ class DungeonRun {
     if (pr.kind === 'holeExit') return this.ascend(p);
     if (pr.kind === 'shopkeeper' || pr.kind === 'chef' || pr.kind === 'enchanter' || pr.kind === 'pawn') return w.events.onNpc?.(pr.kind, this, p);
     if (pr.kind === 'restaurant5') return w.events.onNpc?.('chef', this, p);
+    if (SPECIAL_KEEPERS.includes(pr.kind)) return w.events.onNpc?.(pr.kind, this, p);
     if (p === w.localPlayer) {
       w.events.onToast?.(`${pr.label}: COMING SOON`);
       Sound.play('uiClick');
@@ -1659,7 +1693,7 @@ class DungeonRun {
 
   /**
    * Wishing well: one coin per toss. Each coin may grant the wish (sure to by
-   * the pity-th); the wish is 2-6 of one random potion, or (upgradeChance of the
+   * the pity-th); the wish is 2-6 of one random potion (plain ones likeliest, super ones rarest), or (upgradeChance of the
    * time) a random upgrade the hero doesn't have yet. One wish per hero.
    */
   wish(pr, hero) {
@@ -1695,7 +1729,10 @@ class DungeonRun {
       Sound.play('magic');
       return;
     }
-    const id = choose(Object.keys(POTIONS));
+    // any kind of potion, the plain ones the most likely (tierWeights: tier 1, 2, 3)
+    const all = Object.values(POTIONS);
+    let r = Math.random() * all.reduce((s, p) => s + (c.tierWeights[p.tier - 1] || 0), 0);
+    const id = (all.find((p) => (r -= c.tierWeights[p.tier - 1] || 0) < 0) || all[0]).id;
     const n = randInt(c.potions[0], c.potions[1]);
     this.spawnPotions(pr.x, pr.y + 30, n, () => id);
     w.effects.burst(pr.x, pr.y - 20, { count: 40, colors: ['#6ad8ff', '#ffffff', '#ffe680'], speed: [60, 200], life: [0.4, 0.8], up: 80 });
@@ -1982,7 +2019,9 @@ class DungeonRun {
     for (const pr of this.props) {
       if (pr.ground) continue;   // floor plates are drawn with the ground
       if (Scenes[pr.kind]) {
-        items.push(...Scenes.drawables(pr.kind, pr.x, pr.y, this.time));
+        // (the helper camp shows its hireling until this screen's hero hires them)
+        const extra = pr.hire ? { hire: pr.hire, hired: !!pr.hired?.[this.world.localPlayer.netId || 'solo'] } : undefined;
+        items.push(...Scenes.drawables(pr.kind, pr.x, pr.y, this.time, extra));
         items.push({ y: pr.y + 80, draw: (ctx) => this.drawPropLabel(ctx, pr) });
       } else {
         items.push({ y: pr.kind === 'hole' || pr.kind === 'holeExit' ? pr.y - 1000 : pr.y, draw: (ctx) => this.drawProp(ctx, pr) });
@@ -2537,7 +2576,7 @@ class DungeonRun {
     const y = Math.round(pr.y);
     if (pr.opened) return;
     const near = this.world.localPlayer.nearProp === pr;
-    const npc = ['shopkeeper', 'chef', 'enchanter', 'pawn', 'restaurant5'].includes(pr.kind);
+    const npc = ['shopkeeper', 'chef', 'enchanter', 'pawn', 'restaurant5', ...SPECIAL_KEEPERS].includes(pr.kind);
     const labelY = npc || Scenes[pr.kind] ? y - 86 : pr.kind === 'rewardChest' || pr.kind === 'secretChest' || pr.kind === 'chest' || pr.kind === 'gemChest' ? y - 36 : y - 62;
     let label = near && npc ? 'TALK' : pr.label;
     if (pr.kind === 'wishingWell') {
@@ -2774,8 +2813,9 @@ class DungeonRun {
    * soft, pale, slowly drifting and breathing, a touch brighter where light falls.
    */
   drawFog(ctx, cam) {
-    if (!this.fog.length) return;
+    if (!this.fog.length || !Settings.gfx.fog) return;
     const t = this.time;
+    const side = Settings.gfx.fog > 1 ? 1 : 0;   // the faster graphics presets keep only each bank's middle billow
     ctx.save();
     for (const b of this.fog) {
       const x = b.x + Math.sin(t * b.speed + b.seed) * b.drift;
@@ -2784,7 +2824,7 @@ class DungeonRun {
       const breathe = 0.6 + 0.4 * Math.sin(t * 0.4 + b.seed);
       ctx.globalAlpha = 0.16 * breathe;
       // a bank is a few wide, flat billows side by side
-      for (let i = -1; i <= 1; i++) {
+      for (let i = -side; i <= side; i++) {
         ctx.save();
         ctx.translate(x + i * b.r * 0.8, y + Math.abs(i) * 4);
         ctx.scale(1, 0.42);

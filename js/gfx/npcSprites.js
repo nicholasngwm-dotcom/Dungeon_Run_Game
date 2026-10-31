@@ -465,11 +465,159 @@ function drawHelper(p, P) {
   p.round(42, 14 + b - wave, 4, 4, Sk[2], 1);
 }
 
+/**
+ * The hired knight (helper room): bright steel over a blue tabard with a gold cross, an open helm
+ * with a blue plume and a friendly face (sword and shield drawn by the hireling).
+ */
+function drawHiredKnight(p, P) {
+  const { b, s, hb } = P;
+  const S = RAMP.steel;
+  const Bl = ['#16203e', '#2a4a8a', '#3e64b0', '#5a80c8', '#8ab8ff'];
+  const G = RAMP.gold;
+  const hem = Math.round(s / 2);
+  cuteLeg(p, 29, 29 - s, P.lb, [S[1], S[2], S[3]], [S[0], S[1], S[2]], 52, null, 4);
+  cuteLeg(p, 34, 34 + s, P.lf, [S[2], S[3], S[4]], [S[1], S[2], S[3]], 52, null, 4);
+  p.round(24, 25 + b, 4, 10, S[2], 1);                       // back arm
+  // breastplate, with a blue tabard and gold cross over it
+  p.round(26, 23 + b, 15, 16, S[3], 3);
+  p.rect(27, 24 + b, 3, 13, S[4]);
+  p.poly([[29, 27 + b], [38, 27 + b], [39 + hem, 46 + b], [28 + hem, 46 + b]], Bl[2]);
+  p.poly([[29, 27 + b], [31, 27 + b], [30 + hem, 46 + b], [28 + hem, 46 + b]], Bl[3]);
+  p.rect(28 + hem, 45 + b, 12, 1, G[2]);
+  p.rect(33, 29 + b, 2, 9, G[3]);
+  p.rect(30, 32 + b, 8, 2, G[3]);
+  p.rect(26, 38 + b, 15, 2, RAMP.leather[2]);
+  p.round(24, 22 + b, 7, 6, S[4], 2);                        // pauldron
+  p.rect(25, 22 + b, 4, 1, S[5]);
+  // face in an open helm, a blue plume streaming back
+  cuteFace(p, P, NPC_EYES.blue, { male: true });
+  p.poly([[33, 7 + b], [30, 3 + b], [24, 3 + b], [19 + P.hs, 6 + hb], [16 + P.hs, 11 + hb], [21 + P.hs, 10 + hb], [26, 7 + b]], Bl[3]);
+  p.line(29, 4 + b, 20 + P.hs, 7 + hb, Bl[4]);
+  p.round(27, 7 + b, 15, 9, S[3], 4);
+  p.rect(29, 8 + b, 6, 1, S[5]);
+  p.rect(28, 13 + b, 13, 2, S[2]);
+  p.rect(28, 13 + b, 13, 1, S[4]);
+  p.rect(27, 14 + b, 2, 8, S[2]);
+  p.rect(40, 14 + b, 2, 7, S[1]);
+  p.rect(33, 13 + b, 2, 4, S[3]);                            // nose guard
+  // sword arm forward
+  p.round(37, 25 + b, 4, 8, S[3], 1);
+  p.round(38, 32 + b, 4, 4, S[2], 1);
+}
+
+/** The hired archer: a green hood and short cape, a leather jerkin, a quiver of arrows on the back (bow drawn by the hireling). */
+function drawHiredArcher(p, P) {
+  const { b, s } = P;
+  const Gr = ['#14301c', '#22502e', '#327440', '#4a9a58', '#78c884'];
+  const L = RAMP.leather;
+  const Hr = ['#3a2416', '#5b3922', '#7d532f', '#9c6c3e'];
+  const hem = P.cf;
+  cuteLeg(p, 29, 29 - s, P.lb, ['#3a3426', '#524a36', '#6a6046'], [L[0], L[1], L[2]], 50);
+  cuteLeg(p, 34, 34 + s, P.lf, ['#524a36', '#6a6046', '#827858'], [L[1], L[2], L[3]], 50);
+  // quiver on the back, arrows poking out
+  p.rect(20, 18 + b, 5, 16, L[2]);
+  p.rect(20, 18 + b, 5, 1, L[4]);
+  for (const [x, c] of [[20, '#e84a4a'], [22, '#f0ead8'], [24, '#e84a4a']]) p.rect(x, 14 + b, 1, 4, c);
+  p.round(25, 25 + b, 4, 10, Gr[1], 1);                       // back arm
+  // short cape behind, jerkin, belt
+  p.poly([[26, 23 + b], [32, 23 + b], [30, 36 + b], [22 + hem, 38 + b], [21 + hem, 33 + b]], Gr[1]);
+  p.round(27, 24 + b, 13, 15, L[3], 3);
+  p.rect(28, 25 + b, 3, 12, L[4]);
+  p.rect(33, 25 + b, 1, 12, L[1]);
+  p.rect(27, 36 + b, 14, 2, L[1]);
+  p.rect(32, 36 + b, 3, 2, RAMP.gold[2]);
+  p.rect(27, 38 + b, 14, 4, Gr[2]);
+  // face with a fringe of brown hair, in a green hood
+  cuteFace(p, P, NPC_EYES.green);
+  cuteBangs(p, P, Hr);
+  cuteHood(p, P, Gr);
+  // bow arm forward
+  p.round(37, 25 + b, 4, 8, L[3], 1);
+  p.round(38, 32 + b, 4, 4, RAMP.skin[2], 1);
+}
+
+/** The hired priest: an old man in white and gold robes and a tall mitre, a white beard (crosier drawn by the hireling). */
+function drawHiredPriest(p, P) {
+  const { b, hb } = P;
+  const W = ['#8a8494', '#c4bece', '#e8e4ee', '#ffffff'];
+  const G = RAMP.gold;
+  const hem = Math.round(P.s / 2) + P.cf;
+  // robe to the floor
+  p.poly([[27, 24 + b], [39, 24 + b], [42, 36 + b], [45 + hem, 57], [21 + hem, 57], [24, 36 + b]], W[2]);
+  p.poly([[27, 24 + b], [30, 24 + b], [26 + hem, 57], [21 + hem, 57], [24, 36 + b]], W[3]);
+  p.poly([[38, 30 + b], [42, 36 + b], [45 + hem, 57], [40 + hem, 57]], W[1]);
+  p.rect(22 + hem, 55, 23, 1, G[2]);
+  // a gold stole down the front with crosses
+  p.poly([[32, 25 + b], [35, 25 + b], [36 + hem, 54], [33 + hem, 54]], G[2]);
+  for (const y of [34, 46]) { p.rect(33 + Math.round(hem * (y - 25) / 30), y, 2, 4, '#ffffff'); p.rect(32 + Math.round(hem * (y - 25) / 30), y + 1, 4, 1, '#ffffff'); }
+  p.poly([[26, 26 + b], [29, 26 + b], [28 + P.ba, 35 + b], [24 + P.ba, 35 + b]], W[1]);   // back sleeve
+  // kindly old face, a big white beard, the mitre
+  cuteFace(p, P, NPC_EYES.brown, { male: true, mask: true });
+  p.round(29, 20 + b, 12, 8, W[3], 3);
+  p.rect(30, 21 + b, 3, 6, W[2]);
+  p.rect(34, 21 + b, 2, 1, CUTE.mouth);
+  p.rect(30, 16 + b, 3, 1, W[2]);                            // bushy brows
+  p.rect(35, 16 + b, 4, 1, W[2]);
+  p.poly(shift([[28, 12], [30, 1], [34.5, -3], [39, 1], [41, 12]], hb), W[3]);
+  p.poly(shift([[28, 12], [30, 1], [32, 0], [31, 12]], hb), W[2]);
+  p.rect(28, 10 + hb, 14, 2, G[2]);
+  p.rect(34, 1 + hb, 1, 9, G[2]);
+  p.rect(32, 4 + hb, 5, 1, G[2]);
+  // sleeve reaching forward to the crosier
+  p.poly([[35, 25 + b], [40, 25 + b], [44, 31 + b], [44, 35 + b], [39, 35 + b], [37, 30 + b]], W[2]);
+  p.rect(40, 34 + b, 4, 1, G[2]);
+  p.round(40, 34 + b, 4, 4, RAMP.skin[2], 1);
+}
+
+/** The priest's acolyte: a young novice in a cream robe with a rope belt (staff drawn by the acolyte). */
+function drawAcolyte(p, P) {
+  const { b } = P;
+  const C = ['#8a7a5a', '#b4a47e', '#d8ccaa', '#f0e8d0'];
+  const Hr = ['#3a2416', '#6a4428', '#8a5e3a', '#aa7a4e'];
+  const hem = Math.round(P.s / 2) + P.cf;
+  p.poly([[27, 24 + b], [39, 24 + b], [41, 36 + b], [43 + hem, 57], [23 + hem, 57], [25, 36 + b]], C[2]);
+  p.poly([[27, 24 + b], [30, 24 + b], [27 + hem, 57], [23 + hem, 57], [25, 36 + b]], C[3]);
+  p.poly([[38, 30 + b], [41, 36 + b], [43 + hem, 57], [39 + hem, 57]], C[1]);
+  p.rect(26, 35 + b, 15, 2, '#a07a4a');                      // rope belt
+  p.line(30, 37 + b, 29 + hem, 44 + b, '#a07a4a');
+  p.poly([[26, 26 + b], [29, 26 + b], [28 + P.ba, 35 + b], [24 + P.ba, 35 + b]], C[1]);
+  cuteFace(p, P, NPC_EYES.teal);
+  npcHairCap(p, P, Hr);
+  cuteBangs(p, P, Hr);
+  p.poly([[35, 25 + b], [40, 25 + b], [43, 31 + b], [41, 34 + b], [37, 30 + b]], C[2]);
+  p.round(40, 31 + b, 4, 4, RAMP.skin[2], 1);
+}
+
+/** A dark minion (the Dark Minions upgrade): a little hooded shadow with horns and glowing violet eyes. */
+function drawDarkMinion(p, P) {
+  const R = ['#06040c', '#140c22', '#22163a', '#342456', '#4a3478'];
+  const glow = '#c48aff';
+  drawRobedCute(p, P, R, (pp, y) => {
+    if (P.eyes === 'blink') {
+      pp.rect(32, 17 + y, 3, 1, glow);
+      pp.rect(37, 17 + y, 3, 1, glow);
+      return;
+    }
+    pp.rect(32, 15 + y, 3, 3, glow);
+    pp.rect(37, 15 + y, 3, 3, glow);
+    pp.px(33, 15 + y, '#ffffff');
+    pp.px(38, 15 + y, '#ffffff');
+    pp.rect(33, 21 + y, 5, 1, '#6a3aa0');   // a little grin
+  }, { hand: '#2e2048' });
+  // two small horns through the hood
+  const hb = P.hb;
+  p.poly([[27, 9 + hb], [24, 2 + hb], [30, 7 + hb]], '#46286a');
+  p.poly([[39, 8 + hb], [43, 1 + hb], [41, 9 + hb]], '#46286a');
+  p.px(24, 2 + hb, '#9a72cc');
+  p.px(43, 1 + hb, '#9a72cc');
+}
+
 function drawPony(p, pose) {
   const b = pose.bob;
   const B = ['#2a1810', '#4a2c1a', '#6e4428', '#92603a', '#b48058'];
   const M = ['#140c08', '#24160e', '#3a2618'];
   const s = pose.stride || 0;
+  if (pose.lie) return drawPonyResting(p, B, M, b);
   // legs
   for (const [x, dx, c] of [[24, -s, B[1]], [30, s, B[2]], [50, s, B[1]], [56, -s, B[2]]]) {
     p.rect(x + dx, 44, 4, 12, c);
@@ -505,6 +653,58 @@ function drawPony(p, pose) {
   p.line(40, 31 + b, 40, 44 + b, RAMP.leather[1]);
 }
 
+/** The pony lying down to rest (its health ran out): legs folded under, head low, eyes shut. */
+function drawPonyResting(p, B, M, b) {
+  // folded legs peeking out under the belly
+  for (const x of [24, 34, 50]) p.rect(x, 53, 7, 3, B[1]);
+  p.rect(58, 54, 6, 3, M[1]);
+  // body lying low
+  p.round(18, 40 + b, 44, 15, B[2], 6);
+  p.round(20, 41 + b, 30, 5, B[3], 3);
+  // tail curled on the floor
+  p.poly([[19, 46], [11, 50], [10, 56], [18, 55], [21, 50]], M[1]);
+  // neck and head resting forward, low
+  p.poly(shift([[52, 44], [60, 34], [66, 31], [72, 33], [73, 39], [68, 42], [60, 44]], b), B[2]);
+  p.round(65, 33 + b, 9, 7, B[3], 2);
+  p.line(64, 35 + b, 67, 35 + b, '#0c0808');   // closed eye
+  p.rect(69, 37 + b, 2, 1, '#d87a74');
+  p.poly(shift([[61, 31], [62, 26], [64, 30]], b), B[2]);   // ear
+  p.poly(shift([[52, 42], [58, 33], [63, 29], [63, 32], [58, 37], [56, 44]], b), M[1]);   // mane
+  // saddle still on
+  p.rect(32, 38 + b, 16, 7, '#8a2a24');
+  p.round(34, 35 + b, 12, 6, RAMP.leather[2], 2);
+}
+
+/** The helpers' gear: the hired knight's shield, the acolytes' staffs and the dark minions' daggers. */
+function buildAllyWeapons() {
+  const S = RAMP.steel;
+  const G = RAMP.gold;
+  const L = RAMP.leather;
+  const weapon = (w, h, pivotX, pivotY, fn) => ({ img: PixelArt.make(w, h, fn, OUTLINE, 0.5), pivotX, pivotY });
+  Sprites.weapons.heaterShield = weapon(18, 24, 9, 11, (p) => {
+    p.poly([[1, 1], [17, 1], [17, 11], [9, 23], [1, 11]], S[4]);
+    p.poly([[3, 3], [15, 3], [15, 11], [9, 20], [3, 11]], '#3e64b0');
+    p.poly([[9, 3], [15, 3], [15, 11], [9, 20]], '#2a4a8a');
+    p.rect(8, 5, 2, 12, G[3]);
+    p.rect(5, 8, 8, 2, G[3]);
+    p.rect(1, 1, 16, 1, S[5]);
+  });
+  Sprites.weapons.acolyteStaff = weapon(34, 10, 6, 5, (p) => {
+    p.rect(1, 4, 26, 2, L[3]);
+    p.rect(1, 4, 26, 1, L[4]);
+    p.rect(25, 3, 2, 4, G[2]);
+    p.circle(30, 5, 3, '#fff2a0');
+    p.circle(29.5, 4.5, 1.5, '#ffffff');
+  });
+  Sprites.weapons.darkDagger = weapon(18, 7, 3, 3, (p) => {
+    p.rect(1, 2, 4, 3, '#2e2048');
+    p.rect(5, 0, 2, 7, '#46286a');
+    p.poly([[7, 1], [14, 1], [17, 3.5], [14, 6], [7, 6]], '#1e1430');
+    p.rect(7, 1, 8, 1, '#b45aff');
+    p.rect(8, 3, 6, 1, '#6a3aa0');
+  });
+}
+
 /** The heroes' 8-frame idle (and walk) for an NPC, plus extra named animations: { name: [P overrides...] } on top of the first idle pose. */
 function buildCuteNpc(draw, extra = {}) {
   const out = buildCuteEnemy(draw);
@@ -531,11 +731,22 @@ function buildNpcSprites() {
     darkTrader: buildCuteNpc(drawDarkTrader),
     mountTrader: buildCuteNpc(drawMountTrader),
     helper: buildCuteNpc(drawHelper),
-    pony: {
-      idle: [{ bob: 0 }, { bob: 1 }].map((pose) => {
-        const img = PixelArt.make(80, 64, (p) => drawPony(p, pose), OUTLINE, 0.5);
-        return { img, flash: PixelArt.silhouette(img) };
-      }),
-    },
+    // the helper room's hirelings, the priest's acolytes, and the Dark Minions upgrade's shadows
+    hiredKnight: buildCuteNpc(drawHiredKnight),
+    hiredArcher: buildCuteNpc(drawHiredArcher),
+    hiredPriest: buildCuteNpc(drawHiredPriest),
+    acolyte: buildCuteNpc(drawAcolyte),
+    darkMinion: buildCuteNpc(drawDarkMinion),
   };
+  // the pony (and every hero's horse): standing, walking (a four-beat stride) and lying down to rest
+  const pony = (poses) => poses.map((pose) => {
+    const img = PixelArt.make(80, 64, (p) => drawPony(p, pose), OUTLINE, 0.5);
+    return { img, flash: PixelArt.silhouette(img) };
+  });
+  Sprites.npcs.pony = {
+    idle: pony([{ bob: 0 }, { bob: 1 }]),
+    walk: pony([{ bob: 0, stride: 3 }, { bob: 1, stride: 1 }, { bob: 0, stride: -3 }, { bob: 1, stride: -1 }]),
+    rest: pony([{ bob: 0, lie: true }, { bob: 1, lie: true }]),
+  };
+  buildAllyWeapons();
 }

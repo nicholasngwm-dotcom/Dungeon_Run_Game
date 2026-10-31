@@ -51,8 +51,10 @@ class Effects {
       size = [2, 4], gravity = 0, drag = 3, angle = null, spread = TAU, up = 0,
     } = opts;
     const other = this.isOthers(x, y);
-    // a teammate's bursts get fewer sparks too (rounded at random, so small ones still show sometimes)
-    const n = other ? Math.floor(count * Settings.data.othersFx + vrand(0, 1)) : count;
+    // a teammate's bursts get fewer sparks too, and the graphics preset scales them all (rounded at
+    // random, so small ones still show sometimes)
+    const k = Settings.gfx.particles * (other ? Settings.data.othersFx : 1);
+    const n = k === 1 ? count : Math.floor(count * k + vrand(0, 1));
     for (let i = 0; i < n; i++) {
       const a = angle === null ? vrand(0, TAU) : angle + vrand(-spread / 2, spread / 2);
       const s = vrand(speed[0], speed[1]);
@@ -126,7 +128,7 @@ class Effects {
    * colors = [shadow, body, light].
    */
   smoke(x, y, { count = 8, radius = 16, life = 0.7, rise = 22, colors = SMOKE_COLORS } = {}) {
-    const n = Math.round(count * 1.1);
+    const n = Math.max(1, Math.round(count * 1.1 * Settings.gfx.particles));
     const wisps = Array.from({ length: n }, (_, i) => {
       const a = (i / n) * TAU + vrand(-0.5, 0.5);
       return {

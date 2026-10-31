@@ -95,7 +95,7 @@ class Mage extends Player {
     this.cooldowns.primary = c.cooldown;
     // Empowered Mana Surge: cast with 100 mana or more, the missile is bigger and hits 50% harder
     const empowered = Upgrades.empowered(this);
-    if (!this.spend(c.cost, world)) return;
+    if (!this.spend(Math.max(0, c.cost - Forge.manaCut(this)), world)) return;   // (the forge's Gemstone saves mana)
     if (empowered) Upgrades.state(this).flash.empoweredSurge = world.time;
     this.recoil = 0.08;
     const m = world.mouseWorld;

@@ -80,7 +80,10 @@ const HUD = {
     this.drawPickupHover(ctx, game);
     // always this screen's hero (game.player is the boss's target while a boss updates)
     this.drawPlayer(ctx, game.localPlayer);
-    if (game.run) this.drawCoins(ctx, game.localPlayer);
+    if (game.run) {
+      this.drawCoins(ctx, game.localPlayer);
+      this.drawSpecials(ctx, game.localPlayer);
+    }
     else if (game.lobby && Profiles.current) this.drawGems(ctx, Profiles.gems);
     if (game.multiplayer) this.drawParty(ctx, game);
     this.drawWave(ctx, game);
@@ -312,16 +315,73 @@ const HUD = {
     this.text(ctx, `${hero.coins}`, x + 54, y + 3, { size: 8, align: 'right', color: hero.coinFlash > 0 ? '#fff2a0' : '#ffd34a' });
   },
 
+  /**
+   * Under the coins: the forge's weapon enhancement (its icon in its rarity's colour; mythical ones
+   * shimmer) and the horse's health, when the hero has them. Hovering the enhancement says what it does.
+   */
+  drawSpecials(ctx, p) {
+    const y = 34;
+    let x = 244;
+    const m = Input._mouse;
+    const f = p.forged;
+    if (f) {
+      const R = FORGE_RARITIES[f.rarity];
+      const s = 22;
+      this.panel(ctx, x, y, s, s);
+      ctx.fillStyle = R.color;
+      ctx.fillRect(x - 1, y - 1, s + 2, 1);
+      ctx.fillRect(x - 1, y + s, s + 2, 1);
+      ctx.fillRect(x - 1, y, 1, s);
+      ctx.fillRect(x + s, y, 1, s);
+      ctx.drawImage(Sprites.forge[f.item], x + 1, y + 1);
+      if (f.rarity === 'mythical') {
+        // a band of light sweeping across it
+        const k = (performance.now() / 900) % 1.6;
+        if (k < 1) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.fillStyle = 'rgba(255, 140, 140, 0.45)';
+          ctx.fillRect(Math.round(x + k * s) - 2, y, 3, s);
+          ctx.restore();
+        }
+      }
+      if (!Touch.enabled && m.x >= x && m.x < x + s && m.y >= y && m.y < y + s) {
+        const I = FORGE_ITEMS[f.item];
+        this.tooltip(ctx, x + s / 2, y + s + 30, Forge.title(f), R.color, I.stat(Forge.value(f)) + (f.rarity === 'mythical' ? ` ${I.perk}` : ''));
+      }
+      x += s + 6;
+    }
+    const h = p.horse;
+    if (h) {
+      const w = 40;
+      this.panel(ctx, x, y, w, 22);
+      // a little horseshoe, then the horse's health
+      ctx.fillStyle = h.resting ? '#6a6070' : '#adb2c0';
+      ctx.fillRect(x + 4, y + 5, 2, 10);
+      ctx.fillRect(x + 10, y + 5, 2, 10);
+      ctx.fillRect(x + 4, y + 13, 8, 2);
+      this.bar(ctx, x + 15, y + 6, 22, 5, h.hp / h.maxHp, '#e0b080', '#2a1a10');
+      this.text(ctx, h.resting ? 'REST' : p.riding ? 'RIDING' : `${Math.ceil(h.hp)}`, x + 26, y + 13, { size: 5, align: 'center', color: h.resting ? '#8a7a6a' : '#e0b080' });
+    }
+  },
+
   drawPlayer(ctx, p) {
     // portrait
     this.panel(ctx, 12, 12, 40, 40);
     const frame = p.frames.idle[0].img;
     ctx.drawImage(frame, 14, 6, 36, 36, 14, 14, 36, 36);
 
-    // health
+    // health (and Soulreap's soul health over it, in violet)
     const ratio = p.hp / p.maxHp;
     this.bar(ctx, 60, 14, 170, 14, ratio, ratio > 0.3 ? '#e84a4a' : '#ff2a2a');
-    this.text(ctx, `${Math.ceil(p.hp)}/${p.maxHp}`, 145, 17, { size: 8, align: 'center' });
+    const soul = p.soulHp || 0;
+    if (soul > 0) {
+      ctx.fillStyle = '#a070e0';
+      ctx.fillRect(61, 15, Math.round(168 * clamp(soul / p.maxHp, 0, 1)), 4);
+      ctx.fillStyle = '#e0c8ff';
+      ctx.fillRect(61, 15, Math.round(168 * clamp(soul / p.maxHp, 0, 1)), 1);
+    }
+    this.text(ctx, soul > 0 ? `${Math.ceil(p.hp)}/${p.maxHp} +${Math.ceil(soul)}` : `${Math.ceil(p.hp)}/${p.maxHp}`, 145, 17, { size: 8, align: 'center' });
     let y = 36;
     if (p.resource) {
       const r = p.resource;
@@ -346,6 +406,9 @@ const HUD = {
     // abilities (the touch controls draw their own buttons)
     const icons = Sprites.icons[p.classId];
     for (const s of Touch.enabled ? [] : this.abilitySlots(p)) {
+      // the Priestess: a light orb above the box for each one the ability costs
+      const orbs = s.slot ? p.orbCost?.(s.slot) : 0;
+      if (orbs) this.costOrbs(ctx, s.x + s.w / 2, s.y - 13, orbs, p.resource.value);
       if (s.slot === 'q') { this.ultSlot(ctx, s.x, s.y, p); continue; }
       const icon = s.icon || (s.slot === 'dodge' ? Sprites.icons.dodge : icons[s.slot]);
       const cd = s.cd ?? p.cooldowns[s.slot];
@@ -866,6 +929,29 @@ const HUD = {
     if (id) this.readyFlash(ctx, id, cd, x, y, w, h);
   },
 
+  /**
+   * A row of n little light orbs centred on x (top at y): an ability's cost. The ones the hero
+   * has are lit, the rest dark, so it reads at a glance whether it can be paid for.
+   */
+  costOrbs(ctx, x, y, n, have) {
+    const x0 = Math.round(x - (n * 12 - 2) / 2);
+    for (let i = 0; i < n; i++) {
+      const ox = x0 + i * 12;
+      const lit = i < have;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(ox + 2, y, 6, 10);
+      ctx.fillRect(ox, y + 2, 10, 6);
+      ctx.fillRect(ox + 1, y + 1, 8, 8);
+      ctx.fillStyle = lit ? '#e0a830' : '#3a2e40';
+      ctx.fillRect(ox + 2, y + 1, 6, 8);
+      ctx.fillRect(ox + 1, y + 2, 8, 6);
+      ctx.fillStyle = lit ? '#ffe680' : '#54465c';
+      ctx.fillRect(ox + 2, y + 2, 5, 5);
+      ctx.fillStyle = lit ? '#ffffff' : '#6a5c74';
+      ctx.fillRect(ox + 3, y + 3, 2, 2);
+    }
+  },
+
   /** Q slot: fills up as the hero deals damage. */
   ultSlot(ctx, x, y, p) {
     const w = 70;
@@ -882,6 +968,17 @@ const HUD = {
     ctx.globalAlpha = 1;
     this.text(ctx, Settings.label('ult'), x + 4, y + 4, { size: 6, color: ready ? '#ffe680' : '#8a7660' });
     this.text(ctx, ready ? 'READY' : `${Math.floor(r * 100)}%`, x + w / 2, y + 39, { size: 6, align: 'center', color: ready ? '#ffe680' : '#f4ead7' });
+    if (ready && !p.canAfford('q')) {
+      // charged, but short of what else it costs (the Priestess's light): red, like the other slots
+      ctx.fillStyle = 'rgba(120, 10, 16, 0.55)';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = '#ff3a3a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      ctx.fillStyle = '#2e1f17';
+      ctx.fillRect(x + 2, y + 37, w - 4, 10);
+      this.text(ctx, `NO ${p.resource.name}`, x + w / 2, y + 39, { size: 5, align: 'center', color: '#ff4a4a' });
+    }
     // flash the moment it fills (treated as a cooldown of "how much is left to charge")
     this.readyFlash(ctx, 'ult', ready ? 0 : Math.max(1, (1 - r) * 10), x, y, w, h);
   },

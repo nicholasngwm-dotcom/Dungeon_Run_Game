@@ -91,7 +91,8 @@ class Player extends Entity {
   get speedMultiplier() {
     return (this.slowTime > 0 ? CONFIG.golem.slowAmount : 1) * (this.chillTime > 0 ? this.chillAmount : 1)
       * (this.buffs.speed > 0 ? CONFIG.buffs.speed.multiplier : 1) * this.moveMultiplier * (1 + this.brew('speed'))
-      * (this.tuneSpeed > 0 ? 1 + this.tuneSpeedAmount : 1) * this.sugarScale('speed') * Upgrades.speedScale(this);
+      * (this.tuneSpeed > 0 ? 1 + this.tuneSpeedAmount : 1) * this.sugarScale('speed') * Upgrades.speedScale(this)
+      * (this.riding ? CONFIG.run.mount.speed : 1);
   }
 
   /** The sugar rush's boost to `stat` (speed or attackSpeed): stacked sugar rushes (Premium Baking Goods) add up. */
@@ -175,6 +176,7 @@ class Player extends Entity {
     }
     for (let i = 0; i < this.inventory.length; i++) if (Input.pressed(`item${i + 1}`)) this.useItem(i, world);
     if (Input.pressed('quickHeal')) this.quickHeal(world);
+    if (Input.pressed('mount')) Mounts.toggle(this, world);   // the mount trader's horse: on or off
     this.busy -= dt;
     this.resourceShort = (this.resourceShort || 0) - dt;
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
@@ -265,6 +267,7 @@ class Player extends Entity {
     }
     for (const [key, slot] of [['ult', 'q'], ['e', 'e'], ['f', 'f']]) {
       if (!Input.pressed(key)) continue;
+      if (slot === 'q' && this.riding) { this.noUltRiding(world); return; }
       if (slot === 'q' ? !this.ultReady : this.cooldowns[slot] > 0) {
         if (slot === 'q') Sound.play('denied');
         else this.tryAbility(slot, world, () => {});   // the class's own refusal (sound, or nothing)
@@ -278,9 +281,16 @@ class Player extends Entity {
     }
   }
 
+  /** No ultimates in the saddle. */
+  noUltRiding(world) {
+    Sound.play('denied');
+    world.effects.text(this.hx, this.hy - 40, 'GET OFF YOUR HORSE FIRST', { color: '#e0b080', size: 7 });
+  }
+
   castSlot(slot, world) {
     if (slot === 'q') {
-      if (this.ultReady) { this.ult = 0; this.ultimate(world); }
+      if (this.riding) this.noUltRiding(world);
+      else if (this.ultReady) { this.ult = 0; this.ultimate(world); }
       else Sound.play('denied');
     } else if (slot === 'e') this.tryAbility('e', world, () => this.abilityE(world));
     else this.tryAbility('f', world, () => this.abilityF(world));
@@ -791,12 +801,21 @@ class Player extends Entity {
     }
     if (this.passiveBlock(world, fromX, fromY)) return true;
     this.lastBlocked = false;
+    // in the saddle the horse takes the hit (what's past its last hp reaches the rider), then soul health (Soulreap)
+    if (this.riding && this.horse && !world.cheats?.god) amount = this.horse.soak(amount, world);
+    amount = Upgrades.absorbSoul(this, amount, world);
+    if (amount <= 0) {
+      this.invulnerable = CONFIG.player.hurtInvulnerability;
+      Upgrades.darklash(this, world);
+      return true;
+    }
     // Ironskin: flat defence off every hit (always at least 1 gets through)
     if (this.brews.ironskin) amount = Math.max(1, amount - this.brew('ironskin'));
     // Thorns: part of the hit goes back at whoever dealt it
     if (this.brews.thorns) this.reflectDamage(amount * this.brew('thorns'), world, fromX, fromY, opts.projectile);
     this.onHitTaken(world);
     Upgrades.adrenaline(this, world);   // a hit that got through
+    Upgrades.darklash(this, world);
     // practice god mode (after absorb, so parries and blocks can still be practised)
     if (world.cheats?.god) {
       this.invulnerable = CONFIG.player.hurtInvulnerability; // so hit-counting passives tick at a normal rate
@@ -815,6 +834,7 @@ class Player extends Entity {
     if (this.hp <= 0) {
       this.hp = 0;
       this.dead = true;
+      if (this.riding) this.riding = false;   // the horse is left standing where they fell
       world.effects.burst(this.hx, this.hy, { count: 30, colors: ['#ff4a4a', '#ffffff', '#b81e2e'], speed: [80, 220], life: [0.5, 1] });
     }
     return true;
@@ -1254,7 +1274,7 @@ class Player extends Entity {
   // ---------- drawing ----------
 
   currentFrame() {
-    return heroFrame(this.frames, this.moving, this.animTime);
+    return heroFrame(this.frames, this.moving && !this.riding, this.animTime);   // (in the saddle the horse does the walking)
   }
 
   weaponAngle() { return this.aim; }
@@ -1269,7 +1289,8 @@ class Player extends Entity {
   }
 
   drawGround(ctx) {
-    if (!this.seat) drawShadow(ctx, this.x, this.y + 9, 13, 5);
+    if (this.riding && this.horse) this.horse.drawGround(ctx, HORSE_LIFT);
+    else if (!this.seat) drawShadow(ctx, this.x, this.y + 9, 13, 5);
     this.drawGroundExtras(ctx);
     Upgrades.drawGround(this, ctx, this.animTime);
     if (this.isLocal) this.drawAbilityPreview(ctx);
@@ -1354,6 +1375,12 @@ class Player extends Entity {
     const alpha = (blink ? 0.45 : 1) * this.bodyAlpha;
     if (alpha <= 0) return this.drawExtras(ctx);
     if (this.seat) return this.drawSeated(ctx);
+    // in the saddle: the horse under them, its health over its head
+    if (this.riding && this.horse) {
+      ctx.globalAlpha = alpha;
+      this.horse.drawBody(ctx, HORSE_LIFT);
+      ctx.globalAlpha = 1;
+    }
     const weaponBehind = Math.sin(this.aim) < -0.35;
     ctx.globalAlpha = alpha;
     if (weaponBehind) this.drawWeapon(ctx);
@@ -1370,6 +1397,7 @@ class Player extends Entity {
     this.drawSongShield(ctx);
     Upgrades.drawOver(this, ctx, this.animTime);
     this.drawStatus(ctx);
+    if (this.riding && this.horse) this.horse.drawBar(ctx, this.y + HORSE_LIFT + 12);
   }
 }
 
@@ -1378,6 +1406,9 @@ function createHero(classId, x, y, enhancements = 0) {
   const classes = { warrior: Warrior, ranger: Ranger, mage: Mage, rogue: Rogue, priestess: Priestess, bard: Bard, rocketeer: Rocketeer, baker: Baker };
   const p = new classes[classId](x, y);
   applyEnhancements(p, enhancements);
+  // every basic attack goes through the forge, which counts it and tags what it hits (forge enhancements, Dark Minions)
+  const primary = p.primary;
+  p.primary = function (world) { Forge.attack(this, world, () => primary.call(this, world)); };
   return p;
 }
 

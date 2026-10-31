@@ -15,12 +15,17 @@ const Lighting = {
     if (dark <= 0.01 && !tint) return;
     const W = cam.width;
     const H = cam.height;
-    if (!this.canvas || this.canvas.width !== W || this.canvas.height !== H) {
+    // the darkness is soft, so the faster graphics presets draw it smaller and stretch it over the screen
+    const k = Settings.gfx.lightRes;
+    const cw = Math.ceil(W * k);
+    const ch = Math.ceil(H * k);
+    if (!this.canvas || this.canvas.width !== cw || this.canvas.height !== ch) {
       this.canvas = document.createElement('canvas');
-      this.canvas.width = W;
-      this.canvas.height = H;
+      this.canvas.width = cw;
+      this.canvas.height = ch;
     }
     const lc = this.canvas.getContext('2d');
+    lc.setTransform(k, 0, 0, k, 0, 0);
     lc.globalCompositeOperation = 'source-over';
     lc.clearRect(0, 0, W, H);
     lc.fillStyle = `rgba(${color}, ${dark})`;
@@ -41,11 +46,12 @@ const Lighting = {
       lc.fillStyle = g;
       lc.fillRect(x - l.r, y - l.r, l.r * 2, l.r * 2);
     }
-    ctx.drawImage(this.canvas, ox, oy);
     ctx.save();
+    ctx.imageSmoothingEnabled = k < 1;   // (a small layer is smoothed as it's stretched, so it shows no blocks)
+    ctx.drawImage(this.canvas, ox, oy, W, H);
     ctx.globalCompositeOperation = 'lighter';
     for (const l of lights) {
-      if (!l.rgb || !onScreen(l)) continue;
+      if (!l.rgb || !Settings.gfx.bloom || !onScreen(l)) continue;
       const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r * 0.7);
       g.addColorStop(0, `rgba(${l.rgb}, ${bloom * dark})`);
       g.addColorStop(1, `rgba(${l.rgb}, 0)`);

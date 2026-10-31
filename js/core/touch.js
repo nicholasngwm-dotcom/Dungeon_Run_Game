@@ -160,6 +160,8 @@ const Touch = {
       buttons.push(place('ice', ax + Math.cos(a) * 165 * k, ay + Math.sin(a) * 165 * k, 22 * k));
     }
     buttons.push(place('heal', 294, H - 32, 17));
+    // a hero with a horse (the mount trader's): a button to get on and off it, beside HEAL
+    if (this.app?.game?.localPlayer?.horse || this.editing) buttons.push(place('mount', 254, H - 32, 17));
     const square = (id, x, y) => {
       const c = place(id, x + 13, y + 13, 13);
       return { id, x: c.x - c.r, y: c.y - c.r, w: c.r * 2, h: c.r * 2 };
@@ -203,6 +205,7 @@ const Touch = {
       t.role = b.id;
       if (b.id === 'dodge') t.deferred = true;   // dodges on letting go: dragged, that way; tapped, the way the hero walks
       if (b.id === 'heal') { Input.touchPressed.add('quickHeal'); return; }
+      if (b.id === 'mount') { Input.touchPressed.add('mount'); this.flashTap = { id: b.id, t: performance.now() }; return; }
       const p = game.localPlayer;
       // a tap button: cast now, nothing to aim
       if ((this.heroRules(p).taps || []).includes(b.id)) {
@@ -784,7 +787,7 @@ const Touch = {
     ctx.fillRect(0, 0, W, H);
     const icons = Sprites.icons[App.game?.localPlayer?.classId || App.classId];
     const glyphs = { aim: icons.primary, dodge: Sprites.icons.dodge, secondary: icons.fire || icons.secondary, ice: icons.ice, e: icons.e, f: icons.f, ult: icons.q };
-    const names = { aim: 'ATTACK', stick: 'JOYSTICK', dodge: 'DODGE', secondary: 'SECONDARY', ice: 'ICE ARROW', e: 'E', f: 'F', ult: 'ULTIMATE', interact: 'USE', heal: 'HEAL', cancel: 'CANCEL', pause: 'PAUSE', score: 'SCORES', bag: 'BAG' };
+    const names = { aim: 'ATTACK', stick: 'JOYSTICK', dodge: 'DODGE', secondary: 'SECONDARY', ice: 'ICE ARROW', e: 'E', f: 'F', ult: 'ULTIMATE', interact: 'USE', heal: 'HEAL', mount: 'HORSE', cancel: 'CANCEL', pause: 'PAUSE', score: 'SCORES', bag: 'BAG' };
     for (const it of this.editorItems()) {
       const sel = it.id === this.editSel;
       if (it.rect) {
@@ -872,7 +875,7 @@ const Touch = {
     // a dragged skill button's knob follows the thumb a little, so it's clear it's aiming
     const at = thumb && TOUCH_AIMED.includes(b.id) ? this.clampTo(thumb, b, r * 0.8) : b;
     if (at !== b) this.ring(ctx, x, y, r);
-    const lit = !!thumb || (b.id !== 'dodge' && b.id !== 'heal' && b.id !== 'interact' && p.slotHeld(b.id));
+    const lit = !!thumb || (b.id === 'mount' ? !!p.riding : b.id !== 'dodge' && b.id !== 'heal' && b.id !== 'interact' && p.slotHeld(b.id));
     this.disc(ctx, at.x, at.y, r, lit);
     if (thumb && this.cancelArmed && TOUCH_AIMED.includes(b.id)) {
       ctx.fillStyle = 'rgba(200, 30, 40, 0.6)';
@@ -912,6 +915,33 @@ const Touch = {
       ctx.fillRect(at.x - 2, at.y - 7, 5, 11);
       ctx.fillRect(at.x - 6, at.y - 3, 13, 3);
       HUD.text(ctx, 'HEAL', at.x, at.y + r + 4, { size: 5, align: 'center', color: '#d8c8a0' });
+      return;
+    }
+    if (b.id === 'mount') {
+      // a horseshoe: lit while riding, dimmed while the horse rests
+      const h = p.horse;
+      const resting = h && h.resting;
+      ctx.globalAlpha = resting ? 0.4 : 1;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(at.x - 7, at.y - 8, 15, 16);
+      ctx.fillStyle = '#adb2c0';
+      ctx.fillRect(at.x - 6, at.y - 7, 4, 14);
+      ctx.fillRect(at.x + 3, at.y - 7, 4, 14);
+      ctx.fillRect(at.x - 6, at.y + 3, 13, 4);
+      ctx.fillStyle = '#e4e7ee';
+      ctx.fillRect(at.x - 6, at.y - 7, 1, 13);
+      ctx.fillStyle = OUTLINE;
+      for (const yy of [-4, 0]) { ctx.fillRect(at.x - 5, at.y + yy, 1, 1); ctx.fillRect(at.x + 5, at.y + yy, 1, 1); }
+      ctx.globalAlpha = 1;
+      HUD.text(ctx, resting ? 'RESTING' : p.riding ? 'GET OFF' : 'RIDE', at.x, at.y + r + 4, { size: 5, align: 'center', color: '#e0b080' });
+      const ft = this.flashTap?.id === b.id ? (performance.now() - this.flashTap.t) / 250 : 1;
+      if (ft < 1) {
+        ctx.strokeStyle = `rgba(255, 240, 180, ${1 - ft})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(at.x, at.y, r + 2 + ft * 10, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       return;
     }
     // (the Archer's ICE button is the secondary's: it shares its cooldown)

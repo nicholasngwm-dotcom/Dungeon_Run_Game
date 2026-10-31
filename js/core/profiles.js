@@ -24,6 +24,10 @@ const ProfileStore = {
     }
     return this.ok;
   },
+
+  remove(key) {
+    try { localStorage.removeItem(this.prefix + key); } catch (e) { /* storage blocked: nothing was kept anyway */ }
+  },
 };
 
 const Profiles = {
@@ -97,6 +101,7 @@ const Profiles = {
   },
 
   remove(id) {
+    RunSave.clear(id);
     this.list = this.list.filter((p) => p.id !== id);
     if (this.lastId === id) this.lastId = null;
     if (this.current && this.current.id === id) this.current = null;
@@ -167,6 +172,35 @@ const Profiles = {
     this.current.pet = kind || null;
     this.save();
     return true;
+  },
+};
+
+/**
+ * A solo dungeon run in progress, kept per profile (through ProfileStore, like the profiles) and
+ * written at the start of every stage (App.saveRun) so it can be continued from the main menu:
+ * { run: { mode, theme }, classId, snapshot (DungeonRun.snapshot, saved: true), time, kills, stats, savedAt }.
+ * It's cleared when the run ends; starting a new run instead gives it up (paying its gems, see gems).
+ */
+const RunSave = {
+  key(id) { return `run.${id}`; },
+
+  /** The profile's saved run, or null (none, or one this version can't read). */
+  get(id = Profiles.current?.id) {
+    if (!id) return null;
+    const s = ProfileStore.read(this.key(id));
+    const ok = s && s.run && s.snapshot && CONFIG.classes[s.classId] && s.snapshot.stage >= 1 && s.snapshot.stage <= 3
+      && Array.isArray(s.snapshot.themes) && s.snapshot.themes.every((t) => CONFIG.themes[t]) && s.snapshot.heroes?.local;
+    return ok ? s : null;
+  },
+
+  put(data, id = Profiles.current?.id) { if (id) ProfileStore.write(this.key(id), data); },
+
+  clear(id = Profiles.current?.id) { if (id) ProfileStore.remove(this.key(id)); },
+
+  /** Gems a saved run pays when it's given up: what a wipe at the start of its stage would have paid. */
+  gems(save) {
+    const G = CONFIG.gems;
+    return Math.floor(G.win * G.deathShare * clamp((save.snapshot.stage - 1) / 3, 0, 1));
   },
 };
 

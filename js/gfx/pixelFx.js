@@ -79,8 +79,11 @@ const PFX = {
 
   /** Stepped glow: stacked translucent discs, brightest in the middle. rgb = 'r, g, b'. */
   glow(ctx, x, y, r, rgb, alpha = 1, k = 2, ry = r) {
-    for (let i = 4; i >= 1; i--) {
-      PFX.disc(ctx, x, y, (r * i) / 4, (ry * i) / 4, `rgba(${rgb}, ${(alpha * 0.2).toFixed(3)})`, k);
+    // the faster graphics presets stack two discs instead of four (each a little stronger)
+    const step = Settings.gfx.glow ? 1 : 2;
+    const a = (alpha * (step === 1 ? 0.2 : 0.3)).toFixed(3);
+    for (let i = 4; i >= 1; i -= step) {
+      PFX.disc(ctx, x, y, (r * i) / 4, (ry * i) / 4, `rgba(${rgb}, ${a})`, k);
     }
   },
 

@@ -273,13 +273,37 @@ const SHOP_UPGRADES = [
     desc: 'Cakes splat over a bigger area. Every 5th cake coats enemies in icing, slowing them.',
     hud: (p) => ({ count: Upgrades.state(p).cakes % 5, active: Upgrades.state(p).cakes % 5 === 4 }),
   },
+  // ---------- dark: only the dark trader deals in these (never in Bram's store or the free picks) ----------
+  {
+    // every: basic attacks per minion; max: how many stand at once (a new one replaces the oldest); life: seconds each lasts
+    id: 'darkMinions', name: 'Dark Minions', color: '#b45aff', dark: true, every: 5, max: 3, life: 20,
+    desc: 'Every 5th basic attack raises a dark minion where it lands. It slashes enemies with a dark dagger. Up to 3 at once, for 20 seconds each.',
+    hud: (p) => ({ count: Upgrades.minionsOf(p), active: Upgrades.state(p).darkHits % 5 === 4 }),
+  },
+  {
+    // radius / damage / knockback of the wave of darkness a hit sets off
+    id: 'darklash', name: 'Darklash', color: '#8a3aff', dark: true, cooldown: 10, radius: 120, damage: 45, knockback: 340,
+    desc: 'Taking damage releases a wave of darkness around you, knocking enemies back and hurting them.',
+    hud: (p) => ({ cd: Upgrades.cd(p, 'darklash'), max: 10, active: Upgrades.cd(p, 'darklash') <= 0 }),
+  },
+  {
+    // chance per hit (at most one roll every `gap` s); heal: hp per fragment; maxSoul: the most soul health held
+    id: 'soulreap', name: 'Soulreap', color: '#c8a0ff', dark: true, chance: 0.12, gap: 0.25, heal: 10, maxSoul: 50,
+    desc: 'Hitting enemies may knock soul fragments loose. Each heals 10 HP; at full HP it becomes 10 soul health instead (an extra layer of health, up to 50).',
+    hud: (p) => ({ count: Math.round(p.soulHp || 0), active: (p.soulHp || 0) > 0 }),
+  },
 ];
 
 const UPGRADE_BY_ID = Object.fromEntries(SHOP_UPGRADES.map((u) => [u.id, u]));
 
-/** The upgrades this hero can ever be offered: the shared ones they can use, plus their own. */
+/** The upgrades this hero can ever be offered: the shared ones they can use, plus their own (never the dark trader's). */
 function shopStock(player) {
-  return SHOP_UPGRADES.filter((u) => (!u.hero || u.hero === player.classId) && (!u.needs || u.needs(player)));
+  return SHOP_UPGRADES.filter((u) => !u.dark && (!u.hero || u.hero === player.classId) && (!u.needs || u.needs(player)));
+}
+
+/** The dark trader's own upgrades this hero doesn't have yet. */
+function darkStock(player) {
+  return SHOP_UPGRADES.filter((u) => u.dark && !player.upgradeLevels[u.id]);
 }
 
 /** A hero's upgrade icon (Sprites.upgrades, 20x20) painted into a canvas, which is sized to fit. */
@@ -363,7 +387,107 @@ const Upgrades = {
 
   /** Per-hero upgrade bookkeeping: timers, stacks and counters. */
   state(p) {
-    return p.upg || (p.upg = { still: 0, stacks: 0, idle: 0, cd: {}, flash: {}, rays: 0, cakes: 0, dodges: 2, dodgeT: 0, trail: [], storms: [], said: {} });
+    return p.upg || (p.upg = { still: 0, stacks: 0, idle: 0, cd: {}, flash: {}, rays: 0, cakes: 0, darkHits: 0, dodges: 2, dodgeT: 0, trail: [], storms: [], said: {} });
+  },
+
+  // ---------- the dark trader's upgrades ----------
+
+  /** How many of this hero's dark minions are up. */
+  minionsOf(p) {
+    const w = p.lastWorld;
+    return w?.minions ? w.minions.filter((m) => m.owner === p && !m.dead).length : 0;
+  },
+
+  /** A basic attack went out (Forge.attack): Dark Minions counts it, and every 5th arms a minion to rise where it lands. */
+  basicAttack(p, world) {
+    if (!this.has(p, 'darkMinions')) return;
+    const s = this.state(p);
+    if (++s.darkHits % UPGRADE_BY_ID.darkMinions.every) return;
+    s.minionAt = world.time + 0.8;   // nothing hit by then: it rises in front of them instead
+  },
+
+  /** A basic attack landed on `target`: a minion armed by the last attack rises beside it. */
+  basicHit(p, target, world) {
+    const s = p.upg;
+    if (!s?.minionAt || target.prop) return;
+    s.minionAt = 0;
+    this.raiseMinion(p, target.x, target.y + 8, world);
+  },
+
+  /** A dark minion climbs out of a pool of shadow at (x, y); at the most already, the oldest fades to make room. */
+  raiseMinion(p, x, y, world) {
+    const u = UPGRADE_BY_ID.darkMinions;
+    const mine = world.minions.filter((m) => m.owner === p && !m.dead);
+    if (mine.length >= u.max) mine[0].fade(world);
+    const pt = world.dungeon.freePoint(x, y, 6, 4);
+    world.minions.push(new DarkMinion(p, pt.x, pt.y, u.life, world));
+    this.proc(p, world, 'darkMinions');
+  },
+
+  /** Darklash: a hit that got through sends a wave of darkness rolling out, hurting and hurling back everything round the hero. */
+  darklash(p, world) {
+    if (!this.has(p, 'darklash') || this.cd(p, 'darklash') > 0 || p.dead) return;
+    const u = UPGRADE_BY_ID.darklash;
+    this.state(p).cd.darklash = u.cooldown;
+    this.proc(p, world, 'darklash', 'DARKLASH!', 9);
+    const { x, y } = p;
+    for (const t of world.getTargets()) {
+      if (t.prop || dist(x, y, t.x, t.y) > u.radius + (t.radius || 0)) continue;
+      world.damageTarget(t, u.damage, { source: p, angle: angleTo(x, y, t.x, t.y), knockback: u.knockback, noCrit: true, sound: null, color: u.color });
+    }
+    const r = u.radius;
+    world.effects.add(0.5, (ctx, t) => {
+      const e = 1 - (1 - t) ** 3;
+      ctx.save();
+      PFX.disc(ctx, x, y + 2, r * e, r * 0.55 * e, `rgba(20, 8, 36, ${0.5 * (1 - t)})`, 3);
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.ring(ctx, x, y + 2, r * e, r * 0.55 * e, `rgba(180, 90, 255, ${1 - t})`, 3, { thick: t < 0.4 ? 3 : 2 });
+      PFX.ring(ctx, x, y + 2, r * e * 0.7, r * 0.38 * e, `rgba(224, 192, 255, ${0.7 * (1 - t)})`, 2, { dash: [4, 3], spin: t * 4 });
+      PFX.glow(ctx, x, y - 14, 30 * (1 - t) + 6, '138, 58, 255', 0.8 * (1 - t));
+      ctx.restore();
+    });
+    world.effects.smoke(x, y - 4, { count: 8, radius: 26, life: 0.7, rise: 18, colors: ['#1e1430', '#2e2048', '#46286a'] });
+    world.effects.burst(x, y - 12, { count: 26, colors: ['#b45aff', '#6a28c8', '#e0c0ff', '#1e1430'], speed: [90, 240], life: [0.3, 0.6] });
+    if (p === world.localPlayer) world.shake(4, 0.2);
+    Sound.play('phantomVanish', 0.1);
+  },
+
+  /** Soulreap: a hit may knock a soul fragment loose (at most one roll every `gap` s, so damage over time can't farm them). */
+  soulreap(p, target, world) {
+    const u = UPGRADE_BY_ID.soulreap;
+    const s = this.state(p);
+    if ((s.reapAt || 0) > world.time || Math.random() >= u.chance) return;
+    s.reapAt = world.time + u.gap;
+    world.pickups.push(new SoulPickup(target.x + rand(-10, 10), target.y + rand(-4, 6), p));
+  },
+
+  /** A soul fragment reached its hero: it heals them, and what's past full health becomes soul health (up to maxSoul). */
+  collectSoul(p, world) {
+    const u = UPGRADE_BY_ID.soulreap;
+    const room = p.maxHp - p.hp;
+    if (room > 0) p.heal(Math.min(room, u.heal), world, true);
+    const extra = u.heal - Math.max(0, room);
+    if (extra > 0) {
+      const before = p.soulHp || 0;
+      p.soulHp = Math.min(u.maxSoul, before + extra);
+      if (p.soulHp > before) world.effects.text(p.hx, p.hy - 26, `+${Math.round(p.soulHp - before)} SOUL`, { color: u.color, size: 8 });
+    }
+    this.state(p).flash.soulreap = world.time;
+    world.effects.burst(p.hx, p.hy, { count: 8, colors: ['#c8a0ff', '#e0c8ff', '#ffffff'], speed: [20, 70], life: [0.3, 0.5], up: 40 });
+  },
+
+  /** Soul health soaks a hit before the hero's own health does; returns what gets through. */
+  absorbSoul(p, amount, world) {
+    if (!(p.soulHp > 0) || amount <= 0) return amount;
+    const soaked = Math.min(p.soulHp, amount);
+    p.soulHp -= soaked;
+    world.effects.text(p.hx, p.hy - 26, `-${Math.round(soaked)}`, { color: '#c8a0ff', size: 8 });
+    world.effects.burst(p.hx, p.hy - 6, { count: 6, colors: ['#c8a0ff', '#6a3aa0', '#ffffff'], speed: [40, 120], life: [0.15, 0.3] });
+    if (p.soulHp <= 0) {
+      p.soulHp = 0;
+      world.effects.text(p.hx, p.hy - 38, 'SOUL SPENT', { color: '#c8a0ff', size: 7 });
+    }
+    return amount - soaked;
   },
 
   cd(p, id) { return Math.max(0, this.state(p).cd[id] || 0); },
@@ -490,6 +614,11 @@ const Upgrades = {
       s.idle += dt;
       if (s.idle >= BEATDOWN.decay) { s.idle = 0; s.stacks--; }
     }
+    // Dark Minions: an armed minion whose attack hit nothing rises in front of the hero
+    if (s.minionAt && world.time >= s.minionAt) {
+      s.minionAt = 0;
+      if (!p.dead) this.raiseMinion(p, p.x + Math.cos(p.aim) * 50, p.y + Math.sin(p.aim) * 36, world);
+    }
     if (this.has(p, 'burstDodging')) this.updateDodges(p, dt);
     if (this.has(p, 'lastDefence') && !p.dead && p.hp > 0 && p.hp < p.maxHp * 0.1) this.lastDefence(p, world);
     if (this.has(p, 'birdieTrail')) this.updateStorms(p, dt, world);
@@ -528,6 +657,7 @@ const Upgrades = {
   /** After a hit lands (Game.damageTarget). info: { crit, fire, arrow }. */
   onDealt(src, target, dmg, info, world) {
     if (!src.upgradeLevels) return;
+    if (this.has(src, 'soulreap') && !target.prop && world.run) this.soulreap(src, target, world);
     if (info.crit && info.arrow && this.has(src, 'razorArrows') && !target.dead) {
       const bleeding = world.dots.find((d) => d.target === target && d.kind === 'bleed' && d.source === src);
       if (bleeding) bleeding.t = Math.max(bleeding.t, 4);
@@ -1278,6 +1408,7 @@ const Shop = {
       upgrades: ['Power has a price, adventurer. Take as much as you can carry.', 'Each enchantment I bind costs a little more than the last.', 'Not to your liking? The runes can show you others... for a fee.'],
       pick: ['Before you go deeper: the runes offer you one gift. Choose it well.', 'A new stage, a new gift. Take one.'],
       sell: ['Let us see what you have got.', 'Everything has a price. Mine is just... smaller.', 'No haggling, friend. Tobin pays fair. Ish.'],
+      forge: ['Hand me that weapon. I\'ll make it sing.', 'The fire\'s hot. What comes out of it... that\'s up to the anvil.', 'Rare, epic, legendary... and once in a blue moon, something that shines red.'],
     };
     this.say(choose(lines[mode]));
     this.render();
@@ -1294,7 +1425,7 @@ const Shop = {
   /** Everything the window shows, to notice changes. */
   signature() {
     const p = this.hero;
-    return JSON.stringify([this.mode, p.coins, p.upgradeLevels, p.inventory, this.run.shopState(p), this.run.potionStock, this.run.startPicks]);
+    return JSON.stringify([this.mode, p.coins, p.upgradeLevels, p.inventory, this.run.shopState(p), this.run.potionStock, this.run.startPicks, p.forged, p.forgePending]);
   },
 
   /** Re-renders if anything shown changed since last time. */
@@ -1307,12 +1438,13 @@ const Shop = {
     this.shown = this.signature();
     const p = this.hero;
     document.getElementById('shop-coins').textContent = p.coins;
-    const titles = { potions: "Mira's Potions", upgrades: "Bram's Enchantments", pick: 'A Gift for the Journey', sell: "Tobin's Trade-ins" };
+    const titles = { potions: "Mira's Potions", upgrades: "Bram's Enchantments", pick: 'A Gift for the Journey', sell: "Tobin's Trade-ins", forge: "Borin's Forge" };
     document.getElementById('shop-title').textContent = titles[this.mode];
     document.getElementById('shop-leave').classList.toggle('hidden', this.mode === 'pick' && this.run.needsPick(p));
     const grid = document.getElementById('shop-items');
-    grid.className = `shop-items ${this.mode === 'pick' ? 'upgrades' : this.mode}`;
-    if (this.mode === 'potions') this.renderPotions(grid, p);
+    grid.className = `shop-items ${this.mode === 'pick' || this.mode === 'forge' ? 'upgrades' : this.mode}`;
+    if (this.mode === 'forge') Forge.render(this, grid, p);
+    else if (this.mode === 'potions') this.renderPotions(grid, p);
     else if (this.mode === 'sell') this.renderSell(grid, p);
     else if (this.mode === 'pick') this.renderPick(grid, p);
     else this.renderUpgrades(grid, p);
@@ -1492,6 +1624,24 @@ const Shop = {
     App.command({ type: 'pickUpgrade', upgrade: id });
   },
 
+  /** The blacksmith: forge a new enhancement for the hero's weapon. */
+  forge() {
+    const p = this.hero;
+    if (p.forgePending) return;
+    if (p.coins < Forge.price(this.run, p)) {
+      this.say("Coin first, then the fire. That's how it works.");
+      Sound.play('denied');
+      return;
+    }
+    App.command({ type: 'forge' });
+  },
+
+  /** After a forge: keep the new enhancement ('new') or the old one. */
+  forgeKeep(which) {
+    if (!this.hero.forgePending) return;
+    App.command({ type: 'forgeKeep', keep: which });
+  },
+
   reroll() {
     const p = this.hero;
     const st = this.run.shopState(p);
@@ -1524,6 +1674,13 @@ const Shop = {
       if (what === 'reroll') this.say(vchoose(['Hmm... how about these?', 'Fresh choices, fresh fortunes.', 'The runes shift...']));
       else if (what === 'potion') this.say(vchoose(['Drink it while it\'s fizzy!', 'Pleasure doing business.', 'Come back soon, dear!']));
       else if (what === 'sellPotion' || what === 'sellUpgrade') this.say(vchoose(['A fine piece. Here is your coin.', 'Done! Pleasure doing business.', 'I know just the buyer for this.']));
+      else if (what === 'forge') {
+        Sound.play('blockClang');
+        const f = hero.forgePending || hero.forged;
+        this.say(f?.rarity === 'mythical' ? 'By my beard... it SHINES. I\'ve not seen one like that in years.'
+          : f?.rarity === 'legendary' ? 'Now that is fine work, if I say so myself.'
+            : hero.forgePending ? 'There. Keep this one, or what you had? Your call.' : 'There. Feel the weight of that.');
+      } else if (what === 'forgeKeep') this.say(vchoose(['A wise choice. Off you go.', 'Into the slag with the other one.', 'She\'ll serve you well.']));
       else {
         this.justChose = what === 'pick' ? true : this.buying;
         Sound.play('magic');

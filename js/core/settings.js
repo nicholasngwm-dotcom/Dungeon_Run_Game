@@ -21,6 +21,7 @@ const KEY_ACTIONS = [
   ['item6', 'Inventory slot 6 (Backpack)'],
   ['item7', 'Inventory slot 7 (Backpack)'],
   ['quickHeal', 'Quick heal (strongest health potion)'],
+  ['mount', 'Mount / dismount your horse'],
   ['interact', 'Interact / revive'],
   ['music', 'Toggle music'],
   ['cursor', 'Mouse / crosshair'],
@@ -37,7 +38,22 @@ const CROSSHAIR_TYPES = [
 
 // How the game is played, in the order the settings screen lists them (auto: touch on phones and tablets).
 // the touch buttons' names, for prompts like "[USE] OPEN" on a phone (Settings.prompt)
-const TOUCH_PROMPTS = { interact: 'USE', scoreboard: 'SCORE', quickHeal: 'HEAL', dodge: 'DODGE', ult: 'ULT' };
+const TOUCH_PROMPTS = { interact: 'USE', scoreboard: 'SCORE', quickHeal: 'HEAL', dodge: 'DODGE', ult: 'ULT', mount: 'HORSE' };
+
+// Graphics presets, sharpest first (the settings screen lists them in this order). Looks only: none
+// of it touches the shared simulation, so teammates can each pick their own.
+//   res: the most canvas pixels per game pixel (sharper text and effects; sprites look the same)
+//   particles: x every spray of sparks and puff of smoke; lightRes: the darkness layer's resolution
+//   (x the game's); bloom: lamps' coloured glow; fog: billows per bank of graveyard mist (0 = none);
+//   glow: torch glows and full glow rings; vignette: the darkened screen edges; fps: frame cap (0 = none)
+const GRAPHICS_PRESETS = [
+  ['superQuality', 'Super quality', { res: 3, particles: 1.5, lightRes: 2, bloom: true, fog: 3, glow: true, vignette: true, fps: 0 }],
+  ['quality', 'Quality', { res: 2, particles: 1, lightRes: 1, bloom: true, fog: 3, glow: true, vignette: true, fps: 0 }],
+  ['balanced', 'Balanced', { res: 1.5, particles: 0.7, lightRes: 0.5, bloom: true, fog: 1, glow: true, vignette: true, fps: 0 }],
+  ['performance', 'Performance', { res: 1, particles: 0.45, lightRes: 0.5, bloom: false, fog: 1, glow: false, vignette: true, fps: 0 }],
+  ['superPerformance', 'Super performance', { res: 1, particles: 0.25, lightRes: 0.25, bloom: false, fog: 0, glow: false, vignette: false, fps: 30 }],
+];
+const GRAPHICS_BY_ID = Object.fromEntries(GRAPHICS_PRESETS.map(([id, , g]) => [id, g]));
 
 const CONTROL_MODES = [
   ['auto', 'Auto'],
@@ -57,6 +73,7 @@ const Settings = {
     crosshairLock: 0,    // 0 = off; else the crosshair stays this many px from the hero, the mouse turning it round them
     display: 'fullscreen',   // fullscreen | default (see Display)
     displayV: 2,         // saves from before fullscreen was the default are moved onto it once (see load)
+    graphics: 'quality', // graphics preset - see GRAPHICS_PRESETS
     screenShake: 1,      // camera shake strength (0 = off)
     othersFx: 1,         // multiplayer: how strongly teammates' effects show (0 = hidden); yours, enemies' and text stay full
     controls: 'auto',    // auto | touch | mouse - see CONTROL_MODES and Touch
@@ -71,7 +88,7 @@ const Settings = {
       e: 'KeyE', f: 'KeyF', ult: 'KeyQ', dodge: 'ShiftLeft',
       interact: 'KeyE', music: 'KeyM', cursor: 'KeyC', scoreboard: 'Tab',
       item1: 'Digit1', item2: 'Digit2', item3: 'Digit3', item4: 'Digit4', item5: 'Digit5', item6: 'Digit6', item7: 'Digit7',
-      quickHeal: 'KeyH',
+      quickHeal: 'KeyH', mount: 'KeyR',
     },
   },
   data: null,
@@ -113,6 +130,9 @@ const Settings = {
   differsFrom(snapshot) { return JSON.stringify(this.data) !== JSON.stringify(snapshot); },
 
   get keys() { return this.data.keys; },
+
+  /** The chosen graphics preset's values (GRAPHICS_PRESETS). */
+  get gfx() { return GRAPHICS_BY_ID[this.data.graphics] || GRAPHICS_BY_ID.quality; },
 
   /**
    * Binds an action to a key. If another action already uses that key it gets

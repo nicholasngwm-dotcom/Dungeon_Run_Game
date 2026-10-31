@@ -140,7 +140,7 @@ class FloorMap extends Dungeon {
       const r = take();
       if (!r) break;
       r.type = 'special';
-      r.special = pick(specials);
+      r.special = pick(specials) || choose(CONFIG.run.specials);   // (a list of one, from ?special=, can run out)
     }
     for (const t of ['defend', 'survival', 'puzzle']) {
       if (rest.length > 3) pick(rest).type = t;

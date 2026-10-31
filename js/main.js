@@ -39,7 +39,7 @@ const App = {
       ['Sharpening the blades...', () => { buildItemSprites(); buildGraveyardSprites(); }],   // graveyard after the items: it adds to Sprites.projectiles
       ['Crowning the court...', () => { buildCastleSprites(); buildQueenSprites(); buildKingSprites(); buildRoyalSetPieces(); buildCastleDecor(); buildRuinsSprites(); buildGuardianSprites(); }],
       ['Furnishing the keep...', () => { buildNpcSprites(); buildPropSprites(); buildPetSprites(); buildObstacleSprites(); buildBarrelSprites(); }],   // obstacles after the cover (they add to Sprites.cover)
-      ['Brewing potions...', () => { buildPotionSprites(); buildIconSprites(); buildRocketeerSprites(); buildBakerSprites(); buildUpgradeSprites(); }],   // the rocketeer's and baker's gear add to the weapons, items and icons
+      ['Brewing potions...', () => { buildPotionSprites(); buildIconSprites(); buildRocketeerSprites(); buildBakerSprites(); buildUpgradeSprites(); buildForgeSprites(); }],   // the rocketeer's and baker's gear add to the weapons, items and icons
       ['Rehearsing the battles...', () => MenuShowcase.start(0)],
     ];
     const started = performance.now();
@@ -174,6 +174,8 @@ const App = {
       onGems: (n) => Profiles.addGems(n),   // banked on this machine's profile (in multiplayer every machine gets the event)
       onNpc: (kind, run, hero) => this.talkTo(kind, run, hero),
       onPurchase: (hero, what, ok) => Shop.onPurchase(hero, what, ok),
+      onSpecial: (hero, what, ok, info) => this.onSpecial(hero, what, ok, info),
+      onStageStart: (run) => this.saveRun(run),
       // (in multiplayer every machine gets these; only the host moves the party)
       onBossArena: (boss) => (this.mp ? this.mp.startBossPractice(boss) : this.startBossPractice(boss)),
       onPracticeReturn: () => this.startPractice(),
@@ -292,12 +294,145 @@ const App = {
           { label: 'Not today', fn: () => Dialog.close() },
         ],
       });
+    } else if (kind === 'blacksmith') {
+      const p = this.game.localPlayer;
+      const item = FORGE_ITEMS[Forge.itemFor(p.classId)];
+      Dialog.open({
+        name: 'BORIN', frames: Sprites.npcs.blacksmith,
+        text: p.forged
+          ? `Back for another go? That ${Forge.title(p.forged)} isn't bad... but the anvil might give you better. Or worse. You keep whichever you like.`
+          : `A ${CONFIG.classes[p.classId].name}, eh? I can forge a ${item.name} for that weapon of yours. Rare, epic, legendary - and if the fire loves you, mythical.`,
+        options: [
+          { label: 'Show me the forge', fn: () => Shop.open(run, 'forge') },
+          { label: 'Not now', fn: () => Dialog.close() },
+        ],
+      });
+    } else if (kind === 'darkTrader') {
+      const p = this.game.localPlayer;
+      const c = CONFIG.run.darkTrader;
+      const can = p.hp > c.hp;
+      Dialog.open({
+        name: 'THE DARK TRADER', frames: Sprites.npcs.darkTrader,
+        text: can
+          ? `Mmm... so much life in you. Give me ${c.hp} of it, and I will give you something... interesting. A bottle, a power - perhaps one no one else dares to sell.`
+          : `Too little life left in you for my tastes. Come back when you have more than ${c.hp} to spare.`,
+        options: [
+          can && { label: `Offer ${c.hp} HP`, fn: () => { Dialog.close(); this.command({ type: 'darkTrade' }); } },
+          { label: 'Leave', fn: () => Dialog.close() },
+        ].filter(Boolean),
+      });
+    } else if (kind === 'friendlyTrader') {
+      const p = this.game.localPlayer;
+      const pr = Specials.propHere(run, p, 'friendlyTrader');
+      const n = CONFIG.run.friendlyTrader.count;
+      const done = !!pr?.traded?.[p.netId || 'solo'];
+      const can = !done && Specials.tradeable(p).length >= n;
+      Dialog.open({
+        name: 'WREN', frames: Sprites.npcs.trader,
+        text: done ? 'We already shook on it, friend! A deal is a deal. Safe travels!'
+          : can ? `Tired of what you've got? Hand me ${n} of your upgrades - I pick, mind - and I'll give you ${n} others in their place. Could be better, could be worse. That's trading!`
+            : `I'd love to trade, but you've only got ${Specials.tradeable(p).length} upgrade${Specials.tradeable(p).length === 1 ? '' : 's'} I can take. Come back with at least ${n}!`,
+        options: [
+          can && { label: `Trade ${n} upgrades`, fn: () => { Dialog.close(); this.command({ type: 'friendlyTrade' }); } },
+          { label: can ? 'Maybe later' : 'Bye!', fn: () => Dialog.close() },
+        ].filter(Boolean),
+      });
+    } else if (kind === 'mountTrader') {
+      const p = this.game.localPlayer;
+      const c = CONFIG.run.mount;
+      const price = Specials.price(run, p, c.price);
+      const key = Settings.prompt('mount');
+      Dialog.open({
+        name: 'DUSTY', frames: Sprites.npcs.mountTrader,
+        text: p.horse
+          ? `How's that horse treating you? Press [${key}] to hop on or off. Don't forget: no fancy ultimates in the saddle, and once you're off in a fight, you stay off till it's done.`
+          : `Need a faster ride? ${price} coins and she's yours. She runs quicker than you, takes the hits for you (${c.hp} HP of 'em), and gets a bit of rest back every new stage. Press [${key}] to hop on and off - but no ultimates in the saddle, and in a fight you can hop off, not back on.`,
+        options: [
+          !p.horse && { label: `Buy a horse (${price} coins)`, fn: () => { Dialog.close(); this.command({ type: 'buyHorse' }); } },
+          { label: p.horse ? 'Thanks, Dusty' : 'Not today', fn: () => Dialog.close() },
+        ].filter(Boolean),
+      });
+    } else if (kind === 'helper') {
+      const p = this.game.localPlayer;
+      const pr = Specials.propHere(run, p, 'helper');
+      const hire = pr?.hire || 'knight';
+      const c = CONFIG.run.helpers[hire];
+      const price = Specials.price(run, p, c.price);
+      const hired = !!pr?.hired?.[p.netId || 'solo'];
+      const who = {
+        knight: 'a knight with a sword and shield. Blocks what comes at him and hits back hard.',
+        archer: 'an archer. Keeps back and shoots whatever is coming for you.',
+        priest: `a priest, with two acolytes. He heals you every ${c.healEvery} seconds, and they shoot beams of light at your enemies - mind, the acolytes are frail.`,
+      }[hire];
+      Dialog.open({
+        name: 'PIP', frames: Sprites.npcs.helper,
+        text: hired ? "They're with you now! They'll follow you all the way down - till they fall, anyway. Look after them!"
+          : `Hello! Need a hand down there? For ${price} coins I'll send ${who} They'll follow you from stage to stage until they fall.`,
+        options: [
+          !hired && { label: `Hire the ${hire} (${price} coins)`, fn: () => { Dialog.close(); this.command({ type: 'hire' }); } },
+          { label: hired ? 'Thanks, Pip!' : 'No thanks', fn: () => Dialog.close() },
+        ].filter(Boolean),
+      });
     } else {
       Dialog.open({
         name: 'CHEF BRUNO', frames: Sprites.npcs.chef,
         text: "Welcome to my restaurant, adventurer! The kitchen isn't quite ready yet... come back soon and I'll cook you something special!",
         options: [{ label: "Can't wait!", fn: () => Dialog.close() }],
       });
+    }
+  },
+
+  /** A special room's trade went through (or didn't): told on the trader's screen only. */
+  onSpecial(hero, what, ok, info) {
+    if (!this.game || hero !== this.game.localPlayer) return;
+    if (ok) {
+      if (what === 'friendly' && info?.got?.length) Menus.toast(`NEW: ${info.got.map((u) => u.name.toUpperCase()).join(' + ')}`, '#6cff7a');
+      return;
+    }
+    Sound.play('denied');
+    const why = {
+      dark: 'NOT ENOUGH HP TO TRADE',
+      friendly: 'NOTHING TO TRADE',
+      horse: hero.horse ? 'YOU ALREADY HAVE A HORSE' : 'NOT ENOUGH COINS',
+      hire: 'NOT ENOUGH COINS',
+    }[what];
+    if (why) Menus.toast(why, '#e04545');
+  },
+
+  // ---------- saved runs (solo) ----------
+
+  /** A solo dungeon run saves at the start of every stage (DungeonRun.start), on this profile. */
+  saveRun(run) {
+    const g = run.world;
+    if (this.mp || g.multiplayer || !Profiles.current || run.practiceBoss || !this.lastRun || this.lastRun.practiceBoss) return;
+    RunSave.put({
+      run: { mode: this.lastRun.mode, theme: this.lastRun.theme || null },
+      classId: g.localPlayer.classId,
+      snapshot: { ...run.snapshot(), saved: true },
+      time: g.time, kills: g.kills, stats: { ...Game.statsOf(g.localPlayer) },
+      savedAt: Date.now(),
+    });
+  },
+
+  /** Main menu / the gate's Continue: the saved run picks up at the start of the stage it was saved on. */
+  continueRun() {
+    const save = RunSave.get();
+    if (!save || this.mp) return;
+    this.lastRun = { mode: save.run.mode, theme: save.run.theme || undefined };
+    this.resumeSave = save;
+    this.practiceMode = false;
+    this.startGame(save.classId);
+  },
+
+  /** Starting a new run while one is saved gives the saved one up: it pays what a wipe at its stage would. */
+  abandonSavedRun() {
+    const save = RunSave.get();
+    if (!save) return;
+    RunSave.clear();
+    const n = RunSave.gems(save);
+    if (n > 0) {
+      Profiles.addGems(n);
+      Menus.toast(`YOUR SAVED RUN ENDED: +${n} GEMS`, '#8ac8ff');
     }
   },
 
@@ -503,6 +638,7 @@ const App = {
   /** A dungeon run: { mode: 'set', theme } or { mode: 'random' }. */
   startDungeonRun(run) {
     if (this.mp) { if (this.mp.isHost) this.mp.startRun(run); return; }
+    this.abandonSavedRun();
     this.lastRun = run;
     this.practiceMode = false;
     this.startGame(this.classId);
@@ -536,12 +672,21 @@ const App = {
   startGame(classId) {
     Sound.init();
     this.classId = classId;
+    const save = this.resumeSave;   // a saved run being continued (continueRun)
+    this.resumeSave = null;
     this.game = new Game(classId, this.events, {
       practice: this.practiceMode ? this.practiceOptions : null,
       // the practice cheats also work in a boss arena opened from the range
       cheats: this.practiceMode || this.lastRun?.practiceBoss ? this.practiceOptions : null,
-      run: this.practiceMode ? null : this.lastRun,
+      run: this.practiceMode ? null : save ? { ...this.lastRun, resume: save.snapshot } : this.lastRun,
     });
+    if (save) {
+      // the clock, kills and scoreboard carry on from where they were
+      this.game.time = Number(save.time) || 0;
+      this.game.kills = Number(save.kills) || 0;
+      if (save.stats) Object.assign(Game.statsOf(this.game.localPlayer), save.stats);
+      this.saveRun(this.game.run);   // (it saved as the stage began, before these were put back)
+    }
     Menus.refreshPractice(this.practiceOptions);
     this.state = 'playing';
     Input.reset();
@@ -552,6 +697,8 @@ const App = {
 
   endGame(won, stats) {
     this.state = 'ended';
+    // a finished solo run (won or wiped) has nothing left to continue
+    if (!this.mp && this.game?.run && !this.game.run.practiceBoss) RunSave.clear();
     Menus.showEnd(won, stats, this.mp ? (this.mp.isHost ? 'host' : 'client') : null);
   },
 
@@ -583,6 +730,12 @@ const App = {
    * notice on screen now and then) instead of stopping the loop and freezing the game for good.
    */
   loop(now) {
+    // a graphics preset with a frame cap skips frames that come too soon (input waits for the next one)
+    const cap = Settings.gfx.fps;
+    if (cap && now - this.lastTime < 1000 / cap - 4) {
+      requestAnimationFrame((t) => this.loop(t));
+      return;
+    }
     try {
       this.frame(now);
     } catch (e) {
@@ -597,7 +750,7 @@ const App = {
   },
 
   frame(now) {
-    const dt = Math.min((now - this.lastTime) / 1000 || 0, 1 / 30);
+    const dt = Math.min((now - this.lastTime) / 1000 || 0, Settings.gfx.fps ? 1.25 / Settings.gfx.fps : 1 / 30);   // (a capped frame may run a little long)
     // (resizing the canvas resets its state, so both are set every frame)
     this.ctx.setTransform(Display.renderScale, 0, 0, Display.renderScale, 0, 0);
     this.ctx.imageSmoothingEnabled = false;

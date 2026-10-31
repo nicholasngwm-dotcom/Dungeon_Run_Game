@@ -100,15 +100,39 @@ Tobin's trade-in stall at the back of the shop buys them back for a little: 10 c
 **Upgrades**: 35 shared ones (Vital Heart, Tesla Armour, Silver Shield, Backpack, Nuclear Reactor, Last Hurrah...;
 every hero can be offered any of them, even the few that only help heroes with mana, rockets,
 energy, followers or pets, or a melee basic attack) and 16 hero upgrades, framed in gold with the
-hero's name, that only ever show up for that hero. Hold Tab (the scoreboard) to see every
+hero's name, that only ever show up for that hero (plus 3 dark ones only the dark trader deals in). Hold Tab (the scoreboard) to see every
 player's upgrades: hover one to read it; cooldowns, stacks and "active right now" glows show on
 the icons, and they flash when they go off. Potion prices rise with the stage. In defend rooms,
 enemies chase you once they spot you and go back for the lantern if you outrun them.
 
-The restaurant (its chef just chats for now), special rooms (blacksmith, wishing well, hero statue,
-5 star restaurant, mount / dark / friendly traders, treasure, helper), puzzle rooms
-and a secret room (reached only by jumping into a glowing hole in one combat room's floor; a rope of light takes you back up) can be found
-but do nothing yet: items, food, free upgrades and gems are not in.
+**Special rooms** (one or two a floor; their prices rise with the stage like the shop's):
+- **Blacksmith** (Borin): forges an enhancement for your weapon (35 coins) for the rest of the run, in
+  a random rarity: rare (blue), epic (purple), legendary (gold) or mythical (shining red: legendary's boost
+  plus a perk). One at a time; forging again lets you keep either. Knight and Rogue: Sharpening Stone
+  (+2-4 damage per basic hit; mythical makes them bleed). Archer and Rocketeer: Quiver (+5-15% attack
+  speed; mythical fires 2 weaker shots at a diagonal). Mage: Gemstone (missiles cost 1-3 less mana;
+  every 5th mythical one bursts). Priestess and Bard: Holy Tome (every 7th / 6th / 5th attack stuns;
+  mythical slows after the stun). Baker: Whisks (every 3rd attack throws one for 20-40; mythical ices them).
+- **Dark trader**: 25 HP (never your last) for a random gift: potions or an upgrade, sometimes one only he
+  has: Dark Minions (every 5th attack raises a shadow with a dagger, up to 3), Darklash (getting hit sends
+  out a wave of darkness, 10s cooldown) or Soulreap (hits drop soul fragments: 10 HP each, or 10 soul health
+  past full, up to 50).
+- **Friendly trader** (Wren): two random upgrades you own for two others, once a room.
+- **Mount trader** (Dusty): a horse (45 coins, 50 HP) that's faster and takes your hits; at 0 it lies down
+  to rest, and every new stage gives it 30 HP back. R (RIDE on a phone) gets on and off; no ultimates in
+  the saddle, and in a locked room you can get off but not back on.
+- **Helper camp** (Pip): hire the knight (sword and shield, blocks), the archer, or the priest (heals you
+  every 10 seconds; his two frail acolytes shoot light). They follow you from stage to stage until they fall.
+- The wishing well grants a wish for coins and the treasure room has three chests; the hero statue and
+  the 5 star restaurant (its chef just chats for now) aren't in yet.
+
+Puzzle rooms (Simon's rune stone) and a secret room (reached only by jumping into a glowing hole in one
+combat room's floor; a rope of light takes you back up) can also be found.
+
+**Saved runs**: a solo run saves on your profile at the start of every stage. The main menu (and the
+dungeon gate) then offers **Continue Run**, picking up at the start of that stage with your upgrades,
+coins, items, forge enhancement, horse and hirelings. Starting a new run instead ends the saved one and
+pays its gems as if it had ended there; finishing or wiping clears it. (Multiplayer runs aren't saved.)
 
 ## Practice range
 
@@ -151,9 +175,16 @@ The game fills the whole window, whatever its shape (no black bars), and goes **
 on the first click or key press; leave it (Esc / F11) and the next click brings it back.
 Settings > Window mode switches to playing in the browser window instead.
 
+**Graphics** (Settings > General) has five presets for slower or faster computers: Super quality,
+Quality (the default), Balanced, Performance and Super performance. The faster ones draw at a lower
+resolution (sprites look the same; text and effects get chunkier), with fewer sparks and smoke wisps,
+a cheaper darkness layer, no lamp bloom or torch glows, thinner graveyard fog, and Super performance
+drops the fog and vignette and caps the game at 30 FPS. Super quality draws sharper on high-resolution
+screens, with more particles. It only changes how your screen looks, so teammates can each pick their own.
+
 **Settings** (main menu or pause menu) is the same on every device, in four tabs, each
 setting with a short recommended value: **General** (control style Auto / Touch / Mouse + keys,
-window mode, minimap size, music and sound), **Phone** (auto fire, interface and button size,
+window mode, graphics, minimap size, music and sound), **Phone** (auto fire, interface and button size,
 opacity, the button editor), **PC** (mouse sensitivity, crosshair, and key bindings for movement, E, F, Q, dodge,
 the five bag slots, interact, the music toggle and the mouse / crosshair toggle (LMB / RMB
 stay on the mouse)) and **Multiplayer** (teammate effects, screen shake). Settings are saved in the browser. While playing, the game

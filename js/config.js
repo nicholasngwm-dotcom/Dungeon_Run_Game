@@ -207,8 +207,8 @@ const CONFIG = {
       // F: then LMB shields the ally nearest the cursor (allyHp), RMB shields yourself (selfHp)
       aegis:     { cost: 2, cooldown: 10, allyHp: 150, selfHp: 50, duration: 8, selectRadius: 80 },
       // Q: charge for up to powerTime (LMB releases early), then throw a stunning light bomb at the cursor.
-      // Damage, radius and stun scale from their minimums up to full.
-      ult:       { charge: 1600, powerTime: 4, moveMultiplier: 0.4, maxRange: 380, flightTime: 0.35,
+      // Damage, radius and stun scale from their minimums up to full. Takes `cost` light orbs as well as the full charge.
+      ult:       { charge: 1600, cost: 4, powerTime: 4, moveMultiplier: 0.4, maxRange: 380, flightTime: 0.35,
                    damage: 480, minPower: 0.25, radius: 170, minRadius: 80, stun: 2.5, minStun: 0.8 },
     },
     bard: {
@@ -832,8 +832,9 @@ const CONFIG = {
     // time, potions[0]-potions[1] healing potions, mostly the small ones (healTierWeights: tier 1, 2, 3)
     treasure: { coins: [5, 35], potions: [2, 5], potionChance: 0.5, healTierWeights: [6, 3, 1] },
     // wishing well: each coin tossed in has `chance` to grant a wish (guaranteed on the pity-th coin);
-    // a wish is one random kind of potion, potions[0]-potions[1] of it (or, upgradeChance of the time, a random upgrade). One wish per hero per well
-    well: { chance: 0.15, pity: 12, potions: [2, 6], upgradeChance: 0.15 },
+    // a wish is one random kind of potion, potions[0]-potions[1] of it, weighted by tier (tierWeights: tier 1, 2, 3)
+    // (or, upgradeChance of the time, a random upgrade). One wish per hero per well
+    well: { chance: 0.15, pity: 12, potions: [2, 6], tierWeights: [6, 3, 1], upgradeChance: 0.1 },
     // puzzle room (Simon's stone): it lights a pattern of its four colours, `show`s each with a `gap` between,
     // and the heroes step on the matching floor plates in order. lengths: the pattern's length for each round;
     // `wins` right answers give every hero a free random upgrade. `strikes` mistakes and the stone blinks red
@@ -868,9 +869,35 @@ const CONFIG = {
       poison: { radius: 80, cloudTime: 4, dps: 5, time: 8, enemyDps: 15 },
       frost: { radius: 75, damage: 10, enemyDamage: 25, freeze: 1.5, iceRadius: 70, iceTime: 8, refreeze: 1.2 },
     },
-    // special rooms (one or two per floor); not functional yet
+    // special rooms (one or two per floor); the hero statue and the restaurant aren't in yet
     specials: ['blacksmith', 'wishingWell', 'heroStatue', 'restaurant5', 'mountTrader', 'darkTrader',
                'friendlyTrader', 'treasure', 'helper'],
+    // Every special room price below is in coins, x the stage's shop price (shop.stagePrice) and Discount Cards.
+    // dark trader: give up `hp` health (never your last of it) for a gift: an upgrade upgradeChance of the time
+    // (a dark one, only he has, darkChance of those while any are left), otherwise potions[0]-potions[1] of one kind
+    darkTrader: { hp: 25, upgradeChance: 0.6, darkChance: 0.45, potions: [1, 3], tierWeights: [5, 3, 2] },
+    // friendly trader: once per hero per room, `count` random upgrades the hero owns for `count` others
+    friendlyTrader: { count: 2 },
+    // blacksmith: each forge costs `price`; the rarity is rolled from `rarity` weights (see FORGE_RARITIES)
+    blacksmith: { price: 35, rarity: { rare: 50, epic: 30, legendary: 15, mythical: 5 } },
+    // mount trader's horse: moves the rider speed x faster, takes the rider's hits on its own hp, rests at 0
+    // and gets `stageHeal` back at every new stage. No ultimates while riding; in a locked room you can get
+    // off but not back on.
+    mount: { price: 45, hp: 50, speed: 1.4, stageHeal: 30 },
+    // helper room: one hireling (a random kind) that follows its hero until it falls (see js/entities/allies.js).
+    // Like pets, enemy bodies don't hurt them (only enemy attacks do).
+    helpers: {
+      knight: { name: 'Hired Knight', price: 30, hp: 260, speed: 175, damage: 26, every: 0.85, reach: 40, arc: 110,
+                block: 0.7, blockEvery: 3.5, blockTime: 1.4, color: '#8ab8ff' },
+      archer: { name: 'Hired Archer', price: 30, hp: 150, speed: 185, damage: 22, every: 1.1, range: 300, arrowSpeed: 560, color: '#8cff9a' },
+      // the priest heals every hero within healRange for `heal` every healEvery s; his two acolytes shoot light beams
+      priest: { name: 'Hired Priest', price: 45, hp: 220, speed: 165, heal: 40, healEvery: 10, healRange: 260, color: '#fff2a0',
+                acolyte: { hp: 60, speed: 190, damage: 16, every: 1.1, range: 260 } },
+      leash: 320,         // how far from their hero they go after enemies
+      regen: 0.03,        // share of max hp healed per second after regenDelay s without a hit
+      regenDelay: 5,
+      stageDamage: 0.3,   // their hits grow by this much per stage after the first
+    },
   },
 
   // ---------------------------------------------------------

@@ -161,7 +161,10 @@ class Baker extends Player {
       lob.t += dt;
       if (lob.t < lob.time) continue;
       lob.dead = true;
+      const was = world.basicHit;
+      world.basicHit = lob.tag || null;   // a basic attack's cake (see Forge.attack)
       this.splat(world, lob.x1, lob.y1, lob.flavour, lob);
+      world.basicHit = was;
     }
     removeDead(this.lobs);
   }

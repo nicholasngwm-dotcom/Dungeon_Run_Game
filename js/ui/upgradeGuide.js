@@ -19,12 +19,14 @@ const UpgradeGuide = {
   /** [title, color, upgrades] sections: the general ones, then each hero's (the filter picks which). */
   get sections() {
     const out = [];
-    if (this.filter === 'all' || this.filter === 'general') out.push(['GENERAL - ANY HERO', '#c8a0ff', SHOP_UPGRADES.filter((u) => !u.hero)]);
+    if (this.filter === 'all' || this.filter === 'general') out.push(['GENERAL - ANY HERO', '#c8a0ff', SHOP_UPGRADES.filter((u) => !u.hero && !u.dark)]);
     for (const [id, c] of Object.entries(CONFIG.classes)) {
       if (this.filter !== 'all' && this.filter !== id) continue;
       const list = SHOP_UPGRADES.filter((u) => u.hero === id);
       if (list.length) out.push([`${c.name.toUpperCase()} ONLY`, '#ffd34a', list]);
     }
+    // the dark trader's own: never in the shops
+    if (this.filter === 'all' || this.filter === 'general') out.push([`ONLY FROM THE DARK TRADER (FOR ${CONFIG.run.darkTrader.hp} HP)`, '#b45aff', SHOP_UPGRADES.filter((u) => u.dark)]);
     return out;
   },
 
@@ -33,7 +35,7 @@ const UpgradeGuide = {
     document.getElementById('tome-filters').innerHTML = chips
       .map(([f, label]) => `<button class="chip${this.filter === f ? ' on' : ''}" data-action="tomeFilter:${f}">${label}</button>`).join('');
     const total = SHOP_UPGRADES.length;
-    document.getElementById('tome-count').textContent = `${total} enchantments: ${SHOP_UPGRADES.filter((u) => !u.hero).length} general, ${total - SHOP_UPGRADES.filter((u) => !u.hero).length} for one hero only.`;
+    document.getElementById('tome-count').textContent = `${total} enchantments: ${SHOP_UPGRADES.filter((u) => !u.hero && !u.dark).length} general, ${SHOP_UPGRADES.filter((u) => u.hero).length} for one hero only, ${SHOP_UPGRADES.filter((u) => u.dark).length} only the dark trader deals in.`;
     // each section: a heading, then its upgrades as cards filling the rows left to right
     document.getElementById('tome-list').innerHTML = this.sections.map(([title, color, list]) => {
       const cards = list.map((u) => {

@@ -29,6 +29,7 @@ const Menus = {
     });
     this.initSettings();
     this.musicChanged(Settings.data.music, false);
+    this.refreshContinue();
   },
 
   // ---------- settings ----------
@@ -66,6 +67,9 @@ const Menus = {
     });
     document.getElementById('set-display').innerHTML = DISPLAY_MODES
       .map(([mode, label]) => `<button class="toggle" data-action="display:${mode}">${label.toUpperCase()}</button>`)
+      .join('');
+    document.getElementById('set-gfx').innerHTML = GRAPHICS_PRESETS
+      .map(([id, label]) => `<button class="toggle" data-action="graphics:${id}">${label.toUpperCase()}</button>`)
       .join('');
   },
 
@@ -107,6 +111,9 @@ const Menus = {
   displayChanged() {
     for (const btn of document.querySelectorAll('#set-display .toggle')) {
       btn.classList.toggle('off', btn.dataset.action !== `display:${Settings.data.display}`);
+    }
+    for (const btn of document.querySelectorAll('#set-gfx .toggle')) {
+      btn.classList.toggle('off', btn.dataset.action !== `graphics:${Settings.data.graphics}`);
     }
   },
 
@@ -260,6 +267,16 @@ const Menus = {
     const [action, arg, arg2] = cmd.split(':');
     switch (action) {
       case 'play': this.showProfiles('play'); break;
+      case 'continueRun': {
+        // (on the main menu: as the profile the save belongs to)
+        const id = this.continueProfile;
+        if (!id || !RunSave.get(id)) { this.refreshContinue(); break; }
+        if (Profiles.current?.id !== id) Profiles.select(id);
+        app.continueRun();
+        break;
+      }
+      case 'forge': Shop.forge(); break;
+      case 'forgeKeep': Shop.forgeKeep(arg); break;
       case 'multiplayer': this.showProfiles('mp'); break;
       case 'profileCreate': this.createProfile(); break;
       case 'profileSelect': {
@@ -338,6 +355,12 @@ const Menus = {
         this.displayChanged();
         this.updateSaveState();
         break;
+      case 'graphics':
+        Settings.data.graphics = arg;
+        Display.layout();   // (the preset caps the resolution)
+        this.displayChanged();
+        this.updateSaveState();
+        break;
       case 'controlMode':
         Settings.data.controls = arg;
         this.controlsChanged();
@@ -406,6 +429,27 @@ const Menus = {
     this.hideEnhTip();
     for (const [key, el] of Object.entries(this.screens)) {
       el.classList.toggle('hidden', key !== name);
+    }
+    if (name === 'menu') this.refreshContinue();
+  },
+
+  /** The profile whose saved run the main menu offers to continue (the one playing, or the last one played). */
+  get continueProfile() { return Profiles.current?.id || Profiles.lastId; },
+
+  /** "Profile - Graveyard, stage 2" for a saved run. */
+  saveLabel(save, withName = true) {
+    const theme = CONFIG.themes[save.snapshot.themes[save.snapshot.stage - 1]]?.name || '';
+    const who = withName ? `${Profiles.byId(this.continueProfile)?.name || ''} - ` : '';
+    return `${who}${theme}, stage ${save.snapshot.stage}`;
+  },
+
+  /** The main menu's Continue Run, shown while the profile has a saved run. */
+  refreshContinue() {
+    const id = this.continueProfile;
+    const save = id ? RunSave.get(id) : null;
+    for (const [btn, sub] of [['menu-continue', 'menu-continue-sub'], ['menu-continue-m', 'menu-continue-m-sub']]) {
+      document.getElementById(btn).classList.toggle('hidden', !save);
+      document.getElementById(sub).textContent = save ? this.saveLabel(save) : '';
     }
   },
 
@@ -602,6 +646,17 @@ const Menus = {
 
   /** Dungeon gate: 'modes' (Set / Random / Test) or 'themes' (Set Dungeon's theme list). */
   showDungeonView(view) {
+    // a saved solo run: a card to continue it, and a warning that a new run gives it up (paying its gems)
+    const save = !App.mp && RunSave.get();
+    document.getElementById('dungeon-continue').classList.toggle('hidden', !save);
+    document.getElementById('dungeon-soon').classList.toggle('hidden', !!save);
+    const note = document.getElementById('dungeon-save-note');
+    note.classList.toggle('hidden', !save);
+    if (save) {
+      document.getElementById('dungeon-continue-stats').textContent = this.saveLabel(save, false).toUpperCase();
+      const n = RunSave.gems(save);
+      note.textContent = `Starting a new run ends your saved run${n > 0 ? ` and pays its reward: ${n} gems` : ''}.`;
+    }
     document.getElementById('dungeon-modes').classList.toggle('hidden', view !== 'modes');
     document.getElementById('dungeon-themes').classList.toggle('hidden', view !== 'themes');
     this.show('dungeon');

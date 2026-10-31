@@ -105,7 +105,7 @@ const HERO_GUIDE = {
         desc: `Press E and a healing rune appears at your feet straight away. Allies standing in it heal ${c.rune.heal} hp per second for ${sec(c.rune.duration)}.` },
       { key: 'F', icon: 'f', name: 'Guardian Aegis', tags: [`${c.aegis.cost} light`, `${sec(c.aegis.cooldown)} cd`],
         desc: `Press F, then LMB to shield the ally nearest the cursor or RMB to shield yourself. On a teammate the shield absorbs ${c.aegis.allyHp} damage, on yourself ${c.aegis.selfHp}; it lasts ${sec(c.aegis.duration)}.` },
-      { key: 'Q', icon: 'q', name: 'Light Bomb', tags: [`charge: deal ${c.ult.charge} dmg`, `up to ${c.ult.damage} dmg`],
+      { key: 'Q', icon: 'q', name: 'Light Bomb', tags: [`${c.ult.cost} light`, `charge: deal ${c.ult.charge} dmg`, `up to ${c.ult.damage} dmg`],
         desc: `Charge for up to ${sec(c.ult.powerTime)} (LMB throws early), then hurl a bomb at the cursor. The longer you charge, the bigger the blast, the damage and the stun (up to ${sec(c.ult.stun)}).` },
     ],
   }),
@@ -208,7 +208,7 @@ const HERO_TIPS = {
     secondary: 'Homing missiles that mark enemies.',
     e: 'Healing rune at your feet.',
     f: 'Shield an ally (LMB) or yourself (RMB).',
-    q: 'Charge, then throw a stunning light bomb.',
+    q: 'Costs light orbs. Charge, then throw a stunning light bomb.',
   },
   bard: {
     primary: 'Strum a fan of magic notes.',

@@ -41,6 +41,10 @@ class Game {
     for (const r of this.roster) this.petChoice[r.id] = Profiles.cleanPet(r.pet);
     if (!this.multiplayer && !this.showcase) this.petChoice[this.roster[0].id] = Profiles.pet;
     this.pets = [];                // the heroes' pets (see Pet, syncPets)
+    this.helpers = [];             // hirelings from the helper room, and the priest's acolytes (js/entities/allies.js)
+    this.minions = [];             // Dark Minions (the dark trader's upgrade)
+    this.horses = [];              // horses from the mount trader (each hero's is also hero.horse)
+    this.basicHit = null;          // the basic attack acting right now, if any (see Forge.attack)
     this.players = [];
     // a run builds its own floors (FloorMap) and sets this.dungeon
     this.run = opts.run ? new DungeonRun(this, opts.run) : null;
@@ -91,7 +95,9 @@ class Game {
       const resume = opts.run.resume;   // a multiplayer resync: the heroes take back what they had
       if (resume) this.run.restoreHeroes(resume);
       this.run.start();
-      if (resume) this.banner('BACK IN SYNC', `Stage ${this.run.stage} starts again - upgrades, coins and items kept`, 3);
+      // (a run continued from its save: it picks up at the start of the stage it was saved on)
+      if (resume?.saved) this.banner('RUN CONTINUED', `${this.run.theme.name} - stage ${this.run.stage}: upgrades, coins and items kept`, 3);
+      else if (resume) this.banner('BACK IN SYNC', `Stage ${this.run.stage} starts again - upgrades, coins and items kept`, 3);
     }
     this.camera.follow(this.player.x, this.player.y, 0, this.dungeon.width, this.dungeon.height, true);
     this.vignette = Game.buildVignette();
@@ -184,6 +190,9 @@ class Game {
    */
   damageTarget(target, amount, { angle = 0, knockback = 0, sound = 'hit', noCrit = false, crit: forced = null, color = '#ffffff', fromUlt = false, source = null, fire = false, arrow = false } = {}) {
     const src = source || this.actor || this.players[0];
+    // a basic attack's hit: the forge's Sharpening Stone adds to it, the mythical Quiver's side shots are weaker
+    const basic = this.basicHit && this.basicHit.owner === src ? this.basicHit : null;
+    if (basic) amount = (amount + Forge.bonus(src, basic)) * (basic.scale || 1);
     // crit: true / false decides it up front (one roll shared by a whole attack, e.g. a rocket and its blast)
     let crit = forced ?? (!noCrit && Math.random() < (src.critChance ?? CONFIG.player.critChance));
     crit = Upgrades.forceCrit(src, target, crit, noCrit);   // First Encounter
@@ -218,6 +227,7 @@ class Game {
     if (!fromUlt && !src.dead) src.gainUlt(dmg);
     src.onDamageDealt(target, dmg, this);
     Upgrades.onDealt(src, target, dmg, { crit, fire, arrow }, this);
+    if (basic) Forge.onBasicHit(src, target, basic, this);
     if (this.practice) {
       this.practice.log.push({ t: this.time, dmg });
       this.practice.total += dmg;
@@ -339,6 +349,7 @@ class Game {
     const list = this.heroes;
     list.push(...this.clones.filter((c) => !c.dead));
     list.push(...this.pets.filter((pt) => pt.fighting));   // a pet that ran home to heal is left alone
+    list.push(...this.helpers.filter((h) => !h.dead), ...this.minions.filter((m) => !m.dead));
     list.push(...this.barriers.filter((b) => b.ally && !b.dead));   // the Baker's oven: enemies can hit it
     if (this.run) list.push(...this.run.allies());
     return list;
@@ -782,6 +793,25 @@ class Game {
       case 'sellPotion':
         if (this.run && hero && Number.isInteger(cmd.slot)) this.run.sellPotion(hero, cmd.slot);
         return;
+      // the special rooms' keepers
+      case 'forge':
+        if (this.run && hero) Forge.forge(this.run, hero);
+        return;
+      case 'forgeKeep':
+        if (this.run && hero) Forge.keep(this.run, hero, cmd.keep === 'new' ? 'new' : 'old');
+        return;
+      case 'darkTrade':
+        if (this.run && hero) Specials.darkTrade(this.run, hero);
+        return;
+      case 'friendlyTrade':
+        if (this.run && hero) Specials.friendlyTrade(this.run, hero);
+        return;
+      case 'buyHorse':
+        if (this.run && hero) Specials.buyHorse(this.run, hero);
+        return;
+      case 'hire':
+        if (this.run && hero) Specials.hire(this.run, hero);
+        return;
       case 'moveItem':
         if (hero) hero.moveItem(cmd.from, cmd.to);
         return;
@@ -857,6 +887,10 @@ class Game {
     this.players.splice(this.players.indexOf(p), 1);
     this.roster = this.roster.filter((r) => r.id !== id);
     this.clones = this.clones.filter((c) => c.owner !== p);
+    // their hirelings, minions and horse go home with them
+    this.helpers = this.helpers.filter((h) => h.owner !== p);
+    this.minions = this.minions.filter((m) => m.owner !== p);
+    this.horses = this.horses.filter((h) => h.owner !== p);
     if (this.readyCheck) delete this.readyCheck.ready[id];
   }
 
@@ -1056,6 +1090,9 @@ class Game {
     for (const c of this.clones) { this.setActor(c.owner); c.update(dt, this); }
     this.syncPets();
     for (const pt of this.pets) { this.setActor(pt.owner); pt.update(dt, this); }
+    for (const h of this.helpers) { this.setActor(h.owner); h.update(dt, this); }
+    for (const m of this.minions) { this.setActor(m.owner); m.update(dt, this); }
+    for (const h of this.horses) h.update(dt, this);
     this.setActor(null);
     for (const b of this.barriers) b.update(dt, this);
     // while each enemy acts, weakenScale tones down the hits it lands and the shots it fires
@@ -1099,7 +1136,9 @@ class Game {
       this.bossFocus = null;
       if (this.boss.dead) this.boss = null;
     }
-    for (const p of this.playerProjectiles) { this.setActor(p.owner); p.update(dt, this); }
+    // a basic attack's shot carries its tag while it flies, so what it hits knows (see Forge.attack)
+    for (const p of this.playerProjectiles) { this.setActor(p.owner); this.basicHit = p.basic || null; p.update(dt, this); }
+    this.basicHit = null;
     this.setActor(null);
     for (const p of this.enemyProjectiles) p.update(dt, this);
     for (const p of this.pickups) p.update(dt, this);
@@ -1133,6 +1172,8 @@ class Game {
     }
     removeDead(this.enemies);
     removeDead(this.clones);
+    removeDead(this.helpers);
+    removeDead(this.minions);
     removeDead(this.barriers);
     removeDead(this.playerProjectiles);
     removeDead(this.enemyProjectiles);
@@ -1269,6 +1310,9 @@ class Game {
     for (const e of this.enemies) e.drawGround(ctx);
     for (const cl of this.clones) cl.drawGround(ctx);
     for (const pt of this.pets) pt.drawGround(ctx);
+    for (const h of this.helpers) h.drawGround(ctx);
+    for (const m of this.minions) m.drawGround(ctx);
+    for (const h of this.horses) if (!h.owner.riding) h.drawGround(ctx);
     for (const d of this.dummies) d.drawGround(ctx);
     for (const p of this.players) if (p.dead && this.multiplayer) p.drawDowned(ctx, this.time);
     // aim previews (targeting rings, placement ghosts) are only drawn for this screen's hero
@@ -1280,6 +1324,9 @@ class Game {
     for (const p of this.heroes) items.push({ y: p.y, draw: (c) => p.draw(c) });
     for (const cl of this.clones) items.push({ y: cl.y, draw: (c) => cl.draw(c) });
     for (const pt of this.pets) items.push({ y: pt.y, draw: (c) => pt.draw(c) });
+    for (const h of this.helpers) items.push({ y: h.y, draw: (c) => h.draw(c) });
+    for (const m of this.minions) items.push({ y: m.y, draw: (c) => m.draw(c) });
+    for (const h of this.horses) if (!h.owner.riding) items.push({ y: h.y, draw: (c) => h.draw(c) });
     for (const d of this.dummies) items.push({ y: d.y, draw: (c) => d.draw(c) });
     for (const b of this.barriers) items.push({ y: b.y, draw: (c) => b.draw(c) });
     if (this.boss) items.push(...this.boss.getDrawables());
@@ -1308,9 +1355,11 @@ class Game {
     this.effects.drawTexts(ctx);
     ctx.restore();
 
-    if (this.run) ctx.globalAlpha = 0.55;   // a softer vignette in the dungeons
-    ctx.drawImage(this.vignette, 0, 0, CONFIG.screen.width, CONFIG.screen.height);   // (stretched to this screen's shape)
-    ctx.globalAlpha = 1;
+    if (Settings.gfx.vignette) {
+      if (this.run) ctx.globalAlpha = 0.55;   // a softer vignette in the dungeons
+      ctx.drawImage(this.vignette, 0, 0, CONFIG.screen.width, CONFIG.screen.height);   // (stretched to this screen's shape)
+      ctx.globalAlpha = 1;
+    }
     if (!this.showcase) HUD.draw(ctx, this);
   }
 

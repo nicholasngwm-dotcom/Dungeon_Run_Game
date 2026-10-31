@@ -106,7 +106,10 @@ class Priestess extends Player {
       r.t += dt;
       if (r.t < c.delay) continue;
       r.dead = true;
+      const was = world.basicHit;
+      world.basicHit = r.tag || null;   // a basic attack's ray (see Forge.attack)
       const hit = this.hitCircle(world, r.x, r.y, c.radius, c.damage, { knockback: 60, stun: r.blind ? 1 : 0 });
+      world.basicHit = was;
       const { x, y } = r;
       if (r.blind) {
         Upgrades.proc(this, world, 'blindingLight', hit.length ? 'BLINDING LIGHT!' : null);
@@ -325,6 +328,13 @@ class Priestess extends Player {
   }
 
   // ---------- Q: light bomb ----------
+
+  castSlot(slot, world) {
+    // the light bomb takes light orbs too: short of them it's refused, and keeps its charge
+    // (in the saddle it's refused before anything is spent)
+    if (slot === 'q' && this.ultReady && !this.riding && !this.spend(this.cfg.ult.cost, world)) return;
+    super.castSlot(slot, world);
+  }
 
   ultimate(world) {
     this.bomb = { t: 0 };
@@ -568,7 +578,13 @@ class Priestess extends Player {
   abilityCost(slot) {
     if (slot === 'e') return this.cfg.rune.cost;
     if (slot === 'f') return this.choosingAegis ? 0 : this.cfg.aegis.cost;
+    if (slot === 'q') return this.cfg.ult.cost;
     return 0;
+  }
+
+  /** Light orbs each slot always costs, shown as orbs above the PC's ability boxes. */
+  orbCost(slot) {
+    return { e: this.cfg.rune.cost, f: this.cfg.aegis.cost, q: this.cfg.ult.cost }[slot] || 0;
   }
 
   /** Ability outlines while a key is held: who gets the aegis, the light bomb's blast (the rune casts on the press). */

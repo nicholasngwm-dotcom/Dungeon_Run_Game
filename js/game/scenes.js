@@ -117,10 +117,10 @@ function drawArc(ctx, x0, y0, x1, y1, seed) {
 }
 
 const Scenes = {
-  /** Pieces for a scene of `kind` around (x, y) at time t. */
-  drawables(kind, x, y, t) {
+  /** Pieces for a scene of `kind` around (x, y) at time t. extra: what the scene shows (the helper camp's hireling). */
+  drawables(kind, x, y, t, extra) {
     const fn = this[kind];
-    return fn ? fn.call(this, Math.round(x), Math.round(y), t) : [];
+    return fn ? fn.call(this, Math.round(x), Math.round(y), t, extra) : [];
   },
 
   /**
@@ -242,10 +242,45 @@ const Scenes = {
         drawPuffs(ctx, forgeX, forgeY - 58, t, '90, 84, 96', 4, 34, 4);
       }),
       propPiece('weaponRack', x + 52, y - 14),
-      propPiece('grindstone', x - 62, y + 10),
+      propPiece('grindstone', x - 62, y + 10, false, (ctx) => {
+        // sparks off the turning wheel now and then
+        if ((t * 0.7) % 1 < 0.4) {
+          for (let i = 0; i < 4; i++) {
+            const k = (t * 3 + i * 0.27) % 1;
+            ctx.fillStyle = i % 2 ? '#ffd34a' : '#fff6c0';
+            ctx.fillRect(Math.round(x - 56 + k * 12), Math.round(y - 12 - k * 8 + k * k * 14), 1, 1);
+          }
+        }
+      }),
       propPiece('barrel', x + 46, y + 14, false, (ctx) => {
         if ((t * 0.9) % 1 < 0.3) drawPuffs(ctx, x + 46, y - 10, t * 2, '230, 230, 240', 2, 16, 2);
       }),
+      // a table of finished work: four enhancements glowing in their rarities' colours
+      propPiece('table', x - 4, y + 46, false, (ctx) => {
+        const cols = ['90, 168, 255', '180, 90, 255', '255, 211, 74', '255, 58, 74'];
+        cols.forEach((rgb, i) => {
+          const gx = x - 22 + i * 12;
+          const gy = y + 26 + (i % 2);
+          const pulse = 0.25 + Math.sin(t * 3 + i * 1.3) * 0.1 + (i === 3 ? Math.sin(t * 9) * 0.08 : 0);
+          drawGlow(ctx, gx, gy, i === 3 ? 14 : 10, rgb, pulse);
+          const img = Sprites.forge?.[['stone', 'quiver', 'gemstone', 'tome'][i]];
+          if (img) ctx.drawImage(img, gx - 6, gy - 8, 12, 12);
+        });
+        drawGlints(ctx, [[x + 14, y + 22], [x - 22, y + 24]], t);
+      }),
+      // embers drifting up off the hearth (looks only)
+      {
+        y: y - 200,
+        draw: (ctx) => {
+          for (let i = 0; i < 6; i++) {
+            const k = (t * 0.35 + i / 6) % 1;
+            const ex = forgeX + Math.sin(i * 2.3 + t) * 10 + k * 14;
+            const ey = forgeY - 30 - k * 60;
+            ctx.fillStyle = `rgba(255, ${Math.round(200 - k * 120)}, 80, ${1 - k})`;
+            ctx.fillRect(Math.round(ex), Math.round(ey), 1, 1);
+          }
+        },
+      },
       {
         y,
         draw: (ctx) => {
@@ -343,11 +378,27 @@ const Scenes = {
     return pieces;
   },
 
-  /** The mount trader with a pony, hay and a fence. */
+  /** The mount trader in his paddock: fences, a pony grazing by the trough, hay, a saddle on the rail. */
   mountTrader(x, y, t) {
     return [
-      propPiece('fence', x - 30, y - 30),
+      propPiece('fence', x - 60, y - 30),
+      propPiece('fence', x - 30, y - 30, false, (ctx) => {
+        // a saddle thrown over the rail, a horseshoe hung beside it
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(x - 37, y - 47, 14, 8);
+        ctx.fillStyle = '#7d532f';
+        ctx.fillRect(x - 36, y - 46, 12, 6);
+        ctx.fillStyle = '#9c6c3e';
+        ctx.fillRect(x - 36, y - 46, 12, 1);
+        ctx.fillStyle = '#8a2a24';
+        ctx.fillRect(x - 34, y - 41, 8, 3);
+        ctx.fillStyle = '#adb2c0';
+        ctx.fillRect(x - 18, y - 48, 4, 1);
+        ctx.fillRect(x - 18, y - 48, 1, 4);
+        ctx.fillRect(x - 15, y - 48, 1, 4);
+      }),
       propPiece('fence', x + 16, y - 30),
+      propPiece('fence', x + 46, y - 30),
       npcPiece('mountTrader', x, y, t),
       {
         y: y + 2,
@@ -358,15 +409,57 @@ const Scenes = {
           drawSprite(ctx, frames[Math.floor(t * 1.2) % 2].img, x + 52, y + 9, 40, 58, true);
         },
       },
-      propPiece('hayBale', x - 42, y + 8),
-      propPiece('trough', x + 50, y + 34),
+      propPiece('hayBale', x - 42, y + 8, false, (ctx) => {
+        // stray wisps of hay lifting on the breeze
+        for (let i = 0; i < 3; i++) {
+          const k = (t * 0.3 + i / 3) % 1;
+          ctx.fillStyle = `rgba(230, 200, 110, ${1 - k})`;
+          ctx.fillRect(Math.round(x - 42 + Math.sin(k * 6 + i) * 10 + k * 20), Math.round(y - 14 - k * 20), 2, 1);
+        }
+      }),
+      propPiece('hayBale', x - 66, y + 20),
+      propPiece('trough', x + 50, y + 34, false, (ctx) => drawGlints(ctx, [[x + 42, y + 22], [x + 56, y + 23]], t)),
+      propPiece('sacks', x + 84, y + 14),
+      // a butterfly flitting about the paddock
+      {
+        y: y + 300,
+        draw: (ctx) => {
+          const bx = Math.round(x - 10 + Math.sin(t * 0.7) * 50);
+          const by = Math.round(y - 40 + Math.sin(t * 1.3) * 14);
+          const flap = Math.floor(t * 10) % 2;
+          ctx.fillStyle = '#ffb0d8';
+          ctx.fillRect(bx - 2, by - flap, 2, 2 + flap);
+          ctx.fillRect(bx + 1, by - flap, 2, 2 + flap);
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(bx, by, 1, 2);
+        },
+      },
     ];
   },
 
-  /** The dark trader on a rug, a cauldron of something purple, candles and skulls. */
+  /**
+   * The dark trader on a rune-scorched rug: a cauldron of something purple, candles and skulls,
+   * a chest of ill-gotten goods, and wisps of soul drifting round him.
+   */
   darkTrader(x, y, t) {
     return [
-      { y: y - 1000, draw: (ctx) => drawProp(ctx, 'rugRound', x, y + 22) },
+      {
+        y: y - 1000,
+        draw: (ctx) => {
+          drawProp(ctx, 'rugRound', x, y + 22);
+          // a ring of runes burned round the rug, pulsing violet
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          const pulse = 0.45 + Math.sin(t * 2) * 0.2;
+          PFX.ring(ctx, x, y + 14, 58, 22, `rgba(180, 90, 255, ${pulse})`, 2, { dash: [3, 4], spin: t * 0.4 });
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * TAU + t * 0.4;
+            ctx.fillStyle = `rgba(224, 192, 255, ${pulse})`;
+            ctx.fillRect(Math.round(x + Math.cos(a) * 58) - 1, Math.round(y + 14 + Math.sin(a) * 22) - 2, 2, 4);
+          }
+          ctx.restore();
+        },
+      },
       npcPiece('darkTrader', x, y, t),
       propPiece('cauldron', x + 32, y + 8, false, (ctx) => {
         drawGlow(ctx, x + 32, y - 14, 30, '170, 90, 255', 0.25 + Math.sin(t * 4) * 0.08);
@@ -377,26 +470,127 @@ const Scenes = {
         }
       }),
       propPiece('skullPile', x - 30, y + 12),
+      propPiece('chest', x + 58, y - 6, true, (ctx) => drawGlow(ctx, x + 58, y - 14, 18, '180, 90, 255', 0.18 + Math.sin(t * 3) * 0.06)),
       propPiece('candelabra', x - 44, y - 4, false, (ctx) => {
         for (const cx of [-7, -1, 5]) drawFlame(ctx, x - 44 + cx + 1, y - 31, t, cx);
       }),
+      propPiece('candelabra', x + 76, y + 18, false, (ctx) => {
+        for (const cx of [-7, -1, 5]) drawFlame(ctx, x + 76 + cx + 1, y - 9, t, cx + 3);
+      }),
+      // souls circling him (looks only)
+      {
+        y: y + 200,
+        draw: (ctx) => {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < 3; i++) {
+            const a = t * 0.9 + (i * TAU) / 3;
+            const sx = x + Math.cos(a) * 30;
+            const sy = y - 30 + Math.sin(a) * 10 + Math.sin(t * 3 + i) * 3;
+            PFX.glow(ctx, sx, sy, 7, '200, 160, 255', 0.6);
+            ctx.fillStyle = '#e0c8ff';
+            ctx.fillRect(Math.round(sx), Math.round(sy), 1, 2);
+          }
+          ctx.restore();
+        },
+      },
     ];
   },
 
-  /** A friendly trader beside a cart piled with goods. */
+  /** A friendly trader at a market stall: a cart piled with goods, a counter of wares, a sleepy cat. */
   friendlyTrader(x, y, t) {
-    return [
+    const cat = Sprites.props.catSit_ginger ? 'catSit_ginger' : null;
+    const pieces = [
       propPiece('cart', x + 48, y + 4),
       npcPiece('trader', x, y, t),
       propPiece('sacks', x - 34, y + 8),
       propPiece('crate', x - 52, y - 2),
       propPiece('barrel', x + 20, y + 30),
+      // his counter: coins and trinkets laid out, glinting
+      propPiece('table', x - 2, y + 44, false, (ctx) => {
+        ctx.fillStyle = '#ffd34a';
+        for (const [cx, cy] of [[-14, 24], [-10, 25], [12, 23]]) ctx.fillRect(x + cx, y + cy, 3, 2);
+        ctx.fillStyle = '#6cff7a';
+        ctx.fillRect(x - 2, y + 22, 4, 3);
+        ctx.fillStyle = '#8ab8ff';
+        ctx.fillRect(x + 4, y + 23, 3, 3);
+        drawGlints(ctx, [[x - 13, y + 23], [x + 13, y + 22], [x, y + 21]], t);
+      }),
+      propPiece('bannerGreen', x - 74, y - 20),
+      // a "TRADE" sign on a post
+      {
+        y: y - 6,
+        draw: (ctx) => {
+          const sx = x - 72;
+          const sy = y + 10;
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(sx - 1, sy - 22, 4, 24);
+          ctx.fillStyle = '#7d532f';
+          ctx.fillRect(sx, sy - 21, 2, 22);
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(sx - 15, sy - 32, 32, 12);
+          ctx.fillStyle = '#c8925a';
+          ctx.fillRect(sx - 14, sy - 31, 30, 10);
+          ctx.fillStyle = '#e0b07a';
+          ctx.fillRect(sx - 14, sy - 31, 30, 1);
+          HUD.text(ctx, 'TRADE', sx + 1, sy - 29, { size: 5, align: 'center', color: '#3a2416', shadow: false });
+        },
+      },
     ];
+    if (cat) pieces.push(propPiece(cat, x + 30, y + 52, Math.sin(t * 0.2) > 0));
+    return pieces;
   },
 
-  /** The helper's camp: a tent, a bedroll and a cosy fire. */
-  helper(x, y, t) {
-    return [
+  /**
+   * The helper's camp: a tent, a weapon rack and a cosy fire, and the hireling who's for hire
+   * (extra: { hire: 'knight' | 'archer' | 'priest', hired: true once this screen's hero hired them)
+   * waiting by it with a "FOR HIRE" sign.
+   */
+  helper(x, y, t, extra = {}) {
+    const pieces = [];
+    const kind = extra.hire;
+    if (kind && !extra.hired) {
+      const name = `hired${kind[0].toUpperCase()}${kind.slice(1)}`;
+      const hx = x + 96;
+      const hy = y + 24;
+      pieces.push(npcPiece(name, hx, hy, t, true));
+      if (kind === 'priest') {
+        pieces.push({
+          y: hy + 12,
+          draw: (ctx) => {
+            for (const dx of [-22, 22]) {
+              const f = Sprites.npcs.acolyte.idle;
+              drawShadow(ctx, hx + dx, hy + 20, 9, 3);
+              ctx.save();
+              ctx.translate(hx + dx, hy + 12);
+              ctx.scale(-0.82, 0.82);
+              drawSprite(ctx, f[Math.floor((t + dx + 50) * CUTE.fps.idle) % f.length].img, 0, 0, HERO_ANCHOR.x, HERO_ANCHOR.y);
+              ctx.restore();
+            }
+          },
+        });
+      }
+      // the sign
+      pieces.push({
+        y: hy - 20,
+        draw: (ctx) => {
+          const sx = hx + 30;
+          const sy = hy;
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(sx - 1, sy - 20, 4, 22);
+          ctx.fillStyle = '#7d532f';
+          ctx.fillRect(sx, sy - 19, 2, 20);
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(sx - 17, sy - 31, 36, 12);
+          ctx.fillStyle = '#e8dcc0';
+          ctx.fillRect(sx - 16, sy - 30, 34, 10);
+          HUD.text(ctx, 'FOR HIRE', sx + 1, sy - 28, { size: 5, align: 'center', color: '#3a2416', shadow: false });
+        },
+      });
+    }
+    pieces.push(propPiece('weaponRack', x - 86, y - 12));
+    pieces.push(propPiece('bench', x + 14, y + 44));
+    return pieces.concat([
       propPiece('tent', x - 44, y - 6),
       npcPiece('helper', x, y, t),
       {
@@ -417,8 +611,18 @@ const Scenes = {
           }
           drawGlow(ctx, fx, fy - 6, 40, '255, 170, 70', 0.25 + Math.sin(t * 9) * 0.04);
           drawPuffs(ctx, fx, fy - 14, t, '120, 114, 126', 3, 24, 3);
+          // a pot of stew hanging over it on a little tripod
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(fx - 9, fy - 22, 1, 20);
+          ctx.fillRect(fx + 8, fy - 22, 1, 20);
+          ctx.fillRect(fx - 9, fy - 22, 18, 1);
+          ctx.fillRect(fx - 5, fy - 19, 11, 7);
+          ctx.fillStyle = '#545a6a';
+          ctx.fillRect(fx - 4, fy - 18, 9, 5);
+          ctx.fillStyle = '#c8925a';
+          ctx.fillRect(fx - 4, fy - 18, 9, 1);
         },
       },
-    ];
+    ]);
   },
 };

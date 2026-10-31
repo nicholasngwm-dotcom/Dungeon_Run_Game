@@ -148,16 +148,66 @@ class FloorDecor {
         const place = (name, n, opts = {}) => {
           for (let i = 0; i < n; i++) this.add('prop', this.spot(r, { clearMiddle: true, minGap: 40, ...opts }), { name });
         };
+        // first each room is dressed the same on both sides (lights in the corners, its own things along
+        // the walls and out on the floor), then a few more pieces are scattered round the keeper
+        const looks = {
+          blacksmith: {
+            light: ['lampPost', { warm: true }],
+            wall: [['prop:weaponRack'], ['prop:bannerRed'], ['prop:toolBoard'], ['prop:crate']],
+            floor: [['prop:barrel'], ['prop:grindstone'], ['prop:sacks']],
+          },
+          wishingWell: {
+            light: 'lampPost',
+            wall: [['prop:tree'], ['prop:flowers'], ['prop:plant'], ['prop:tree']],
+            floor: [['prop:flowers'], ['prop:bench'], ['prop:flowers']],
+          },
+          heroStatue: {
+            light: ['lampPost', { warm: true }],
+            wall: [['prop:bannerBlue'], ['prop:plant'], ['prop:bannerBlue'], ['prop:candelabra']],
+            floor: [['prop:flowers'], ['candles'], ['prop:flowers']],
+          },
+          restaurant5: {
+            light: ['lampPost', { warm: true }],
+            wall: [['prop:bannerGreen'], ['prop:barrel'], ['prop:plant'], ['prop:sacks']],
+            floor: [['prop:plant'], ['candles'], ['prop:barrel']],
+          },
+          mountTrader: {
+            light: ['lampPost', { warm: true }],
+            wall: [['prop:fence'], ['prop:hayBale'], ['prop:trough'], ['prop:fence']],
+            floor: [['prop:hayBale'], ['prop:flowers'], ['prop:sacks']],
+          },
+          darkTrader: {
+            light: 'prop:candelabra',
+            wall: [['prop:bookshelf'], ['prop:skullPile'], ['soulTree'], ['prop:chest']],
+            floor: [['bonePile'], ['candles'], ['prop:skullPile']],
+          },
+          friendlyTrader: {
+            light: ['lampPost', { warm: true }],
+            wall: [['prop:bannerGreen'], ['prop:crate'], ['prop:plant'], ['prop:barrel']],
+            floor: [['prop:sacks'], ['prop:flowers'], ['prop:crate']],
+          },
+          treasure: {
+            light: ['lampPost', { warm: true }],
+            wall: [['prop:goldPile'], ['prop:candelabra'], ['gemCluster', { v: 1 }], ['prop:goldPile']],
+            floor: [['prop:goldPile'], ['gemCluster', { v: 0 }], ['prop:chest']],
+          },
+          helper: {
+            light: ['lampPost', { warm: true }],
+            wall: [['prop:weaponRack'], ['prop:bannerBlue'], ['prop:crate'], ['prop:bench']],
+            floor: [['prop:sacks'], ['prop:flowers'], ['prop:barrel']],
+          },
+        };
+        if (looks[r.special]) this.dressRoom(r, looks[r.special]);
         const sets = {
-          blacksmith: [['crate', 2], ['barrel', 2], ['bannerRed', 1], ['sacks', 1]],
-          wishingWell: [['flowers', 4], ['plant', 2], ['bench', 1]],
-          heroStatue: [['bannerBlue', 2], ['plant', 2], ['flowers', 2]],
-          restaurant5: [['plant', 2], ['barrel', 2], ['bannerGreen', 1], ['sacks', 1]],
-          mountTrader: [['hayBale', 3], ['sacks', 1], ['fence', 1]],
-          darkTrader: [['skullPile', 2], ['candelabra', 2]],
-          friendlyTrader: [['crate', 2], ['sacks', 2], ['barrel', 1], ['plant', 1]],
-          treasure: [['goldPile', 5], ['candelabra', 2], ['chest', 1]],
-          helper: [['crate', 1], ['sacks', 1], ['bench', 1], ['flowers', 2]],
+          blacksmith: [['crate', 1], ['barrel', 1]],
+          wishingWell: [['flowers', 3], ['plant', 1]],
+          heroStatue: [['plant', 1], ['flowers', 2]],
+          restaurant5: [['plant', 1], ['barrel', 1]],
+          mountTrader: [['hayBale', 2], ['fence', 1]],
+          darkTrader: [['skullPile', 1], ['candelabra', 1]],
+          friendlyTrader: [['crate', 1], ['sacks', 1], ['plant', 1]],
+          treasure: [['goldPile', 3], ['candelabra', 1]],
+          helper: [['crate', 1], ['flowers', 2]],
         };
         for (const [name, n] of sets[r.special] || []) place(name, n);
         for (let i = 0; i < 2; i++) this.add('candles', this.spot(r));

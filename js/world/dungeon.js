@@ -172,15 +172,17 @@ class Dungeon {
   drawTorches(ctx, time) {
     for (const t of this.torches) {
       const f = Math.sin(time * 12 + t.seed) * 0.5 + Math.sin(time * 23 + t.seed * 2) * 0.5;
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const r = 70 + f * 6;
-      const g = ctx.createRadialGradient(t.x, t.y, 2, t.x, t.y, r);
-      g.addColorStop(0, 'rgba(255, 160, 60, 0.35)');
-      g.addColorStop(1, 'rgba(255, 120, 40, 0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(t.x - r, t.y - r, r * 2, r * 2);
-      ctx.restore();
+      if (Settings.gfx.glow) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const r = 70 + f * 6;
+        const g = ctx.createRadialGradient(t.x, t.y, 2, t.x, t.y, r);
+        g.addColorStop(0, 'rgba(255, 160, 60, 0.35)');
+        g.addColorStop(1, 'rgba(255, 120, 40, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(t.x - r, t.y - r, r * 2, r * 2);
+        ctx.restore();
+      }
       const h = Math.round(9 + f * 2);
       ctx.fillStyle = '#e0461e';
       ctx.fillRect(t.x - 4, t.y - h + 2, 8, h);
