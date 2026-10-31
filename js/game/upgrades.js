@@ -1526,19 +1526,40 @@ const Shop = {
     document.getElementById('shop-hint').textContent = `Choose one upgrade to take into stage ${this.run.stage}. Every stage starts with a free one; more can be bought from Bram at each stage's shop.`;
   },
 
+  /**
+   * Mira's potions, on display on her shelves like a shop's: each kind stands on the shelf (a few bottles of it
+   * lined up, a sticker with how many are left), its price tag clipped to the shelf's edge below - yellow with the
+   * old price struck through and a red flag when Discount Cards take money off - and a little label with its name
+   * and what it does. A sold-out spot is bare shelf with a stamp across it. The price tag is the buy button.
+   */
   renderPotions(grid, p) {
     grid.innerHTML = this.run.potionStock.map((s) => {
       const pot = POTIONS[s.id];
       const out = s.left <= 0;
       const full = !p.canCarry(s.id);
       const price = potionPrice(this.run, pot.id, p);
-      const label = out ? 'SOLD OUT' : full ? 'BAG FULL' : this.priceTag(price, potionPrice(this.run, pot.id, p, true));
-      return `<div class="shop-card potion${out ? ' faded' : ''}">
-        <canvas width="28" height="28" data-potion="${pot.id}"></canvas>
-        <b style="color:${POTION_COLORS[pot.family][1]}">${pot.name}</b>
-        <span>${pot.desc}</span>
-        <div class="stock">${out ? 'none left' : `${s.left} left`}</div>
-        <button class="buy" data-action="buyPotion:${pot.id}" ${out || full || p.coins < price ? 'disabled' : ''}>${label}</button>
+      const was = potionPrice(this.run, pot.id, p, true);
+      const sale = !out && was > price;
+      const off = Math.round((1 - Upgrades.priceScale(p)) * 100);   // (what the discount is, not the rounded prices' difference)
+      const pricey = !out && !full && p.coins < price;
+      // up to three bottles of it stand in a row on the shelf (the front one biggest)
+      const bottles = out ? '' : [...Array(Math.min(3, s.left)).keys()].reverse()
+        .map((i) => `<canvas width="28" height="28" data-potion="${pot.id}" class="bottle b${i}"></canvas>`).join('');
+      const tag = out ? '<b class="tag-big">SOLD OUT</b>'
+        : full ? '<b class="tag-big">BAG FULL</b>'
+          : `${sale ? `<i class="sale-flag">-${off}%</i><s class="tag-was">${was}</s>` : ''}<b class="tag-price">${price}</b><em></em>`;
+      return `<div class="shelf-slot${out ? ' out' : ''}">
+        <div class="shelf-goods">
+          ${bottles}
+          ${out ? '<span class="sold-stamp">SOLD OUT</span>' : `<span class="stock-sticker">${s.left} LEFT</span>`}
+        </div>
+        <div class="shelf-edge">
+          <button class="price-tag${sale ? ' sale' : ''}${out ? ' gone' : ''}${pricey ? ' pricey' : ''}" data-action="buyPotion:${pot.id}" ${out || full || p.coins < price ? 'disabled' : ''}>${tag}</button>
+        </div>
+        <div class="shelf-label">
+          <b style="color:${POTION_COLORS[pot.family][1]}">${pot.name}</b>
+          <span>${pot.desc}</span>
+        </div>
       </div>`;
     }).join('');
     for (const c of grid.querySelectorAll('canvas')) c.getContext('2d').drawImage(Sprites.potions[c.dataset.potion], 0, 0);

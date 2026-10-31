@@ -1081,7 +1081,69 @@ body:not(.touch) .dialog-keys { margin-top: 8px; font-size: 10px; color: #b8a888
 .shop-line { font-size: 12px; color: #d8c8a0; min-height: 12px; }
 .shop-items { display: grid; gap: 10px; }
 .shop-items.upgrades { grid-template-columns: repeat(3, 220px); }
-.shop-items.potions { grid-template-columns: repeat(3, 280px); }
+/* Mira's potions on display: a dark wooden cabinet, two shelves of three; each kind stands on its shelf (a few
+   bottles in a row, a sticker with how many are left), its price tag clipped to the shelf's edge, a little label below */
+.shop-items.potions {
+  grid-template-columns: repeat(3, 250px); gap: 0; padding: 8px 10px 6px;
+  background: repeating-linear-gradient(90deg, #2a1a12 0 38px, #24160f 38px 40px), #2a1a12;
+  border: 6px solid #5b3922; box-shadow: 0 0 0 3px var(--border), inset 0 0 0 2px #3b2416, inset 0 10px 18px rgba(0, 0, 0, 0.5);
+}
+.shelf-slot { display: flex; flex-direction: column; align-items: stretch; position: relative; padding-bottom: 8px; }
+.shelf-goods {
+  position: relative; height: 62px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;
+  background: radial-gradient(ellipse 60px 14px at 50% 100%, rgba(255, 200, 120, 0.12), transparent);
+}
+.shelf-goods .bottle { image-rendering: pixelated; flex: none; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45)); }
+.shelf-goods .bottle.b0 { width: 50px; height: 50px; position: relative; z-index: 3; }
+.shelf-goods .bottle.b1, .shelf-goods .bottle.b2 { width: 40px; height: 40px; margin: 0 -14px 3px 0; filter: brightness(0.75) drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45)); }
+.shelf-goods .bottle.b1 { position: relative; z-index: 2; }
+.shelf-goods .bottle.b2 { position: relative; z-index: 1; filter: brightness(0.6); }
+/* how many are left: a little white sticker stuck to the shelf back */
+.stock-sticker {
+  position: absolute; top: 4px; right: 10px; padding: 2px 5px; font-size: 9px; color: #2a1a10; background: #f4ead7;
+  box-shadow: 0 0 0 2px #1a100a, 2px 2px 0 2px rgba(0, 0, 0, 0.35); transform: rotate(4deg);
+}
+/* the shelf board and its front edge, where the price tags clip on */
+.shelf-edge {
+  position: relative; display: flex; justify-content: center; height: 16px;
+  background: linear-gradient(#9c6c3e 0 3px, #7d532f 3px 12px, #5b3922 12px 14px, #3b2416 14px);
+  box-shadow: 0 2px 0 #1a100a;
+}
+.price-tag {
+  position: relative; z-index: 4; margin-top: 3px; min-width: 64px; height: 30px; padding: 0 8px 0 10px;
+  display: flex; align-items: center; justify-content: center; gap: 4px; font-family: inherit; cursor: pointer;
+  color: #1a100a; background: #fbf6e6; border: 0; box-shadow: 0 0 0 2px #1a100a, 3px 3px 0 2px rgba(0, 0, 0, 0.4);
+}
+.price-tag::before {   /* the clip holding it to the shelf */
+  content: ''; position: absolute; top: -5px; left: 50%; width: 14px; height: 5px; margin-left: -7px; background: #adb2c0; box-shadow: 0 0 0 1px #1a100a;
+}
+.price-tag .tag-price { font-size: 18px; font-weight: normal; }
+.price-tag em { display: inline-block; width: 9px; height: 9px; background: #ffd34a; box-shadow: inset -2px -2px 0 #a07a24, 0 0 0 2px #1a100a; }
+.price-tag:not(:disabled):hover { transform: translateY(1px) rotate(-2deg); background: #fff; }
+.price-tag:disabled { cursor: default; color: #6a5a4a; }
+.price-tag:disabled .tag-price { text-decoration: none; }
+.price-tag .tag-big { font-size: 11px; letter-spacing: 1px; color: #8a2a1a; }
+/* a sale: a yellow tag, the old price struck through in red and a red flag with what's off */
+.price-tag.sale { background: #ffe14a; }
+.price-tag.sale:not(:disabled):hover { background: #fff07a; }
+.price-tag .tag-was { font-size: 11px; color: #c0281a; text-decoration: line-through; text-decoration-thickness: 2px; }
+.sale-flag {
+  position: absolute; top: -9px; right: -14px; padding: 2px 4px; font-size: 9px; font-style: normal; color: #fff; background: #d42a1a;
+  box-shadow: 0 0 0 2px #1a100a; transform: rotate(10deg);
+}
+.price-tag.gone { background: #d8cfc0; }
+/* its label: name and what it does */
+.price-tag.pricey .tag-price { color: #c0281a; }   /* can't afford it yet */
+.shelf-label { margin: 24px 6px 0; padding: 4px 7px 5px; text-align: left; background: rgba(12, 8, 6, 0.55); box-shadow: 0 0 0 2px #1a100a; }
+.shelf-label b { display: block; font-size: 11px; font-weight: normal; margin-bottom: 2px; }
+.shelf-label span { display: block; font-size: 10px; line-height: 1.3; color: #d8cfe4; }
+/* sold out: bare shelf, a little dust, a red stamp across it */
+.shelf-slot.out .shelf-goods { background: radial-gradient(ellipse 40px 6px at 50% 96%, rgba(160, 140, 120, 0.25), transparent); }
+.shelf-slot.out .shelf-label { opacity: 0.5; }
+.sold-stamp {
+  position: absolute; top: 18px; left: 50%; padding: 3px 8px; font-size: 13px; letter-spacing: 1px; color: #ff5a4a;
+  border: 3px solid #ff5a4a; transform: translateX(-50%) rotate(-12deg); background: rgba(40, 8, 6, 0.6);
+}
 /* a store card: icon, name, a readable description, then the price button at the bottom */
 .shop-card {
   display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
@@ -1089,18 +1151,7 @@ body:not(.touch) .dialog-keys { margin-top: 8px; font-size: 10px; color: #b8a888
   padding: 10px 8px;
 }
 .shop-items.upgrades .shop-card { min-height: 150px; }
-/* a potion card lies on its side: the bottle on the left, name and effect beside it, stock and price along the bottom */
-.shop-items.potions .shop-card {
-  display: grid; grid-template-columns: 46px 1fr auto; grid-template-rows: auto 1fr auto; column-gap: 8px; row-gap: 3px;
-  align-items: center; text-align: left; padding: 8px 10px;
-}
-.shop-items.potions .shop-card canvas { grid-column: 1; grid-row: 1 / span 3; align-self: center; }
-.shop-items.potions .shop-card b, .shop-items.potions .shop-card span { grid-column: 2 / span 2; }
-.shop-items.potions .shop-card span { align-self: start; }
-.shop-items.potions .stock { grid-column: 2; }
-.shop-items.potions .buy { grid-column: 3; margin: 0; }
 .shop-card canvas { width: 60px; height: 60px; image-rendering: pixelated; flex: none; }
-.shop-card.potion canvas { width: 42px; height: 42px; }
 .shop-card b { font-size: 12px; }
 .shop-card span { font-size: 12px; line-height: 1.3; color: #d8cfe4; flex: 1; }
 .shop-card .buy { margin-top: auto; }
@@ -1485,7 +1536,14 @@ body.touch .hero-side::-webkit-scrollbar { display: none; }
 body.touch #screen-shop { gap: 6px; }
 body.touch .shop-line { min-height: 0; }
 body.touch .shop-items { max-width: 100%; }
-body.touch .shop-items.potions { grid-template-columns: repeat(3, minmax(0, 270px)); gap: 8px; }
+body.touch .shop-items.potions { grid-template-columns: repeat(3, minmax(0, 250px)); }
+body.touch .shelf-goods { height: 50px; }
+body.touch .shelf-goods .bottle.b0 { width: 40px; height: 40px; }
+body.touch .shelf-goods .bottle.b1, body.touch .shelf-goods .bottle.b2 { width: 32px; height: 32px; }
+body.touch .price-tag .tag-price { font-size: 15px; }
+body.touch .shelf-label { margin-top: 20px; padding: 3px 6px 4px; }
+body.touch .shop-items.potions { padding: 4px 8px 2px; }
+body.touch .shelf-label span { font-size: 9px; }
 body.touch .shop-items.upgrades { grid-template-columns: repeat(3, minmax(0, 220px)); gap: 8px; }
 body.touch .shop-items.sell { grid-template-columns: repeat(2, minmax(0, 330px)); gap: 10px; }
 body.touch .shop-items.upgrades .shop-card { min-height: 0; padding: 8px 6px; gap: 4px; }
@@ -1499,9 +1557,6 @@ body.touch .mp-desc { min-height: 0; }
 body.touch .controls-list { padding: 8px 16px; line-height: 1.6; }
 /* a screen taller than the phone scrolls; its rows keep their height instead of squashing into each other */
 body.touch .screen > * { flex-shrink: 0; }
-body.touch .shop-items.potions .shop-card { padding: 6px 8px; row-gap: 2px; }
-body.touch .shop-items.potions .shop-card span { font-size: 10px; line-height: 1.3; }
-body.touch .shop-card.potion canvas { width: 36px; height: 36px; }
 
 /* ===== Main menu on phones: a mobile title screen ===== */
 /* the showcase fight fills the screen; the logo top left, darkened corners behind the buttons */
