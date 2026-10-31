@@ -754,13 +754,18 @@ const CONFIG = {
       preferredMin: 200, preferredMax: 330, windup: 1.1, cooldown: 3.4, ringCount: 14, ringRadius: 26, ringWiden: 96, ringSpeed: 160, ringLife: 3.2,
     },
     // Elite demon: flies hover px up on great wings, where melee can't reach it (shots can). Every diveEvery s it
-    // marks where you stand and dives (diveWindup), landing with both swords (landRadius); it then fights on the
-    // ground for groundTime s - slashing (attackReach, attackArcDegrees) - and can be hit by anything, then flies up
-    // again. meleeRange: in the air, hits from heroes closer than this (that aren't shots) can't reach it
+    // marks where you stand and dive-bombs the ground there (diveWindup): the impact hurts (landRadius) and sends
+    // out a small shockwave (out to waveRadius at waveSpeed) that slows whoever it passes for waveSlow s, without
+    // hurting. On the ground it can be hit by anything: it goes after you slashing its swords rapidly (one every
+    // slashWindup + slashCooldown s; attackReach, attackArcDegrees) until you get disengageRange away (for
+    // disengageTime s), then flies up again. meleeRange: in the air, hits from heroes closer than this (that aren't
+    // shots) can't reach it
     eliteDemon: {
-      hp: 260, speed: 100, radius: 15, damage: 34,
-      hover: 56, diveEvery: [2.4, 3.6], diveWindup: 0.8, diveTime: 0.35, landRadius: 54, groundTime: 2.2,
-      slashRange: 70, attackReach: 88, attackArcDegrees: 150, slashWindup: 0.45, slashCooldown: 0.8, liftTime: 0.5, meleeRange: 120,
+      hp: 260, speed: 100, radius: 15, damage: 18,   // (each rapid slash; the dive bomb does diveDamage)
+      hover: 56, diveEvery: [2.4, 3.6], diveWindup: 0.8, diveTime: 0.35, landRadius: 54, diveDamage: 36,
+      waveRadius: 150, waveSpeed: 300, waveBand: 22, waveSlow: 1.5,
+      slashRange: 70, attackReach: 88, attackArcDegrees: 150, slashWindup: 0.18, slashCooldown: 0.12,
+      disengageRange: 190, disengageTime: 0.6, liftTime: 0.5, meleeRange: 120,
       knockbackResist: 0.5, stunResist: 0.4, heartChance: 0.2,
     },
     // Magma den: never moves; every summonEvery s its mouth glows for openTime s and lets out three magma bats or three
@@ -775,7 +780,7 @@ const CONFIG = {
     // the ground burning for fireTime s
     meteorCrab: {
       hp: 210, speed: 44, radius: 15, damage: 46, armor: 0.25,
-      preferredMin: 180, preferredMax: 320, meteorEvery: 4.5, castTime: 0.7, fallTime: 1.5, meteorRadius: 62,
+      preferredMin: 180, preferredMax: 320, meteorEvery: 4.5, castTime: 0.7, fallTime: 1.5, meteorRadius: 96,
       burnDps: 10, burnTime: 3, fireTime: 3, knockbackResist: 0.6, stunResist: 0.3,
     },
     // stage 2+: Wildfire: living fire that rushes at you (touching it sets you on fire) and leaves burning ground

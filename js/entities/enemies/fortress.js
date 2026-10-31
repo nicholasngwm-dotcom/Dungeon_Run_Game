@@ -532,6 +532,7 @@ class EliteDemon extends Enemy {
     this.state = 'fly';
     this.diveTimer = rand(...this.cfg.diveEvery);
     this.orbit = rand(0, TAU);
+    this.waves = [];   // the dive bomb's slowing shockwaves: { x, y, r, hit }
     this.gibColors = [...FORT_DEMON_GIBS, '#46404a'];
   }
 
@@ -593,29 +594,31 @@ class EliteDemon extends Enemy {
         if (k >= 1) this.land(world);
         break;
       }
-      case 'ground':
+      case 'ground': {
+        // it stays down and hacks away at the hero until they get well clear of it, then takes off again
         this.alt = 0;
-        if (!p.dead) {
-          const d = this.distanceTo(p);
-          if (this.attackCooldown <= 0 && d < c.slashRange) {
-            this.attackAngle = angleTo(this.x, this.y, p.x, p.y);
-            this.faceToward(p.x);
-            this.setState('slash');
-            Sound.play('windup');
-            break;
-          }
-          this.moveToward(world, p.x, p.y, this.speed * 0.8, dt);
+        const d = p.dead ? Infinity : this.distanceTo(p);
+        this.farFor = d > c.disengageRange ? (this.farFor || 0) + dt : 0;
+        if (this.farFor >= c.disengageTime) { this.setState('lift'); Sound.play('birdForm', 0.1); break; }
+        if (p.dead) break;
+        if (this.attackCooldown <= 0 && d < c.slashRange) {
+          this.attackAngle = angleTo(this.x, this.y, p.x, p.y);
+          this.faceToward(p.x);
+          this.setState('slash');
+          break;
         }
-        if (this.stateTime >= c.groundTime) { this.setState('lift'); Sound.play('birdForm', 0.1); }
+        this.moveToward(world, p.x, p.y, this.speed * 0.8, dt);
         break;
+      }
       case 'slash':
         if (this.stateTime >= c.slashWindup) {
+          // a quick cut, one sword then the other, over and over
           meleeArc(this, world, () => {});
           this.swipeFx(world, '255, 140, 60');
-          Sound.play('greatswordSweep', 0.1);
+          Sound.play(this.slashSide ? 'slash' : 'swordSwing', 0.1);
+          this.slashSide = !this.slashSide;
           this.attackCooldown = c.slashCooldown;
           this.setState('ground');
-          this.stateTime = c.groundTime * 0.5;   // a slash eats into its time on the ground
         }
         break;
       case 'lift':
@@ -625,14 +628,48 @@ class EliteDemon extends Enemy {
     }
   }
 
-  /** It lands on the marked spot, both swords first. */
+  update(dt, world) {
+    super.update(dt, world);
+    this.updateWaves(dt, world);   // a shockwave already on its way rolls on, even if it's stunned
+  }
+
+  /**
+   * The dive bomb's shockwave: a ring of heat racing out over the floor. It doesn't hurt; whoever it passes
+   * is slowed for a moment.
+   */
+  updateWaves(dt, world) {
+    const c = this.cfg;
+    for (const w of this.waves) {
+      w.r += c.waveSpeed * dt;
+      if (w.r >= c.waveRadius) { w.dead = true; continue; }
+      for (let i = 0; i < 2; i++) {
+        const a = vrand(0, TAU);
+        world.effects.burst(w.x + Math.cos(a) * w.r, w.y + Math.sin(a) * w.r * 0.6, { count: 1, colors: ['#ffb52e', '#ff7a1a', '#fff2a0'], speed: [10, 40], life: [0.2, 0.4], up: 30, size: [1, 2] });
+      }
+      for (const p of world.heroes) {
+        const d = Math.hypot(p.x - w.x, (p.y - w.y) / 0.6);
+        if (w.hit.has(p) || p.dead || d > w.r + 6 || d < w.r - c.waveBand) continue;
+        w.hit.add(p);
+        if (p.blocksShockwave?.(w.x, w.y)) { world.effects.text(p.hx, p.hy - 28, 'BLOCKED', { color: '#e4e7ee', size: 7 }); continue; }
+        // (the impact's hit doesn't shield you from it - only a dodge's i-frames do)
+        if (p.iframes > 0 || p.brews?.purity) continue;
+        p.slowTime = Math.max(p.slowTime || 0, c.waveSlow);
+        world.effects.text(p.hx, p.hy - 34, 'SLOWED!', { color: '#ffb52e', size: 8 });
+      }
+    }
+    removeDead(this.waves);
+  }
+
+  /** It dive-bombs the marked spot: the impact hurts, and a small shockwave rolls out that slows (no damage). */
   land(world) {
     const c = this.cfg;
     this.alt = 0;
     const free = world.dungeon.freePoint(this.x, this.y, this.hw, this.hh);
     this.x = free.x;
     this.y = free.y;
-    hitAround(world, this.x, this.y, c.landRadius, c.damage, 200);
+    hitAround(world, this.x, this.y, c.landRadius, stageDamage(world, c.diveDamage), 200);
+    this.waves.push({ x: this.x, y: this.y, r: 8, hit: new Set() });
+    this.farFor = 0;
     const { x, y } = this;
     world.effects.add(0.4, (ctx, t) => {
       ctx.save();
@@ -656,6 +693,16 @@ class EliteDemon extends Enemy {
       Telegraph.circle(ctx, this.diveTo.x, this.diveTo.y, c.landRadius, k);
     }
     if (this.state === 'slash') Telegraph.cone(ctx, this.x, this.y, this.attackAngle, c.attackArcDegrees * DEG, c.attackReach, this.stateTime / c.slashWindup);
+    // the shockwave: a band of shimmering heat racing out across the floor
+    for (const w of this.waves) {
+      const k = w.r / c.waveRadius;
+      ctx.save();
+      ctx.globalAlpha = 0.9 * (1 - k);
+      PFX.ring(ctx, w.x, w.y, w.r, w.r * 0.6, '#ffb52e', 2, { thick: 3 });
+      ctx.globalAlpha = 0.5 * (1 - k);
+      PFX.ring(ctx, w.x, w.y, Math.max(1, w.r - c.waveBand * 0.6), Math.max(1, (w.r - c.waveBand * 0.6) * 0.6), '#ff7a1a', 2, { dash: [3, 3] });
+      ctx.restore();
+    }
   }
 
   currentFrame() {
