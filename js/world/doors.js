@@ -79,6 +79,9 @@ class SwingDoors {
         else if (dr.open < prev) dr.opening = false;
         this.lavaFx(dr, world, prev, dr.open);
         dr.lastOpen = dr.open;
+        // what's drawn trails the door: thick lava takes its time to drain away and to pour back (visual only)
+        dr.flow ??= dr.open;
+        dr.flow += clamp(dr.open - dr.flow, -dt * 1.8, dt * 1.8);
       }
       if (dr.locked) {
         // slam shut: a puff of dust along the doorway as it bangs closed
@@ -344,9 +347,9 @@ class SwingDoors {
     const len = dr.b - dr.a;
     const n = Math.max(1, Math.round(len / 24));
     const w = Math.floor(len / n);
-    const lintel = SwingDoors.lavaLintel(dr.ns ? 22 : w);
+    const lintel = SwingDoors.lavaLintel(w);
     const sealed = dr.locked && dr.open === 0;
-    const k = dr.open;
+    const k = dr.flow ?? dr.open;   // (drawn a little behind the door itself: thick lava drains and pours slowly)
     // the stream's head and tail, as fractions of the drop from spout (0) to floor (1)
     const top = dr.opening ? k : 0;          // stopping: its tail falls away from the spout
     const bottom = dr.opening ? 1 : 1 - k;   // starting: its head pours down from the spout
@@ -354,11 +357,13 @@ class SwingDoors {
       items.push({ y: dr.b + 7, draw: (ctx) => this.drawLavaSide(ctx, dr, top, bottom, sealed) });
       return items;
     }
+    // the frame first: brick posts either side of the opening and a lintel running right across onto the walls
+    items.push({ y: dr.y + 6, draw: (ctx) => this.drawLavaFrame(ctx, dr) });
     for (let i = 0; i < n; i++) {
       const u = (i + 0.5) / n;
-      const x = dr.ns ? dr.x : lerp(dr.a, dr.b, u);
-      const y = dr.ns ? lerp(dr.a, dr.b, u) + 8 : dr.y + 8;
-      const sw = dr.ns ? 12 : w - 4;   // seen side-on (a north-south doorway) each stream is a narrower ribbon
+      const x = lerp(dr.a, dr.b, u);
+      const y = dr.y + 8;
+      const sw = w - 6;
       items.push({
         y: y - 1,
         draw: (ctx) => {
@@ -367,24 +372,17 @@ class SwingDoors {
           // the trough in the floor: a slot of lava, glowing brighter while the curtain pours
           const pour = bottom - top;
           ctx.fillStyle = '#1a0a0a';
-          ctx.fillRect(Math.round(x - (dr.ns ? 8 : w / 2)), Math.round(y - 3), Math.round(dr.ns ? 16 : w), 6);
+          ctx.fillRect(Math.round(x - w / 2), Math.round(y - 3), Math.round(w), 6);
           ctx.fillStyle = pour > 0.05 ? '#e0461e' : '#7a1206';
-          ctx.fillRect(Math.round(x - (dr.ns ? 7 : w / 2 - 1)), Math.round(y - 2), Math.round(dr.ns ? 14 : w - 2), 3);
-          // the stream: bands of brighter lava sliding down it
+          ctx.fillRect(Math.round(x - w / 2 + 1), Math.round(y - 2), Math.round(w - 2), 3);
+          // the stream: thick, slow lava
           if (pour > 0.01) {
-            const y0 = Math.round(spout + 10 + top * (H - 10));
-            const y1 = Math.round(spout + 10 + bottom * (H - 10));
-            const speed = sealed ? 26 : 16;
-            for (let yy = y0; yy < y1; yy += 2) {
-              const wv = Math.sin(yy * 0.25 - t * 9 + i) * 1;
-              ctx.fillStyle = '#a8200e';
-              ctx.fillRect(Math.round(x - sw / 2 + wv), yy, Math.round(sw), 2);
-              ctx.fillStyle = (Math.floor(yy / 2 - t * speed) % 5 + 5) % 5 === 0 ? '#ffe27a' : sealed ? '#ffb02e' : '#ff8a1e';
-              ctx.fillRect(Math.round(x - sw / 4 + wv), yy, Math.max(2, Math.round(sw / 2)), 2);
-            }
+            const y0 = Math.round(spout + 12 + top * (H - 12));
+            const y1 = Math.round(spout + 12 + bottom * (H - 12));
+            drawLavaStream(ctx, x, y0, y1, sw, t, { seed: i * 1.7, head: !dr.opening && bottom < 0.98, tail: dr.opening && top > 0.02, hot: sealed });
             ctx.save();
             ctx.globalCompositeOperation = 'lighter';
-            PFX.glow(ctx, x, (y0 + y1) / 2, sw * 0.9, sealed ? '255, 90, 40' : FORT_LAVA, (sealed ? 0.55 + Math.sin(t * 6 + i) * 0.1 : 0.35) * pour, 2, (y1 - y0) / 2 + 6);
+            PFX.glow(ctx, x, (y0 + y1) / 2, sw * 0.9, sealed ? '255, 90, 40' : FORT_LAVA, (sealed ? 0.55 + Math.sin(t * 2 + i) * 0.1 : 0.35) * pour, 2, (y1 - y0) / 2 + 6);
             ctx.restore();
           }
           // the lintel over the doorway, its spout glowing while it pours
@@ -407,54 +405,161 @@ class SwingDoors {
    * H px up, and the sheet of lava falling from it to a trough along the floor. top / bottom: the falling sheet's
    * tail and head, as fractions of the drop (see lavaDrawables).
    */
+  /**
+   * A front-on lava curtain's frame: a post of nether brick standing against the wall at either side of the opening,
+   * and the lintel running from one to the other and on over the walls, so the whole gate is built into them.
+   */
+  drawLavaFrame(ctx, dr) {
+    const H = this.height;
+    const B = FF.brick;
+    const floor = Math.round(dr.y + 8);
+    const top = floor - H - 2;
+    const jolt = dr.slam > 0 ? Math.round(Math.sin(dr.slam * 60) * dr.slam * 3) : 0;
+    const brick = (x, y, w, h) => {
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+      ctx.fillStyle = B[3];
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = B[1];
+      for (let yy = y + 6; yy < y + h; yy += 6) ctx.fillRect(x, yy, w, 1);
+      for (let yy = y, r = 0; yy < y + h; yy += 6, r++) ctx.fillRect(x + (r % 2 ? 4 : w - 4), yy, 1, 6);
+      ctx.fillStyle = B[5];
+      ctx.fillRect(x, y, 2, h);   // lit down its left
+    };
+    // the posts, from the floor up to the lintel, standing against the walls just outside the opening
+    brick(Math.round(dr.a - 12), top + 6 + jolt, 12, floor - top - 6);
+    brick(Math.round(dr.b), top + 6 + jolt, 12, floor - top - 6);
+    // their feet, wider, set into the floor
+    for (const x of [dr.a - 14, dr.b - 2]) {
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(Math.round(x) - 1, floor - 5, 18, 7);
+      ctx.fillStyle = B[2];
+      ctx.fillRect(Math.round(x), floor - 4, 16, 5);
+      ctx.fillStyle = B[4];
+      ctx.fillRect(Math.round(x), floor - 4, 16, 1);
+    }
+    // the lintel: right across the opening and on over the walls either side
+    const lx = Math.round(dr.a - 22);
+    const lw = Math.round(dr.b - dr.a + 44);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(lx - 1, top - 1 + jolt, lw + 2, 15);
+    ctx.fillStyle = B[3];
+    ctx.fillRect(lx, top + jolt, lw, 13);
+    ctx.fillStyle = B[5];
+    ctx.fillRect(lx, top + jolt, lw, 2);
+    ctx.fillStyle = B[1];
+    ctx.fillRect(lx, top + 7 + jolt, lw, 1);
+    for (let x = lx + 6, r = 0; x < lx + lw; x += 10, r++) ctx.fillRect(x + (r % 2) * 5, top + 2 + jolt, 1, 11);
+    ctx.fillStyle = B[0];
+    ctx.fillRect(lx, top + 12 + jolt, lw, 1);
+    // a keystone over the middle, a lava-red gem set in it
+    const kx = Math.round((dr.a + dr.b) / 2);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(kx - 7, top - 6 + jolt, 14, 20);
+    ctx.fillStyle = B[4];
+    ctx.fillRect(kx - 6, top - 5 + jolt, 12, 18);
+    ctx.fillStyle = '#ff7a1a';
+    ctx.fillRect(kx - 2, top + 1 + jolt, 4, 4);
+    ctx.fillStyle = '#ffe27a';
+    ctx.fillRect(kx - 2, top + 1 + jolt, 2, 2);
+  }
+
+  /**
+   * A lava curtain in a doorway on a room's side. Seen straight edge-on it would be a sliver, so it's drawn turned
+   * to the viewer: its line across the floor runs on a slant (from the near wall's corner to the far one's), so the
+   * sheet of lava shows as a broad slanted face. Brick posts stand at both ends, a lintel beam joins them along the
+   * top, and the lava pours from the beam to a trough along the slant. top / bottom: the sheet's tail and head as
+   * fractions of the drop (see lavaDrawables).
+   */
   drawLavaSide(ctx, dr, top, bottom, sealed) {
     const H = this.height;
     const t = performance.now() / 1000;
-    const x = Math.round(dr.x);
-    const a = dr.a + 8;
-    const b = dr.b + 8;
     const B = FF.brick;
-    // the trough along the floor
-    ctx.fillStyle = '#1a0a0a';
-    ctx.fillRect(x - 7, Math.round(a), 14, Math.round(b - a));
+    const S = 44;                    // the slant: the curtain's floor line runs from x - S (far end) to x + S (near end)
+    const xa = Math.round(dr.x - S);
+    const xb = Math.round(dr.x + S);
+    const ya = dr.a + 4;
+    const yb = dr.b + 8;
+    const drop = H - 12;
+    const along = (f, h) => ({ x: lerp(xa, xb, f), y: lerp(ya, yb, f) - h });   // a point on the curtain: f along it, h px up
+    const quad = (pts, color) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.fill();
+    };
+    const jolt = dr.slam > 0 ? Math.round(Math.sin(dr.slam * 60) * dr.slam * 3) : 0;
+    const post = (p) => {
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(Math.round(p.x) - 7, Math.round(p.y - H - 2) + jolt, 14, H + 6);
+      ctx.fillStyle = B[3];
+      ctx.fillRect(Math.round(p.x) - 6, Math.round(p.y - H - 1) + jolt, 12, H + 4);
+      ctx.fillStyle = B[1];
+      for (let yy = Math.round(p.y - H) + 5; yy < p.y + 3; yy += 6) ctx.fillRect(Math.round(p.x) - 6, yy + jolt, 12, 1);
+      ctx.fillStyle = B[5];
+      ctx.fillRect(Math.round(p.x) - 6, Math.round(p.y - H - 1) + jolt, 2, H + 4);
+    };
+    // the far post (behind the sheet), then the trough along the floor
+    post(along(0, 0));
     const pour = bottom - top;
-    ctx.fillStyle = pour > 0.05 ? '#e0461e' : '#7a1206';
-    ctx.fillRect(x - 5, Math.round(a + 1), 10, Math.round(b - a - 2));
-    // the sheet: from height H (1 - top) down to height H (1 - bottom) over every point of the doorway
+    quad([along(0, -4), along(1, -4), along(1, 4), along(0, 4)], '#1a0a0a');
+    quad([along(0, -2), along(1, -2), along(1, 2), along(0, 2)], pour > 0.05 ? '#e0461e' : '#7a1206');
+    // the sheet of lava: a slanted face between the heights it's fallen to
     if (pour > 0.01) {
-      const drop = H - 10;
-      const y0 = Math.round(a - drop * (1 - top));
-      const y1 = Math.round(b - drop * (1 - bottom));
-      for (let yy = y0; yy < y1; yy += 2) {
-        const wv = Math.round(Math.sin(yy * 0.2 - t * 8));
-        ctx.fillStyle = '#a8200e';
-        ctx.fillRect(x - 6 + wv, yy, 12, 2);
-        ctx.fillStyle = (Math.floor(yy / 2 - t * (sealed ? 26 : 16)) % 5 + 5) % 5 === 0 ? '#ffe27a' : sealed ? '#ffb02e' : '#ff8a1e';
-        ctx.fillRect(x - 3 + wv, yy, 6, 2);
+      const h1 = drop * (1 - top);      // its top edge, px up
+      const h0 = drop * (1 - bottom);   // its bottom edge
+      quad([along(0, h1), along(1, h1), along(1, h0), along(0, h0)], '#7a1606');
+      quad([along(0.04, h1 - 1), along(0.96, h1 - 1), along(0.96, h0 + 1), along(0.04, h0 + 1)], sealed ? '#ff7a1a' : '#e0461e');
+      // slow heavy folds sliding down its face
+      ctx.save();
+      ctx.lineWidth = 2;
+      const speed = sealed ? 9 : 5;
+      for (let j = 0; j < 8; j++) {
+        const h = h1 - (((t * speed + j * 9) % 72));
+        if (h <= h0 + 2 || h >= h1 - 2) continue;
+        const sag = Math.sin(t * 0.7 + j) * 2;
+        const p0 = along(0.06, h);
+        const pm = along(0.5, h - sag);
+        const p1 = along(0.94, h);
+        ctx.strokeStyle = j % 3 === 0 ? (sealed ? '#fff0a0' : '#ffd27a') : '#ffa030';
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.quadraticCurveTo(pm.x, pm.y + 2, p1.x, p1.y);
+        ctx.stroke();
+      }
+      // lit along the near edge, a dark skin cooling down the far one
+      ctx.strokeStyle = sealed ? '#ffc24a' : '#ff9a3a';
+      ctx.beginPath();
+      ctx.moveTo(along(0.96, h1).x, along(0.96, h1).y);
+      ctx.lineTo(along(0.96, h0).x, along(0.96, h0).y);
+      ctx.stroke();
+      ctx.restore();
+      // the leading edge while it pours down: a thick swollen lip
+      if (!dr.opening && bottom < 0.98) {
+        ctx.save();
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#ff7a1a';
+        ctx.beginPath();
+        ctx.moveTo(along(0, h0).x, along(0, h0).y);
+        ctx.lineTo(along(1, h0).x, along(1, h0).y);
+        ctx.stroke();
+        ctx.restore();
       }
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      PFX.glow(ctx, x, (y0 + y1) / 2, 16, sealed ? '255, 90, 40' : FORT_LAVA, (sealed ? 0.55 : 0.35) * pour, 2, (y1 - y0) / 2 + 6);
+      const mid = along(0.5, (h0 + h1) / 2);
+      PFX.glow(ctx, mid.x, mid.y, S + 10, sealed ? '255, 90, 40' : FORT_LAVA, (sealed ? 0.55 : 0.35) * pour, 2, (yb - ya) / 2 + (h1 - h0) / 2);
       ctx.restore();
     }
-    // the lintel beam across the top, with a glowing spout every so often along its underside
-    const jolt = dr.slam > 0 ? Math.round(Math.sin(dr.slam * 60) * dr.slam * 3) : 0;
-    const ty = Math.round(a - H) + jolt;
-    const len = Math.round(b - a);
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x - 9, ty - 1, 18, len + 12);
-    ctx.fillStyle = B[3];
-    ctx.fillRect(x - 8, ty, 16, len + 10);
-    ctx.fillStyle = B[5];
-    ctx.fillRect(x - 8, ty, 2, len + 10);
-    ctx.fillStyle = B[1];
-    for (let yy = ty + 8; yy < ty + len + 10; yy += 8) ctx.fillRect(x - 8, yy, 16, 1);
-    if (pour > 0.05) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      PFX.glow(ctx, x, ty + len / 2 + 6, 10, FORT_LAVA, 0.4, 2, len / 2);
-      ctx.restore();
-    }
+    // the lintel beam along the top, between the posts
+    const l0 = along(0, H);
+    const l1 = along(1, H);
+    quad([{ x: l0.x - 2, y: l0.y - 3 + jolt }, { x: l1.x + 2, y: l1.y - 3 + jolt }, { x: l1.x + 2, y: l1.y + 11 + jolt }, { x: l0.x - 2, y: l0.y + 11 + jolt }], OUTLINE);
+    quad([{ x: l0.x, y: l0.y - 2 + jolt }, { x: l1.x, y: l1.y - 2 + jolt }, { x: l1.x, y: l1.y + 10 + jolt }, { x: l0.x, y: l0.y + 10 + jolt }], B[3]);
+    quad([{ x: l0.x, y: l0.y - 2 + jolt }, { x: l1.x, y: l1.y - 2 + jolt }, { x: l1.x, y: l1.y + 1 + jolt }, { x: l0.x, y: l0.y + 1 + jolt }], B[5]);
+    // the near post, in front of it all
+    post(along(1, 0));
   }
 
   /**

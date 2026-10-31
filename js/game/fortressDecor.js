@@ -14,6 +14,40 @@
 
 const FORT_FIRE_RGB = '255, 130, 40';
 
+/**
+ * A falling stream of lava, thick and slow like the real thing (the lavafalls, the doors' curtains): it creeps down
+ * in heavy lumps that bulge and thin as they go, a dark cooling skin at its edges, a hot core lit from the left,
+ * and slow bright folds sliding down it. From y0 down to y1 at x, about w px wide. opts.head: it's still pouring
+ * down (a heavy rounded glob at its leading end); opts.tail: it's draining (it thins to a drip at the top);
+ * opts.hot: brighter and a little quicker (a sealed door); opts.seed staggers the lumps between streams.
+ */
+function drawLavaStream(ctx, x, y0, y1, w, t, { seed = 0, head = false, tail = false, hot = false } = {}) {
+  if (y1 - y0 < 1) return;
+  const speed = hot ? 9 : 5;   // px/s: lava doesn't rush
+  for (let yy = Math.round(y0); yy < y1; yy += 2) {
+    const ph = yy - t * speed;
+    let ww = w + Math.sin(ph * 0.16 + seed) * 1.8 + Math.sin(ph * 0.06 + seed * 2.3) * 1.2;
+    if (tail) ww *= clamp((yy - y0) / 22, 0.25, 1);
+    const sway = Math.sin(yy * 0.04 + t * 0.6 + seed) * 0.8;
+    const lx = Math.round(x - ww / 2 + sway);
+    const W = Math.max(2, Math.round(ww));
+    ctx.fillStyle = '#7a1606';   // the cooling skin at its edges
+    ctx.fillRect(lx, yy, W, 2);
+    const fold = ((Math.floor(ph / 2) % 11) + 11) % 11;
+    ctx.fillStyle = fold === 0 ? (hot ? '#fff0a0' : '#ffd27a') : fold === 1 ? '#ffa030' : hot ? '#ff7a1a' : '#e0461e';
+    ctx.fillRect(lx + 1, yy, Math.max(1, W - 2), 2);
+    ctx.fillStyle = hot ? '#ffc24a' : '#ff9a3a';   // lit down its left side
+    ctx.fillRect(lx + 1, yy, Math.max(1, Math.round(W * 0.3)), 2);
+  }
+  if (head) {
+    // the leading glob, swollen and heavy, a skin forming over it
+    const gy = Math.round(y1);
+    PFX.disc(ctx, x, gy, w * 0.72, 4, '#7a1606', 1);
+    PFX.disc(ctx, x - 1, gy - 1, w * 0.55, 3, hot ? '#ff9a2a' : '#ff7a1a', 1);
+    PFX.disc(ctx, x - 2, gy - 2, w * 0.2, 1, '#ffd27a', 1);
+  }
+}
+
 const FortressDecor = {
   /** Fills room r. Returns false for rooms it leaves to FloorDecor (shops, specials). */
   decorate(fd, r) {
@@ -115,21 +149,40 @@ const FortressDecor = {
         // embers and smoke pouring up off it, so it's plain from across the room
         if (nativeRandom() < dt * 16) world.effects.burst(d.x + vrand(-12, 12), d.y - vrand(10, 40), { count: 1, colors: ['#ffd34a', '#ff8a1e', '#fff6c8'], speed: [10, 40], up: 90, life: [0.6, 1.2], size: [1, 3] });
         if (nativeRandom() < dt * 2) world.effects.smoke(d.x + vrand(-6, 6), d.y - 56, { count: 1, radius: 8, life: 1.4, rise: 40, colors: ['#2a1a18', '#3e2a26', '#5a4038'] });
-      } else if (d.kind === 'lavafall' && nativeRandom() < dt * 10) {
-        world.effects.burst(d.x + vrand(-8, 8), d.y - 4, { count: 1, colors: ['#ffc23a', '#ff8a1e', '#e0461e'], speed: [20, 60], up: 50, gravity: 260, life: [0.3, 0.6], size: [1, 2] });
+      } else if (d.kind === 'lavafall' && nativeRandom() < dt * 4) {
+        // thick lava doesn't splash: a slow, heavy blob plops out of the heap now and then
+        world.effects.burst(d.x + vrand(-6, 6), d.y - 6, { count: 1, colors: ['#ffc23a', '#ff8a1e', '#e0461e'], speed: [4, 14], up: 18, gravity: 90, life: [0.6, 1], size: [2, 3] });
       }
     }
     // bubbles swelling and popping on the lava in view
     const cam = world.camera;
     const f = fd.floor;
-    for (let i = 0; i < 3; i++) {
-      if (nativeRandom() > dt * 40) continue;
+    // (thick lava: a skin swells up slowly into a dome, then pops, a few heavy drops plopping back)
+    for (let i = 0; i < 2; i++) {
+      if (nativeRandom() > dt * 18) continue;
       const x = cam.x + vrand(0, cam.width);
       const y = cam.y + vrand(0, cam.height);
       const tx = Math.floor(x / f.T);
       const ty = Math.floor(y / f.T);
       if (!(f.lava.has(f.idx(tx, ty)) || (f.baseTile(tx, ty) === TILE.WALL && f.isSea(tx, ty)))) continue;
-      world.effects.burst(x, y, { count: 3, colors: ['#ffe27a', '#ffb02e', '#ff7a1a'], speed: [10, 40], up: 40, gravity: 200, life: [0.25, 0.5], size: [1, 2] });
+      const r = vrand(3, 6);
+      const life = vrand(1.2, 2);
+      world.effects.add(life, (ctx, k) => {
+        if (k < 0.82) {
+          const s = Math.sin((k / 0.82) * Math.PI / 2);
+          PFX.disc(ctx, x, y, r * s + 1, (r * s + 1) * 0.6, '#a8200e', 1);
+          PFX.disc(ctx, x - 1, y - 1, r * s * 0.7 + 0.5, (r * s * 0.7 + 0.5) * 0.6, '#ff8a1e', 1);
+          if (s > 0.5) { ctx.fillStyle = '#ffe27a'; ctx.fillRect(Math.round(x - r * 0.4), Math.round(y - r * 0.4), 2, 1); }
+          return;
+        }
+        // popped: a few heavy drops arcing out and back down
+        const u = (k - 0.82) / 0.18;
+        ctx.fillStyle = u < 0.5 ? '#ffd27a' : '#ff8a1e';
+        for (let j = 0; j < 4; j++) {
+          const a = j * 1.57 + 0.6;
+          ctx.fillRect(Math.round(x + Math.cos(a) * r * (0.6 + u)), Math.round(y - Math.sin(u * Math.PI) * 5 + Math.sin(a) * r * 0.3), 2, 2);
+        }
+      }, true);
     }
   },
 
@@ -227,15 +280,9 @@ const FortressDecor = {
         ctx.fillRect(x - 8, top - 3, 16, 6);
         ctx.fillStyle = '#1a0604';
         ctx.fillRect(x - 6, top - 1, 12, 3);
-        for (let yy = top; yy < bottom; yy += 2) {
-          const k = (yy - top) / (bottom - top);
-          const wv = Math.sin(yy * 0.3 - t * 10) * 1;
-          const w = 6 + k * 4;
-          ctx.fillStyle = '#a8200e';
-          ctx.fillRect(Math.round(x - w / 2 + wv), yy, Math.round(w), 2);
-          ctx.fillStyle = (Math.floor(yy / 2 - t * 18) % 4 + 4) % 4 === 0 ? '#ffe27a' : '#ff8a1e';
-          ctx.fillRect(Math.round(x - w / 4 + wv), yy, Math.max(1, Math.round(w / 2)), 2);
-        }
+        drawLavaStream(ctx, x, top + 2, bottom, 10, t, { seed: d.seed });
+        // it piles up where it lands: a slow-spreading heap of lava in the basin
+        PFX.disc(ctx, x, bottom, 9 + Math.sin(t * 0.8 + d.seed) * 1, 3, '#e0461e', 1);
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         PFX.glow(ctx, x, (top + bottom) / 2, 18, FORT_LAVA, 0.35, 2, 46);
@@ -308,11 +355,12 @@ const FortressDecor = {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     pats.forEach((pat, i) => {
-      const ox = (t * (i ? -9 : 14)) % 128;
-      const oy = (t * (i ? 5 : 3)) % 128;
+      // a slow, heavy crawl (lava creeps, it doesn't run), the two layers drifting apart
+      const ox = (t * (i ? -2.2 : 3.5)) % 128;
+      const oy = (t * (i ? 1.2 : 0.8)) % 128;
       pat.setTransform?.(new DOMMatrix().translate(ox, oy));
       ctx.fillStyle = pat;
-      ctx.globalAlpha = (i ? 0.5 : 0.7) + Math.sin(t * (i ? 1.3 : 0.9)) * 0.15;
+      ctx.globalAlpha = (i ? 0.5 : 0.7) + Math.sin(t * (i ? 0.45 : 0.3)) * 0.15;
       for (const [ty, a, b] of runs) {
         if (ty < ty0 || ty > ty1 || b < tx0 || a > tx1) continue;
         const x0 = Math.max(a, tx0);
