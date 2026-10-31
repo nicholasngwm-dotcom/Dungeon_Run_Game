@@ -1243,13 +1243,25 @@ const CONFIG = {
     splitCount: 3,
     splitScale: 0.7,
     contactDamage: 18,     // touching it while it's up
-    surfaceTime: [1.2, 1.4],   // seconds up before its attack [phase 1, phase 2 (each worm)]
-    digTime: [2.8, 3.6],       // seconds below ground [min, max]
+    // its round: fireballs (the first time) or the arrow -> it plunges head first into the floor by you (a bite)
+    // -> the diving phase: it leaps out at you again and again -> it burrows about near you -> bites up -> again
+    surfaceTime: [1.0, 1.2],   // seconds up before its attack [phase 1, phase 2 (each worm)]
+    digTime: [0.5, 2],         // seconds burrowing near you before it bites up [min, max] (random each time)
     digSpeed: 190,             // how fast its mound chases you
-    diveTime: 0.9,
-    bite: { windup: 1.1, radius: 84, damage: 46 },
+    plunge: { time: 0.85, near: 40, radius: 70, damage: 36 },   // its dive into the floor: lands `near` px short of you
+    diving: {
+      time: [4.5, 3.5],        // seconds of leaping at you [phase 1, phase 2]
+      speed: 520,              // how fast it moves along its leap
+      height: 140,             // how high it arcs
+      from: 190,               // it comes up this far short of you, and dives in where you stood
+      gap: 0.4,                // seconds tunnelling between leaps
+      radius: 64, damage: 32,
+    },
+    bite: { windup: 0.9, radius: 84, damage: 46 },
     fireballs: { waves: 3, count: [16, 11], every: 0.45, speed: 210, damage: 22, burnDps: 8, burnTime: 3 },
-    arrow: { windup: 1.3, speed: 360, damage: 48, blastRadius: 100, fireRadius: 120, fireTime: 5, burnDps: 10, burnTime: 3 },
+    arrow: { windup: 1.3, speed: 380, damage: 48, blastRadius: 100, fireRadius: 120, fireTime: 5, burnDps: 10, burnTime: 3, pillar: 240 },
+    split: { time: 1.3, birth: 0.45, spread: 170 },   // its splitting: convulsing, then three worms rear up and plunge away
+    trailTime: 3,              // seconds the molten rock behind its burrow takes to cool
   },
 
   phantom: {

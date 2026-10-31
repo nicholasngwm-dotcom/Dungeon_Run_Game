@@ -79,12 +79,14 @@ stops it until half health, when it smashes through), and slams the ground
 four times (six at half health, with bigger spikes) for massive rock spikes, at you and then
 ahead of you in turn. The power crystals slowly heal it while they stand, so break them; at
 half health broken ones reform out of the magic, but only once. In the Fiery Fortress each
-stage's boss is the Decronic Flameworm, a giant sandworm of molten rock: below ground it can't be
-hurt and its mound of broken floor chases you, then the floor cracks and glows where it bursts up to
-bite and spray fireballs; above ground it sprays fireballs in every direction, wave after wave, or
-looses a giant flaming magic arrow that bursts near you and leaves the area in flames, then dives
-again. Below half health it splits into three smaller worms, each with its own health bar (together
-what it had left). Beating the boss
+stage's boss is the Decronic Flameworm, a giant sandworm armoured in crimson rock plates. Reared up
+out of its hole it sprays fireballs in every direction, wave after wave, or forms a divine flame
+arrow in its jaws that bursts into a pillar of flame near you and leaves the area burning. Then it
+arcs over and dives head first into the floor beside you, biting, and for a few seconds leaps out of
+the floor at you again and again. Below ground it can't be hurt: its heap of rock burrows about near
+you for half a second to two seconds, leaving a trail of molten rock, then the floor cracks and glows
+where it bites back up. Below half health it convulses and splits into three smaller worms, each
+with its own health bar (together what it had left), which rear up and plunge away. Beating the boss
 opens a portal to the next stage, and after stage 3 the run is won. Later stages
 make enemies tougher (more hp and damage, a little faster) rather than sending
 many more of them, and add stage-exclusive enemies (necromancer, reaper
@@ -309,7 +311,7 @@ js/
     boss/guardian.js    The Guardian (the ruins' floating rock boss: slowing ring + chest beam, spike slams, healing crystals)
     boss/phantom.js     Phantom King (dash, eye lasers, vanish + pull shockwaves)
     boss/deathbringer.js The Deathbringer (scythes, tendrils, darkness, the shade)
-    boss/flameworm.js   The Decronic Flameworm (the fortress's burrowing worm: bite, fireball waves, flaming arrow, splits in three)
+    boss/flameworm.js   The Decronic Flameworm (the fortress's burrowing worm: a plated spine on a curve; bite, plunge, leaps, fireballs, flame arrow, splits in three)
   game/                 Game world, wave director, lobby hub, dungeon run (rooms + objectives), HUD
   ui/menus.js           DOM menus + lobby panels (hero, workshop, dungeon, legend)
   ui/bestiary.js        bestiary book (entries, filters, page flips)

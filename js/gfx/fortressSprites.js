@@ -154,15 +154,33 @@ function buildFortressProjectiles() {
       p.ellipse(20, 20, 4, 3, L[3]);
       p.px(19, 19, L[6]);
     }),
-    // the worm's giant flaming magic arrow (drawn pointing right): a shaft of violet magic, a head of fire
-    wormArrow: sprite(64, 20, (p) => {
-      p.rect(2, 9, 44, 3, M[2]);
-      p.rect(2, 9, 44, 1, M[4]);
-      for (const x of [10, 22, 34]) { p.rect(x, 8, 3, 5, M[3]); p.px(x + 1, 10, M[5]); }
-      p.poly([[0, 3], [10, 9], [10, 12], [0, 17], [4, 10]], M[1]);
-      p.poly([[44, 2], [63, 10], [44, 18], [48, 10]], L[2]);
-      p.poly([[46, 5], [60, 10], [46, 15], [49, 10]], L[4]);
-      p.poly([[49, 8], [57, 10], [49, 12]], L[6]);
+    // the worm's divine flame arrow (drawn pointing right): an arrow made of fire itself - a white-hot shaft
+    // braided with flame, a great barbed head of fire, tongues of it streaming back off the barbs and fletching
+    wormArrow: sprite(78, 30, (p) => {
+      const Fr = FORT_FIRE;
+      // the tongues streaming back off the barbs
+      p.poly([[50, 3], [36, 1], [22, 6], [38, 6], [48, 9]], Fr[1]);
+      p.poly([[50, 27], [36, 29], [22, 24], [38, 24], [48, 21]], Fr[1]);
+      p.poly([[48, 5], [38, 3], [30, 6], [40, 7]], Fr[2]);
+      p.poly([[48, 25], [38, 27], [30, 24], [40, 23]], Fr[2]);
+      // the shaft: flame wound round a white-hot core
+      p.poly([[6, 11], [52, 12], [52, 18], [6, 19], [12, 15]], Fr[1]);
+      p.poly([[10, 13], [52, 13], [52, 17], [10, 17], [14, 15]], Fr[2]);
+      for (let x = 12; x < 50; x += 8) { p.line(x, 13, x + 5, 17, Fr[3]); p.line(x + 4, 13, x + 8, 15, Fr[1]); }
+      p.rect(14, 14, 38, 2, Fr[3]);
+      p.rect(20, 15, 32, 1, Fr[4]);
+      // the fletching: three flames licking back
+      p.poly([[14, 13], [4, 4], [0, 6], [8, 14]], Fr[2]);
+      p.poly([[14, 17], [4, 26], [0, 24], [8, 16]], Fr[2]);
+      p.poly([[12, 14], [1, 13], [1, 17], [12, 16]], Fr[3]);
+      p.poly([[12, 13], [6, 7], [5, 9]], Fr[3]);
+      p.poly([[12, 17], [6, 23], [5, 21]], Fr[3]);
+      // the head: barbed, layered from its red edge to a white-hot point
+      p.poly([[46, 2], [77, 15], [46, 28], [52, 15]], Fr[1]);
+      p.poly([[49, 6], [73, 15], [49, 24], [54, 15]], Fr[2]);
+      p.poly([[52, 9], [69, 15], [52, 21], [56, 15]], Fr[3]);
+      p.poly([[55, 12], [65, 15], [55, 18]], Fr[4]);
+      p.line(56, 15, 66, 15, '#ffffff');
     }),
   });
 }
@@ -379,78 +397,139 @@ function buildFortressDecor() {
 }
 
 /**
- * The Decronic Flameworm: a giant sandworm of black molten rock. Its body is a chain of segments (each a ring
- * of rock plates with lava welling between them), drawn at runtime rising out of its burrow; its head is a great
- * round maw ringed with fangs, lava in its throat (open) or its plates clamped shut to a point (closed).
+ * The Decronic Flameworm: a giant sandworm armoured in plates of dark crimson rock, molten pustules glowing
+ * between them. Seen from the side, facing right: its body is a run of overlapping plated segments (the rear lip
+ * of each is what shows), drawn turned along its spine at runtime; its head is a plated skull and a hinged lower
+ * jaw, both ringed with fangs, opening on a throat of raw flesh and fire. Rocks for its holes and the rubble it
+ * throws up. The jaw and skull pivot on their hinge (WORM_HEAD in flameworm.js holds the pivots).
  */
 function buildFlamewormSprites() {
   const R = FF.rock;
+  const B = FF.brick;
   const L = FF.lava;
+  const W = ['#16050a', '#2c0a10', '#4a1216', '#6a1c1e', '#8c2a26', '#b04232', '#d0623e'];   // its armour, darkest first
+  const M = ['#24060c', '#5a1222', '#9a2a3a', '#d0566a', '#f08a96'];                        // its maw
+  const F = ['#8a7a6a', '#d8ccb8', '#f4ecdc'];                                               // fangs
   const make = (w, h, fn) => PixelArt.make(w, h, fn, OUTLINE, 0.5);
-  const segment = (p, w, h) => {
-    const cx = w / 2;
-    const cy = h / 2;
-    p.ellipse(cx, cy, cx - 1, cy - 1, L[1]);
-    p.ellipse(cx, cy + 1, cx - 3, cy - 4, L[2]);
-    // the plates round it, lit on the upper left
-    const n = 6;
-    for (let i = 0; i < n; i++) {
-      const a0 = (i / n) * TAU - Math.PI / 2 + 0.12;
-      const a1 = ((i + 1) / n) * TAU - Math.PI / 2 - 0.12;
-      const pts = [];
-      for (let k = 0; k <= 4; k++) {
-        const a = a0 + (a1 - a0) * (k / 4);
-        pts.push([cx + Math.cos(a) * (cx - 1), cy + Math.sin(a) * (cy - 1)]);
-      }
-      for (let k = 4; k >= 0; k--) {
-        const a = a0 + (a1 - a0) * (k / 4);
-        pts.push([cx + Math.cos(a) * (cx * 0.45), cy + Math.sin(a) * (cy * 0.45)]);
-      }
-      const lit = Math.cos((a0 + a1) / 2 + 2.3);
-      p.poly(pts, lit > 0.4 ? R[4] : lit > -0.3 ? R[3] : R[2]);
-    }
-    // the core: molten, a white-hot fleck
-    p.ellipse(cx, cy, cx * 0.4, cy * 0.4, L[3]);
-    p.ellipse(cx - 1, cy - 1, cx * 0.2, cy * 0.2, L[5]);
+  /** A molten pustule bulging between the plates. */
+  const pustule = (p, x, y, r) => {
+    p.circle(x, y, r + 1, W[1]);
+    p.circle(x, y, r, L[3]);
+    p.circle(x - 1, y - 1, Math.max(1, r - 1), L[4]);
+    p.px(x - 1, y - 1, L[6]);
   };
+  /** A fang from (x, y) pointing along dy (down +, up -), w wide at the root. */
+  const fang = (p, x, y, w, len, dy, lean = 0) => {
+    p.poly([[x, y], [x + w, y], [x + w / 2 + lean, y + dy * len]], F[1]);
+    p.line(x + w - 1, y, x + w / 2 + lean, y + dy * (len - 1), F[0]);
+    p.px(x + 1, y + dy, F[2]);
+  };
+  /** One body segment, 26x50: a plated band with its rear lip (left) raised, a dorsal spike, lava in the seam. */
+  const segment = (p, spot, spike) => {
+    p.poly([[4, 8], [17, 5], [23, 10], [25, 25], [23, 40], [17, 45], [4, 43], [8, 25]], W[2]);
+    // lit along the top, the belly in shadow
+    p.poly([[5, 9], [17, 6], [22, 11], [23, 19], [7, 18]], W[4]);
+    p.poly([[6, 34], [23, 33], [22, 40], [17, 44], [5, 42]], W[1]);
+    p.line(7, 8, 16, 6, W[5]);
+    p.line(8, 7, 12, 6, W[6]);
+    // the rear lip: a thick rim of plate with the seam of lava under it
+    p.line(4, 9, 8, 25, W[5], 2);
+    p.line(8, 25, 4, 42, W[3], 2);
+    p.line(2, 12, 5, 26, L[2]);
+    p.line(5, 26, 2, 40, L[1]);
+    // the plate's ribs
+    p.line(13, 8, 15, 42, W[1]);
+    p.line(14, 9, 16, 18, W[5]);
+    if (spike) { p.poly([[9, 8], [16, 6], [11, 0]], W[3]); p.line(10, 6, 11, 1, W[5]); }
+    if (spot === 1) pustule(p, 18, 26, 3);
+    if (spot === 2) { pustule(p, 11, 22, 2); pustule(p, 19, 30, 2); }
+  };
+  const skull = make(70, 54, (p) => {
+    // the plated dome of its head, the snout coming to a hooked lip over the fangs
+    p.poly([[0, 14], [10, 8], [24, 5], [40, 7], [54, 14], [63, 24], [68, 32], [62, 36], [27, 37], [23, 44], [14, 50], [0, 48]], W[2]);
+    p.poly([[2, 15], [11, 10], [24, 7], [39, 9], [52, 15], [59, 22], [32, 21], [6, 25]], W[4]);
+    p.poly([[4, 40], [24, 39], [21, 45], [13, 49], [2, 47]], W[1]);
+    p.line(8, 11, 22, 7, W[5]);
+    p.line(26, 7, 38, 9, W[6]);
+    // the plates' seams, lava under them
+    for (const [x0, y0, x1, y1] of [[18, 7, 14, 36], [32, 8, 30, 36], [46, 12, 46, 35]]) {
+      p.line(x0, y0, x1, y1, W[0], 2);
+      p.line(x0 + 1, y0 + 2, x1 + 1, y1, L[2]);
+    }
+    // ridge spikes along the crown
+    for (const x of [12, 25, 38]) { p.poly([[x, 9], [x + 8, 7], [x + 1, 1]], W[3]); p.line(x + 1, 7, x + 1, 2, W[5]); }
+    pustule(p, 24, 24, 3);
+    pustule(p, 40, 22, 2);
+    pustule(p, 9, 32, 2);
+    // the hooked lip and a deep-set ember eye
+    p.poly([[56, 30], [68, 32], [64, 38], [58, 36]], W[3]);
+    p.rect(50, 24, 5, 3, L[4]);
+    p.px(51, 24, L[6]);
+    p.line(48, 22, 56, 23, W[0]);
+    // the upper fangs hanging from the jaw line, the front ones longest
+    for (const [x, len] of [[28, 5], [33, 6], [38, 6], [43, 7], [48, 7], [53, 8], [58, 9]]) fang(p, x, 36, 4, len, 1, 1);
+  });
+  const jaw = make(50, 30, (p) => {
+    p.poly([[0, 9], [8, 7], [40, 10], [48, 13], [45, 19], [32, 24], [12, 25], [0, 20]], W[2]);
+    p.poly([[2, 10], [8, 9], [40, 12], [46, 14], [45, 15], [3, 12]], M[2]);
+    p.poly([[2, 19], [12, 23], [32, 22], [44, 18], [30, 26], [12, 27]], W[1]);
+    p.line(4, 17, 40, 17, W[4]);
+    pustule(p, 14, 20, 2);
+    // the lower fangs, up from the gum, the front ones longest
+    for (const [x, len] of [[14, 5], [20, 6], [26, 6], [32, 7], [38, 7], [43, 8]]) fang(p, x, 11, 4, len, -1, 1);
+  });
+  // its throat behind the jaws: raw flesh round a gullet of fire
+  const throat = make(44, 34, (p) => {
+    p.ellipse(22, 17, 20, 15, M[0]);
+    p.ellipse(23, 17, 17, 12, M[1]);
+    p.ellipse(25, 18, 12, 8, M[2]);
+    p.ellipse(20, 17, 7, 6, L[2]);
+    p.ellipse(19, 17, 4, 4, L[4]);
+    p.px(18, 16, L[6]);
+    p.ellipse(32, 24, 8, 3, M[3]);
+    p.line(28, 23, 36, 23, M[4]);
+  });
+  // its tail (when it leaps clear): the plates tapering to a barbed point, facing right like the rest
+  const tail = make(34, 40, (p) => {
+    p.poly([[33, 6], [33, 34], [16, 30], [1, 21], [16, 11]], W[2]);
+    p.poly([[33, 7], [16, 12], [6, 19], [33, 17]], W[4]);
+    p.poly([[33, 28], [16, 29], [6, 23], [33, 33]], W[1]);
+    p.line(22, 9, 22, 32, W[0]);
+    p.line(23, 10, 23, 18, W[5]);
+    p.line(1, 21, 10, 20, W[5]);
+    pustule(p, 27, 20, 2);
+  });
+  // the rocks of its holes and the rubble it throws up: charred basalt and broken nether brick
+  /** A broken, faceted rock: its outline `pts`, a lit top face, a shaded foot, a sharp lit edge. */
+  const shard = (p, pts, top, R = R0) => {
+    p.poly(pts, R[2]);
+    p.poly(top, R[4]);
+    const ys = pts.map((q) => q[1]);
+    const low = Math.max(...ys);
+    p.poly(pts.filter((q) => q[1] >= low - 3).concat([[pts[0][0], low - 2]]), R[1]);
+    p.line(top[0][0], top[0][1], top[1][0], top[1][1], R[5]);
+  };
+  const R0 = ['#140808', '#2a1210', '#46201a', '#5e2c22', '#7c4030', '#a05a40'];   // scorched red rock, like its floor
+  const rocks = [
+    make(12, 11, (p) => shard(p, [[1, 6], [4, 1], [9, 2], [11, 7], [7, 10], [2, 9]], [[4, 1], [9, 2], [8, 5], [3, 5]])),
+    make(15, 12, (p) => { shard(p, [[1, 7], [5, 1], [11, 1], [14, 6], [12, 11], [3, 11]], [[5, 1], [11, 1], [11, 5], [4, 6]]); ffCrack(p, [[5, 8], [9, 9]], false); }),
+    make(17, 14, (p) => shard(p, [[1, 9], [3, 3], [8, 1], [15, 4], [16, 10], [10, 13], [3, 13]], [[3, 3], [8, 1], [15, 4], [9, 7], [3, 7]], R)),
+    make(20, 16, (p) => { shard(p, [[1, 10], [5, 2], [13, 1], [19, 7], [17, 14], [6, 15]], [[5, 2], [13, 1], [17, 6], [10, 8], [4, 8]]); ffCrack(p, [[6, 11], [10, 9], [14, 11]]); }),
+    make(15, 11, (p) => { p.poly([[1, 4], [12, 1], [14, 7], [3, 10]], B[3]); p.poly([[1, 4], [12, 1], [13, 4], [2, 6]], B[5]); p.line(7, 3, 8, 9, B[1]); }),
+    make(24, 17, (p) => { shard(p, [[1, 12], [4, 5], [10, 1], [17, 3], [23, 9], [20, 16], [5, 16]], [[4, 5], [10, 1], [17, 3], [19, 8], [11, 9], [4, 9]], R); ffCrack(p, [[8, 12], [13, 13], [18, 10]]); }),
+  ];
   Sprites.flameworm = {
-    segment: make(44, 40, (p) => segment(p, 44, 40)),
-    tail: make(28, 26, (p) => segment(p, 28, 26)),
-    // the head, maw open: a ring of plates round a mouth of fangs and fire
-    head: make(64, 60, (p) => {
-      p.ellipse(32, 32, 30, 26, R[2]);
-      p.ellipse(31, 30, 27, 23, R[3]);
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * TAU;
-        const x = Math.round(32 + Math.cos(a) * 24);
-        const y = Math.round(32 + Math.sin(a) * 20);
-        p.round(x - 5, y - 4, 10, 8, Math.cos(a + 2.3) > 0 ? R[5] : R[2], 3);
-        ffCrack(p, [[x, y], [Math.round(32 + Math.cos(a + 0.4) * 18), Math.round(32 + Math.sin(a + 0.4) * 15)]], false);
-      }
-      // the maw
-      p.ellipse(32, 33, 18, 15, '#1a0604');
-      p.ellipse(32, 34, 15, 12, L[1]);
-      p.ellipse(32, 35, 10, 8, L[2]);
-      p.ellipse(32, 36, 6, 4, L[4]);
-      p.ellipse(31, 35, 2, 1, L[6]);
-      for (let i = 0; i < 14; i++) {
-        const a = (i / 14) * TAU;
-        const x = 32 + Math.cos(a) * 16;
-        const y = 33 + Math.sin(a) * 13;
-        const tx = 32 + Math.cos(a) * 10;
-        const ty = 33 + Math.sin(a) * 8;
-        p.poly([[x + Math.cos(a + 1.6) * 2, y + Math.sin(a + 1.6) * 2], [tx, ty], [x - Math.cos(a + 1.6) * 2, y - Math.sin(a + 1.6) * 2]], '#e8dcc0');
-      }
-      // eyes high on the plates, glaring
-      for (const ex of [17, 43]) { p.rect(ex, 10, 5, 3, L[4]); p.px(ex + 1, 10, L[6]); }
-    }),
-    // the head, maw shut: the plates clamped together to a blunt point, lava in the seams
-    headClosed: make(56, 60, (p) => {
-      p.poly([[6, 50], [4, 26], [14, 8], [28, 2], [42, 8], [52, 26], [50, 50], [28, 58]], R[2]);
-      p.poly([[8, 48], [6, 26], [15, 10], [27, 4], [26, 56]], R[3]);
-      for (const [x0, y0, x1, y1] of [[28, 4, 28, 56], [10, 18, 46, 40], [46, 18, 10, 40]]) ffCrack(p, [[x0, y0], [Math.round((x0 + x1) / 2), Math.round((y0 + y1) / 2)], [x1, y1]]);
-      for (const ex of [14, 37]) { p.rect(ex, 22, 5, 3, L[4]); p.px(ex + 1, 22, L[6]); }
-      p.line(14, 8, 28, 3, R[5]);
-    }),
+    segments: [make(26, 50, (p) => segment(p, 1, true)), make(26, 50, (p) => segment(p, 0, false)), make(26, 50, (p) => segment(p, 2, true)), make(26, 50, (p) => segment(p, 0, true))],
+    skull, jaw, throat, tail, rocks,
+    // the bestiary's picture of it: the head, jaws agape
+    head: PixelArt.make(72, 64, (p) => {
+      p.ctx.drawImage(throat, 18, 26);
+      p.ctx.save();
+      p.ctx.translate(24, 38);
+      p.ctx.rotate(0.45);
+      p.ctx.drawImage(jaw, -3, -4);
+      p.ctx.restore();
+      p.ctx.drawImage(skull, 0, 0);
+    }, null),
   };
 }
