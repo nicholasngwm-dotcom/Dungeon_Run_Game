@@ -789,11 +789,12 @@ const CONFIG = {
       hp: 70, speed: 118, radius: 11, damage: 10, contactDamage: 10,
       trailEvery: 0.2, trailRadius: 18, trailLife: 2.4, burnDps: 8, burnTime: 3,
     },
-    // stage 2+: Blazing turret: never moves; aims (windup), then pours fireballs at you for burstTime s (one every
-    // fireEvery s, wobbling spreadDegrees), each setting you on fire; then rests for cooldown
+    // stage 2+: Blazing turret: never moves; aims (windup, a cone on the floor), then fires `volleys` fans of fireballs
+    // at you, volleyEvery s apart, each setting you on fire; then rests for cooldown
     blazingTurret: {
       hp: 220, speed: 0, radius: 16, damage: 12, contactDamage: 0,
-      range: 560, windup: 0.8, burstTime: 2, fireEvery: 0.13, spreadDegrees: 14, fireSpeed: 320, cooldown: 2.6,
+      range: 560, windup: 0.8, fireSpeed: 300, cooldown: 2.6,
+      volleys: 4, volleyEvery: 0.45, fan: 5, fanDegrees: 50,   // fans of fireballs aimed at you (every other fan one less, in the gaps)
       burnDps: 7, burnTime: 2.5, knockbackResist: 1, stunResist: 0.5, heartChance: 0.15,
     },
     // stage 2+: Molten knight: an old suit of royal armour dripping lava. Less hp than a royal guard, but touching it

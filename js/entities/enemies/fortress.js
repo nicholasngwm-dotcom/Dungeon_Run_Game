@@ -997,26 +997,31 @@ class BlazingTurret extends Enemy {
         break;
       case 'windup':
         this.aim = angleTo(m.x, m.y, p.hx, p.hy);
-        if (this.stateTime >= c.windup) { this.setState('burst'); this.shotTimer = 0; }
+        if (this.stateTime >= c.windup) { this.setState('burst'); this.shotTimer = 0; this.volleys = c.volleys; }
         break;
       case 'burst':
-        // it follows the hero as it pours, its aim wobbling
-        this.aim += clamp(angleDiff(angleTo(m.x, m.y, p.hx, p.hy), this.aim), -1.6 * dt, 1.6 * dt);
+        // fans of fireballs aimed at the hero; every other fan has one less, its shots in the last fan's gaps
         this.shotTimer -= dt;
         if (this.shotTimer <= 0) {
-          this.shotTimer += c.fireEvery;
-          const a = this.aim + rand(-0.5, 0.5) * c.spreadDegrees * DEG;
-          fireShot(world, m.x + Math.cos(a) * 10, m.y + Math.sin(a) * 8, a, c.fireSpeed, c, { radius: 5, damage: c.damage, sprite: Sprites.projectiles.fireballSmall, spin: 10 });
-          if (Math.random() < 0.5) Sound.play('bossFireball', 0.06);
+          this.shotTimer += c.volleyEvery;
+          this.aim = angleTo(m.x, m.y, p.hx, p.hy);
+          const gap = (c.fanDegrees * DEG) / (c.fan - 1);
+          const n = this.volleys % 2 ? c.fan - 1 : c.fan;
+          for (let i = 0; i < n; i++) {
+            const a = this.aim + (i - (n - 1) / 2) * gap;
+            fireShot(world, m.x + Math.cos(a) * 10, m.y + Math.sin(a) * 8, a, c.fireSpeed, c, { radius: 5, damage: c.damage, sprite: Sprites.projectiles.fireballSmall, spin: 10 });
+          }
+          world.effects.burst(m.x + Math.cos(this.aim) * 12, m.y + Math.sin(this.aim) * 8, { count: 8, colors: FORT_LAVA_GIBS, speed: [40, 140], life: [0.15, 0.3] });
+          Sound.play('bossFireball', 0.08);
+          if (--this.volleys <= 0) { this.setState('chase'); this.attackCooldown = c.cooldown; }
         }
-        if (this.stateTime >= c.burstTime) { this.setState('chase'); this.attackCooldown = c.cooldown; }
         break;
     }
   }
 
   drawGround(ctx) {
     drawShadow(ctx, this.x, this.y + 8, 22, 7, 0.35);
-    if (this.state === 'windup') Telegraph.line(ctx, this.x, this.y, this.x + Math.cos(this.aim) * 200, this.y + Math.sin(this.aim) * 200, 16, this.stateTime / this.cfg.windup, Telegraph.orange);
+    if (this.state === 'windup') Telegraph.cone(ctx, this.x, this.y, this.aim, (this.cfg.fanDegrees + 10) * DEG, 220, this.stateTime / this.cfg.windup, Telegraph.orange);
   }
 
   draw(ctx) {
