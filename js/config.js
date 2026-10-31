@@ -1248,14 +1248,15 @@ const CONFIG = {
     // -> the diving phase: it leaps out at you again and again -> it burrows about near you -> bites up -> again
     surfaceTime: [1.0, 1.2],   // seconds up before its attack [phase 1, phase 2 (each worm)]
     digTime: [0.5, 2],         // seconds burrowing near you before it bites up [min, max] (random each time)
-    digSpeed: 190,             // how fast its mound chases you
-    plunge: { time: 0.85, near: 40, radius: 70, damage: 36 },   // its dive into the floor: lands `near` px short of you
+    digSpeed: 160,             // how fast its mound chases you
+    plunge: { time: 1.0, near: 40, radius: 70, damage: 36 },   // its dive into the floor: lands `near` px short of you
     diving: {
       time: [4.5, 3.5],        // seconds of leaping at you [phase 1, phase 2]
-      speed: 520,              // how fast it moves along its leap
+      speed: 450,              // how fast it moves along its leap
       height: 140,             // how high it arcs
       from: 190,               // it comes up this far short of you, and dives in where you stood
-      gap: 0.4,                // seconds tunnelling between leaps
+      gap: 0.5,                // seconds tunnelling between leaps (at most tunnelSpeed px/s)
+      tunnelSpeed: 560,
       radius: 64, damage: 32,
     },
     bite: { windup: 0.9, radius: 84, damage: 46 },

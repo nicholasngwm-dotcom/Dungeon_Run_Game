@@ -353,6 +353,7 @@ class FlamewormBody {
     if (this.t >= this.digFor) {
       this.setState('surface');
       Sound.play('graveRumble', 0.12);
+      Sound.play('wormRoar', 0.3);
     }
   }
 
@@ -402,7 +403,7 @@ class FlamewormBody {
     world.effects.smoke(x, y - 8, { count: 8, radius: r * 0.6, life: 1, rise: 30, colors: ['#2a1a18', '#4a3430', '#6a5048'] });
     world.shake(8 * this.scale, 0.35);
     Sound.play('rockErupt');
-    Sound.play('bossRoar', 0.1);
+    Sound.play('wormShriek', 0.25);
     this.holeBorn = this.boss.time;
     this.rise = 0;
     this.setState('emerge');
@@ -495,6 +496,7 @@ class FlamewormBody {
     this.facing = end.x >= this.x ? 1 : -1;
     this.setState('plunge');
     Sound.play('graveRumble', 0.1);
+    Sound.play('wormShriek', 0.25);
   }
 
   /** A leap out of the floor at the hero: up `from` px short of them, in an arc, and down where they stood. */
@@ -552,6 +554,7 @@ class FlamewormBody {
         world.effects.burst(f.x, f.y - 6, { count: 18, colors: [...FORT_ROCK_GIBS, ...FORT_LAVA_GIBS], speed: [60, 220], life: [0.3, 0.7], up: 120, gravity: 400 });
         world.shake(4 * s, 0.2);
         Sound.play('rockErupt', 0.08);
+        Sound.play('wormShriek', 0.25);
       }
     }
     if (!this.struck && this.sHead >= this.hitS) {
@@ -571,6 +574,7 @@ class FlamewormBody {
       world.effects.burst(e.x, e.y - 6, { count: 26, colors: [...FORT_ROCK_GIBS, ...FORT_LAVA_GIBS], speed: [80, 260], life: [0.4, 0.8], up: 140, gravity: 400, size: [2, 5] });
       world.shake(7 * s, 0.3);
       Sound.play('rockErupt');
+      Sound.play('wormRoar', 0.3);
     }
     // all of it gone into the floor: on with the dive
     if (this.sHead - this.bodyLen > this.hitS + 10 * s) {
@@ -602,7 +606,7 @@ class FlamewormBody {
     this.leapTo = this.keepInside(world, { ...at });
     this.leapFrom = this.keepInside(world, { x: at.x - Math.cos(a) * D.from * s, y: at.y - Math.sin(a) * D.from * s * 0.7 });
     this.gapFrom = { x: this.x, y: this.y };
-    this.gapTime = Math.max(D.gap, dist(this.x, this.y, this.leapFrom.x, this.leapFrom.y) / 700);
+    this.gapTime = Math.max(D.gap, dist(this.x, this.y, this.leapFrom.x, this.leapFrom.y) / D.tunnelSpeed);
     this.setState('gap');
   }
 
@@ -989,7 +993,7 @@ class Flameworm {
     wormRocks(world, spot.x, spot.y, 22, 1.4, 1);
     enemyBlastFx(world, spot.x, spot.y, 120);
     world.shake(12, 0.6);
-    Sound.play('bossRoar');
+    Sound.play('wormShriek');
     Sound.play('rockErupt');
   }
 

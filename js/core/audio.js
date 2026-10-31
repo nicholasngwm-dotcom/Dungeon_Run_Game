@@ -811,6 +811,18 @@ const SFX = {
     s.tone({ type: 'square', freq: 60, to: 30, dur: 1.2, vol: 0.2 });
     s.noise({ dur: 1.2, vol: 0.3, filter: 'lowpass', freq: 400, to: 60 });
   },
+  // the Flameworm: a rasping shriek sliding up as it bursts out or plunges, a wet gurgling roar as it dives under
+  wormShriek: (s) => {
+    s.tone({ type: 'sawtooth', freq: 340, to: 1100, dur: 0.55, vol: 0.12 });
+    s.tone({ type: 'square', freq: 355, to: 1040, dur: 0.55, vol: 0.06 });
+    s.noise({ dur: 0.6, vol: 0.22, filter: 'bandpass', freq: 1200, to: 2600, q: 2 });
+    s.tone({ type: 'sawtooth', freq: 120, to: 60, dur: 0.5, vol: 0.12 });
+  },
+  wormRoar: (s) => {
+    s.tone({ type: 'sawtooth', freq: 130, to: 55, dur: 0.8, vol: 0.22 });
+    s.tone({ type: 'square', freq: 70, to: 38, dur: 0.8, vol: 0.14 });
+    [0, 0.12, 0.24, 0.36, 0.48].forEach((d) => s.noise({ dur: 0.14, vol: 0.18, filter: 'lowpass', freq: 500, to: 150, delay: d }));
+  },
   fistCharge: (s) => s.tone({ type: 'sawtooth', freq: 80, to: 200, dur: 0.5, vol: 0.08 }),
   fistLaunch: (s) => {
     s.noise({ dur: 0.25, vol: 0.3, filter: 'bandpass', freq: 400, to: 1500 });
