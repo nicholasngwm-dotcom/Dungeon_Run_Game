@@ -1006,10 +1006,11 @@ const CONFIG = {
     //   lava: standing in it burns FAST - dps, hurt every `every` s - and it clings for `linger` s after you step out.
     //         Fight rooms get pools[0]-pools[1] pools (or, channelChance of the time, a channel across the room with
     //         stone bridges over it); enemy attacks leave lava too. The fortress's fire creatures don't mind it.
-    //   fire: the open flames burning up out of cracks in the floor (fires[0]-fires[1] in the fight rooms, radius
-    //         px) set you on fire: the ordinary slow, light burn (burnDps for burnTime), like any fire attack
+    //   fire: the open flames burning up out of cracks in the floor (fires[0]-fires[1] in survival and defend rooms,
+    //         combatFires[0]-combatFires[1] in combat rooms, which have them instead of spike traps; radius px) set
+    //         you on fire: the ordinary slow, light burn (burnDps for burnTime), like any fire attack
     lava: { dps: 40, every: 0.2, linger: 0.6, rooms: ['combat', 'survival', 'defend', 'boss'], pools: [1, 3], channelChance: 0.4 },
-    fire: { fires: [2, 4], radius: 18, burnDps: 8, burnTime: 3 },
+    fire: { fires: [2, 4], combatFires: [5, 7], radius: 18, burnDps: 8, burnTime: 3 },
     // special rooms (one or two per floor); the hero statue and the restaurant aren't in yet
     specials: ['blacksmith', 'wishingWell', 'heroStatue', 'restaurant5', 'mountTrader', 'darkTrader',
                'friendlyTrader', 'treasure', 'helper'],

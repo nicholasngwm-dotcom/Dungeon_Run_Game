@@ -78,7 +78,8 @@ const FortressDecor = {
         });
         this.lavafalls(fd, r, r.type === 'combat' ? 2 : 1);
         if (['combat', 'survival', 'defend'].includes(r.type)) {
-          const [lo, hi] = CONFIG.run.fire.fires;
+          // combat rooms have no spike traps here: more open fires instead
+          const [lo, hi] = r.type === 'combat' ? CONFIG.run.fire.combatFires : CONFIG.run.fire.fires;
           for (let i = 0, n = randInt(lo, hi); i < n; i++) fd.add('openFire', fd.spot(r, { minGap: 70 }));
         }
         return true;

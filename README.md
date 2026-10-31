@@ -94,7 +94,8 @@ enemies can be up at once.
 
 **The Fiery Fortress**: a fortress of black nether brick over a sea of lava (the lava flows past
 the ramparts, and the hallways are brick bridges). Lava and fire are different: open flames burn
-up out of vents in the fight rooms' floors (a dashed orange ring marks each) and set you on fire,
+up out of vents in the fight rooms' floors (a dashed orange ring marks each; combat rooms here have
+more of them instead of spike traps) and set you on fire,
 the same slow, light burn as any fire attack; lava, in pools or channels crossed by stone bridges
 (and left by magma slimes, the molten elemental's waves and the baby dragon's fireballs), burns you
 far faster while you stand in it and clings for a moment after. There are no frost barrels here.

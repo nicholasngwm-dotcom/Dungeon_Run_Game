@@ -283,7 +283,7 @@ class DungeonRun {
       if (r.type === 'boss' && this.bossType === 'guardian') this.crystalCover(r);
       if (r.type === 'boss' && this.bossType === 'flameworm') this.wormCover(r);
       if (r.type === 'boss' && this.bossType === 'king') this.throneHallPillars(r);
-      if (r.type === 'combat') this.addSpikes(r);
+      if (r.type === 'combat' && this.themeId !== 'fortress') this.addSpikes(r);   // (the fortress has more open fires instead)
       this.addProps(r);
       if (this.themeId === 'fortress' && CONFIG.run.lava.rooms.includes(r.type)) this.addLava(r);
     }
