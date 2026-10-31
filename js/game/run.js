@@ -821,14 +821,30 @@ class DungeonRun {
     return list[0][0];
   }
 
-  /** Spawns an enemy somewhere in the room, away from the hero. */
+  /**
+   * True if `type` can't stand at pt: an enemy that never moves (the fortress's magma dens and blazing turrets)
+   * never stands in or right at the edge of the rooms' lava, where it would be stuck for good.
+   */
+  badSpot(type, pt) {
+    const c = CONFIG.enemies[type];
+    return !!c && !(c.speed > 0) && this.floor.nearLava(pt.x, pt.y, c.radius + 12);
+  }
+
+  /** Spawns an enemy somewhere in the room, away from the hero (and off the lava, if it can't move). */
   spawnIn(r, type) {
     const w = this.world;
+    const f = this.floor;
     // somewhere in the room, away from every hero
     const tooClose = (pt) => w.heroes.some((p) => dist(pt.x, pt.y, p.x, p.y) < 170);
-    let pt = this.floor.randomPointIn(r, 2);
-    for (let i = 0; i < 20 && tooClose(pt); i++) pt = this.floor.randomPointIn(r, 2);
-    pt = this.floor.freePoint(pt.x, pt.y, 10, 8);   // never inside cover
+    let pt = null;
+    for (let i = 0; i < 40; i++) {
+      const q = f.randomPointIn(r, 2);
+      if (i < 20 && tooClose(q)) continue;
+      const free = f.freePoint(q.x, q.y, 10, 8);   // never inside cover
+      pt = free;
+      if (!this.badSpot(type, free)) break;
+    }
+    if (this.badSpot(type, pt)) type = this.pickEnemy({ magmaDen: 99, blazingTurret: 99 });   // (nowhere off the lava: something that walks instead)
     w.spawnEnemy(type, pt.x, pt.y);
   }
 
@@ -859,10 +875,17 @@ class DungeonRun {
       const n = Math.round((this.byStage(c.perWave) + randInt(0, c.perWaveRandom)) * this.world.playerScale.count);
       const counts = {};
       for (let i = 0; i < n; i++) {
-        let pt = f.randomPointIn(r, 2);
-        for (let k = 0; k < 20 && (doors.some((d) => dist(d.x, d.y, pt.x, pt.y) < 5 * T) || (this.hole && this.hole.room === r && dist(this.hole.x, this.hole.y, pt.x, pt.y) < 60)); k++) pt = f.randomPointIn(r, 2);
-        pt = f.freePoint(pt.x, pt.y, 10, 8);
-        const e = createEnemy(this.pickEnemy(counts), pt.x, pt.y);
+        let type = this.pickEnemy(counts);
+        const awkward = (q) => doors.some((d) => dist(d.x, d.y, q.x, q.y) < 5 * T) || (this.hole && this.hole.room === r && dist(this.hole.x, this.hole.y, q.x, q.y) < 60);
+        let pt = null;
+        for (let k = 0; k < 40; k++) {
+          const q = f.randomPointIn(r, 2);
+          if (k < 20 && awkward(q)) continue;
+          pt = f.freePoint(q.x, q.y, 10, 8);
+          if (!this.badSpot(type, pt)) break;   // (a magma den or turret never stands in the lava)
+        }
+        if (this.badSpot(type, pt)) type = this.pickEnemy({ ...counts, magmaDen: 99, blazingTurret: 99 });
+        const e = createEnemy(type, pt.x, pt.y);
         this.world.scaleEnemy(e);
         const wait = (s) => {
           s.age = 5;
