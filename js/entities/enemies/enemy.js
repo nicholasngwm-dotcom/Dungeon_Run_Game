@@ -26,6 +26,12 @@ class Enemy extends Entity {
   /** Body centre for hits, on the scaled-down sprite (see Game.drawEnemy). */
   get hy() { return this.y - this.hitOffY * CONFIG.enemyDrawScale; }
 
+  /**
+   * Room kept clear above the feet box when walking up to a wall (Dungeon.move): enough that the
+   * body stays out in front of the top wall, where shots can reach it, instead of tucked into it.
+   */
+  get wallTop() { return Math.max(0, this.y - this.hy + 6 - this.hh); }
+
   setState(s) {
     this.state = s;
     this.stateTime = 0;

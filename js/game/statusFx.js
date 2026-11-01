@@ -12,6 +12,7 @@ const MELT_COLORS = ['#2a0604', '#6a0c08', '#a8100e', '#d81e14', '#ff4a2a', '#ff
 
 const StatusFx = {
   levels: { low: 0, burn: 0, melt: 0, frozen: 0, poison: 0, stun: 0 },   // each border's strength, fading in and out
+  lv: {},           // the levels as drawn: scaled by the Screen borders setting
   last: null,        // the game time last drawn (borders and the heartbeat follow game time, so pausing stops them)
   beat: 0,           // seconds to the next heartbeat
   pulse: 0,          // 1 on a heartbeat, fading
@@ -65,12 +66,16 @@ const StatusFx = {
     }
 
     const { width: w, height: h } = CONFIG.screen;
-    if (!Object.values(this.levels).some((v) => v > 0) && !this.word) return;
+    // the Screen borders setting scales every border (the big word and the heartbeat stay)
+    const fx = Settings.data.borderFx ?? 1;
+    this.lv = {};
+    for (const [id, v] of Object.entries(this.levels)) this.lv[id] = v * fx;
+    if (!Object.values(this.lv).some((v) => v > 0) && !this.word) return;
     if (this.borders?.key !== `${w}x${h}`) this.borders = this.build(w, h);
     const b = this.borders;
     const t = game.time;
     ctx.save();
-    const lv = this.levels;
+    const lv = this.lv;
     if (lv.poison > 0) {
       ctx.globalAlpha = lv.poison;
       ctx.drawImage(b.poison, 0, 0, w, h);
@@ -215,7 +220,7 @@ const StatusFx = {
       const x = ((i * 97 + lap * 211) % 1000) / 1000 * w;
       const y = h - 6 - life * 70;
       const r = 2 + (i % 3) + life * 2;
-      ctx.globalAlpha = this.levels.poison * (1 - life);
+      ctx.globalAlpha = this.lv.poison * (1 - life);
       ctx.fillStyle = '#2a5a14';
       ctx.fillRect(Math.round(x - r) - 1, Math.round(y - r) - 1, r * 2 + 2, r * 2 + 2);
       ctx.fillStyle = '#7ad84a';
@@ -223,7 +228,7 @@ const StatusFx = {
       ctx.fillStyle = '#d8ffb0';
       ctx.fillRect(Math.round(x - r) + 1, Math.round(y - r) + 1, 2, 2);
     }
-    ctx.globalAlpha = this.levels.poison;
+    ctx.globalAlpha = this.lv.poison;
   },
 
   /** Stars wheeling slowly round the edge of the screen. */

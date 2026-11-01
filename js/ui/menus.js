@@ -49,6 +49,7 @@ const Menus = {
     slider('set-svol', 'sfxVolume', (v) => `${Math.round(v * 100)}%`, () => { Sound.applyVolumes(); Sound.play('uiClick', 0.15); });
     slider('set-map', 'minimapSize', (v) => `${Math.round(v * 100)}%`);
     slider('set-shake', 'screenShake', Menus.offOrPercent);
+    slider('set-border', 'borderFx', Menus.offOrPercent);
     slider('set-ofx', 'othersFx', Menus.offOrPercent);
     slider('set-xsize', 'crosshairSize', (v) => `${Math.round(v * 100)}%`, () => this.drawCrosshairPreview());
     slider('set-xlock', 'crosshairLock', Menus.lockLabel);
@@ -211,6 +212,7 @@ const Menus = {
     set('set-svol', s.sfxVolume, `${Math.round(s.sfxVolume * 100)}%`);
     set('set-map', s.minimapSize, `${Math.round(s.minimapSize * 100)}%`);
     set('set-shake', s.screenShake, Menus.offOrPercent(s.screenShake));
+    set('set-border', s.borderFx, Menus.offOrPercent(s.borderFx));
     set('set-ofx', s.othersFx, Menus.offOrPercent(s.othersFx));
     set('set-xsize', s.crosshairSize, `${Math.round(s.crosshairSize * 100)}%`);
     set('set-xlock', s.crosshairLock, Menus.lockLabel(s.crosshairLock));

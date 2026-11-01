@@ -299,10 +299,12 @@ class Dungeon {
     if (dy !== 0) {
       const oy = e.y;
       e.y += dy;
-      if (this.boxHitsTiles(e.x, e.y, e.hw, e.hh, fly)) {
+      // going up, enemies keep their body clear of the wall above (wallTop px over the box)
+      const pad = dy < 0 ? e.wallTop || 0 : 0;
+      if (this.boxHitsTiles(e.x, e.y - pad / 2, e.hw, e.hh + pad / 2, fly)) {
         hitY = true;
         if (dy > 0) e.y = Math.floor((e.y + e.hh) / T) * T - e.hh - 0.01;
-        else e.y = (Math.floor((e.y - e.hh) / T) + 1) * T + e.hh + 0.01;
+        else e.y = (Math.floor((e.y - e.hh - pad) / T) + 1) * T + e.hh + pad + 0.01;
       }
       if (posted(e.x, e.y, e.x, oy)) { hitY = true; e.y = oy; }
     }

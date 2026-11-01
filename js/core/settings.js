@@ -76,6 +76,7 @@ const Settings = {
     displayV: 2,         // saves from before fullscreen was the default are moved onto it once (see load)
     graphics: 'quality', // graphics preset - see GRAPHICS_PRESETS
     screenShake: 1,      // camera shake strength (0 = off)
+    borderFx: 1,         // the low health and ailment screen borders' strength (0 = off; see StatusFx)
     othersFx: 1,         // multiplayer: how strongly teammates' effects show (0 = hidden); yours, enemies' and text stay full
     controls: 'auto',    // auto | touch | mouse - see CONTROL_MODES and Touch
     autoFire: true,      // touch: dragging the aim stick attacks; off, letting go of it fires one shot
