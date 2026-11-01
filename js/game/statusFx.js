@@ -2,7 +2,7 @@
 // HUD: a blood-red border pulsing with a heartbeat while under 25% health, and a border of its
 // own for each ailment - flames licking up the edges while burning, molten rock welling up and
 // oozing down while melting in lava, ice crystals creeping in from
-// the corners while frozen (a lighter frost while chilled), green ooze dripping while poisoned,
+// the corners while frozen (a lighter frost while chilled), green haze and bubbles rising off the bottom while poisoned,
 // stars wheeling round the edge while stunned - plus a giant STUNNED / FROZEN word while you
 // can't act. Looks and sound only; drawn over the world, under the HUD.
 
@@ -434,41 +434,21 @@ const StatusFx = {
       }
     });
 
+    // poisoned: only along the bottom - a toxic green haze rising off it, blotches, a dark rim (the bubbles are drawn live)
     const poison = canvas((g) => {
-      edge(g, '60, 190, 40', 0.75, 0.64);
-      // ooze along the top, sagging into drips
-      const top = (x) => 7 + Math.sin(x * 0.05) * 3 + Math.sin(x * 0.13 + 1) * 2;
-      g.fillStyle = 'rgba(42, 90, 20, 0.85)';
-      g.beginPath();
-      g.moveTo(0, 0);
-      for (let x = 0; x <= w; x += 6) g.lineTo(x, top(x) + 2);
-      g.lineTo(w, 0);
-      g.fill();
-      g.fillStyle = 'rgba(110, 200, 60, 0.85)';
-      g.beginPath();
-      g.moveTo(0, 0);
-      for (let x = 0; x <= w; x += 6) g.lineTo(x, top(x));
-      g.lineTo(w, 0);
-      g.fill();
-      for (let i = 0; i < 22; i++) {
+      const gr = g.createLinearGradient(0, h, 0, h * 0.6);
+      gr.addColorStop(0, 'rgba(60, 190, 40, 0.75)');
+      gr.addColorStop(0.35, 'rgba(60, 190, 40, 0.3)');
+      gr.addColorStop(1, 'rgba(60, 190, 40, 0)');
+      g.fillStyle = gr;
+      g.fillRect(0, h * 0.6, w, h * 0.4);
+      for (let i = 0; i < 40; i++) {
         const x = rng() * w;
-        const len = 10 + rng() * 46;
-        const r = 2.5 + rng() * 2.5;
-        g.fillStyle = 'rgba(42, 90, 20, 0.85)';
-        g.fillRect(x - r - 1, 0, r * 2 + 2, len);
-        blob(g, x, len, r + 2, 'rgba(42, 90, 20, 0.85)');
-        g.fillStyle = 'rgba(110, 200, 60, 0.9)';
-        g.fillRect(x - r, 0, r * 2, len);
-        blob(g, x, len, r + 1, 'rgba(110, 200, 60, 0.9)');
-        g.fillStyle = 'rgba(216, 255, 176, 0.9)';
-        g.fillRect(Math.round(x - r + 1), Math.round(len - r), 2, 2);
+        const d = rng() ** 2 * 36;
+        blob(g, x, h - d, (3 + rng() * 12) * (1 - d / 50), 'rgba(80, 170, 40, 0.35)');
       }
-      // green blotches round the other edges
-      for (let i = 0; i < 50; i++) {
-        const s = nearEdge(36);
-        blob(g, s.x, s.y, (3 + rng() * 12) * (1 - s.d / 50), 'rgba(80, 170, 40, 0.35)');
-      }
-      rim(g, 'rgba(30, 70, 14, 0.55)', 3);
+      g.fillStyle = 'rgba(30, 70, 14, 0.55)';
+      g.fillRect(0, h - 3, w, 3);
     });
 
     const stun = canvas((g) => {
