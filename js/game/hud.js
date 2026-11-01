@@ -1196,6 +1196,8 @@ const HUD = {
     Deathbringer: { band: ['#06040a', '#120a1c', '#22143a'], trim: '#dcb44c', glow: '150, 90, 255', h: 170 },
     RoyalPrince: { band: ['#2e1c10', '#5a3a1e', '#8a5a2e'], trim: '#ecd690', glow: '255, 210, 140', h: 100 },
     RoyalPrincess: { band: ['#141030', '#221a4a', '#3a2c70'], trim: '#c49aff', glow: '170, 130, 255', h: 100 },
+    // the worm rears up tall and its head juts forward: a big portrait (drawPortrait centres it)
+    Flameworm: { band: ['#1a0406', '#3a0a0e', '#5e1216'], trim: '#ff6a4a', glow: '255, 70, 40', h: 170 },
   },
 
   /** Letterbox bars slide in while the camera pans to the boss, and out as the fight begins. */

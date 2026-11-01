@@ -478,16 +478,23 @@ function buildFlamewormSprites() {
     // the lower fangs, up from the gum, the front ones longest
     for (const [x, len] of [[14, 5], [20, 6], [26, 6], [32, 7], [38, 7], [43, 8]]) fang(p, x, 11, 4, len, -1, 1);
   });
-  // its throat behind the jaws: raw flesh round a gullet of fire
-  const throat = make(44, 34, (p) => {
-    p.ellipse(22, 17, 20, 15, M[0]);
-    p.ellipse(23, 17, 17, 12, M[1]);
-    p.ellipse(25, 18, 12, 8, M[2]);
-    p.ellipse(20, 17, 7, 6, L[2]);
-    p.ellipse(19, 17, 4, 4, L[4]);
-    p.px(18, 16, L[6]);
-    p.ellipse(32, 24, 8, 3, M[3]);
-    p.line(28, 23, 36, 23, M[4]);
+  // the inside of its mouth, behind the jaws (only the gap between them shows): a wedge from the hinge (left,
+  // at 2, 20) opening forward, dark flesh ribbed across the palate, a tongue along the floor, the gullet at the back
+  const throat = make(50, 44, (p) => {
+    p.poly([[1, 17], [28, 6], [36, 9], [39, 22], [36, 34], [28, 38], [1, 23]], M[0]);
+    p.poly([[14, 14], [27, 9], [33, 12], [35, 22], [33, 31], [27, 34], [14, 26]], M[1]);
+    // ridges across the roof of the mouth, lighter toward the front
+    for (const [x, c] of [[12, M[1]], [18, M[2]], [24, M[2]], [30, M[3]]]) {
+      const top = 17 - ((x - 1) * 11) / 27;
+      p.line(x, top + 1, x + 2, top + 5, c);
+    }
+    // the tongue along the floor of the mouth
+    p.poly([[8, 22], [22, 26], [32, 28], [36, 31], [33, 34], [22, 31], [10, 25]], M[3]);
+    p.line(11, 23, 33, 29, M[4]);
+    // the gullet at the back, a dull glow of fire far down it
+    p.ellipse(6, 20, 4, 3, '#0a0204');
+    p.px(5, 20, L[1]);
+    p.px(7, 19, L[2]);
   });
   // its tail (when it leaps clear): the plates tapering to a barbed point, facing right like the rest
   const tail = make(34, 40, (p) => {

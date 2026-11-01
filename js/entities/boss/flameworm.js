@@ -28,7 +28,7 @@ const WORM_JOINTS = 18;   // segments along its spine, the head first
 const WORM_GAP = 14;      // px between them (x its scale)
 const WORM_PER = 10;      // curve samples between control points
 // the head's pivots (sprite px): where the neck meets the body, the jaw's hinge, and where each part hangs off it
-const WORM_HEAD = { hinge: [22, 7], skull: [24, 38], jaw: [3, 4], throat: [10, -8], scale: 1.2 };
+const WORM_HEAD = { hinge: [22, 7], skull: [24, 38], jaw: [3, 4], throat: [2, -14], scale: 1.2 };
 // states it's rooted in its hole for (its body rears up out of it)
 const WORM_ROOTED = ['intro', 'emerge', 'up', 'spray', 'arrow', 'diveWait', 'splitting', 'birth'];
 
@@ -196,7 +196,7 @@ class FlamewormBody {
   }
   get hx() { return this.hit ? this.hit.x : this.x; }
   get hy() { return this.hit ? this.hit.y : this.y; }
-  get radius() { return 34 * this.scale; }
+  get radius() { return 30 * this.scale; }   // (its head: the only part that can be hit)
   /** Up out of the ground far enough to be hit. */
   get targetable() {
     return !this.dead && this.exposed && this.state !== 'splitting' && this.state !== 'birth' && this.boss.intro <= 0 && this.boss.dying <= 0;
@@ -655,15 +655,16 @@ class FlamewormBody {
       J.push(j);
     }
     this.joints = J;
-    let top = null;
-    for (const j of J) if (!top || j.z > top.z) top = j;
+    // only its head can be hit: the middle of the skull, a little ahead of the neck (out of the ground while it dives)
+    const h = J[0];
+    const fx = h.x + Math.cos(h.a) * 26 * s;
+    const fy = h.y + Math.sin(h.a) * 26 * s;
     if (this.path) {
-      this.exposed = top.z > 30 * s;
-      this.hit = { x: top.x, y: top.y - top.z, gx: top.x, gy: top.y };
+      this.exposed = h.z > 8 * s;
+      this.hit = { x: fx, y: fy - h.z, gx: h.x, gy: h.y };
     } else {
       this.exposed = this.rise > 0.4;
-      const j = J[4];
-      this.hit = { x: j.x, y: j.y - j.z, gx: this.x, gy: this.y };
+      this.hit = { x: fx, y: fy - h.z, gx: this.x, gy: this.y };
     }
   }
 
@@ -848,7 +849,7 @@ class FlamewormBody {
         // its maw glowing with the fire in its throat
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        PFX.glow(ctx, H.hinge[0] + 16, H.hinge[1] + 4, 10 + this.jaw * 22, FORT_LAVA, 0.25 + this.jaw * 0.5);
+        PFX.glow(ctx, H.hinge[0] + 6, H.hinge[1] + 4, 6 + this.jaw * 12, FORT_LAVA, 0.15 + this.jaw * 0.3);
         ctx.restore();
       };
       parts(false);
@@ -1151,6 +1152,11 @@ class Flameworm {
 
   drawOverlay() {}
 
-  /** Its title card portrait: one worm, reared up, maw open. */
-  drawPortrait(ctx) { this.portrait.drawBody(ctx, this.time); }
+  /** Its title card portrait: one worm, reared up, maw open (shifted back so the curve and the head sit in the middle). */
+  drawPortrait(ctx) {
+    ctx.save();
+    ctx.translate(-45, 0);
+    this.portrait.drawBody(ctx, this.time);
+    ctx.restore();
+  }
 }
