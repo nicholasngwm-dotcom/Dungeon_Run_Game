@@ -178,7 +178,7 @@ const Specials = {
 
   // ---------- the hero statue ----------
 
-  /** Buys the statue's blessing and binds it to `slot` (right click, E, F or the ultimate), replacing the hero's old one. */
+  /** Buys the statue's blessing and binds it to `slot` (E, F or the ultimate), replacing the hero's old one. */
   bless(run, hero, slot) {
     const w = run.world;
     const pr = this.propHere(run, hero, 'heroStatue');

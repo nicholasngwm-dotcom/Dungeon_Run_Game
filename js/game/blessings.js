@@ -1,13 +1,13 @@
 // The hero statues' blessings. A statue in a special room carries one hero's blessing; any hero
-// can buy it (CONFIG.run.heroStatue.price coins, x the stage's prices) and bind it to their right
-// click, E, F or ultimate - never the dodge. Each hero carries one blessing at a time: buying
+// can buy it (CONFIG.run.heroStatue.price coins, x the stage's prices) and bind it to their
+// E, F or ultimate - never an attack or the dodge. Each hero carries one blessing at a time: buying
 // another replaces it. Whenever the blessed ability is used and the blessing is off cooldown, the
 // blessing goes off too, then waits out its own cooldown.
 //
-// hero.blessing = { id (the statue's class id), slot ('secondary' | 'e' | 'f' | 'q'), cd (s left) }
+// hero.blessing = { id (the statue's class id), slot ('e' | 'f' | 'q'), cd (s left) }
 // Each blessing's numbers live in CONFIG.run.heroStatue.blessings[id].
 
-const BLESS_SLOTS = ['secondary', 'e', 'f', 'q'];
+const BLESS_SLOTS = ['e', 'f', 'q'];
 
 /** The knight statue's little knights: a hired knight in miniature that fights for a while, then fades. */
 class BlessedKnight extends HiredKnight {
@@ -306,8 +306,8 @@ const Blessings = {
 
   /** The key (or button) a slot is on, for the HUD and the statue's choices. */
   slotKey(hero, slot) {
-    if (Touch.enabled) return { secondary: 'SECONDARY', e: 'E', f: 'F', q: 'ULT' }[slot];
-    return { secondary: 'RMB', e: Settings.label('e'), f: Settings.label('f'), q: Settings.label('ult') }[slot];
+    if (Touch.enabled) return { e: 'E', f: 'F', q: 'ULT' }[slot];
+    return { e: Settings.label('e'), f: Settings.label('f'), q: Settings.label('ult') }[slot];
   },
 
   /** "RMB - SHIELD" style label for a slot of this hero's. */

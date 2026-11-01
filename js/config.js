@@ -1027,7 +1027,7 @@ const CONFIG = {
     // and gets `stageHeal` back at every new stage. No ultimates while riding; in a locked room you can get
     // off but not back on.
     mount: { price: 45, hp: 150, speed: 1.6, stageHeal: 90 },
-    // hero statue: one hero's blessing (js/game/blessings.js) for `price`, bound to the right click, E, F or the
+    // hero statue: one hero's blessing (js/game/blessings.js) for `price`, bound to E, F or the
     // ultimate; it goes off with that ability, then waits out its own `cooldown` (s). One blessing per hero.
     heroStatue: {
       price: 15,
