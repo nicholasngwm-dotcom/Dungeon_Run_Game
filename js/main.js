@@ -883,6 +883,7 @@ const App = {
     const g = this.state === 'playing' && this.game;
     this.practicePanel.classList.toggle('hidden', !(g && g.cheats));
     this.practicePanel.classList.toggle('arena', !!(g && g.cheats && !g.practice));
+    this.practicePanel.classList.toggle('testrun', !!(g && g.cheats && g.run?.testBoss));
     // in a dungeon (boss practice, the test dungeon) it sits under the minimap instead of over it
     const top = g && g.cheats && g.run ? `${g.run.minimapBottom + 10}px` : '';
     if (this.practicePanel.style.top !== top) this.practicePanel.style.top = top;

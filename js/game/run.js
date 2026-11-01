@@ -547,6 +547,38 @@ class DungeonRun {
     w.effects.burst(r.cx, y - 10, { count: 24, colors: ['#ffd34a', '#fff2a0', '#ffffff'], speed: [40, 140], life: [0.3, 0.7], up: 40 });
   }
 
+  // ---------- the test dungeon's practice buttons ----------
+
+  /** Every hero statue on the floor moves on to the next hero's blessing. Returns what to tell the player. */
+  cycleStatues() {
+    const ids = Object.keys(BLESSINGS);
+    const statues = this.props.filter((pr) => pr.kind === 'heroStatue');
+    if (!statues.length) return 'NO HERO STATUE ON THIS FLOOR';
+    for (const s of statues) {
+      s.hero = ids[(ids.indexOf(s.hero) + 1) % ids.length];
+      s.label = `${BLESSINGS[s.hero].name.toUpperCase()} STATUE`;
+      this.world.effects.burst(s.x, s.y - 30, { count: 20, colors: [BLESSINGS[s.hero].color, '#fff6c8', '#ffffff'], speed: [30, 120], life: [0.3, 0.6], up: 40 });
+    }
+    Sound.play('magic');
+    return `STATUE: ${BLESSINGS[statues[0].hero].name.toUpperCase()}`;
+  }
+
+  /**
+   * Every cleared fight room (combat, defend, survival) is set up again: its reward chest goes and
+   * walking back in starts a new fight. Returns what to tell the player.
+   */
+  restartRooms() {
+    const rooms = this.floor.rooms.filter((r) => ['combat', 'defend', 'survival'].includes(r.type) && r.state === 'cleared' && r !== this.active);
+    if (!rooms.length) return 'NO CLEARED FIGHT ROOMS TO RESTART';
+    for (const r of rooms) {
+      r.state = 'idle';
+      r.wave = 0;
+    }
+    this.props = this.props.filter((pr) => !(pr.kind === 'rewardChest' && rooms.includes(pr.room)));
+    Sound.play('waveStart');
+    return `${rooms.length} ROOM${rooms.length > 1 ? 'S' : ''} RESTARTED - WALK IN TO FIGHT`;
+  }
+
   // ---------- coins ----------
 
   /** Coins go into one hero's purse (each hero keeps their own for the whole run). */

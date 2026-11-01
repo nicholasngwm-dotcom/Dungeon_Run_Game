@@ -931,6 +931,12 @@ class Game {
       case 'toggle': if (arg in this.cheats) this.cheats[arg] = !this.cheats[arg]; return;
       case 'ult': hero.ult = hero.ultMax; return;
     }
+    // the test dungeon: swap the hero statues' blessings round, and set its fights going again
+    if (this.run?.testBoss) {
+      const say = (text) => { if (hero === this.localPlayer) this.events.onToast?.(text); };
+      if (action === 'statue') return say(this.run.cycleStatues());
+      if (action === 'rooms') return say(this.run.restartRooms());
+    }
     if (!pr) return;
     switch (action) {
       case 'spawn': if (CONFIG.enemies[arg]) this.practiceSpawn(arg); return;

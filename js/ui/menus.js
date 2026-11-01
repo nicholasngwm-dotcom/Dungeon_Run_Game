@@ -414,7 +414,7 @@ const Menus = {
         app.command({ type: 'hero', classId: arg });
         app.classId = arg;
         break;
-      case 'spawn': case 'arena': case 'clear': case 'toggle': case 'ult': case 'resetDps':
+      case 'spawn': case 'arena': case 'clear': case 'toggle': case 'ult': case 'resetDps': case 'statue': case 'rooms':
         app.command({ type: 'practice', action: name, arg });
         break;
       case 'range': if (!hostOnly()) app.startPractice(); break;

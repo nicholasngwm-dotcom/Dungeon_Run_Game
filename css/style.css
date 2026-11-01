@@ -282,6 +282,7 @@ h2 {
 .pp-head { display: flex; justify-content: space-between; align-items: center; color: var(--accent); font-size: 12px; }
 .practice-panel.collapsed .pp-body { display: none; }
 .practice-panel.arena .pp-range, .practice-panel:not(.arena) .pp-arena { display: none; }
+.practice-panel:not(.testrun) .pp-test { display: none; }   /* the test dungeon's own buttons */
 .pp-label { color: var(--muted); margin: 7px 0 4px; }
 .pp-note { font-size: 0.75em; opacity: 0.75; }
 .pp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
