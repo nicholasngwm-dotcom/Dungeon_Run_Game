@@ -848,6 +848,8 @@ const App = {
     HUD.handleForgeMouse(this.state === 'playing' && this.game ? this.game.localPlayer : null);
     // and in the lobby, the teleport button and its map of the keep
     HUD.handleTeleportMouse(this.state === 'playing' && this.game ? this.game : null);
+    // and in the test dungeon, a click on a room on the minimap teleports there
+    HUD.handleMinimapMouse(this.state === 'playing' && this.game ? this.game : null);
 
     if (this.mp) {
       // multiplayer: the session steps the shared world whatever menu is open here;
@@ -885,9 +887,24 @@ const App = {
     this.practicePanel.classList.toggle('hidden', !(g && g.cheats));
     this.practicePanel.classList.toggle('arena', !!(g && g.cheats && !g.practice));
     this.practicePanel.classList.toggle('testrun', !!(g && g.cheats && g.run?.testBoss));
-    // in a dungeon (boss practice, the test dungeon) it sits under the minimap instead of over it
-    const top = g && g.cheats && g.run ? `${g.run.minimapBottom + 10}px` : '';
+    // where it sits, clear of the rest of the HUD: in a dungeon (boss practice, the test dungeon) under the
+    // minimap instead of over it, stopping above the ability bar; with touch controls the right side is all
+    // buttons, so on the left under the hero's panel, stopping above the joystick
+    const touch = !!(g && g.cheats && Touch.enabled);
+    let top = '';
+    let maxH = '';
+    if (touch) {
+      const st = Touch.layout().stick;
+      top = '84px';
+      maxH = `${Math.max(90, st.y - st.r - 30 - 84)}px`;
+    } else if (g && g.cheats && g.run) {
+      const t = g.run.minimapBottom + 10;
+      top = `${t}px`;
+      maxH = `${Math.max(120, CONFIG.screen.height - t - 74)}px`;
+    }
+    this.practicePanel.classList.toggle('touch-left', touch);
     if (this.practicePanel.style.top !== top) this.practicePanel.style.top = top;
+    if (this.practicePanel.style.maxHeight !== maxH) this.practicePanel.style.maxHeight = maxH;
     if (g && g.cheats) Menus.refreshPractice(g.cheats);   // (in multiplayer a teammate may have toggled one)
 
     Input.endFrame();

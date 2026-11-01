@@ -214,6 +214,7 @@ const Touch = {
       return;
     }
     if (HUD.teleportOpen || (game.lobby && inRect(HUD.teleportButtonRect(game)))) { this.click = pos; return; }
+    if (game.run?.testBoss && game.run.onMinimap(pos.x, pos.y)) { this.click = pos; return; }   // the test dungeon: tap a room to teleport
     const b = L.buttons.find((o) => Math.hypot(pos.x - o.x, pos.y - o.y) <= o.r * 1.2);
     const slot = b ? -1 : HUD.bagSlotAt(pos.x, pos.y);
     const taken = (role) => [...this.pointers.values()].some((o) => o.role === role);

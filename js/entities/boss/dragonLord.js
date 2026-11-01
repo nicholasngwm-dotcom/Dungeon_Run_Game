@@ -6,11 +6,11 @@
 //    flying:  he circles out over the moat, out of reach (he can't be hurt), hurling giant lava meteors at the
 //             heroes; each crashes where its circle grew and leaves the ground burning. In phase 2 he calls his
 //             baby dragons too, and they fly in over the lava.
-//    perched: he lands on his tower and can be hit anywhere on it. He roars twice, and each time fireballs
-//             rain down all over the platform (in phase 2, round every hero). In phase 2 he breathes fire
-//             between the rains: a fan of ground lights up, then his breath sweeps across it, searing in
-//             rapid ticks whoever it plays over and setting them alight.
-//  Below phase2At of his health: faster meteors, longer perches with three roars, the brood, the breath.
+//    perched: he lands on his tower and can be hit anywhere on it. Twice he rears his head and spits fireballs
+//             up into the sky that rain down all over the platform (in phase 2, thickly round every hero).
+//             In phase 2 he breathes fire between the rains: a fan of ground lights up, then his breath
+//             sweeps across it, searing in rapid ticks whoever it plays over and setting them alight.
+//  Below phase2At of his health: faster meteors, longer perches with three far heavier rains, the brood, the breath.
 //  (x, y) is the ground under him; z how high he is above it (perched: on the tower's top).
 // =============================================================
 
@@ -41,7 +41,7 @@ class BlazingDragonLord {
     this.spit = 0;           // s left of his jaws open after hurling a meteor
     this.theta = 0;          // flying: where he is round the platform, and which way he circles
     this.spin = 1;
-    this.roar = null;        // perched: { t, rained } while he roars
+    this.roar = null;        // perched: { t, rained, len } while he spits a rain of fire up (rained once it's begun), or roars in fury
     this.breath = null;      // perched (phase 2): { t, aim, from, to, tick } while he breathes fire
     this.babiesCalled = false;
   }
@@ -91,7 +91,7 @@ class BlazingDragonLord {
     world.banner('THE DRAGON LORD IS ENRAGED!', 'His brood answers - and keep clear of his breath');
     world.shake(8, 0.5);
     Sound.play('dragonRoar');
-    if (!this.roar && !this.breath) this.roar = { t: 0, rained: true };   // a roar of fury (no rain)
+    if (!this.roar && !this.breath) this.roar = { t: 0, rained: true, len: this.cfg.perch.roarTime };   // a roar of fury (no rain)
   }
 
   // ---------------------------------------------------------
@@ -270,13 +270,13 @@ class BlazingDragonLord {
       const P = this.cfg.perch;
       const ph = this.phase - 1;
       this.perchFor = rand(...P.time[ph]);
-      this.roars = P.roars[ph].slice();
+      this.rains = P.rains[ph].slice();
       this.breaths = P.breaths[ph].slice();
       this.setState('perch');
     }
   }
 
-  /** On his tower: he can be hurt; he roars down rains of fire, and in phase 2 breathes fire between them. */
+  /** On his tower: he can be hurt; he spits rains of fire into the sky, and in phase 2 breathes fire between them. */
   updatePerch(dt, world) {
     const P = this.cfg.perch;
     this.flap += dt * 2;
@@ -288,14 +288,14 @@ class BlazingDragonLord {
         this.roar.rained = true;
         this.rainFire(world);
       }
-      if (this.roar.t >= P.roarTime) this.roar = null;
+      if (this.roar.t >= this.roar.len) this.roar = null;
     } else if (this.breath) {
       this.updateBreath(dt, world);
-    } else if (this.roars.length && this.t >= this.roars[0]) {
-      this.roars.shift();
-      this.roar = { t: 0, rained: false };
-      world.shake(7, 0.6);
-      Sound.play('dragonRoar');
+    } else if (this.rains.length && this.t >= this.rains[0]) {
+      // he rears his head back and spits a rain of fire up into the sky
+      this.rains.shift();
+      this.roar = { t: 0, rained: false, len: P.volleyTime };
+      Sound.play('fireballCast');
     } else if (this.breaths.length && this.t >= this.breaths[0]) {
       this.breaths.shift();
       this.startBreath(world);
@@ -402,27 +402,43 @@ class BlazingDragonLord {
       drawShadow(ctx, at.x, at.y, 10 + t * M.radius * 0.6, 4 + t * M.radius * 0.3, 0.2 + t * 0.3);
     }, true);
     const seed = vrand(0, 10);
+    // spat out of his jaws: it shoots forward out of his mouth the way he faces, then curves up and over onto
+    // its circle (a curve from his mouth, through a point out in front of it, to the ground)
+    const mid = { x: from.x + this.facing * 150, y: Math.min(from.y, at.y) - 120 };
+    const curve = (t) => ({
+      x: (1 - t) ** 2 * from.x + 2 * (1 - t) * t * mid.x + t * t * at.x,
+      y: (1 - t) ** 2 * from.y + 2 * (1 - t) * t * mid.y + t * t * at.y,
+    });
     world.effects.add(flight, (ctx, t) => {
-      // lobbed high out of his jaws, trailing fire, tumbling
-      const x = lerp(from.x, at.x, t);
-      const y = lerp(from.y, at.y, t) - Math.sin(t * Math.PI) * 110;
-      const vx = at.x - from.x;
-      const vy = at.y - from.y - Math.cos(t * Math.PI) * 110 * Math.PI;
-      const back = Math.atan2(-vy, -vx);
+      const { x, y } = curve(t);
+      const q = curve(Math.max(0, t - 0.04));
+      const back = Math.atan2(q.y - y, q.x - x);
+      const grow = 0.6 + Math.min(1, t * 5) * 1.3;   // it swells to full size just out of his jaws
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      PFX.glow(ctx, x, y, 44, FORT_LAVA, 0.75);
+      PFX.glow(ctx, x, y, 22 + grow * 12, FORT_LAVA, 0.75);
       ctx.restore();
-      for (let i = 1; i < 6; i++) {
-        PFX.flame(ctx, x + Math.cos(back) * i * 11, y + Math.sin(back) * i * 11 + 10, 26 - i * 3.5, 30 - i * 3, t * 22 + i + seed, FORT_FIRE);
+      // a trail of fire back along its path, all the way to his jaws at first
+      for (let i = 1; i < 7; i++) {
+        PFX.flame(ctx, x + Math.cos(back) * i * 11, y + Math.sin(back) * i * 11 + 10, (26 - i * 3.2) * grow / 1.9, (30 - i * 3) * grow / 1.9, t * 22 + i + seed, FORT_FIRE);
       }
       ctx.save();
       ctx.translate(Math.round(x), Math.round(y));
       ctx.rotate(t * 9 + seed);
-      ctx.scale(1.9, 1.9);
+      ctx.scale(grow, grow);
       ctx.drawImage(img, -img.width / 2, -img.height / 2);
       ctx.restore();
     });
+    // the burst of fire out of his mouth as he spits it
+    world.effects.add(0.3, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, from.x, from.y, 50 * (1 - t * 0.5), FORT_LAVA, 1 - t);
+      PFX.glow(ctx, from.x, from.y, 18, '255, 240, 230', 1 - t);
+      ctx.restore();
+    });
+    world.effects.burst(from.x, from.y, { count: 22, colors: ['#ffffff', '#ffd2c4', '#ff6a4a', '#e8281a'], speed: [80, 260], life: [0.2, 0.5], gravity: 200 });
+    world.effects.smoke(from.x + this.facing * 10, from.y, { count: 4, radius: 16, life: 0.7, rise: 30, colors: ['#2a1612', '#4a2a22', '#6a3a2a'] });
     const stage = world.run ? world.run.stage : 0;
     world.after(flight, () => {
       if ((world.run && world.run.stage !== stage) || world.boss !== this) return;
@@ -442,7 +458,7 @@ class BlazingDragonLord {
     Sound.play('bossFireball');
   }
 
-  /** His roar calls fire down out of the sky: all over the platform, or (phase 2) round every hero. */
+  /** A rain of fire: fireballs spat up into the sky, one after another, falling all over the platform, or (phase 2) thickly round every hero. */
   rainFire(world) {
     const R = this.cfg.rain;
     const pl = this.platform(world);
@@ -476,12 +492,47 @@ class BlazingDragonLord {
     });
   }
 
-  /** One fireball of the rain: its circle grows as it falls, it bursts where it lands, setting heroes alight. */
+  /**
+   * One fireball of the rain: spat up out of his jaws and away into the sky (rain.rise s), then down onto its
+   * spot (rain.fall s), its circle growing from the moment it leaves him; it bursts there, setting heroes alight.
+   */
   dropFireball(world, x, y) {
     const R = this.cfg.rain;
     const img = Sprites.projectiles.fireballBig;
     const side = vrand(-1, 1) * 60;
-    world.effects.add(R.fall, (ctx, t) => Telegraph.circle(ctx, x, y, R.radius, t, '255, 50, 30'), true);
+    const from = this.mouth();
+    const up = { x: from.x + vrand(-50, 50), y: from.y - 420 };
+    world.effects.add(R.rise + R.fall, (ctx, t) => Telegraph.circle(ctx, x, y, R.radius, t, '255, 50, 30'), true);
+    world.effects.add(R.rise, (ctx, t) => {
+      // shooting up out of his jaws, trailing fire back down to them
+      const k = 1 - (1 - t) ** 2;
+      const fx = lerp(from.x, up.x, k);
+      const fy = lerp(from.y, up.y, k);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, fx, fy, 22, FORT_LAVA, 0.8);
+      ctx.restore();
+      for (let i = 1; i < 4; i++) PFX.flame(ctx, fx, fy + i * 13, 12 - i * 2, 18 - i * 2, t * 20 + i, FORT_FIRE);
+      drawRotated(ctx, img, fx, fy, img.width / 2, img.height / 2, t * 8);
+    });
+    world.effects.add(0.18, (ctx, t) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, from.x, from.y, 30 * (1 - t * 0.4), FORT_LAVA, 1 - t);
+      ctx.restore();
+    });
+    world.effects.burst(from.x, from.y, { count: 6, colors: ['#ffd2c4', '#ff6a4a', '#e8281a'], speed: [60, 180], life: [0.15, 0.35], up: 120 });
+    Sound.play('bossFireball', 0.08);
+    const stage = world.run ? world.run.stage : 0;
+    world.after(R.rise, () => {
+      if (world.run && world.run.stage !== stage) return;
+      this.fallFireball(world, x, y, img, side);
+    });
+  }
+
+  /** A rain fireball dropping out of the sky onto (x, y), and bursting there. */
+  fallFireball(world, x, y, img, side) {
+    const R = this.cfg.rain;
     world.effects.add(R.fall, (ctx, t) => {
       const k = t * t;
       const fx = x + (1 - k) * side;
@@ -606,7 +657,7 @@ class BlazingDragonLord {
     const S = Sprites.dragonLord;
     const flying = this.state === 'fly' || this.state === 'takeoff' || (this.state === 'land' && this.t < this.cfg.fly.land - 0.35) || (this.state === 'intro' && this.intro > DRAGON_INTRO.total - DRAGON_INTRO.land);
     if (flying && this.dying <= 0) {
-      const list = this.spit > 0 ? S.flyOpen : S.fly;
+      const list = this.spit > 0 || (this.state === 'fly' && this.meteorIn < 0.45) ? S.flyOpen : S.fly;   // (jaws open round the meteor forming in them)
       return list[Math.floor(this.flap) % list.length];
     }
     if (this.dying > 0) return S.roar[Math.floor(this.time * 9) % 2];
@@ -769,11 +820,23 @@ class BlazingDragonLord {
       if (this.roar) PFX.flame(ctx, m.x, m.y + 4, 14, 24, this.time * 14, FORT_FIRE);
     }
     if (this.state === 'fly' && this.meteorIn < 0.45) {
-      // a meteor of molten rock swelling in his jaws
+      // a meteor of molten rock swelling in his jaws, fire gathering in round it
       const k = 1 - this.meteorIn / 0.45;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       PFX.glow(ctx, m.x, m.y, 14 + k * 30, FORT_LAVA, 0.4 + k * 0.5);
+      ctx.restore();
+      for (let i = 0; i < 6; i++) {
+        const u = (this.time * 2.2 + i / 6) % 1;
+        const a = i * 1.05 + this.time * 5;
+        PFX.disc(ctx, m.x + Math.cos(a) * (1 - u) * 46, m.y + Math.sin(a) * (1 - u) * 32, 2 + u * 2, 2 + u * 2, u > 0.6 ? '#ffd2c4' : '#e8281a');
+      }
+      const img = Sprites.projectiles.meteor;
+      ctx.save();
+      ctx.translate(Math.round(m.x + this.facing * 4), Math.round(m.y));
+      ctx.rotate(this.time * 4);
+      ctx.scale(0.3 + k * 0.4, 0.3 + k * 0.4);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
       ctx.restore();
     }
   }

@@ -182,6 +182,17 @@ const HUD = {
     this.teleportOpen = false;
   },
 
+  /** The test dungeon: a click (or tap) on a room on the minimap teleports this screen's hero there. */
+  handleMinimapMouse(game) {
+    const run = game?.run;
+    if (!run || !run.testBoss || game.localPlayer.dead) return;
+    const m = Input._mouse;
+    if (!m.leftPressed || !run.onMinimap(m.x, m.y)) return;
+    m.left = m.leftPressed = false;   // (the hero doesn't swing at it)
+    const r = run.minimapRoomAt(m.x, m.y);
+    if (r) App.command({ type: 'practice', action: 'tp', arg: r.id });
+  },
+
   /** The TELEPORT button and, while open, the map of the keep: rooms named, stations and heroes marked. */
   drawTeleport(ctx, game) {
     const m = Input._mouse;

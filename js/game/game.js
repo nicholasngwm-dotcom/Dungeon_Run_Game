@@ -937,6 +937,7 @@ class Game {
       const say = (text) => { if (hero === this.localPlayer) this.events.onToast?.(text); };
       if (action === 'statue') return say(this.run.cycleStatues());
       if (action === 'rooms') return say(this.run.restartRooms());
+      if (action === 'tp') return this.run.teleportTo(hero, this.run.floor.rooms.find((r) => r.id === Number(arg)));
     }
     if (!pr) return;
     switch (action) {

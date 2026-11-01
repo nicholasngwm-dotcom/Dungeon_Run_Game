@@ -1293,13 +1293,14 @@ const CONFIG = {
   //      at the heroes (meteor.every s apart): each crashes where its circle was and leaves a pool of lava as
   //      big as its blast (for poolTime s). In phase 2 he also calls his baby dragons (babies: up to `count`
   //      alive) - they fly in over the lava.
-  //    Perched (perch.time s): he lands on his tower and can be hit anywhere on it. He roars at the times in
-  //      perch.roars: fireballs rain down all over the platform (rain.count), or in phase 2 round every hero
+  //    Perched (perch.time s): he lands on his tower and can be hit anywhere on it. At the times in perch.rains
+  //      he rears his head and spits fireballs up into the sky, one after another: they rain down all over
+  //      the platform (rain.count), or in phase 2 thickly round every hero
   //      (rain.near each, within rain.spread px). Between the rains (perch.breaths, phase 2) he breathes fire:
   //      a fan (breath.fan either side of his aim, breath.range long) lights up for breath.windup s, then
   //      his breath sweeps across it from one edge to the other over breath.sweep s; whoever it plays over
   //      is seared in rapid ticks (breath.damage every breath.every s) and set alight.
-  //  Phase 2 starts below phase2At of his health: faster meteors, longer perches (three roars, two breaths).
+  //  Phase 2 starts below phase2At of his health: faster meteors, longer perches (three rains, two breaths).
   // ---------------------------------------------------------
   dragonLord: {
     hp: 7400,
@@ -1311,12 +1312,13 @@ const CONFIG = {
     meteor: { every: [1.7, 1.05], flight: 1.25, radius: 80, damage: 44, poolTime: 4, burnDps: 9, burnTime: 3 },
     perch: {
       time: [[9, 9], [18, 20]],                  // [min, max] seconds [phase 1, phase 2]
-      roars: [[0.8, 4.8], [1.0, 7.6, 14.2]],     // when he roars (s into the perch): each brings down a rain of fire
-      breaths: [[], [4.6, 11.2]],                // when he breathes fire (between the rains)
-      roarTime: 1.7,                             // seconds a roar lasts (the rain begins `rainAt` into it)
-      rainAt: 0.5,
+      rains: [[0.6, 4.9], [0.8, 7.4, 14.0]],     // when he spits a rain of fire into the sky (s into the perch)
+      breaths: [[], [4.7, 11.3]],                // when he breathes fire (between the rains)
+      volleyTime: 3.7,                           // seconds he spends spitting a rain up (the first fireball leaves `rainAt` in)
+      roarTime: 1.7,                             // his roar of fury as he enrages
+      rainAt: 0.3,
     },
-    rain: { count: 24, over: 3.0, near: 7, spread: 130, wild: 5, fall: 1.0, radius: 46, damage: 30, burnDps: 8, burnTime: 3 },
+    rain: { count: 24, over: 3.0, near: 16, spread: 150, wild: 14, rise: 0.35, fall: 1.0, radius: 46, damage: 30, burnDps: 8, burnTime: 3 },
     breath: { range: 320, fan: 1.1, beam: 0.24, windup: 1.0, sweep: 1.8, every: 0.1, damage: 6, burnDps: 10, burnTime: 3 },
     babies: { count: 3, at: 1.6, flyIn: 1.1 },   // phase 2: seconds into each flight he calls them, and how long they take to fly in
   },

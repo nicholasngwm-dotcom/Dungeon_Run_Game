@@ -315,6 +315,8 @@ class DungeonRun {
     const s = f.startRoom;
     s.state = 'cleared';
     this.visit(s);
+    // the test dungeon's whole floor is on the minimap from the start (click a room on it to teleport there)
+    if (this.testBoss) for (const r of f.rooms) if (r.type !== 'secret') r.seen = true;
   }
 
   /** Called once the heroes exist: groups them at the entrance and announces the stage. */
@@ -3107,12 +3109,72 @@ class DungeonRun {
     const goal = this.objectiveText();
     if (goal) HUD.text(ctx, goal, CONFIG.screen.width - 14, 30, { size: 7, align: 'right' });
     this.drawMinimap(ctx, CONFIG.screen.width - 14, 46);
+    if (this.testBoss) {
+      const L = this.minimapLayout();
+      HUD.text(ctx, Touch.enabled ? 'TAP A ROOM TO TELEPORT' : 'CLICK A ROOM TO TELEPORT', L.left + L.w, L.top + L.h + 6, { size: 5, align: 'right', color: '#a8d8ff' });
+    }
     this.drawTimer(ctx);
+  }
+
+  /** The minimap's layout on screen (see drawMinimap): its top-left, each grid cell's size and each room box's size. */
+  minimapLayout(right = CONFIG.screen.width - 14, top = 46) {
+    const g = CONFIG.run.grid;
+    const s = Settings.data.minimapSize || 1.4;
+    const cw = Math.round(20 * s);
+    const ch = Math.round(15 * s);
+    return { left: right - g.cols * cw, top, cw, ch, bw: Math.round(16 * s), bh: Math.round(12 * s), w: g.cols * cw, h: g.rows * ch };
+  }
+
+  /** True if screen point (x, y) is on the minimap (its frame included). */
+  onMinimap(x, y) {
+    const L = this.minimapLayout();
+    return x >= L.left - 4 && x < L.left + L.w + 4 && y >= L.top - 4 && y < L.top + L.h + 4;
+  }
+
+  /** The room shown on the minimap at screen point (x, y), or null (unseen rooms and the secret room aren't on it). */
+  minimapRoomAt(x, y) {
+    const L = this.minimapLayout();
+    return this.floor.rooms.find((r) => r.seen && r.type !== 'secret'
+      && Math.abs(x - (L.left + r.gx * L.cw + L.cw / 2)) <= L.cw / 2 && Math.abs(y - (L.top + r.gy * L.ch + L.ch / 2)) <= L.ch / 2) || null;
+  }
+
+  /**
+   * The test dungeon: a hero clicked a room on the minimap and is whisked there. A fight still going is
+   * called off (its enemies vanish, its doors open, and it can be walked into again from the start).
+   */
+  teleportTo(hero, r) {
+    const w = this.world;
+    const f = this.floor;
+    if (!r || r.type === 'secret' || hero.dead) return;
+    const a = this.active;
+    if (a && a !== r) {
+      this.banishEnemies();
+      if (a.type === 'boss') { w.boss = null; w.cutscene = null; a.bossDown = false; }
+      this.finish(a);
+      a.state = 'idle';
+      a.wave = 0;
+      a.timeLeft = 0;
+      Music.play('battle');
+    } else if (a === r) return;
+    const poof = (x, y) => w.effects.burst(x, y - 14, { count: 18, colors: ['#ffffff', '#a8d8ff', '#ffe680'], speed: [30, 110], life: [0.3, 0.6], up: 30 });
+    poof(hero.x, hero.y);
+    // just inside its middle (below it: the Dragon Lord's tower, the King's throne... stand in the middle)
+    const pt = f.freePoint(r.cx, r.cy + (r.type === 'boss' ? 4 : 1) * f.T, hero.hw, hero.hh);
+    hero.x = pt.x;
+    hero.y = pt.y;
+    hero.kbx = 0;
+    hero.kby = 0;
+    poof(hero.x, hero.y);
+    this.visit(r);
+    if (hero === w.localPlayer) {
+      w.camera.follow(hero.x, hero.y - 16, 0, w.dungeon.width, w.dungeon.height, true);
+      Sound.play('phantomAppear', 0.1);
+    }
   }
 
   /** Screen y just under the minimap's frame (the practice cheat panel sits below it in boss practice and the test dungeon). */
   get minimapBottom() {
-    return 46 + CONFIG.run.grid.rows * Math.round(15 * (Settings.data.minimapSize || 1.4)) + 4;
+    return 46 + CONFIG.run.grid.rows * Math.round(15 * (Settings.data.minimapSize || 1.4)) + 4 + (this.testBoss ? 10 : 0);   // (and its teleport hint)
   }
 
   /**
@@ -3238,6 +3300,12 @@ class DungeonRun {
         ctx.fillRect(tx + 2, ty + 3, 1, 1);
         ctx.fillRect(tx + 3, ty + 2, 1, 1);
         ctx.fillRect(tx + 4, ty + 1, 1, 1);
+      }
+      // the test dungeon: the room under the pointer, ready to teleport to
+      if (this.testBoss && !Touch.enabled && this.minimapRoomAt(Input._mouse.x, Input._mouse.y) === r) {
+        ctx.strokeStyle = '#ffe680';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx - 1.5, by - 1.5, bw + 3, bh + 3);
       }
       if (r === here) {
         ctx.strokeStyle = '#ffffff';

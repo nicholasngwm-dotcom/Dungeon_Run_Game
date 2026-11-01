@@ -279,6 +279,8 @@ h2 {
   max-height: 396px;     /* stops above the ability bar (bottom right); scrolls if longer */
   overflow-y: auto;
 }
+/* with touch controls the right side is all buttons: the panel moves over to the left, under the hero's panel */
+.practice-panel.touch-left { right: auto; left: 8px; }
 .pp-head { display: flex; justify-content: space-between; align-items: center; color: var(--accent); font-size: 12px; }
 .practice-panel.collapsed .pp-body { display: none; }
 .practice-panel.arena .pp-range, .practice-panel:not(.arena) .pp-arena { display: none; }
