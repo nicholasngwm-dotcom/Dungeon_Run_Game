@@ -8,6 +8,121 @@
 // All of them are part of the shared simulation (Math.random only; vrand for looks).
 
 /** Common to hirelings and minions: hp, following their hero, finding something to fight, getting hit. */
+// ---------------------------------------------------------------
+//  Following loosely (allies and pets)
+// ---------------------------------------------------------------
+
+const FOLLOW_SPACE = 24;   // followers keep about this far apart (and off their hero)
+
+/**
+ * How hard `u` is being crowded: a push away from the other followers (helpers and pets) and its
+ * hero standing within FOLLOW_SPACE, stronger the closer they are. { x, y } (0, 0 with room to spare).
+ */
+function followerPush(u, world) {
+  let x = 0;
+  let y = 0;
+  const away = (o, space) => {
+    if (o === u || o.dead) return;
+    const dx = u.x - o.x;
+    const dy = u.y - o.y;
+    const d = Math.hypot(dx, dy);
+    if (d >= space) return;
+    if (d < 0.5) { x += Math.random() - 0.5; y += Math.random() - 0.5; return; }   // right on top: any way out
+    x += (dx / d) * (space - d) / space;
+    y += (dy / d) * (space - d) / space;
+  };
+  for (const o of world.helpers || []) away(o, FOLLOW_SPACE);
+  for (const o of world.pets || []) away(o, FOLLOW_SPACE);
+  if (u.owner) away(u.owner, FOLLOW_SPACE * 0.8);
+  return { x, y };
+}
+
+/**
+ * Moves `u` toward (x, y) at `speed`, steering round the followers crowding it so they spread out
+ * instead of piling onto the same spot (or the same enemy).
+ */
+function followerStep(u, x, y, speed, dt, world) {
+  const d = dist(u.x, u.y, x, y);
+  let mx = d > 0.01 ? (x - u.x) / d : 0;
+  let my = d > 0.01 ? (y - u.y) / d : 0;
+  const p = followerPush(u, world);
+  mx += p.x * 1.4;
+  my += p.y * 1.4;
+  const len = Math.hypot(mx, my) || 1;
+  const step = Math.min(speed * dt, Math.max(d, 4));
+  world.dungeon.move(u, (mx / len) * step, (my / len) * step);
+  if (Math.abs(mx) > 0.1) u.facing = mx >= 0 ? 1 : -1;
+  u.moving = true;
+}
+
+/**
+ * Following a hero loosely, so a handful of followers drift round them instead of marching in step:
+ * each keeps a spot of its own round the hero (mostly beside and behind, at its own distance) that it
+ * picks again every few seconds; it only sets off once it has fallen properly behind that spot, stops
+ * short once it's close, walks at its own pace, and shuffles apart from anyone it's crowding.
+ */
+function followLoosely(u, dt, world, gap, baseSpeed) {
+  const o = u.owner;
+  const f = u.follow || (u.follow = { a: 0, r: 0, t: 0, going: false, pace: 0.85 + Math.random() * 0.3 });
+  f.t -= dt;
+  if (f.t <= 0) {
+    f.t = 2 + Math.random() * 3;
+    f.a = Math.PI + (Math.random() - 0.5) * 3.2;   // round behind the hero, out to either side
+    f.r = gap * (0.8 + Math.random() * 0.9);
+  }
+  const a = (o.facing >= 0 ? 0 : Math.PI) + f.a * (o.facing >= 0 ? 1 : -1);
+  const tx = o.x + Math.cos(a) * f.r;
+  const ty = o.y + 4 + Math.sin(a) * f.r * 0.6;
+  const d = dist(u.x, u.y, tx, ty);
+  // the hero's footsteps, for a follower that loses them round a corner
+  const trail = o.followTrail || (o.followTrail = []);
+  const last = trail[trail.length - 1];
+  if (!last || dist(last.x, last.y, o.x, o.y) > 20) {
+    trail.push({ x: o.x, y: o.y });
+    if (trail.length > 40) trail.shift();
+  }
+  // a little slack: small steps of the hero's don't drag everyone along
+  if (!f.going && (d > Math.max(28, gap * 0.9) || dist(u.x, u.y, o.x, o.y) > gap * 2.4)) f.going = true;
+  if (f.going && d < 10) f.going = false;
+  if (f.going) {
+    // hardly getting anywhere (a wall between it and its spot): it walks the hero's footsteps instead
+    f.check = (f.check ?? 0.5) - dt;
+    if (f.check <= 0) {
+      f.check = 0.5;
+      if (f.mark && dist(u.x, u.y, f.mark.x, f.mark.y) < 12 && d > 30) {
+        if (f.lost == null) {
+          let best = 0;
+          trail.forEach((pt, i) => { if (dist(u.x, u.y, pt.x, pt.y) < dist(u.x, u.y, trail[best].x, trail[best].y)) best = i; });
+          f.lost = best;
+        }
+      }
+      f.mark = { x: u.x, y: u.y };
+    }
+    if (f.lost != null && dist(u.x, u.y, o.x, o.y) < gap * 1.5) f.lost = null;
+    // hurries the further behind it falls
+    const speed = Math.max(baseSpeed * 0.75, Math.min(d * 2.5, (o.speed || 200) * 1.4)) * f.pace;
+    if (f.lost != null) {
+      f.lost = Math.min(f.lost, trail.length - 1);
+      const pt = trail[f.lost];
+      if (dist(u.x, u.y, pt.x, pt.y) < 14 && f.lost < trail.length - 1) f.lost++;
+      followerStep(u, pt.x, pt.y, Math.max(speed, baseSpeed), dt, world);
+      return;
+    }
+    followerStep(u, tx, ty, speed, dt, world);
+    return;
+  }
+  f.lost = null;
+  const p = followerPush(u, world);
+  if (Math.hypot(p.x, p.y) > 0.05) {
+    // crowded where it stands: shuffles aside
+    world.dungeon.move(u, p.x * 70 * dt, p.y * 70 * dt);
+    u.moving = true;
+    return;
+  }
+  u.moving = false;
+  if (Math.abs(o.x - u.x) > 6) u.facing = o.x >= u.x ? 1 : -1;   // keeping an eye on its hero
+}
+
 class Ally extends Entity {
   constructor(owner, x, y, hp) {
     super(x, y);
@@ -81,20 +196,11 @@ class Ally extends Entity {
     return { x: o.x + Math.cos(a) * gap * o.facing, y: o.y + 4 + Math.sin(a) * gap * 0.6 };
   }
 
-  heel(dt, world, gap = 30) {
-    const pt = this.heelSpot(gap);
-    const d = dist(this.x, this.y, pt.x, pt.y);
-    if (d < 10) { this.moving = false; this.facing = this.owner.facing; return; }
-    this.moveToward(pt.x, pt.y, Math.max(this.speed * 0.8, Math.min(d * 3, (this.owner.speed || 200) * 1.4)), dt, world);
-  }
+  /** Following the hero loosely, `gap` px or so off them (see followLoosely). */
+  heel(dt, world, gap = 30) { followLoosely(this, dt, world, gap, this.speed); }
 
-  moveToward(x, y, speed, dt, world) {
-    const a = angleTo(this.x, this.y, x, y);
-    const step = Math.min(speed * dt, dist(this.x, this.y, x, y));
-    world.dungeon.move(this, Math.cos(a) * step, Math.sin(a) * step);
-    if (Math.abs(Math.cos(a)) > 0.1) this.facing = Math.cos(a) >= 0 ? 1 : -1;
-    this.moving = true;
-  }
+  /** Walks toward a spot, steering round the other followers so they don't pile up (followerStep). */
+  moveToward(x, y, speed, dt, world) { followerStep(this, x, y, speed, dt, world); }
 
   /** Out of a fight for a while, they patch themselves up. */
   regen(dt) {

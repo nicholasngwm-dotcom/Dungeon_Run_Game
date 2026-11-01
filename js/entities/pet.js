@@ -138,28 +138,11 @@ class Pet extends Entity {
     this.poof(world);
   }
 
-  /** Trots to a spot at its hero's heel, `gap` px behind them. */
-  heel(dt, world, gap) {
-    const o = this.owner;
-    const tx = o.x - o.facing * gap;
-    const ty = o.y + 6;
-    const d = dist(this.x, this.y, tx, ty);
-    if (d < 10) {
-      this.moving = false;
-      this.facing = o.facing;
-      return;
-    }
-    // hurries the further behind it falls
-    this.moveToward(tx, ty, Math.max(this.cfg.speed * 0.8, Math.min(d * 3, (o.speed || 200) * 1.4)), dt, world);
-  }
+  /** Follows its hero loosely, `gap` px or so off them (see followLoosely in allies.js). */
+  heel(dt, world, gap) { followLoosely(this, dt, world, gap, this.cfg.speed); }
 
-  moveToward(x, y, speed, dt, world) {
-    const a = angleTo(this.x, this.y, x, y);
-    const step = Math.min(speed * dt, dist(this.x, this.y, x, y));
-    world.dungeon.move(this, Math.cos(a) * step, Math.sin(a) * step);
-    if (Math.abs(Math.cos(a)) > 0.1) this.facing = Math.cos(a) >= 0 ? 1 : -1;
-    this.moving = true;
-  }
+  /** Walks toward a spot, steering round the other followers so they don't pile up. */
+  moveToward(x, y, speed, dt, world) { followerStep(this, x, y, speed, dt, world); }
 
   // ---------- attacks ----------
 
