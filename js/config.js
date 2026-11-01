@@ -232,7 +232,7 @@ const CONFIG = {
       // F: play a lullaby for `duration`s, free to move. Enemies within `radius` fill a sleep meter while they
       // hear it (it drains again at meterDecay/s out of range); after `exposure`s they fall asleep for `sleep`s
       // (bosses for bossSleep). A hit wakes a sleeper: it takes `wake`s to come round.
-      lullaby: { cooldown: 18, duration: 6, radius: 180, exposure: 2.5, sleep: 6, bossSleep: 4, wake: 1, meterDecay: 1 },
+      lullaby: { cooldown: 18, duration: 6, radius: 180, exposure: 1, sleep: 6, bossSleep: 4, wake: 1, meterDecay: 1 },
       // Q: a wave of piercing notes; each enemy is hit once, knocked back and weakened for `weaken`s
       // (deals weakenDamage less damage and takes weakenTaken more)
       ult:     { charge: 1500, notes: 11, spreadDegrees: 70, damage: 85, speed: 470, life: 0.9, knockback: 320,
