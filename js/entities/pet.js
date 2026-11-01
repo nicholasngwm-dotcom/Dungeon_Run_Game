@@ -106,14 +106,8 @@ class Pet extends Entity {
     if (this.cfg.bark && this.specialT <= 0 && d < this.cfg.bark.radius) this.bark(world);
   }
 
-  /** The nearest enemy within `reach` of its hero (it sticks with the one it's on while it can). */
-  pickTarget(world, reach) {
-    const o = this.owner;
-    const ok = (t) => t && !t.dead && !t.immune && !t.prop && world.getTargets().includes(t) && dist(o.x, o.y, t.x, t.y) < reach;
-    if (ok(this.target)) return this.target;
-    const t = nearestTarget(world, o.x, o.y, reach);
-    return ok(t) ? t : null;
-  }
+  /** What to fight (see followerTarget in allies.js): anything in the room its hero is fighting in, else what's near the hero. */
+  pickTarget(world, reach) { return followerTarget(this, world, reach); }
 
   /** In a run, the hero is fighting in a room this pet isn't in (its doors are shut). */
   shutOut(world) {

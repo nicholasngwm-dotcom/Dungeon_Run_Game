@@ -203,8 +203,7 @@ class DungeonRun {
       }
       for (const hl of h.helpers || []) {
         if (!CONFIG.run.helpers[hl.kind]?.hp) continue;
-        const units = hireHelper(w, hl.kind, p, p.x, p.y, hl.hp);
-        for (const a of units.slice(1 + (hl.acolytes ?? 2))) a.die(w, true);   // acolytes that had already fallen
+        hireHelper(w, hl.kind, p, p.x, p.y);   // (every stage starts with the mercenaries whole, acolytes and all)
       }
     }
   }
@@ -360,6 +359,11 @@ class DungeonRun {
     w.minions = [];
     // horses get back on their feet for the new stage (some of their health back)
     for (const h of w.horses) h.stageHeal();
+    // the mercenaries are whole again for the new stage (a living priest gets his fallen acolytes back)
+    for (const h of mercenaries(w)) h.hp = h.maxHp;
+    for (const pr of w.helpers.filter((h) => h.kind === 'priest' && !h.dead)) {
+      for (const side of [-1, 1]) if (!w.helpers.some((a) => a.priest === pr && a.side === side && !a.dead)) w.helpers.push(new Acolyte(pr, side));
+    }
     w.boss = null;
     w.timers = w.timers.filter((t) => !t.spawn);
     w.pendingSpawns = 0;

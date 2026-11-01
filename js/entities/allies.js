@@ -123,6 +123,32 @@ function followLoosely(u, dt, world, gap, baseSpeed) {
   if (Math.abs(o.x - u.x) > 6) u.facing = o.x >= u.x ? 1 : -1;   // keeping an eye on its hero
 }
 
+/**
+ * What a follower (helper, minion or pet) goes after. While its hero is fighting in a locked room,
+ * the fight comes first: any enemy in that room, wherever it stands, the nearest to the follower.
+ * Otherwise the nearest enemy within `reach` of the hero. It sticks with the one it's on while it can.
+ */
+function followerTarget(u, world, reach) {
+  const o = u.owner;
+  const run = world.run;
+  const room = run?.active && run.floor.roomAt(o.x, o.y) === run.active ? run.active : null;
+  const targets = world.getTargets();
+  const ok = (t) => t && !t.dead && !t.immune && !t.prop && targets.includes(t)
+    && (room ? run.floor.roomAt(t.x, t.y) === room : dist(o.x, o.y, t.x, t.y) < reach);
+  if (ok(u.target)) return u.target;
+  let best = null;
+  let bestD = Infinity;
+  for (const t of targets) {
+    if (!ok(t)) continue;
+    const d = dist(u.x, u.y, t.hx, t.hy);
+    if (d < bestD) { best = t; bestD = d; }
+  }
+  return best;
+}
+
+/** The living hired followers (helpers, the priest's acolytes, the statue's little knights): healed like heroes. */
+function mercenaries(world) { return (world.helpers || []).filter((h) => !h.dead); }
+
 class Ally extends Entity {
   constructor(owner, x, y, hp) {
     super(x, y);
@@ -162,13 +188,15 @@ class Ally extends Entity {
     if (dist(this.x, this.y, o.x, o.y) > CONFIG.run.helpers.leash * 2 || this.shutOut(world)) this.catchUp(world);
   }
 
-  /** The nearest enemy within `reach` of its hero (it sticks with the one it's on while it can). */
-  pickTarget(world, reach) {
-    const o = this.owner;
-    const ok = (t) => t && !t.dead && !t.immune && !t.prop && world.getTargets().includes(t) && dist(o.x, o.y, t.x, t.y) < reach;
-    if (ok(this.target)) return this.target;
-    const t = nearestTarget(world, this.x, this.y, reach);
-    return ok(t) ? t : null;
+  /** What to fight (see followerTarget): anything in the room its hero is fighting in, else what's near the hero. */
+  pickTarget(world, reach) { return followerTarget(this, world, reach); }
+
+  /** A heal from a hero's ability or another follower (pets heal themselves instead). quiet: no number (heals over time). */
+  heal(amount, world, quiet = false) {
+    if (this.dead || this.hp >= this.maxHp) return;
+    const got = Math.min(amount, this.maxHp - this.hp);
+    this.hp += got;
+    if (!quiet && got >= 1) world.effects.text(this.hx, this.hy - 22, `+${Math.round(got)}`, { color: '#6cff7a', size: 7 });
   }
 
   shutOut(world) {
@@ -473,10 +501,10 @@ class HiredPriest extends Hireling {
     if (this.healT <= 0 && !world.lobby) this.blessing(world);
   }
 
-  /** A pillar of light on every hero in range: they're healed (heroes only, not other helpers). */
+  /** A pillar of light on every hero and hired follower in range: they're healed (pets look after themselves). */
   blessing(world) {
     const c = this.cfg;
-    const hurt = world.heroes.filter((p) => dist(p.x, p.y, this.x, this.y) < c.healRange);
+    const hurt = [...world.heroes, ...mercenaries(world)].filter((p) => dist(p.x, p.y, this.x, this.y) < c.healRange);
     if (!hurt.some((p) => p.hp < p.maxHp)) { this.healT = 1; return; }   // nobody needs it: waits until someone does
     this.healT = c.healEvery;
     this.cast = 0.6;

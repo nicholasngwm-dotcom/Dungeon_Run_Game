@@ -88,9 +88,12 @@ class Bard extends Player {
   get songSpeed() { return this.songBoost > 0 ? this.cfg.morale.boostSpeed : this.cfg.tunes.energetic.speed; }
   get songHeal() { return this.songBoost > 0 ? this.cfg.morale.boostHeal : this.cfg.tunes.calming.heal; }
 
-  /** Passive (Ensemble): the tune plays for every living hero within reach, herself included. */
+  /** Passive (Ensemble): the tune plays for every living hero within reach, herself included; the calming one heals hired followers too. */
   playTune(dt, world) {
     const r = this.cfg.passive.radius;
+    if (this.tune !== 'energetic') {
+      for (const m of mercenaries(world)) if (dist(m.x, m.y, this.x, this.y) <= r) m.heal(this.songHeal * dt, world, true);
+    }
     for (const a of world.heroes) {
       if (dist(a.x, a.y, this.x, this.y) > r) continue;
       if (this.tune === 'energetic') {
