@@ -160,6 +160,7 @@ class DungeonRun {
         forgePending: p.forgePending ? { ...p.forgePending } : null,
         soul: p.soulHp || 0,
         maxHpLost: p.maxHpLost || 0,
+        darkTrades: Specials.darkTrades(p),
         horse: p.horse ? { hp: p.horse.hp, riding: !!p.riding } : null,
         helpers: w.helpers.filter((h) => h.owner === p && !h.dead && h instanceof Hireling).map((h) => ({
           kind: h.kind, hp: h.hp, acolytes: w.helpers.filter((a) => a.priest === h && !a.dead).length,
@@ -186,6 +187,7 @@ class DungeonRun {
       p.inventory = h.inventory.map((s) => s && { ...s });
       // max health sold to the dark trader stays gone
       p.maxHpLost = Math.max(0, Number(h.maxHpLost) || 0);
+      if (h.darkTrades != null) p.darkTrades = Math.max(0, Number(h.darkTrades) || 0);
       p.maxHp -= p.maxHpLost;
       p.hp = Math.max(1, Math.round(p.maxHp * h.hp));
       p.ult = h.ult;

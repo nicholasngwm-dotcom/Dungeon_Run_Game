@@ -30,6 +30,11 @@ const Specials = {
     return hero.maxHp - c.maxHp >= c.minMax;
   },
 
+  /** Deals this hero has made with the dark trader this run (saves from before the count: worked out from the max hp sold). */
+  darkTrades(hero) {
+    return hero.darkTrades ?? Math.round((hero.maxHpLost || 0) / CONFIG.run.darkTrader.maxHp);
+  },
+
   darkTrade(run, hero) {
     const c = CONFIG.run.darkTrader;
     const w = run.world;
@@ -37,8 +42,10 @@ const Specials = {
     const ok = !!pr && !hero.dead && this.canDarkTrade(hero);
     if (!ok) { w.events.onSpecial?.(hero, 'dark', false); return; }
     // the price: max health, gone for the rest of the run (current health drops as much, never to 0)
+    hero.darkTrades = this.darkTrades(hero) + 1;   // (counted before the max hp goes: old saves work it out from that)
     hero.maxHp -= c.maxHp;
     hero.maxHpLost = (hero.maxHpLost || 0) + c.maxHp;
+    const sure = hero.darkTrades % c.sureEvery === 0;   // every third deal is always a power
     hero.hp = Math.max(1, Math.min(hero.maxHp, hero.hp - c.maxHp));
     hero.sinceHurt = 0;
     hero.flashTime = 0.15;
@@ -48,13 +55,13 @@ const Specials = {
     const pending = this.pendingGifts(w, hero);
     const dark = darkStock(hero).filter((u) => !pending.has(u.id));
     const plain = shopStock(hero).filter((u) => !hero.upgradeLevels[u.id] && !pending.has(u.id));
-    if ((dark.length || plain.length) && Math.random() < c.upgradeChance) {
+    if ((dark.length || plain.length) && (sure || Math.random() < c.upgradeChance)) {
       const pool = dark.length && (!plain.length || Math.random() < c.darkChance) ? dark : plain;
       const u = choose(pool);
       w.after(0.5, () => {
         w.pickups.push(new UpgradePickup(pr.x, pr.y + 34, u.id, hero));
         w.effects.burst(pr.x, pr.y + 10, { count: 40, colors: [u.color, '#1e1430', '#e0c0ff'], speed: [60, 200], life: [0.4, 0.8], up: 70 });
-        w.effects.text(pr.x, pr.y - 52, `${u.dark ? 'A DARK GIFT' : 'A GIFT'}: ${u.name.toUpperCase()}`, { color: u.color, size: 8, life: 2 });
+        w.effects.text(pr.x, pr.y - 52, `${sure ? 'A SURE DEAL - ' : ''}${u.dark ? 'A DARK GIFT' : 'A GIFT'}: ${u.name.toUpperCase()}`, { color: u.color, size: 8, life: 2 });
         Sound.play('magic');
       });
     } else {

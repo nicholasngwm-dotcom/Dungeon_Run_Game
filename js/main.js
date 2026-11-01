@@ -316,6 +316,9 @@ const App = {
         name: 'THE DARK TRADER', frames: Sprites.npcs.darkTrader,
         text: can
           ? `Mmm... so much life in you. Give me ${c.maxHp} of your MAX health - for good, mind - and I will give you something... interesting. A bottle, a power - perhaps one no one else dares to sell.`
+            + ((Specials.darkTrades(p) + 1) % c.sureEvery === 0
+              ? ' And this deal... this one always buys a power.'
+              : ` Every ${['', '', 'second', 'third', 'fourth', 'fifth'][c.sureEvery] || `${c.sureEvery}th`} deal always buys a power.`)
           : `There is too little of you left for my tastes. I will not take you below ${c.minMax} max health.`,
         options: [
           can && { label: `Offer ${c.maxHp} max HP`, fn: () => { Dialog.close(); this.command({ type: 'darkTrade' }); } },
