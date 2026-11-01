@@ -312,7 +312,7 @@ js/
     boss/phantom.js     Phantom King (dash, eye lasers, vanish + pull shockwaves)
     boss/deathbringer.js The Deathbringer (scythes, tendrils, darkness, the shade)
     boss/flameworm.js   The Decronic Flameworm (the fortress's burrowing worm: a plated spine on a curve; bite, plunge, leaps, fireballs, flame arrow, splits in three)
-    boss/dragonLord.js  The Blazing Dragon Lord (the fortress's deeper boss: circles out of reach hurling meteors, perches on his tower to roar down fire rain; phase 2 brood + breath; arena in game/dragonArena.js)
+    boss/dragonLord.js  The Blazing Dragon Lord (the fortress's deeper boss: circles out of reach hurling meteors, perches on his tower to roar down fire rain; phase 2 brood + sweeping fan breath; arena in game/dragonArena.js)
   game/                 Game world, wave director, lobby hub, dungeon run (rooms + objectives), HUD
   ui/menus.js           DOM menus + lobby panels (hero, workshop, dungeon, legend)
   ui/bestiary.js        bestiary book (entries, filters, page flips)

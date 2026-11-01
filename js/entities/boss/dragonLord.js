@@ -6,17 +6,17 @@
 //    flying:  he circles out over the moat, out of reach (he can't be hurt), hurling giant lava meteors at the
 //             heroes; each crashes where its circle grew and leaves the ground burning. In phase 2 he calls his
 //             baby dragons too, and they fly in over the lava.
-//    perched: he lands on his tower and can be hit anywhere on it. He roars, and fireballs rain down all over
-//             the platform (in phase 2, round every hero); on a long perch he roars again. In phase 2 a hero
-//             coming close sets off his dragon's breath: a stream of fire that sears in rapid ticks and sets
-//             them alight.
-//  Below phase2At of his health: faster meteors, longer perches with up to three roars, the brood, the breath.
+//    perched: he lands on his tower and can be hit anywhere on it. He roars twice, and each time fireballs
+//             rain down all over the platform (in phase 2, round every hero). In phase 2 he breathes fire
+//             between the rains: a fan of ground lights up, then his breath sweeps across it, searing in
+//             rapid ticks whoever it plays over and setting them alight.
+//  Below phase2At of his health: faster meteors, longer perches with three roars, the brood, the breath.
 //  (x, y) is the ground under him; z how high he is above it (perched: on the tower's top).
 // =============================================================
 
 // his entrance: he swoops down out of the sky onto his tower (land), then rears up and roars (roar)
 const DRAGON_INTRO = { land: 2.4, roar: 2.8, total: 4.2 };
-const DRAGON_FLY_LIFT = 52;   // px the middle of his body sits above his feet (flying poses are anchored there)
+const DRAGON_FLY_LIFT = 52;   // sprite px the middle of his body sits above his feet (flying poses are anchored there; x his scale)
 
 class BlazingDragonLord {
   constructor(x, y) {
@@ -42,8 +42,7 @@ class BlazingDragonLord {
     this.theta = 0;          // flying: where he is round the platform, and which way he circles
     this.spin = 1;
     this.roar = null;        // perched: { t, rained } while he roars
-    this.breath = null;      // perched (phase 2): { t, aim, tick } while he breathes fire
-    this.breathCd = 0;
+    this.breath = null;      // perched (phase 2): { t, aim, from, to, tick } while he breathes fire
     this.babiesCalled = false;
   }
 
@@ -56,7 +55,9 @@ class BlazingDragonLord {
   get radius() { return this.cfg.hitRadius; }
   get hx() { return this.x; }
   /** Perched, his hit point is low on him (the tower's top), so heroes at its foot can reach him. */
-  get hy() { return this.perched || this.dying > 0 ? this.tower.y - 70 : this.y - this.z - DRAGON_FLY_LIFT; }
+  get hy() { return this.perched || this.dying > 0 ? this.tower.y - 84 : this.y - this.z - this.flyLift; }
+  /** How far the middle of his body is above his feet, at his size. */
+  get flyLift() { return DRAGON_FLY_LIFT * this.cfg.scale; }
   get drawY() { return this.y; }
 
   getTargets() { return this.targetable ? [this] : []; }
@@ -64,8 +65,8 @@ class BlazingDragonLord {
   get bars() {
     if (this.intro > 0 || this.dying > 0 || this.dead) return [];
     const marker = this.phase === 1 ? this.cfg.phase2At : undefined;
-    if (this.perched) return [{ part: this, x: this.x, y: this.tower.y - this.cfg.perchHeight - 186, w: 120, color: '#ff6a2a', marker }];
-    return [{ part: this, x: this.x, y: this.y - this.z - DRAGON_FLY_LIFT - 100, w: 120, color: '#ff6a2a', marker, locked: true, lockedText: 'IN THE SKY' }];
+    if (this.perched) return [{ part: this, x: this.x, y: this.tower.y - this.cfg.perchHeight - 186 * this.cfg.scale, w: 140, color: '#ff6a2a', marker }];
+    return [{ part: this, x: this.x, y: this.y - this.z - this.flyLift - 150, w: 140, color: '#ff6a2a', marker, locked: true, lockedText: 'IN THE SKY' }];
   }
 
   knockback() {}
@@ -270,17 +271,15 @@ class BlazingDragonLord {
       const ph = this.phase - 1;
       this.perchFor = rand(...P.time[ph]);
       this.roars = P.roars[ph].slice();
-      this.breathCd = 1;
+      this.breaths = P.breaths[ph].slice();
       this.setState('perch');
     }
   }
 
-  /** On his tower: he can be hurt; he roars down fire, and in phase 2 breathes it on whoever comes close. */
+  /** On his tower: he can be hurt; he roars down rains of fire, and in phase 2 breathes fire between them. */
   updatePerch(dt, world) {
-    const c = this.cfg;
-    const P = c.perch;
+    const P = this.cfg.perch;
     this.flap += dt * 2;
-    this.breathCd -= dt;
     const near = this.nearestHero(world);
     if (!this.breath && near) this.facing = near.x >= this.x ? 1 : -1;
     if (this.roar) {
@@ -294,16 +293,12 @@ class BlazingDragonLord {
       this.updateBreath(dt, world);
     } else if (this.roars.length && this.t >= this.roars[0]) {
       this.roars.shift();
-      // (only with time left in the perch for it)
-      if (this.perchFor - this.t >= P.roarLeft) {
-        this.roar = { t: 0, rained: false };
-        world.shake(7, 0.6);
-        Sound.play('dragonRoar');
-      }
-    } else if (this.phase === 2 && this.breathCd <= 0 && near && dist(near.x, near.y, this.tower.x, this.tower.y) < c.breath.trigger) {
-      this.breath = { t: 0, aim: angleTo(this.tower.x, this.tower.y, near.x, near.y), tick: 0, target: near };
-      this.facing = near.x >= this.x ? 1 : -1;
-      Sound.play('fireballCast');
+      this.roar = { t: 0, rained: false };
+      world.shake(7, 0.6);
+      Sound.play('dragonRoar');
+    } else if (this.breaths.length && this.t >= this.breaths[0]) {
+      this.breaths.shift();
+      this.startBreath(world);
     } else if (this.t >= this.perchFor) {
       this.startTakeoff(world);
     }
@@ -319,44 +314,64 @@ class BlazingDragonLord {
     return best;
   }
 
-  /** Where his breath starts on the ground: the tower's foot on the side he faces, a little forward. */
-  breathOrigin() {
-    const a = this.breath ? this.breath.aim : 0;
-    return { x: this.tower.x + Math.cos(a) * 40, y: this.tower.y - 6 + Math.sin(a) * 24 };
+  /** Where his breath meets the ground: the tower's foot, a little out along where it's aimed. */
+  breathOrigin(a = this.breath ? this.breath.aim : 0) {
+    return { x: this.tower.x + Math.cos(a) * 36, y: this.tower.y - 6 + Math.sin(a) * 20 };
   }
 
-  /** His dragon's breath: a moment drawing in, then a stream of fire swinging after its target. */
+  /** A point `d` px out along angle a from the breath's origin (the ground is foreshortened up and down). */
+  breathPoint(a, d) {
+    const o = this.breathOrigin(a);
+    return { x: o.x + Math.cos(a) * d, y: o.y + Math.sin(a) * d * 0.6 };
+  }
+
+  /** His dragon's breath: a fan aimed at a hero lights up, then he sweeps his fire across it from one edge to the other. */
+  startBreath(world) {
+    const B = this.cfg.breath;
+    const heroes = this.heroesAlive(world);
+    const p = heroes.length ? choose(heroes) : null;
+    const mid = p ? angleTo(this.tower.x, this.tower.y, p.x, p.y) : (this.facing > 0 ? 0.4 : Math.PI - 0.4);
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    this.breath = { t: 0, mid, from: mid - dir * B.fan, to: mid + dir * B.fan, aim: mid - dir * B.fan, tick: 0 };
+    this.facing = Math.cos(mid) >= 0 ? 1 : -1;
+    Sound.play('fireballCast');
+    Sound.play('burstCharge', 0.2);
+  }
+
   updateBreath(dt, world) {
     const B = this.cfg.breath;
     const br = this.breath;
     br.t += dt;
-    const p = br.target && !br.target.dead ? br.target : this.nearestHero(world);
-    if (p) {
-      const want = angleTo(this.tower.x, this.tower.y, p.x, p.y);
-      br.aim += clamp(angleDiff(br.aim, want), -B.turn * dt, B.turn * dt);
-      this.facing = Math.cos(br.aim) >= 0 ? 1 : -1;
-    }
     if (br.t < B.windup) return;
-    if (!br.roaring) { br.roaring = true; Sound.play('dragonBreath'); }
+    const k = clamp((br.t - B.windup) / B.sweep, 0, 1);
+    br.aim = lerp(br.from, br.to, k * k * (3 - 2 * k));
+    this.facing = Math.cos(br.aim) >= 0 ? 1 : -1;
+    if (!br.roaring) { br.roaring = true; Sound.play('dragonBreath'); world.shake(5, B.sweep); }
     br.tick -= dt;
     if (br.tick <= 0) {
       br.tick = B.every;
       const o = this.breathOrigin();
       for (const a of world.allies) {
         if (a.dead) continue;
-        const d = dist(o.x, o.y, a.x, a.y);
-        if (d > B.range + a.radius || Math.abs(angleDiff(br.aim, angleTo(o.x, o.y, a.x, a.y))) > B.cone + a.radius / Math.max(40, d)) continue;
+        // (the ground is foreshortened up and down: measure on the unsquashed floor)
+        const dx = a.x - o.x;
+        const dy = (a.y - o.y) / 0.6;
+        const d = Math.hypot(dx, dy);
+        if (d > B.range + a.radius) continue;
+        const ang = Math.atan2(dy, dx);
+        if (Math.abs(angleDiff(br.aim, ang)) > B.beam + a.radius / Math.max(40, d)) continue;
         // rapid little sears (they don't wait on a hero's moment of safety after a hit), and it sets them alight
         if (a.scorch) a.scorch(B.damage / B.every, B.every * 2, world, B.every);
         else a.hurt?.(B.damage, world, o.x, o.y);
         setAlight(world, a, B);
       }
-      if (vrand(0, 1) < 0.5) Sound.play('fireImpact', 0.25);
+      // embers and smoke boiling up where it lands
+      const e = this.breathPoint(br.aim, B.range * vrand(0.55, 1));
+      world.effects.burst(e.x, e.y - 6, { count: 6, colors: ['#ffffff', '#ffd2c4', '#ff6a4a', '#e8281a'], speed: [60, 200], life: [0.25, 0.6], up: 120, gravity: 260, size: [2, 3] });
+      if (vrand(0, 1) < 0.5) world.effects.smoke(e.x, e.y - 10, { count: 2, radius: 18, life: 0.8, rise: 40, colors: ['#2a1612', '#4a2a22', '#6a3a2a'] });
+      if (vrand(0, 1) < 0.4) Sound.play('fireImpact', 0.2);
     }
-    if (br.t >= B.windup + B.time) {
-      this.breath = null;
-      this.breathCd = B.cooldown;
-    }
+    if (k >= 1 && br.t >= B.windup + B.sweep + 0.25) this.breath = null;
   }
 
   // ---------- his attacks ----------
@@ -366,7 +381,8 @@ class BlazingDragonLord {
     const fr = this.frame();
     const m = fr.mouth;
     const base = this.anchorY();
-    return { x: this.x + m.x * this.facing, y: base + m.y };
+    const s = this.cfg.scale;
+    return { x: this.x + m.x * s * this.facing, y: base + m.y * s };
   }
 
   /** A giant lava meteor hurled at a hero: it arcs down onto where its circle grows, crashes and leaves the ground burning. */
@@ -417,7 +433,8 @@ class BlazingDragonLord {
           a.knockback?.(angleTo(at.x, at.y, a.x, a.y), 240);
         }
       }
-      firePatch(world, at.x, at.y, M.fireRadius, M.fireTime, M);
+      // it leaves a pool of molten rock as wide as its blast (the fast lava burn while you stand in it)
+      lavaPool(world, at.x, at.y, M.radius, M.poolTime);
       enemyBlastFx(world, at.x, at.y, M.radius);
       world.effects.burst(at.x, at.y - 8, { count: 26, colors: [...FORT_ROCK_GIBS, ...FORT_LAVA_GIBS], speed: [90, 280], life: [0.4, 0.8], gravity: 360, up: 140, size: [2, 6] });
       world.shake(7, 0.3);
@@ -614,45 +631,90 @@ class BlazingDragonLord {
    * Where the frame's anchor sits on screen: his feet at height z in the perched poses; the middle of his
    * body FLY_LIFT above that in the flying ones (where it is when he's perched, so landing doesn't jump).
    */
-  anchorY() { return this.y - this.z - (this.flyingPose ? DRAGON_FLY_LIFT : 0); }
+  anchorY() { return this.y - this.z - (this.flyingPose ? this.flyLift : 0); }
 
   drawGround(ctx) {
     if (this.dead || (this.state === 'intro' && this.intro >= DRAGON_INTRO.total)) return;
     // his shadow, smaller and fainter the higher he flies
     if (!this.perched && this.dying <= 0) {
       const k = clamp(1 - (this.z - this.cfg.perchHeight) / 500, 0.35, 1);
-      drawShadow(ctx, this.x, this.y + 4, 80 * k, 22 * k, 0.32 * k);
-    }
-    if (this.perched && this.phase === 2 && !this.breath) {
-      // the ground his breath reaches: a faint ring round the tower
-      ctx.save();
-      ctx.globalAlpha = 0.35 + Math.sin(this.time * 4) * 0.1;
-      PFX.ring(ctx, this.tower.x, this.tower.y - 10, this.cfg.breath.trigger, this.cfg.breath.trigger * 0.55, '#ff4a2a', 2, { dash: [4, 4], spin: this.time * 0.3 });
-      ctx.restore();
+      const s = this.cfg.scale;
+      drawShadow(ctx, this.x, this.y + 4, 80 * k * s, 22 * k * s, 0.32 * k);
     }
     if (this.breath) this.drawBreathGround(ctx);
   }
 
-  /** The cone of ground his breath plays over: a warning while he draws in, then scorched and glowing. */
+  /** The ground between angles a0 and a1 of his breath's fan, out to `d` px, as a path. */
+  fanPath(ctx, a0, a1, d) {
+    const o = this.breathOrigin((a0 + a1) / 2);
+    const n = Math.max(2, Math.ceil(Math.abs(a1 - a0) * 10));
+    ctx.beginPath();
+    ctx.moveTo(o.x, o.y);
+    for (let i = 0; i <= n; i++) {
+      const a = lerp(a0, a1, i / n);
+      ctx.lineTo(o.x + Math.cos(a) * d, o.y + Math.sin(a) * d * 0.6);
+    }
+    ctx.closePath();
+  }
+
+  /**
+   * His breath's fan on the ground: it lights up and pulses while he draws in (a bright edge where the sweep
+   * starts, chevrons along its rim the way it will go), then the swept part is left scorched and smouldering.
+   */
   drawBreathGround(ctx) {
     const B = this.cfg.breath;
     const br = this.breath;
-    const o = this.breathOrigin();
-    const k = clamp(br.t / B.windup, 0, 1);
-    const pts = [[o.x, o.y]];
-    for (let i = 0; i <= 8; i++) {
-      const a = br.aim - B.cone + (i / 8) * B.cone * 2;
-      pts.push([o.x + Math.cos(a) * B.range * k, o.y + Math.sin(a) * B.range * 0.6 * k]);
-    }
+    const R = B.range;
+    const warm = clamp(br.t / B.windup, 0, 1);
+    const dir = Math.sign(br.to - br.from);
     ctx.save();
-    ctx.fillStyle = br.t < B.windup ? `rgba(255, 60, 30, ${0.12 + k * 0.12})` : 'rgba(255, 90, 40, 0.28)';
-    ctx.beginPath();
-    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-    ctx.closePath();
+    // the whole fan: still to come
+    this.fanPath(ctx, br.from, br.to, R * (0.7 + 0.3 * warm));
+    ctx.fillStyle = `rgba(255, 50, 30, ${0.1 + warm * 0.12 + (br.t < B.windup ? Math.sin(br.t * 22) * 0.05 : 0)})`;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 80, 50, 0.7)';
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = `rgba(255, 90, 60, ${0.5 + warm * 0.4})`;
     ctx.lineWidth = 2;
     ctx.stroke();
+    ctx.setLineDash([]);
+    if (br.t > B.windup) {
+      // what the fire has already swept: charred, embers glowing through
+      this.fanPath(ctx, br.from, br.aim, R);
+      ctx.fillStyle = 'rgba(26, 8, 6, 0.5)';
+      ctx.fill();
+      ctx.globalCompositeOperation = 'lighter';
+      this.fanPath(ctx, br.from, br.aim, R);
+      ctx.fillStyle = 'rgba(255, 60, 30, 0.16)';
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    } else {
+      // the edge it starts from, burning bright, and chevrons racing along the rim the way it will sweep
+      const o = this.breathOrigin(br.from);
+      const e = this.breathPoint(br.from, R);
+      ctx.strokeStyle = `rgba(255, 220, 200, ${0.5 + warm * 0.5})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(o.x, o.y);
+      ctx.lineTo(e.x, e.y);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255, 200, 180, ${0.4 + warm * 0.5})`;
+      for (let i = 0; i < 5; i++) {
+        const u = (br.t * 1.6 + i / 5) % 1;
+        const a = lerp(br.from, br.to, u);
+        const p = this.breathPoint(a, R * 0.86);
+        const ta = a + dir * Math.PI / 2;
+        const tx = Math.cos(ta);
+        const ty = Math.sin(ta) * 0.6;
+        const nx = Math.cos(a);
+        const ny = Math.sin(a) * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(p.x + tx * 9, p.y + ty * 9);
+        ctx.lineTo(p.x - tx * 4 + nx * 7, p.y - ty * 4 + ny * 7);
+        ctx.lineTo(p.x - tx * 4 - nx * 7, p.y - ty * 4 - ny * 7);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
     ctx.restore();
   }
 
@@ -667,6 +729,7 @@ class BlazingDragonLord {
   drawBody(ctx, portrait = false) {
     const fr = this.frame();
     const D = this.flyingPose ? DRAGON_LORD.fly : DRAGON_LORD.perch;
+    const s = this.cfg.scale;
     let x = this.x;
     let y = this.anchorY();
     let rot = 0;
@@ -687,7 +750,7 @@ class BlazingDragonLord {
     ctx.globalAlpha = alpha;
     ctx.translate(Math.round(x), Math.round(y));
     if (rot) ctx.rotate(rot);
-    if (this.facing < 0) ctx.scale(-1, 1);
+    ctx.scale(this.facing < 0 ? -s : s, s);
     ctx.drawImage(fr.img, -D.ax, -D.ay);
     if (this.flashTime > 0) {
       ctx.globalAlpha = 0.6 * alpha;
@@ -701,54 +764,130 @@ class BlazingDragonLord {
     else if (this.roar || this.spit > 0) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      PFX.glow(ctx, m.x, m.y, 18, FORT_LAVA, 0.7);
+      PFX.glow(ctx, m.x, m.y, 24, FORT_LAVA, 0.7);
       ctx.restore();
-      if (this.roar) PFX.flame(ctx, m.x, m.y + 4, 10, 18, this.time * 14, FORT_FIRE);
+      if (this.roar) PFX.flame(ctx, m.x, m.y + 4, 14, 24, this.time * 14, FORT_FIRE);
     }
     if (this.state === 'fly' && this.meteorIn < 0.45) {
       // a meteor of molten rock swelling in his jaws
       const k = 1 - this.meteorIn / 0.45;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      PFX.glow(ctx, m.x, m.y, 10 + k * 22, FORT_LAVA, 0.4 + k * 0.5);
+      PFX.glow(ctx, m.x, m.y, 14 + k * 30, FORT_LAVA, 0.4 + k * 0.5);
       ctx.restore();
     }
   }
 
-  /** His breath: fire gathering in his jaws, then a roaring stream of it pouring down along his aim. */
+  /**
+   * His breath. Drawing in: fire swirling into his jaws round a swelling white-hot core. Then a jet of fire:
+   * a blinding flare at his jaws, billows of red flame round a white-hot heart that pour down onto the ground
+   * and roll out along it, swelling and darkening into smoke, and a wall of flame where it lands.
+   */
   drawBreath(ctx, m) {
     const B = this.cfg.breath;
     const br = this.breath;
-    const o = this.breathOrigin();
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    PFX.glow(ctx, m.x, m.y, 14 + Math.min(1, br.t / B.windup) * 14, FORT_LAVA, 0.8);
-    ctx.restore();
+    const time = this.time;
     if (br.t < B.windup) {
-      PFX.flame(ctx, m.x, m.y + 4, 8, 12, this.time * 16, FORT_FIRE);
+      const k = br.t / B.windup;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      PFX.glow(ctx, m.x, m.y, 16 + k * 30, FORT_LAVA, 0.5 + k * 0.5);
+      PFX.glow(ctx, m.x, m.y, 5 + k * 10, '255, 230, 220', 0.9);
+      ctx.restore();
+      for (let i = 0; i < 8; i++) {
+        const u = (time * 1.8 + i / 8) % 1;
+        const a = i * 0.8 + time * 6;
+        const r = (1 - u) * 70;
+        PFX.disc(ctx, m.x + Math.cos(a) * r, m.y + Math.sin(a) * r * 0.7, 2 + u * 3, 2 + u * 3, u > 0.6 ? '#ffd2c4' : '#e8281a');
+      }
       return;
     }
-    // blobs of fire racing from his jaws down to the ground and out along the cone, swelling as they go
-    const end = { x: o.x + Math.cos(br.aim) * B.range, y: o.y + Math.sin(br.aim) * B.range * 0.6 };
-    for (let i = 0; i < 22; i++) {
-      const u = (this.time * 2.6 + i / 22) % 1;
-      const spread = Math.sin(i * 2.7) * B.cone * u;
-      const gx = o.x + Math.cos(br.aim + spread) * B.range * u;
-      const gy = o.y + Math.sin(br.aim + spread) * B.range * 0.6 * u;
-      // from the mouth the stream drops to the ground over its first third
-      const drop = Math.min(1, u * 3);
-      const x = lerp(m.x, gx, drop);
-      const y = lerp(m.y, gy, drop);
-      const r = 5 + u * 16;
-      ctx.save();
-      ctx.globalAlpha = 1 - u * 0.6;
-      PFX.flame(ctx, x, y + r * 0.4, r, r * 1.5, this.time * 18 + i, FORT_FIRE);
-      ctx.restore();
-    }
+    const R = B.range;
+    const ground = this.breathOrigin();
+    const end = this.breathPoint(br.aim, R);
+    // the jet pours straight down from his jaws onto the ground a third of the way out, then rolls on along it
+    const land = this.breathPoint(br.aim, R * 0.33);
+    const along = (u, wob) => {
+      if (u >= 0.33) return this.breathPoint(br.aim + wob, R * u);
+      const d = u / 0.33;
+      return { x: lerp(m.x, land.x, d), y: lerp(m.y, land.y, d) };
+    };
+    // the glow of it, and the wall of flame where it lands
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    PFX.glow(ctx, (o.x + end.x) / 2, (o.y + end.y) / 2, B.range * 0.5, '255, 70, 40', 0.45, 2, B.range * 0.3);
+    PFX.glow(ctx, end.x, end.y - 10, 70, '255, 60, 30', 0.9, 2, 36);
+    PFX.glow(ctx, (ground.x + end.x) / 2, (ground.y + end.y) / 2, R * 0.55, '255, 50, 30', 0.5, 2, R * 0.3);
     ctx.restore();
+    for (let i = -2; i <= 2; i++) {
+      const p = this.breathPoint(br.aim + i * 0.06, R * (0.86 + Math.abs(i) * 0.03));
+      PFX.flame(ctx, p.x, p.y + 4, 16, 40 + Math.sin(time * 9 + i) * 10 - Math.abs(i) * 6, time * 14 + i, FORT_FIRE);
+    }
+    // the jet itself: one unbroken stream of fire from his jaws down onto the ground and out along it, a
+    // white-hot core inside it, flickering
+    const path = [];
+    for (let u = 0; u <= 0.62; u += 0.04) path.push(along(u, Math.sin(u * 20 - time * 30) * 0.03 * u));
+    const stroke = (w0, w1, color, k = path.length) => {
+      ctx.strokeStyle = color;
+      ctx.lineCap = 'round';
+      for (let i = 0; i + 1 < k; i++) {
+        ctx.lineWidth = lerp(w0, w1, i / (path.length - 1)) * (1 + Math.sin(time * 37 + i) * 0.12);
+        ctx.beginPath();
+        ctx.moveTo(path[i].x, path[i].y);
+        ctx.lineTo(path[i + 1].x, path[i + 1].y);
+        ctx.stroke();
+      }
+    };
+    ctx.save();
+    stroke(14, 40, '#a8100e');
+    stroke(10, 30, '#e8281a');
+    stroke(6, 18, '#ff6a4a', path.length - 2);
+    stroke(3, 8, '#ffd2c4', path.length - 5);
+    stroke(2, 3, '#ffffff', 6);
+    ctx.restore();
+    // sparks spat out of it
+    for (let i = 0; i < 10; i++) {
+      const u = (time * 3.1 + i / 10) % 1;
+      const p = along(u * 0.8, Math.sin(i * 4.1) * B.beam * 1.4 * u);
+      ctx.fillStyle = u < 0.5 ? '#ffffff' : '#ffd2c4';
+      ctx.fillRect(Math.round(p.x + Math.sin(i * 7) * 14 * u), Math.round(p.y - 10 - u * 30), 2, 2);
+    }
+    // the billows, far ones first: smoke rolling off the old ones, red flame, a white-hot heart while they're young
+    const N = 30;
+    const blobs = [];
+    for (let i = 0; i < N; i++) {
+      const u = (time * 2.4 + i / N) % 1;
+      const wob = Math.sin(i * 2.3 + time * 3) * B.beam * 0.8 * Math.min(1, u * 2);
+      blobs.push({ u, i, ...along(u, wob) });
+    }
+    blobs.sort((a, b) => b.u - a.u);
+    for (const b of blobs) {
+      const r = 6 + b.u * 26;
+      const lift = b.u > 0.33 ? r * 0.35 : 0;
+      if (b.u > 0.6) {
+        ctx.save();
+        ctx.globalAlpha = (b.u - 0.6) * 1.6;
+        PFX.disc(ctx, b.x + 3, b.y - lift - r * 0.4 - (b.u - 0.6) * 40, r * 0.9, r * 0.7, b.i % 2 ? '#2a1612' : '#3e2420');
+        ctx.restore();
+      }
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, 1.6 - b.u * 1.4);
+      PFX.disc(ctx, b.x, b.y - lift, r, r * 0.8, b.u > 0.7 ? '#6e0a0a' : '#a8100e');
+      PFX.disc(ctx, b.x - r * 0.1, b.y - lift - r * 0.1, r * 0.75, r * 0.6, '#e8281a');
+      if (b.u < 0.8) PFX.disc(ctx, b.x - r * 0.15, b.y - lift - r * 0.15, r * 0.55, r * 0.45, '#ff6a4a');
+      if (b.u < 0.6) PFX.disc(ctx, b.x - r * 0.18, b.y - lift - r * 0.18, r * 0.34, r * 0.27, b.u < 0.35 ? '#ffffff' : '#ffd2c4');
+      ctx.restore();
+    }
+    // the white-hot core of the jet, and the flare at his jaws
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let u = 0; u < 0.6; u += 0.06) {
+      const p = along(u, 0);
+      PFX.glow(ctx, p.x, p.y - (u > 0.33 ? 6 : 0), 16 - u * 10, '255, 200, 180', 0.7 - u);
+    }
+    PFX.glow(ctx, m.x, m.y, 34 + Math.sin(time * 30) * 4, '255, 80, 50', 1);
+    PFX.glow(ctx, m.x, m.y, 12, '255, 245, 235', 1);
+    ctx.restore();
+    PFX.star(ctx, m.x, m.y, 10 + Math.sin(time * 40) * 3, '#ffd2c4', '#ffffff');
   }
 
   drawOverlay() {}
