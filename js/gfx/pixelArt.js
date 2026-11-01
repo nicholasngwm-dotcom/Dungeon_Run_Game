@@ -3,7 +3,9 @@
 // outline by the outline() pass (optionally tinted by the colour it borders).
 
 const OUTLINE = '#1a1020';
-// health bars: friends (allies, pets, teammates) are green, enemies redconst ALLY_BAR = '#4ad04a';const ALLY_BAR_BACK = '#163a1c';
+// health bars: friends (allies, pets, teammates) are green, enemies red
+const ALLY_BAR = '#4ad04a';
+const ALLY_BAR_BACK = '#163a1c';
 
 class PixelArt {
   constructor(width, height) {
