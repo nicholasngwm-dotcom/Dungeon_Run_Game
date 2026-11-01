@@ -102,6 +102,39 @@ const PFX = {
     ctx.fillRect(cx, cy, k, k);
   },
 
+  /** A cartoon 5-point star of radius r, outlined, turned by `spin` (radians). */
+  star5(ctx, x, y, r, spin, color) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = spin - Math.PI / 2 + (i * Math.PI) / 5;
+      const rr = i % 2 ? r * 0.45 : r;
+      ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    ctx.closePath();
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.fillStyle = '#fffbe0';
+    ctx.fillRect(Math.round(x - r * 0.3), Math.round(y - r * 0.35), 2, 2);
+  },
+
+  /** Stars wheeling round a stunned head at (x, y), rx wide: the ones behind smaller and dimmer. */
+  stunStars(ctx, x, y, time, rx = 12, n = 4) {
+    const stars = [];
+    for (let i = 0; i < n; i++) {
+      const a = time * 5 + (i * TAU) / n;
+      stars.push({ a, front: Math.sin(a), i });
+    }
+    stars.sort((p, q) => p.front - q.front);   // the back ones first
+    for (const s of stars) {
+      PFX.star5(ctx, x + Math.cos(s.a) * rx, y + s.front * rx * 0.3, 3.4 + s.front * 1.1, time * 3 + s.i,
+        s.front > 0 ? '#ffe14a' : '#c8a030');
+    }
+  },
+
   /**
    * Flickering flame tongue standing on (x, y): w wide at the base, h tall,
    * swaying with `phase` (seconds). colors = outer flame first, core last.

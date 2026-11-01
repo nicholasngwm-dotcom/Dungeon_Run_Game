@@ -255,8 +255,8 @@ class RoyalPrincess {
     Sound.play('daggerFan');
     lobShot(world, this.x + this.facing * 10, this.y - 40, at.x, at.y, c.flight, {
       sprite: kind === 'ice' ? Sprites.projectiles.icePotion : Sprites.projectiles.firePotion,
-      radius: c.radius, height: 100, spin: 9, rgb: kind === 'ice' ? '140, 200, 255' : '255, 120, 40',
-      trail: kind === 'ice' ? ['#9ad0ff', '#e6f6ff'] : ['#ffd34a', '#ff8a1e'],
+      radius: c.radius, height: 100, spin: 9, rgb: kind === 'ice' ? '140, 200, 255' : '255, 50, 30',
+      trail: kind === 'ice' ? ['#9ad0ff', '#e6f6ff'] : ['#ff6a4a', '#e8281a'],
       onLand: (w) => (kind === 'ice' ? this.iceBurst(w, at) : this.fireBurst(w, at)),
     });
   }
@@ -301,7 +301,7 @@ class RoyalPrincess {
     Sound.play('glass');
     Sound.play('fireImpact');
     world.shake(4, 0.2);
-    world.effects.burst(at.x, at.y - 6, { count: 30, colors: ['#ffd34a', '#ff8a1e', '#e0461e', '#ffffff'], speed: [60, 220], life: [0.3, 0.7], up: 60 });
+    world.effects.burst(at.x, at.y - 6, { count: 30, colors: ['#ff6a4a', '#e8281a', '#a8100e', '#ffffff'], speed: [60, 220], life: [0.3, 0.7], up: 60 });
     world.effects.flames(at.x, at.y + 4, { count: 5, spread: 20, height: 26, width: 12, life: 0.6, colors: ENEMY_FIRE_COLORS });
     for (const a of hitAround(world, at.x, at.y, c.radius, c.damage)) a.burn?.(c.burnDps, c.burnTime, world);
     // bouncing fireballs flung out all round
@@ -314,7 +314,7 @@ class RoyalPrincess {
         sprite: Sprites.projectiles.golemFireball, spin: 8, glow: '255, 60, 40', trail: ['#ff3a26', '#c81a1a', '#8a0c12'],
         onHit: (pr, w, t) => {
           if (t) t.burn?.(c.burnDps, c.burnTime, w);
-          w.effects.burst(pr.x, pr.y, { count: 6, colors: ['#ffd34a', '#ff8a1e'], speed: [30, 90], life: [0.15, 0.3] });
+          w.effects.burst(pr.x, pr.y, { count: 6, colors: ['#ff6a4a', '#e8281a'], speed: [30, 90], life: [0.15, 0.3] });
         },
       }));
     }

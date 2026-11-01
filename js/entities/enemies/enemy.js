@@ -557,14 +557,7 @@ class Enemy extends Entity {
     if (this.zapped > 0) return Game.drawZapped(ctx, this.x, this.y, this.radius * 2 + 8, Math.max(24, this.y - this.hy) * 2, this.animTime, this.zapped);
     if (this.asleep) return this.drawSleep(ctx);
     if (this.waking > 0) return this.drawWaking(ctx);
-    const y = this.y - this.barOffset - 8;
-    for (let i = 0; i < 3; i++) {
-      const a = this.animTime * 6 + (i * TAU) / 3;
-      ctx.fillStyle = OUTLINE;
-      ctx.fillRect(Math.round(this.x + Math.cos(a) * 10) - 2, Math.round(y + Math.sin(a) * 3) - 2, 5, 5);
-      ctx.fillStyle = '#ffe680';
-      ctx.fillRect(Math.round(this.x + Math.cos(a) * 10) - 1, Math.round(y + Math.sin(a) * 3) - 1, 3, 3);
-    }
+    PFX.stunStars(ctx, this.x, this.y - this.barOffset - 10, this.animTime, Math.max(12, this.radius));
   }
 
   /** Confused: a puff of flour hanging on it, and question marks wheeling round its head. */

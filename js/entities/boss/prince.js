@@ -20,7 +20,7 @@ const HORSE_SCALE = 1.35;
 // his slash crescents (Warrior.drawSlashFx palettes): gold, and alight once his blade burns
 const PRINCE_FX = {
   gold: { slash: ['#ffffff', '#fffbe8', '#ecd690', '#a07a24'], slashGlow: ['#8a6a26', '#5a3a1a'], flare: '#fff2a0' },
-  fire: { slash: ['#fff2a0', '#ffd34a', '#ff8a1e', '#e0461e'], slashGlow: ['#a03a14', '#5a1a0a'], flare: '#ffd34a' },
+  fire: { slash: ['#ffc0b0', '#ff6a4a', '#e8281a', '#a8100e'], slashGlow: ['#8a0c0c', '#4a0606'], flare: '#ff6a4a' },
 };
 const THRUST_TIME = 0.16;   // the rapier shoots out and back on a stab
 
@@ -393,7 +393,7 @@ class RoyalPrince {
     // a bright golden (or, once his blade burns, fiery) streak the length of the thrust, at hand height
     const len = dist(sx, sy, end.x, end.y);
     const aim = this.aim;
-    const colors = this.blazing ? ['#e0461e', '#ff8a1e', '#ffd34a', '#fff2a0'] : ['#a07a24', '#e8b040', '#fffbe8', '#ffffff'];
+    const colors = this.blazing ? ['#a8100e', '#e8281a', '#ff6a4a', '#ffc0b0'] : ['#a07a24', '#e8b040', '#fffbe8', '#ffffff'];
     world.effects.add(0.3, (ctx, t) => Warrior.drawLineFx(ctx, sx, sy - 18, aim, len, c.stabWidth, colors, t));
     world.effects.burst(end.x, end.y - 18, { count: 10, colors: ['#fffbe8', '#ecd690', '#ffffff'], speed: [60, 180], life: [0.15, 0.35] });
     world.shake(4, 0.15);
@@ -431,7 +431,7 @@ class RoyalPrince {
       this.blazing = true;
       const hx = this.x + this.facing * 20;
       const hy = this.y - 30;
-      world.effects.burst(hx, hy, { count: 24, colors: ['#ffd34a', '#ff8a1e', '#e0461e', '#fff2a0'], speed: [40, 160], life: [0.3, 0.6], up: 50 });
+      world.effects.burst(hx, hy, { count: 24, colors: ['#ff6a4a', '#e8281a', '#a8100e', '#ffc0b0'], speed: [40, 160], life: [0.3, 0.6], up: 50 });
       world.effects.text(this.hx, this.headY - 10, 'BURN!', { color: '#ff8a3a', size: 10, life: 1.2 });
       Sound.play('fireArrow');
       this.setState('walk');
@@ -462,7 +462,7 @@ class RoyalPrince {
         },
         onHit: (pr, w, t) => {
           if (t) t.burn?.(c.burnDps, c.burnTime, w);
-          w.effects.burst(pr.x, pr.y, { count: 5, colors: ['#ffd34a', '#ff8a1e', '#e0461e'], speed: [20, 70], life: [0.15, 0.3], up: 30 });
+          w.effects.burst(pr.x, pr.y, { count: 5, colors: ['#ff6a4a', '#e8281a', '#a8100e'], speed: [20, 70], life: [0.15, 0.3], up: 30 });
         },
       }));
     }
@@ -711,7 +711,7 @@ class RoyalPrince {
           const sa = Math.sin(a);
           ctx.save();
           ctx.globalCompositeOperation = 'lighter';
-          PFX.glow(ctx, f * 8 + ca * 20, hy + 4 + sa * 20, 18, '255, 130, 40', 0.5 + Math.sin(this.time * 17) * 0.1, 1, 12);
+          PFX.glow(ctx, f * 8 + ca * 20, hy + 4 + sa * 20, 18, '255, 55, 30', 0.5 + Math.sin(this.time * 17) * 0.1, 1, 12);
           ctx.restore();
           for (let i = 0; i < 4; i++) {
             const k = 8 + i * 8;

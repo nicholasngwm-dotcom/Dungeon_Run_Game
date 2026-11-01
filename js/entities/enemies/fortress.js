@@ -9,7 +9,7 @@
 // The fortress's own creatures are at home in both.
 
 const FORT_ROCK_GIBS = ['#2c2426', '#544846', '#0e0a0c'];
-const FORT_LAVA_GIBS = ['#ff7a1a', '#ffb52e', '#d63c16'];
+const FORT_LAVA_GIBS = ['#d81e14', '#ff4a2a', '#a8100e'];
 const FORT_DEMON_GIBS = ['#6e1614', '#98241c', '#240608'];
 
 /** Sets a hero alight with cfg's burn (burnDps for burnTime), scaled for the stage. */
@@ -26,7 +26,7 @@ function searLava(world, a) {
 /** A shot of fire: it sets whoever it hits alight, and bursts in sparks. */
 function fireShot(world, x, y, angle, speed, c, opts) {
   enemyShot(world, x, y, angle, speed, {
-    radius: 5, trail: ['#ffd34a', '#ff8a1e', '#e0461e'], glow: FORT_LAVA,
+    radius: 5, trail: ['#ff6a4a', '#e8281a', '#a8100e'], glow: FORT_LAVA,
     onHit: (pr, w, t) => {
       if (t) setAlight(w, t, c);
       w.effects.burst(pr.x, pr.y, { count: 8, colors: FORT_LAVA_GIBS, speed: [30, 110], life: [0.15, 0.35] });
@@ -40,11 +40,11 @@ function drawLavaDisc(ctx, x, y, r, k, secs, seed = 0) {
   ctx.save();
   ctx.globalAlpha = k;
   PFX.disc(ctx, x, y, r, r * 0.55, '#2e1612');
-  PFX.disc(ctx, x, y, r * 0.88, r * 0.47, '#a8200e');
-  PFX.disc(ctx, x, y, r * 0.7, r * 0.36, '#e0461e');
+  PFX.disc(ctx, x, y, r * 0.88, r * 0.47, '#6e0a0a');
+  PFX.disc(ctx, x, y, r * 0.7, r * 0.36, '#a8100e');
   for (let i = 0; i < 4; i++) {
     const a = secs * 0.8 + i * 1.7 + seed;
-    PFX.disc(ctx, x + Math.cos(a) * r * 0.35, y + Math.sin(a * 1.3) * r * 0.18, r * 0.22, r * 0.11, i % 2 ? '#ff8a1e' : '#ffc23a');
+    PFX.disc(ctx, x + Math.cos(a) * r * 0.35, y + Math.sin(a * 1.3) * r * 0.18, r * 0.22, r * 0.11, i % 2 ? '#e8281a' : '#ff5a3a');
   }
   // bubbles swelling and popping
   const ph = (secs * 1.4 + seed) % 1;
@@ -92,7 +92,7 @@ function firePatch(world, x, y, r, life, c, flames = 9) {
       ctx.globalAlpha = 0.55 * k;
       PFX.disc(ctx, px, py, pr, pr * 0.55, '#2a0e06');
       ctx.globalAlpha = 0.8 * k;
-      PFX.ring(ctx, px, py, pr * 0.9, pr * 0.5, '#ff6a1a', 2, { dash: [3, 3] });
+      PFX.ring(ctx, px, py, pr * 0.9, pr * 0.5, '#d01a12', 2, { dash: [3, 3] });
       ctx.restore();
     },
     top: (ctx, px, py, pr, t) => {
@@ -100,7 +100,7 @@ function firePatch(world, x, y, r, life, c, flames = 9) {
       const secs = t * life;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      PFX.glow(ctx, px, py - 6, pr * 1.05, '255, 110, 30', 0.5 * k, 2, pr * 0.6);
+      PFX.glow(ctx, px, py - 6, pr * 1.05, '255, 40, 25', 0.5 * k, 2, pr * 0.6);
       ctx.restore();
       ctx.globalAlpha = k;
       for (let i = 0; i < flames; i++) {
@@ -111,7 +111,7 @@ function firePatch(world, x, y, r, life, c, flames = 9) {
       }
       ctx.globalAlpha = 1;
     },
-    light: { r: r * 2.4, rgb: '255, 120, 40', s: 0.8 },
+    light: { r: r * 2.4, rgb: '255, 50, 30', s: 0.8 },
   });
 }
 
@@ -123,7 +123,7 @@ function lavaBeamFx(world, x1, y1, x2, y2, width, life = 0.3) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = 1 - t;
-    PFX.beam(ctx, x1, y1, angle, len, width * (1.4 - t * 0.6), ['#7a1206', '#e0461e', '#ffb02e', '#fff6c8'], 2, false);
+    PFX.beam(ctx, x1, y1, angle, len, width * (1.4 - t * 0.6), ['#4a0606', '#a8100e', '#ff4a2a', '#ffd2c4'], 2, false);
     PFX.glow(ctx, x2, y2, 16, FORT_LAVA, 0.8 * (1 - t));
     ctx.restore();
   });
@@ -137,7 +137,7 @@ class Skeleflame extends Enemy {
   constructor(x, y) {
     super('skeleflame', x, y);
     this.aim = 0;
-    this.gibColors = ['#5a5040', '#b5ad96', '#ff8a1e'];
+    this.gibColors = ['#5a5040', '#b5ad96', '#e8281a'];
   }
 
   update(dt, world) {
@@ -159,7 +159,7 @@ class Skeleflame extends Enemy {
         if (this.stateTime < c.windup - c.aimLockAt) { this.aim = angleTo(this.hx, this.hy, p.hx, p.hy); this.faceToward(p.x); }
         if (this.stateTime >= c.windup) {
           fireShot(world, this.hx + Math.cos(this.aim) * 14, this.hy + Math.sin(this.aim) * 14, this.aim, c.arrowSpeed, c, {
-            radius: 4, damage: c.damage, life: 3, sprite: Sprites.projectiles.fireArrow,
+            radius: 4, damage: c.damage, life: 3, sprite: Sprites.projectiles.fortFireArrow,
           });
           Sound.play('fireArrow', 0.1);
           this.setState('recover');
@@ -254,7 +254,7 @@ class MagmaBat extends Enemy {
     this.hitOffY = 30;
     this.barOffset = 52;
     this.wander = rand(0, TAU);
-    this.gibColors = [...FORT_ROCK_GIBS, '#ff8a1e'];
+    this.gibColors = [...FORT_ROCK_GIBS, '#e8281a'];
   }
 
   /** Hard to hit: it flits aside from some hits altogether. */
@@ -361,7 +361,7 @@ class DemonWarrior extends Enemy {
           for (const a of world.allies) {
             if (pointSegmentDistance(a.x, a.y, this.x, this.y, x2, y2) <= c.thrustWidth / 2 + a.radius) a.hurt(c.damage, world, this.x, this.y);
           }
-          world.effects.burst(x2, y2 - 10, { count: 8, colors: ['#ffffff', '#ffb52e', '#ff7a1a'], speed: [40, 120], life: [0.12, 0.3], angle: this.attackAngle, spread: 0.8 });
+          world.effects.burst(x2, y2 - 10, { count: 8, colors: ['#ffffff', '#ff4a2a', '#d81e14'], speed: [40, 120], life: [0.12, 0.3], angle: this.attackAngle, spread: 0.8 });
           Sound.play('swordStab');
           this.setState('recover');
         }
@@ -614,7 +614,7 @@ class EliteDemon extends Enemy {
         if (this.stateTime >= c.slashWindup) {
           // a quick cut, one sword then the other, over and over
           meleeArc(this, world, () => {});
-          this.swipeFx(world, '255, 140, 60');
+          this.swipeFx(world, '255, 60, 40');
           Sound.play(this.slashSide ? 'slash' : 'swordSwing', 0.1);
           this.slashSide = !this.slashSide;
           this.attackCooldown = c.slashCooldown;
@@ -644,7 +644,7 @@ class EliteDemon extends Enemy {
       if (w.r >= c.waveRadius) { w.dead = true; continue; }
       for (let i = 0; i < 2; i++) {
         const a = vrand(0, TAU);
-        world.effects.burst(w.x + Math.cos(a) * w.r, w.y + Math.sin(a) * w.r * 0.6, { count: 1, colors: ['#ffb52e', '#ff7a1a', '#fff2a0'], speed: [10, 40], life: [0.2, 0.4], up: 30, size: [1, 2] });
+        world.effects.burst(w.x + Math.cos(a) * w.r, w.y + Math.sin(a) * w.r * 0.6, { count: 1, colors: ['#ff4a2a', '#d81e14', '#ffc0b0'], speed: [10, 40], life: [0.2, 0.4], up: 30, size: [1, 2] });
       }
       for (const p of world.heroes) {
         const d = Math.hypot(p.x - w.x, (p.y - w.y) / 0.6);
@@ -674,10 +674,10 @@ class EliteDemon extends Enemy {
     world.effects.add(0.4, (ctx, t) => {
       ctx.save();
       ctx.globalAlpha = 1 - t;
-      PFX.ring(ctx, x, y, c.landRadius * (0.4 + t * 0.7), c.landRadius * 0.55 * (0.4 + t * 0.7), '#ffb52e', 2, { thick: t < 0.3 ? 3 : 1 });
+      PFX.ring(ctx, x, y, c.landRadius * (0.4 + t * 0.7), c.landRadius * 0.55 * (0.4 + t * 0.7), '#ff4a2a', 2, { thick: t < 0.3 ? 3 : 1 });
       ctx.restore();
     }, true);
-    world.effects.burst(x, y, { count: 20, colors: ['#ffb52e', '#ff7a1a', '#4a1a18'], speed: [60, 200], life: [0.25, 0.5], up: 40 });
+    world.effects.burst(x, y, { count: 20, colors: ['#ff4a2a', '#d81e14', '#4a1a18'], speed: [60, 200], life: [0.25, 0.5], up: 40 });
     world.shake(4, 0.2);
     Sound.play('impact', 0.1);
     this.setState('ground');
@@ -698,9 +698,9 @@ class EliteDemon extends Enemy {
       const k = w.r / c.waveRadius;
       ctx.save();
       ctx.globalAlpha = 0.9 * (1 - k);
-      PFX.ring(ctx, w.x, w.y, w.r, w.r * 0.6, '#ffb52e', 2, { thick: 3 });
+      PFX.ring(ctx, w.x, w.y, w.r, w.r * 0.6, '#ff4a2a', 2, { thick: 3 });
       ctx.globalAlpha = 0.5 * (1 - k);
-      PFX.ring(ctx, w.x, w.y, Math.max(1, w.r - c.waveBand * 0.6), Math.max(1, (w.r - c.waveBand * 0.6) * 0.6), '#ff7a1a', 2, { dash: [3, 3] });
+      PFX.ring(ctx, w.x, w.y, Math.max(1, w.r - c.waveBand * 0.6), Math.max(1, (w.r - c.waveBand * 0.6) * 0.6), '#d81e14', 2, { dash: [3, 3] });
       ctx.restore();
     }
   }
@@ -721,7 +721,7 @@ class EliteDemon extends Enemy {
     if (this.aloft) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      PFX.glow(ctx, this.x, this.hy, 26, '255, 90, 40', 0.18 * this.spawnAlpha);
+      PFX.glow(ctx, this.x, this.hy, 26, '255, 40, 30', 0.18 * this.spawnAlpha);
       ctx.restore();
     }
     this.drawHealthBar(ctx);
@@ -745,7 +745,7 @@ class MagmaDen extends Enemy {
     this.hitOffY = 16;
     this.barOffset = 48;
     this.summonTimer = this.cfg.summonEvery * rand(0.35, 0.6);
-    this.gibColors = [...FORT_ROCK_GIBS, '#ff7a1a'];
+    this.gibColors = [...FORT_ROCK_GIBS, '#d81e14'];
   }
 
   think(dt, world) {
@@ -838,7 +838,7 @@ class MeteorCrab extends Enemy {
     const fall = c.fallTime;
     const img = Sprites.projectiles.meteor;
     world.effects.add(fall, (ctx, t) => {
-      Telegraph.circle(ctx, at.x, at.y, c.meteorRadius, t, '255, 120, 40');
+      Telegraph.circle(ctx, at.x, at.y, c.meteorRadius, t, '255, 50, 30');
       drawShadow(ctx, at.x, at.y, 8 + t * c.meteorRadius * 0.6, 3 + t * c.meteorRadius * 0.3, 0.2 + t * 0.3);
     }, true);
     world.effects.add(fall, (ctx, t) => {
@@ -897,15 +897,15 @@ function enemyBlastFx(world, x, y, r) {
     const e = 1 - (1 - t) ** 3;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    PFX.glow(ctx, x, y - 12, r * (0.5 + e * 0.5), '255, 140, 50', 1.3 * (1 - t), 2, r * 0.6 * (0.5 + e * 0.5));
-    PFX.glow(ctx, x, y - 14, r * 0.35 * (1 - t * 0.7), '255, 240, 200', 1.4 * (1 - t));
+    PFX.glow(ctx, x, y - 12, r * (0.5 + e * 0.5), '255, 60, 40', 1.3 * (1 - t), 2, r * 0.6 * (0.5 + e * 0.5));
+    PFX.glow(ctx, x, y - 14, r * 0.35 * (1 - t * 0.7), '255, 190, 170', 1.4 * (1 - t));
     ctx.restore();
     ctx.save();
     ctx.globalAlpha = 1 - t;
-    PFX.ring(ctx, x, y, r * e, r * 0.55 * e, '#ffe0a0', 2, { thick: t < 0.3 ? 3 : 1 });
+    PFX.ring(ctx, x, y, r * e, r * 0.55 * e, '#ffb0a0', 2, { thick: t < 0.3 ? 3 : 1 });
     ctx.restore();
   });
-  world.effects.flames(x, y, { count: 6, spread: r * 0.45, height: 26, width: 12, life: 0.55, colors: FIRE_COLORS });
+  world.effects.flames(x, y, { count: 6, spread: r * 0.45, height: 26, width: 12, life: 0.55, colors: ENEMY_FIRE_COLORS });
   world.effects.smoke(x, y - 14, { count: 8, radius: r * 0.45, life: 0.9, rise: 30 });
   world.shake(5, 0.2);
   Sound.play('explosion');
@@ -938,7 +938,7 @@ class Wildfire extends Enemy {
   drawGround(ctx) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    PFX.glow(ctx, this.x, this.y, 30, '255, 110, 30', 0.35 * this.spawnAlpha, 2, 14);
+    PFX.glow(ctx, this.x, this.y, 30, '255, 40, 25', 0.35 * this.spawnAlpha, 2, 14);
     ctx.restore();
   }
 
@@ -957,7 +957,7 @@ class Wildfire extends Enemy {
     ctx.fillRect(fx - 5, fy, 3, 3);
     ctx.fillRect(fx + 2, fy, 3, 3);
     ctx.fillRect(fx - 2, fy + 5, 5, 1);
-    ctx.fillStyle = '#fff6c8';
+    ctx.fillStyle = '#ffd2c4';
     ctx.fillRect(fx - 4, fy, 1, 1);
     ctx.fillRect(fx + 3, fy, 1, 1);
     if (this.flashTime > 0) {
@@ -980,7 +980,7 @@ class BlazingTurret extends Enemy {
     this.barOffset = 52;
     this.aim = 0;
     this.attackCooldown = this.cfg.cooldown * rand(0.4, 0.8);
-    this.gibColors = ['#361214', '#46404a', '#ff7a1a'];
+    this.gibColors = ['#361214', '#46404a', '#d81e14'];
   }
 
   get mouth() { return { x: this.x, y: this.y - 14 }; }
@@ -1046,7 +1046,7 @@ class BlazingTurret extends Enemy {
 class MoltenKnight extends Enemy {
   constructor(x, y) {
     super('moltenKnight', x, y);
-    this.gibColors = ['#2e2a32', '#66606a', '#ff7a1a'];
+    this.gibColors = ['#2e2a32', '#66606a', '#d81e14'];
   }
 
   think(dt, world) {
@@ -1065,7 +1065,7 @@ class MoltenKnight extends Enemy {
       case 'windup':
         if (this.stateTime >= c.windup) {
           meleeArc(this, world, (a) => setAlight(world, a, c));
-          this.swipeFx(world, '255, 130, 40');
+          this.swipeFx(world, '255, 55, 30');
           Sound.play('swordSwing');
           this.setState('recover');
         }
@@ -1112,7 +1112,7 @@ class MoltenElemental extends Enemy {
     this.waveTimer = this.cfg.waveEvery * rand(0.5, 0.9);
     this.auraTick = 0;
     this.wave = null;   // a wave of lava on its way: { x, y, angle, d, laid, hit }
-    this.gibColors = [...FORT_ROCK_GIBS, '#ff7a1a', '#ffb52e'];
+    this.gibColors = [...FORT_ROCK_GIBS, '#d81e14', '#ff4a2a'];
   }
 
   update(dt, world) {
@@ -1246,8 +1246,8 @@ class MoltenElemental extends Enemy {
       // a stream of lava from the shoulder to the fist
       ctx.save();
       ctx.globalAlpha = this.spawnAlpha * 0.9;
-      PFX.line(ctx, this.x + side * 22, this.y - 44, at.x - side * 10, at.y - 8, '#ff7a1a', 3);
-      PFX.line(ctx, this.x + side * 22, this.y - 44, at.x - side * 10, at.y - 8, '#ffd34a', 1);
+      PFX.line(ctx, this.x + side * 22, this.y - 44, at.x - side * 10, at.y - 8, '#d81e14', 3);
+      PFX.line(ctx, this.x + side * 22, this.y - 44, at.x - side * 10, at.y - 8, '#ff6a4a', 1);
       ctx.restore();
     };
     fist(-this.facing);
@@ -1257,7 +1257,7 @@ class MoltenElemental extends Enemy {
     const charge = this.state === 'beam' ? this.stateTime / this.cfg.beamWindup : 0;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    PFX.glow(ctx, this.x, this.y - 55, 12 + charge * 14, '255, 200, 90', (0.5 + charge * 0.5) * this.spawnAlpha);
+    PFX.glow(ctx, this.x, this.y - 55, 12 + charge * 14, '255, 110, 80', (0.5 + charge * 0.5) * this.spawnAlpha);
     ctx.restore();
     ctx.fillStyle = '#2c2426';
     for (let i = 0; i < 4; i++) {
@@ -1325,7 +1325,7 @@ class BabyDragon extends Enemy {
           this.chargeHit.add(a);
           if (a.hurt(stageDamage(world, c.chargeDamage), world, this.x, this.y)) { setAlight(world, a, c); a.knockback?.(this.aim, 260); }
         }
-        if (vrand(0, 1) < 0.6) world.effects.flames(this.x - Math.cos(this.aim) * 14, this.y - 30, { count: 1, height: 16, width: 10, life: 0.35, colors: FIRE_COLORS });
+        if (vrand(0, 1) < 0.6) world.effects.flames(this.x - Math.cos(this.aim) * 14, this.y - 30, { count: 1, height: 16, width: 10, life: 0.35, colors: ENEMY_FIRE_COLORS });
         if (this.charged >= c.chargeDistance || moved < c.chargeSpeed * dt * 0.3) this.setState('recover');
         break;
       }
@@ -1349,7 +1349,7 @@ class BabyDragon extends Enemy {
       lavaPool(w, pt.x, pt.y, c.poolRadius, c.poolTime);
     };
     enemyShot(world, mx, my, a, c.fireSpeed, {
-      radius: 12, damage: 0, life, sprite: Sprites.projectiles.fireballBig, spin: 6, glow: FORT_LAVA, trail: ['#ffd34a', '#ff8a1e', '#e0461e'],
+      radius: 12, damage: 0, life, sprite: Sprites.projectiles.fireballBig, spin: 6, glow: FORT_LAVA, trail: ['#ff6a4a', '#e8281a', '#a8100e'],
       onHit: (pr, w) => burst(w, pr.x, pr.y),
     });
   }

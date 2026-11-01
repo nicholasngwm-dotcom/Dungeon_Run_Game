@@ -126,14 +126,14 @@ function buildFortressProjectiles() {
   });
   Object.assign(Sprites.projectiles, {
     // a skeleflame's burning arrow
-    fireArrow: sprite(20, 7, (p) => {
+    fortFireArrow: sprite(20, 7, (p) => {
       p.rect(2, 3, 12, 1, RAMP.leather[3]);
       p.rect(0, 1, 3, 1, '#5a1410'); p.rect(0, 5, 3, 1, '#5a1410');
       p.poly([[13, 0], [19, 3], [13, 6]], L[3]);
       p.poly([[14, 2], [18, 3], [14, 4]], L[5]);
     }),
     fireballSmall: fireball(5),
-    fireball: fireball(7),
+    fortFireball: fireball(7),
     fireballBig: fireball(12),
     magicOrb: sprite(11, 11, (p) => {
       p.circle(5, 5, 4, M[2]);

@@ -420,8 +420,8 @@ class Catapult extends Enemy {
     world.effects.burst(from.x, from.y, { count: 8, colors: ['#8a8070', '#5b3922'], speed: [30, 100], life: [0.2, 0.4] });
     lobShot(world, from.x, from.y, at.x, at.y, c.flight, {
       sprite: flame ? Sprites.projectiles.flameBoulder : Sprites.projectiles.boulder,
-      radius: c.blastRadius, height: 150, spin: 5, rgb: flame ? '255, 120, 40' : '255, 60, 60',
-      trail: flame ? ['#ffd34a', '#ff8a1e', '#e0461e'] : null,
+      radius: c.blastRadius, height: 150, spin: 5, rgb: flame ? '255, 50, 30' : '255, 60, 60',
+      trail: flame ? ['#ff6a4a', '#e8281a', '#a8100e'] : null,
       onLand: (w) => {
         hitAround(w, at.x, at.y, c.blastRadius, damage, 220);
         // a crash of stone: dust, shards and a crater

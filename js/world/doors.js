@@ -322,7 +322,7 @@ class SwingDoors {
     c.width = S;
     c.height = S;
     const g = c.getContext('2d');
-    const L = ['#b3260c', '#d63c16', '#ee5a18', '#ff7a1a', '#ff9a24', '#ffb52e', '#ffd450'];
+    const L = ['#7a0c08', '#a8100e', '#c81a12', '#d81e14', '#f03a24', '#ff4a2a', '#ff6a4a'];
     // smooth noise that wraps at the edges (sums of sines over whole periods), banded into the palette
     for (let y = 0; y < S; y += 3) {
       for (let x = 0; x < S; x += 3) {
@@ -335,7 +335,7 @@ class SwingDoors {
       }
     }
     // a few white-hot flecks
-    for (const [x, y] of [[6, 9], [27, 3], [39, 30], [15, 36], [33, 18]]) { g.fillStyle = '#fff2a0'; g.fillRect(x, y, 3, 3); }
+    for (const [x, y] of [[6, 9], [27, 3], [39, 30], [15, 36], [33, 18]]) { g.fillStyle = '#ffc0b0'; g.fillRect(x, y, 3, 3); }
     return (SwingDoors.lavaTex = c);
   }
 
@@ -405,7 +405,7 @@ class SwingDoors {
         // the trough along the floor of the doorway
         ctx.fillStyle = '#1a0a0a';
         ctx.fillRect(Math.round(dr.a), Math.round(y - 3), Math.round(dr.b - dr.a), 6);
-        ctx.fillStyle = pour > 0.05 ? '#e0461e' : '#7a1206';
+        ctx.fillStyle = pour > 0.05 ? '#a8100e' : '#7a1206';
         ctx.fillRect(Math.round(dr.a + 1), Math.round(y - 2), Math.round(dr.b - dr.a - 2), 3);
         // the sheet, filling the frame from the lintel down
         const lintelY = y - H + 11;
@@ -434,7 +434,7 @@ class SwingDoors {
     ctx.fillStyle = '#1a0a0a';
     ctx.fillRect(x - 8, Math.round(a), 16, Math.round(b - a));
     const pour = bottom - top;
-    ctx.fillStyle = pour > 0.05 ? '#e0461e' : '#7a1206';
+    ctx.fillStyle = pour > 0.05 ? '#a8100e' : '#7a1206';
     ctx.fillRect(x - 6, Math.round(a + 1), 12, Math.round(b - a - 2));
     // the sheet: from height H (1 - top) down to height H (1 - bottom) over every point of the doorway
     if (pour > 0.01) {
@@ -509,9 +509,9 @@ class SwingDoors {
     ctx.fillRect(kx - 7, top - 6 + jolt, 14, 20);
     ctx.fillStyle = B[4];
     ctx.fillRect(kx - 6, top - 5 + jolt, 12, 18);
-    ctx.fillStyle = '#ff7a1a';
+    ctx.fillStyle = '#d81e14';
     ctx.fillRect(kx - 2, top + 1 + jolt, 4, 4);
-    ctx.fillStyle = '#ffe27a';
+    ctx.fillStyle = '#ff9a80';
     ctx.fillRect(kx - 2, top + 1 + jolt, 2, 2);
   }
 
@@ -526,7 +526,7 @@ class SwingDoors {
     const pouring = now < 1;
     if (pouring && vrand(0, 1) < (dr.locked ? 0.5 : 0.25)) {
       const p = along(vrand(0, 1));
-      world.effects.burst(p.x, p.y - 2, { count: 1, colors: ['#ffc23a', '#ff8a1e', '#e0461e'], speed: [20, 60], up: 50, gravity: 300, life: [0.3, 0.5], size: [1, 2] });
+      world.effects.burst(p.x, p.y - 2, { count: 1, colors: ['#ff5a3a', '#e8281a', '#a8100e'], speed: [20, 60], up: 50, gravity: 300, life: [0.3, 0.5], size: [1, 2] });
     }
     const steps = Math.max(2, Math.round((dr.b - dr.a) / 24));
     if (prev === 0 && now > 0) {
@@ -541,7 +541,7 @@ class SwingDoors {
       // the last of it splashes into the trough
       for (let i = 0; i < steps; i++) {
         const p = along((i + 0.5) / steps);
-        world.effects.burst(p.x, p.y - 2, { count: 4, colors: ['#ffc23a', '#ff8a1e', '#e0461e'], speed: [30, 90], up: 60, gravity: 320, life: [0.3, 0.6], size: [1, 2] });
+        world.effects.burst(p.x, p.y - 2, { count: 4, colors: ['#ff5a3a', '#e8281a', '#a8100e'], speed: [30, 90], up: 60, gravity: 320, life: [0.3, 0.6], size: [1, 2] });
         world.effects.smoke(p.x, p.y - 4, { count: 1, radius: 8, life: 0.9, rise: 14, colors: ['#5a4a46', '#8a7a74', '#b8aca4'] });
       }
     }
@@ -549,7 +549,7 @@ class SwingDoors {
       // it starts pouring again: a gout of embers from the spouts
       for (let i = 0; i < steps; i++) {
         const p = along((i + 0.5) / steps);
-        world.effects.burst(p.x, p.y - H + 12, { count: 3, colors: ['#ffe27a', '#ff8a1e'], speed: [10, 40], gravity: 200, life: [0.3, 0.6], size: [1, 2] });
+        world.effects.burst(p.x, p.y - H + 12, { count: 3, colors: ['#ff9a80', '#e8281a'], speed: [10, 40], gravity: 200, life: [0.3, 0.6], size: [1, 2] });
       }
     }
   }

@@ -236,6 +236,12 @@ const SFX = {
   talk: (s) => s.tone({ type: 'triangle', freq: 520 + nativeRandom() * 160, dur: 0.03, vol: 0.04 }),
   uiClick: (s) => { s.tone({ freq: 520, to: 900, dur: 0.08, vol: 0.1 }); },
   denied: (s) => s.tone({ type: 'square', freq: 140, dur: 0.1, vol: 0.08 }),
+  // low health (StatusFx): a soft lub-dub
+  heartbeat: (s) => {
+    s.tone({ type: 'sine', freq: 72, to: 44, dur: 0.14, vol: 0.32 });
+    s.noise({ dur: 0.08, vol: 0.08, filter: 'lowpass', freq: 160 });
+    s.tone({ type: 'sine', freq: 62, to: 40, dur: 0.12, vol: 0.22, delay: 0.17 });
+  },
 
   // --- Knight ---
   slash: (s) => {

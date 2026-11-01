@@ -1366,6 +1366,7 @@ class Game {
       ctx.drawImage(this.vignette, 0, 0, CONFIG.screen.width, CONFIG.screen.height);   // (stretched to this screen's shape)
       ctx.globalAlpha = 1;
     }
+    if (!this.showcase) StatusFx.draw(ctx, this);   // low health and ailment borders, the big STUNNED word
     if (!this.showcase) HUD.draw(ctx, this);
   }
 
@@ -1525,7 +1526,7 @@ class Game {
       if (p.dead) continue;
       ctx.fillStyle = OUTLINE;
       ctx.fillRect(x - 13, y + 9, 26, 4);
-      ctx.fillStyle = '#e84a4a';
+      ctx.fillStyle = ALLY_BAR;
       ctx.fillRect(x - 12, y + 10, Math.round(24 * clamp(p.hp / p.maxHp, 0, 1)), 2);
     }
   }

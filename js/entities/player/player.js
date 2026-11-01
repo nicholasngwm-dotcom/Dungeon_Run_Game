@@ -574,7 +574,7 @@ class Player extends Entity {
    * ticks (every `every` s) and clings for `duration` s after you step out.
    */
   lavaBurn(dps, duration, world, every = CONFIG.run.lava.every) {
-    this.ailment('lava', dps, duration, world, 'MELTING', '#ffb02e', every);
+    this.ailment('lava', dps, duration, world, 'MELTING', '#ff4a2a', every);
   }
 
   /** Cut open (the jester's daggers): bleeds dps hp per second for `duration`s. */
@@ -598,7 +598,7 @@ class Player extends Entity {
         world.effects.flames(this.x + rand(-7, 7), this.y - rand(2, 14), { count: 1, height: rand(12, 20), width: rand(6, 9), life: rand(0.25, 0.4), colors: ENEMY_FIRE_COLORS });
       } else if (kind === 'lava' && Math.random() < dt * 18) {
         // molten drops clinging and spitting off the feet and legs
-        world.effects.burst(this.x + rand(-8, 8), this.y - rand(0, 12), { count: 1, colors: ['#ffc23a', '#ff8a1e', '#e0461e'], speed: [10, 40], life: [0.3, 0.5], up: 30, gravity: 300, size: [2, 3] });
+        world.effects.burst(this.x + rand(-8, 8), this.y - rand(0, 12), { count: 1, colors: ['#ff5a3a', '#e8281a', '#a8100e'], speed: [10, 40], life: [0.3, 0.5], up: 30, gravity: 300, size: [2, 3] });
       } else if (kind === 'bleed' && Math.random() < dt * 7) {
         world.effects.burst(this.x + rand(-6, 6), this.y - rand(8, 22), { count: 1, colors: ['#c43a44', '#6a1622'], speed: [0, 10], life: [0.3, 0.5], gravity: 300, drag: 0, size: [2, 2] });
       }
@@ -684,20 +684,11 @@ class Player extends Entity {
     ctx.restore();
   }
 
-  /** Spinning stars over a stunned hero (a block of ice if frozen). */
+  /** Stars wheeling over a stunned hero (a block of ice if frozen). */
   drawStatus(ctx) {
     if (this.frozenTime > 0) return this.drawIceBlock(ctx);
     if (!(this.stunTime > 0)) return;
-    const y = this.y - 50;
-    for (let i = 0; i < 3; i++) {
-      const a = this.animTime * 6 + (i * TAU) / 3;
-      const sx = Math.round(this.x + Math.cos(a) * 10);
-      const sy = Math.round(y + Math.sin(a) * 3);
-      ctx.fillStyle = OUTLINE;
-      ctx.fillRect(sx - 2, sy - 2, 5, 5);
-      ctx.fillStyle = '#ffe680';
-      ctx.fillRect(sx - 1, sy - 1, 3, 3);
-    }
+    PFX.stunStars(ctx, this.x, this.y - 52, this.animTime, 14);
   }
 
   // ---------- aegis (cast by the Priestess) ----------

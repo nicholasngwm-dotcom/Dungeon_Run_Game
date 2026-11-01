@@ -63,7 +63,8 @@ const CONTROL_MODES = [
 
 const Settings = {
   defaults: {
-    sensitivity: 1,      // mouse speed multiplier while the game has the pointer locked
+    sensitivity: 0.6,    // mouse speed multiplier while the game has the pointer locked
+    sensV: 2,            // saves still on the old 1.0x default are moved down to 0.6x once (see load)
     music: true,
     musicVolume: 0.7,
     sfxVolume: 0.8,
@@ -102,6 +103,8 @@ const Settings = {
     for (const k of Object.keys(this.data.keys)) if (!(k in this.defaults.keys)) delete this.data.keys[k];
     // a save from when the window was the default: fullscreen now is
     if (!saved.displayV) this.data.display = 'fullscreen';
+    // a save still on the old, twitchier 1.0x default sensitivity: the new default
+    if (!saved.sensV && this.data.sensitivity === 1) this.data.sensitivity = this.defaults.sensitivity;
   },
 
   save() {

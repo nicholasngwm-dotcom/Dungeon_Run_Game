@@ -9,7 +9,7 @@
 const FF = {
   rock: ['#0e0a0c', '#1c1618', '#2c2426', '#3e3434', '#544846', '#706260', '#94847c'],   // charred basalt, darkest first
   brick: ['#14070a', '#240c0e', '#361214', '#4a1a18', '#602420', '#7c3226'],             // nether brick
-  lava: ['#4a0a04', '#9a1c0c', '#d63c16', '#ff7a1a', '#ffb52e', '#ffe27a', '#fff8d0'],    // cooling crust to white-hot
+  lava: ['#4a0a04', '#9a1c0c', '#a8100e', '#d81e14', '#ff4a2a', '#ff9a80', '#fff8d0'],    // cooling crust to white-hot
   demon: ['#240608', '#460c0e', '#6e1614', '#98241c', '#c23a26', '#e8643c'],             // demon hide
   horn: ['#1c1614', '#3a2e28', '#62544a', '#9a8a7a', '#d8ccbc'],
   iron: ['#0c0a0e', '#1c1a20', '#2e2a32', '#46404a', '#66606a', '#948c96'],              // scorched iron
@@ -17,8 +17,8 @@ const FF = {
   scale: ['#3a0c06', '#6a180a', '#a02a10', '#d04818', '#f07a2a', '#ffb050'],             // dragon scales
   belly: ['#6a4a1a', '#a87a30', '#dcb050', '#f6dc8a'],
 };
-const FORT_LAVA = '255, 120, 40';     // lava's glow (rgb)
-const FORT_FIRE = ['#a8200e', '#e0461e', '#ff8a1e', '#ffd34a', '#fff6c8'];   // living flames, darkest first
+const FORT_LAVA = '255, 50, 30';     // lava's glow (rgb)
+const FORT_FIRE = ['#6e0a0a', '#a8100e', '#e8281a', '#ff6a4a', '#ffd2c4'];   // living flames, darkest first
 const FORT_MAGIC = '190, 110, 255';   // the magic demon's glow (rgb)
 
 // ---------- shared parts ----------
@@ -111,7 +111,7 @@ function drawSkeleflame(p, P) {
     p.rect(x, 22 + b - h, 1, h, RAMP.leather[4]);
     p.px(x, 21 + b - h, FF.lava[4]);
   }
-  drawSkeletonBody(p, P, { cloth: '#4a1410', eye: '#ffb02e' });
+  drawSkeletonBody(p, P, { cloth: '#4a1410', eye: '#ff4a2a' });
   // soot and scorch on the skull and ribs, embers caught in the sockets
   for (const [x, y] of [[29, 10], [30, 11], [38, 12], [28, 13]]) p.px(x, y + hb, '#5a5040');
   for (const [x, y] of [[29, 27], [37, 29], [31, 31]]) p.px(x, y + b, '#4a4438');

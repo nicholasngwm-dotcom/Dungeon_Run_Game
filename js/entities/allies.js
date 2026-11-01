@@ -148,7 +148,7 @@ class Ally extends Entity {
     return heroFrame(f, this.moving, this.animTime);
   }
 
-  /** A small health bar over the head in their colour (shown once they've been hurt). */
+  /** A small green health bar over the head (shown once they've been hurt). */
   drawBar(ctx, top = 44) {
     if (this.hp >= this.maxHp) return;
     const w = 20;
@@ -156,9 +156,9 @@ class Ally extends Entity {
     const y = Math.round(this.y - top * this.size);
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(x - 1, y - 1, w + 2, 4);
-    ctx.fillStyle = '#3a1a1a';
+    ctx.fillStyle = ALLY_BAR_BACK;
     ctx.fillRect(x, y, w, 2);
-    ctx.fillStyle = this.color;
+    ctx.fillStyle = ALLY_BAR;
     ctx.fillRect(x, y, Math.round(w * clamp(this.hp / this.maxHp, 0, 1)), 2);
   }
 
@@ -725,9 +725,9 @@ class Horse extends Entity {
     const x = Math.round(this.x - w / 2);
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(x - 1, Math.round(y) - 1, w + 2, 4);
-    ctx.fillStyle = '#3a1a1a';
+    ctx.fillStyle = ALLY_BAR_BACK;
     ctx.fillRect(x, Math.round(y), w, 2);
-    ctx.fillStyle = '#e0b080';
+    ctx.fillStyle = ALLY_BAR;
     ctx.fillRect(x, Math.round(y), Math.round(w * clamp(this.hp / this.maxHp, 0, 1)), 2);
   }
 }

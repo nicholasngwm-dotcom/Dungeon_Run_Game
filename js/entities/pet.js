@@ -445,15 +445,15 @@ class Pet extends Entity {
       PFX.ring(ctx, this.x, this.y + 1, 10 * s, 4 * s, 'rgba(255, 184, 74, 0.6)', 1, { dash: [2, 2], spin: this.animTime * 3 });
       ctx.restore();
     }
-    // health: red while fighting, a green bar filling back up while it heals
+    // health: green like every friend's, turning mint while it retreats to heal
     const w = 20;
     const x = Math.round(this.x - w / 2);
     const y = Math.round(this.y - fly - 22 * s);
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(x - 1, y - 1, w + 2, 4);
-    ctx.fillStyle = '#3a1a1a';
+    ctx.fillStyle = ALLY_BAR_BACK;
     ctx.fillRect(x, y, w, 2);
-    ctx.fillStyle = this.state === 'retreat' ? '#6cff7a' : '#e84a4a';
+    ctx.fillStyle = this.state === 'retreat' ? '#9cffd8' : ALLY_BAR;
     ctx.fillRect(x, y, Math.round(w * clamp(this.hp / this.maxHp, 0, 1)), 2);
     if (this.state === 'retreat') {
       // a little bandage cross bobbing over it

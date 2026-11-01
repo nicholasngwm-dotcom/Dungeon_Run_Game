@@ -8,11 +8,11 @@
 
 const FORT_COLORS = {
   flag: ['#2c1014', '#321216', '#281012', '#361418'], flagL: '#4e2020', flagD: '#1a080a', grout: '#0e0406',
-  ash: '#4a3a36', ashL: '#6a5a52', ember: '#ff7a1a', emberL: '#ffd27a',
+  ash: '#4a3a36', ashL: '#6a5a52', ember: '#d81e14', emberL: '#ff8a70',
   brick: '#3a1214', brickAlt: '#30100f', brickL: '#5a2020', mortar: '#120406', rim: '#6e2a22',
   top: '#1e080a', topL: '#2c0e10', topRim: '#5a2420',
   window: '#ff9a2a', windowL: '#ffe08a', bars: '#141016',
-  lava: ['#7a1206', '#b02a0c', '#e04a14', '#ff7a1a', '#ffb02e', '#ffe27a'], crust: ['#1a0c0a', '#2e1612', '#4a2218'],
+  lava: ['#4a0606', '#8a0e0a', '#b81a12', '#e02a1a', '#ff4a2a', '#ff9a80'], crust: ['#1a0c0a', '#2e1612', '#4a2218'],
   bridge: ['#2a1416', '#3a1c1c', '#4a2622', '#62342a'],
 };
 

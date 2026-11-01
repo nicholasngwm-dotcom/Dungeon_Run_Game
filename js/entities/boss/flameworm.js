@@ -115,7 +115,7 @@ function flamePillar(world, x, y, r, h) {
     // a ring of fire racing out across the floor from its foot
     ctx.save();
     ctx.globalAlpha = 1 - t;
-    PFX.ring(ctx, x, y, r * (0.4 + t * 0.8), r * 0.5 * (0.4 + t * 0.8), '#ffb52e', 2, { thick: 3 });
+    PFX.ring(ctx, x, y, r * (0.4 + t * 0.8), r * 0.5 * (0.4 + t * 0.8), '#ff4a2a', 2, { thick: 3 });
     ctx.restore();
   }, true);
   world.effects.add(life, (ctx, t) => {
@@ -126,8 +126,8 @@ function flamePillar(world, x, y, r, h) {
     const w = r * (0.8 - t * 0.4);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    PFX.glow(ctx, x, y - hh * 0.45, w * 1.4, '255, 110, 30', 0.9 * fade, 2, hh * 0.65);
-    PFX.glow(ctx, x, y - 6, w * 1.2, '255, 220, 140', 0.8 * fade, 2, w * 0.5);
+    PFX.glow(ctx, x, y - hh * 0.45, w * 1.4, '255, 40, 25', 0.9 * fade, 2, hh * 0.65);
+    PFX.glow(ctx, x, y - 6, w * 1.2, '255, 140, 110', 0.8 * fade, 2, w * 0.5);
     ctx.restore();
     ctx.save();
     ctx.globalAlpha = Math.min(1, fade * 1.5);
@@ -136,7 +136,7 @@ function flamePillar(world, x, y, r, h) {
       const k = 1 - Math.abs(i) / 4;
       PFX.flame(ctx, x + i * w * 0.22, y + 4, w * 0.5, hh * (0.4 + 0.6 * k), secs + seed + i * 0.37, FORT_FIRE, 3);
     }
-    PFX.flame(ctx, x, y + 2, w * 0.36, hh * 0.85, secs * 1.3 + seed, ['#ff8a1e', '#ffd34a', '#fff6c8', '#ffffff'], 3);
+    PFX.flame(ctx, x, y + 2, w * 0.36, hh * 0.85, secs * 1.3 + seed, ['#e8281a', '#ff6a4a', '#ffd2c4', '#ffffff'], 3);
     // blobs of flame tearing off its top and rising away
     for (let j = 0; j < 6; j++) {
       const u = (secs * 1.3 + j / 6) % 1;
@@ -374,7 +374,7 @@ class FlamewormBody {
       this.lastTrail = { x: this.x, y: this.y, t: this.boss.time, s: this.scale, seed: tr.length % 7, prev: last };
       tr.push(this.lastTrail);
     }
-    if (vrand(0, 1) < dt * 30) world.effects.burst(this.x + vrand(-16, 16) * this.scale, this.y + vrand(-6, 6), { count: 1, colors: [...FORT_ROCK_GIBS, '#ff7a1a'], speed: [20, 70], life: [0.3, 0.5], up: 60, gravity: 300, size: [2, 3] });
+    if (vrand(0, 1) < dt * 30) world.effects.burst(this.x + vrand(-16, 16) * this.scale, this.y + vrand(-6, 6), { count: 1, colors: [...FORT_ROCK_GIBS, '#d81e14'], speed: [20, 70], life: [0.3, 0.5], up: 60, gravity: 300, size: [2, 3] });
     if (vrand(0, 1) < dt * 4) wormRocks(world, this.x, this.y, 1, 0.45, this.scale);
   }
 
@@ -394,7 +394,7 @@ class FlamewormBody {
     world.effects.add(0.45, (ctx, t) => {
       ctx.save();
       ctx.globalAlpha = 1 - t;
-      PFX.ring(ctx, x, y, r * (0.5 + t * 0.7), r * 0.55 * (0.5 + t * 0.7), '#ffb52e', 2, { thick: t < 0.3 ? 4 : 2 });
+      PFX.ring(ctx, x, y, r * (0.5 + t * 0.7), r * 0.55 * (0.5 + t * 0.7), '#ff4a2a', 2, { thick: t < 0.3 ? 4 : 2 });
       ctx.restore();
     }, true);
     world.effects.burst(x, y - 10, { count: 30, colors: [...FORT_ROCK_GIBS, ...FORT_LAVA_GIBS], speed: [100, 300], life: [0.4, 0.9], up: 160, gravity: 400, size: [2, 6] });
@@ -417,7 +417,7 @@ class FlamewormBody {
     for (let i = 0; i < n; i++) {
       const a = off + (i / n) * TAU;
       fireShot(world, m.x + Math.cos(a) * 10, m.y + Math.sin(a) * 8, a, F.speed, F, {
-        radius: 6, damage: F.damage, life: 4, sprite: Sprites.projectiles.fireball, spin: 8,
+        radius: 6, damage: F.damage, life: 4, sprite: Sprites.projectiles.fortFireball, spin: 8,
       });
     }
     world.effects.burst(m.x, m.y, { count: 14, colors: FORT_LAVA_GIBS, speed: [40, 160], life: [0.2, 0.4] });
@@ -441,12 +441,12 @@ class FlamewormBody {
       enemyBlastFx(w, x, y, A.blastRadius);
       flamePillar(w, x, y, A.blastRadius * 0.7, A.pillar);
       firePatch(w, x, y, A.fireRadius, A.fireTime, A, 14);
-      w.effects.burst(x, y - 10, { count: 30, colors: ['#fff6c8', '#ffd34a', '#ff8a1e', '#e0461e'], speed: [80, 260], life: [0.3, 0.8], up: 120 });
+      w.effects.burst(x, y - 10, { count: 30, colors: ['#ffd2c4', '#ff6a4a', '#e8281a', '#a8100e'], speed: [80, 260], life: [0.3, 0.8], up: 120 });
       w.shake(9, 0.45);
       Sound.play('crownBlast', 0.15);
     };
     enemyShot(world, m.x, m.y, a, A.speed, {
-      radius: 12, damage: 0, life, sprite: Sprites.projectiles.wormArrow, glow: '255, 150, 60', trail: ['#fff6c8', '#ffd34a', '#ff8a1e'],
+      radius: 12, damage: 0, life, sprite: Sprites.projectiles.wormArrow, glow: '255, 70, 45', trail: ['#ffd2c4', '#ff6a4a', '#e8281a'],
       // fire streaming off it behind as it flies
       aura: (ctx, pr) => {
         ctx.save();
@@ -564,7 +564,7 @@ class FlamewormBody {
       world.effects.add(0.4, (ctx, t) => {
         ctx.save();
         ctx.globalAlpha = 1 - t;
-        PFX.ring(ctx, e.x, e.y, r * (0.6 + t * 0.6), r * 0.55 * (0.6 + t * 0.6), '#ffb52e', 2, { thick: t < 0.3 ? 3 : 2 });
+        PFX.ring(ctx, e.x, e.y, r * (0.6 + t * 0.6), r * 0.55 * (0.6 + t * 0.6), '#ff4a2a', 2, { thick: t < 0.3 ? 3 : 2 });
         ctx.restore();
       }, true);
       wormRocks(world, e.x, e.y, 10, 1.1, s);
@@ -684,7 +684,7 @@ class FlamewormBody {
     }
     if (this.state === 'surface') {
       const k = clamp(this.t / c.bite.windup, 0, 1);
-      Telegraph.circle(ctx, this.x, this.y, c.bite.radius * s, k, '255, 120, 40');
+      Telegraph.circle(ctx, this.x, this.y, c.bite.radius * s, k, '255, 50, 30');
       // cracks spreading out from where it will come up, glowing hotter
       ctx.save();
       ctx.strokeStyle = `rgba(255, ${140 + Math.round(k * 100)}, 60, ${0.5 + k * 0.5})`;
@@ -703,11 +703,11 @@ class FlamewormBody {
     }
     if (this.path && !this.struck && !this.dead) {
       const k = clamp((this.sHead - (this.outS - 20 * s)) / Math.max(1, this.hitS - this.outS + 20 * s), 0, 1);
-      Telegraph.circle(ctx, this.flyTo.x, this.flyTo.y, this.strike.radius, k, '255, 120, 40');
+      Telegraph.circle(ctx, this.flyTo.x, this.flyTo.y, this.strike.radius, k, '255, 50, 30');
     }
     if (this.rooted) FlamewormBody.drawHole(ctx, { x: this.x, y: this.y, s, seed: Math.round(this.x + this.y) }, this.holeOpen(), time, false);
     if (this.state === 'arrow' && this.arrowAt) {
-      Telegraph.circle(ctx, this.arrowAt.x, this.arrowAt.y, c.arrow.blastRadius, clamp(this.t / c.arrow.windup, 0, 1), '255, 120, 40');
+      Telegraph.circle(ctx, this.arrowAt.x, this.arrowAt.y, c.arrow.blastRadius, clamp(this.t / c.arrow.windup, 0, 1), '255, 50, 30');
     }
   }
 
@@ -728,7 +728,7 @@ class FlamewormBody {
       PFX.disc(ctx, h.x, h.y + 2, 40 * s, 15 * s, '#1a0a0a');
       PFX.disc(ctx, h.x, h.y + 3, 30 * s, 10 * s, '#5a1006');
       PFX.disc(ctx, h.x, h.y + 4, 20 * s, 6 * s, '#c43a16');
-      PFX.disc(ctx, h.x, h.y + 4, 9 * s, 3 * s, '#ffb52e');
+      PFX.disc(ctx, h.x, h.y + 4, 9 * s, 3 * s, '#ff4a2a');
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       PFX.glow(ctx, h.x, h.y, 50 * s, FORT_LAVA, 0.4 * k + Math.sin(time * 3 + h.seed) * 0.05, 2, 20 * s);
@@ -754,7 +754,7 @@ class FlamewormBody {
     const s = this.scale;
     const rocks = Sprites.flameworm.rocks;
     PFX.disc(ctx, this.x, this.y + 2, 32 * s, 12 * s, '#1a0a0a');
-    PFX.disc(ctx, this.x, this.y, 22 * s, 8 * s, '#a8200e');
+    PFX.disc(ctx, this.x, this.y, 22 * s, 8 * s, '#6e0a0a');
     ctx.save();
     ctx.strokeStyle = 'rgba(255, 150, 60, 0.8)';
     ctx.lineWidth = 2;
@@ -866,14 +866,14 @@ class FlamewormBody {
     const a = angleTo(m.x, m.y, to.x, to.y);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    PFX.glow(ctx, m.x, m.y, 14 + k * 34, '255, 140, 50', 0.4 + k * 0.6);
-    PFX.glow(ctx, m.x, m.y, 6 + k * 12, '255, 240, 200', 0.9);
+    PFX.glow(ctx, m.x, m.y, 14 + k * 34, '255, 60, 40', 0.4 + k * 0.6);
+    PFX.glow(ctx, m.x, m.y, 6 + k * 12, '255, 190, 170', 0.9);
     // tongues of fire spiralling in to it
     for (let i = 0; i < 6; i++) {
       const u = (time * 1.6 + i / 6) % 1;
       const ang = i * 1.05 + time * 5;
       const r = (1 - u) * (60 - k * 20);
-      PFX.disc(ctx, m.x + Math.cos(ang) * r, m.y + Math.sin(ang) * r * 0.7, 3 + u * 2, 3 + u * 2, u > 0.6 ? '#ffd34a' : '#ff8a1e');
+      PFX.disc(ctx, m.x + Math.cos(ang) * r, m.y + Math.sin(ang) * r * 0.7, 3 + u * 2, 3 + u * 2, u > 0.6 ? '#ff6a4a' : '#e8281a');
     }
     ctx.restore();
     const img = Sprites.projectiles.wormArrow;
@@ -985,7 +985,7 @@ class Flameworm {
       this.worms.push(w);
     }
     const h = old.head;
-    world.effects.burst(h.x, h.y, { count: 70, colors: [...FORT_ROCK_GIBS, ...FORT_LAVA_GIBS, '#fff6c8'], speed: [120, 360], life: [0.5, 1.1], gravity: 380, size: [3, 6] });
+    world.effects.burst(h.x, h.y, { count: 70, colors: [...FORT_ROCK_GIBS, ...FORT_LAVA_GIBS, '#ffd2c4'], speed: [120, 360], life: [0.5, 1.1], gravity: 380, size: [3, 6] });
     wormRocks(world, spot.x, spot.y, 22, 1.4, 1);
     enemyBlastFx(world, spot.x, spot.y, 120);
     world.shake(12, 0.6);
@@ -1025,7 +1025,7 @@ class Flameworm {
     const at = FLAMEWORM_INTRO.total - this.intro;
     if (at < FLAMEWORM_INTRO.burst) {
       w.rise = 0;
-      if (vrand(0, 1) < 0.6) world.effects.burst(this.x + vrand(-90, 90), this.y + vrand(-40, 40), { count: 1, colors: [...FORT_ROCK_GIBS, '#ff7a1a'], speed: [20, 80], life: [0.3, 0.6], up: 60, gravity: 300 });
+      if (vrand(0, 1) < 0.6) world.effects.burst(this.x + vrand(-90, 90), this.y + vrand(-40, 40), { count: 1, colors: [...FORT_ROCK_GIBS, '#d81e14'], speed: [20, 80], life: [0.3, 0.6], up: 60, gravity: 300 });
       if (vrand(0, 1) < dt * 6) world.shake(3, 0.2);
     } else {
       if (!this.burst) {
@@ -1066,7 +1066,7 @@ class Flameworm {
     }
     if (this.dying <= 0) {
       this.dead = true;
-      world.effects.burst(last.x, last.y - 20, { count: 90, colors: [...FORT_ROCK_GIBS, ...FORT_LAVA_GIBS, '#fff6c8'], speed: [100, 340], life: [0.6, 1.4], gravity: 380, size: [3, 6] });
+      world.effects.burst(last.x, last.y - 20, { count: 90, colors: [...FORT_ROCK_GIBS, ...FORT_LAVA_GIBS, '#ffd2c4'], speed: [100, 340], life: [0.6, 1.4], gravity: 380, size: [3, 6] });
       enemyBlastFx(world, last.x, last.y, 110);
       if (world.run) world.run.rubble.push(...Array.from({ length: 6 }, (_, i) => ({ x: last.x + (i - 2.5) * 12, y: last.y + (i % 2) * 8, material: 'stone', seed: i * 5 + 3 })));
       world.shake(14, 0.7);
@@ -1080,7 +1080,7 @@ class Flameworm {
     if (this.intro > 0 && this.worms[0].rise <= 0) {
       // the floor cracking open over it during its entrance
       const k = clamp((FLAMEWORM_INTRO.total - this.intro) / FLAMEWORM_INTRO.burst, 0, 1);
-      Telegraph.circle(ctx, this.x, this.y, this.cfg.bite.radius, k, '255, 120, 40');
+      Telegraph.circle(ctx, this.x, this.y, this.cfg.bite.radius, k, '255, 50, 30');
       return;
     }
     for (const w of this.worms) w.drawGround(ctx, this.time);
@@ -1117,7 +1117,7 @@ class Flameworm {
     along((x, y, age, p, i) => {
       const k = 1 - age / T;
       ctx.globalAlpha = Math.min(1, k * 2.5);
-      const col = age < 0.5 ? '#fff6c8' : age < 1.1 ? '#ffd34a' : age < 1.7 ? '#ff8a1e' : age < 2.3 ? '#e0461e' : '#a8200e';
+      const col = age < 0.5 ? '#ffd2c4' : age < 1.1 ? '#ff6a4a' : age < 1.7 ? '#e8281a' : age < 2.3 ? '#a8100e' : '#6e0a0a';
       PFX.disc(ctx, x, y, (3 + 5 * k) * p.s, (1.5 + 2.5 * k) * p.s, col);
       // lumps of cooling crust breaking its surface
       if (i === 0 && p.seed % 2) PFX.disc(ctx, x + ((p.seed % 5) - 2) * 3 * p.s, y - 1, (2 + 2 * (1 - k)) * p.s, 2 * p.s, '#3e1a12');

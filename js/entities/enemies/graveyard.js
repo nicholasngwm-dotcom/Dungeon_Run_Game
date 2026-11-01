@@ -23,7 +23,7 @@ function enemyShot(world, x, y, angle, speed, opts) {
 }
 
 /** Blast that hurts every hero / clone / defended object in range. */
-function enemyBlast(world, x, y, r, damage, colors = ['#ffb02e', '#ff5a1e', '#3a2a2a'], enemyDamage = 0) {
+function enemyBlast(world, x, y, r, damage, colors = ['#ff4a2a', '#c81612', '#3a2a2a'], enemyDamage = 0) {
   for (const a of world.allies) {
     if (dist(a.x, a.y, x, y) < r + a.radius) a.hurt(damage, world, x, y);
   }
@@ -48,7 +48,7 @@ function enemyBlast(world, x, y, r, damage, colors = ['#ffb02e', '#ff5a1e', '#3a
     const e = 1 - (1 - t) ** 3;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    PFX.glow(ctx, x, y - 12, r * (0.5 + e * 0.5), '255, 140, 50', 1.3 * (1 - t), 2, r * 0.6 * (0.5 + e * 0.5));
+    PFX.glow(ctx, x, y - 12, r * (0.5 + e * 0.5), '255, 60, 40', 1.3 * (1 - t), 2, r * 0.6 * (0.5 + e * 0.5));
     PFX.glow(ctx, x, y - 14, r * 0.35 * (1 - t * 0.7), '255, 240, 200', 1.4 * (1 - t));
     ctx.restore();
     ctx.save();

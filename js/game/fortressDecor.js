@@ -12,7 +12,7 @@
 // The lava's flow is animated over the floor's painted lava (drawLava): bright streaks drifting
 // across the sea and the pools, bubbles popping. All visual only.
 
-const FORT_FIRE_RGB = '255, 130, 40';
+const FORT_FIRE_RGB = '255, 55, 30';
 
 /**
  * A falling stream of lava, thick and slow like the real thing (the lavafalls, the doors' curtains): it creeps down
@@ -34,17 +34,17 @@ function drawLavaStream(ctx, x, y0, y1, w, t, { seed = 0, head = false, tail = f
     ctx.fillStyle = '#7a1606';   // the cooling skin at its edges
     ctx.fillRect(lx, yy, W, 2);
     const fold = ((Math.floor(ph / 2) % 11) + 11) % 11;
-    ctx.fillStyle = fold === 0 ? (hot ? '#fff0a0' : '#ffd27a') : fold === 1 ? '#ffa030' : hot ? '#ff7a1a' : '#e0461e';
+    ctx.fillStyle = fold === 0 ? (hot ? '#ffb8a8' : '#ff8a70') : fold === 1 ? '#f03a24' : hot ? '#d81e14' : '#a8100e';
     ctx.fillRect(lx + 1, yy, Math.max(1, W - 2), 2);
-    ctx.fillStyle = hot ? '#ffc24a' : '#ff9a3a';   // lit down its left side
+    ctx.fillStyle = hot ? '#ff5a3a' : '#f03a24';   // lit down its left side
     ctx.fillRect(lx + 1, yy, Math.max(1, Math.round(W * 0.3)), 2);
   }
   if (head) {
     // the leading glob, swollen and heavy, a skin forming over it
     const gy = Math.round(y1);
     PFX.disc(ctx, x, gy, w * 0.72, 4, '#7a1606', 1);
-    PFX.disc(ctx, x - 1, gy - 1, w * 0.55, 3, hot ? '#ff9a2a' : '#ff7a1a', 1);
-    PFX.disc(ctx, x - 2, gy - 2, w * 0.2, 1, '#ffd27a', 1);
+    PFX.disc(ctx, x - 1, gy - 1, w * 0.55, 3, hot ? '#f03a24' : '#d81e14', 1);
+    PFX.disc(ctx, x - 2, gy - 2, w * 0.2, 1, '#ff8a70', 1);
   }
 }
 
@@ -145,14 +145,14 @@ const FortressDecor = {
   update(fd, dt, world) {
     for (const d of fd.items) {
       if (d.kind === 'fortBrazier' && nativeRandom() < dt * 8) {
-        world.effects.burst(d.x + vrand(-6, 6), d.y - 34, { count: 1, colors: ['#ffb02e', '#ff5a1e', '#fff2a0'], speed: [5, 20], up: 60, life: [0.5, 1], size: [1, 2] });
+        world.effects.burst(d.x + vrand(-6, 6), d.y - 34, { count: 1, colors: ['#ff4a2a', '#c81612', '#ffc0b0'], speed: [5, 20], up: 60, life: [0.5, 1], size: [1, 2] });
       } else if (d.kind === 'openFire') {
         // embers and smoke pouring up off it, so it's plain from across the room
-        if (nativeRandom() < dt * 16) world.effects.burst(d.x + vrand(-12, 12), d.y - vrand(10, 40), { count: 1, colors: ['#ffd34a', '#ff8a1e', '#fff6c8'], speed: [10, 40], up: 90, life: [0.6, 1.2], size: [1, 3] });
+        if (nativeRandom() < dt * 16) world.effects.burst(d.x + vrand(-12, 12), d.y - vrand(10, 40), { count: 1, colors: ['#ff6a4a', '#e8281a', '#ffd2c4'], speed: [10, 40], up: 90, life: [0.6, 1.2], size: [1, 3] });
         if (nativeRandom() < dt * 2) world.effects.smoke(d.x + vrand(-6, 6), d.y - 56, { count: 1, radius: 8, life: 1.4, rise: 40, colors: ['#2a1a18', '#3e2a26', '#5a4038'] });
       } else if (d.kind === 'lavafall' && nativeRandom() < dt * 4) {
         // thick lava doesn't splash: a slow, heavy blob plops out of the heap now and then
-        world.effects.burst(d.x + vrand(-6, 6), d.y - 6, { count: 1, colors: ['#ffc23a', '#ff8a1e', '#e0461e'], speed: [4, 14], up: 18, gravity: 90, life: [0.6, 1], size: [2, 3] });
+        world.effects.burst(d.x + vrand(-6, 6), d.y - 6, { count: 1, colors: ['#ff5a3a', '#e8281a', '#a8100e'], speed: [4, 14], up: 18, gravity: 90, life: [0.6, 1], size: [2, 3] });
       }
     }
     // bubbles swelling and popping on the lava in view
@@ -171,14 +171,14 @@ const FortressDecor = {
       world.effects.add(life, (ctx, k) => {
         if (k < 0.82) {
           const s = Math.sin((k / 0.82) * Math.PI / 2);
-          PFX.disc(ctx, x, y, r * s + 1, (r * s + 1) * 0.6, '#a8200e', 1);
-          PFX.disc(ctx, x - 1, y - 1, r * s * 0.7 + 0.5, (r * s * 0.7 + 0.5) * 0.6, '#ff8a1e', 1);
-          if (s > 0.5) { ctx.fillStyle = '#ffe27a'; ctx.fillRect(Math.round(x - r * 0.4), Math.round(y - r * 0.4), 2, 1); }
+          PFX.disc(ctx, x, y, r * s + 1, (r * s + 1) * 0.6, '#6e0a0a', 1);
+          PFX.disc(ctx, x - 1, y - 1, r * s * 0.7 + 0.5, (r * s * 0.7 + 0.5) * 0.6, '#e8281a', 1);
+          if (s > 0.5) { ctx.fillStyle = '#ff9a80'; ctx.fillRect(Math.round(x - r * 0.4), Math.round(y - r * 0.4), 2, 1); }
           return;
         }
         // popped: a few heavy drops arcing out and back down
         const u = (k - 0.82) / 0.18;
-        ctx.fillStyle = u < 0.5 ? '#ffd27a' : '#ff8a1e';
+        ctx.fillStyle = u < 0.5 ? '#ff8a70' : '#e8281a';
         for (let j = 0; j < 4; j++) {
           const a = j * 1.57 + 0.6;
           ctx.fillRect(Math.round(x + Math.cos(a) * r * (0.6 + u)), Math.round(y - Math.sin(u * Math.PI) * 5 + Math.sin(a) * r * 0.3), 2, 2);
@@ -191,7 +191,7 @@ const FortressDecor = {
   lights(fd, out, t) {
     for (const d of fd.items) {
       const flick = Math.sin(t * 9 + d.seed);
-      if (d.kind === 'fortBrazier') out.push({ x: d.x, y: d.y - 28, r: 150 + flick * 8, s: 0.95, rgb: '255, 150, 60' });
+      if (d.kind === 'fortBrazier') out.push({ x: d.x, y: d.y - 28, r: 150 + flick * 8, s: 0.95, rgb: '255, 70, 45' });
       else if (d.kind === 'openFire') out.push({ x: d.x, y: d.y - 18, r: 140 + flick * 12, s: 1, rgb: FORT_FIRE_RGB });
       else if (d.kind === 'lavafall') out.push({ x: d.x, y: d.y - 30, r: 130, s: 0.9, rgb: FORT_LAVA });
     }
@@ -237,8 +237,8 @@ const FortressDecor = {
     switch (d.kind) {
       case 'fortBrazier':
         sprite(S.brazier);
-        for (let i = 0; i < 3; i++) PFX.flame(ctx, x - 6 + i * 6, y - 26, 7, 14 + (i === 1 ? 7 : 0), t * 8 + i + d.seed, FIRE_COLORS);
-        drawGlow(ctx, x, y - 32, 26, '255, 150, 60', 0.3 + Math.sin(t * 9 + d.seed) * 0.05);
+        for (let i = 0; i < 3; i++) PFX.flame(ctx, x - 6 + i * 6, y - 26, 7, 14 + (i === 1 ? 7 : 0), t * 8 + i + d.seed, ENEMY_FIRE_COLORS);
+        drawGlow(ctx, x, y - 32, 26, '255, 70, 45', 0.3 + Math.sin(t * 9 + d.seed) * 0.05);
         break;
       case 'fortBanner': {
         // the cloth stirs in the heat rising off the lava
@@ -261,7 +261,7 @@ const FortressDecor = {
         PFX.glow(ctx, x, y - 22, 34, FORT_FIRE_RGB, 0.45 + Math.sin(t * 11 + d.seed) * 0.08, 2, 40);
         ctx.restore();
         for (const [dx, w, h, i] of [[-11, 10, 24, 0], [10, 10, 26, 1], [-4, 13, 42, 2], [5, 12, 36, 3], [0, 9, 50, 4]]) {
-          PFX.flame(ctx, x + dx, y - 2, w, h * lick(i), t * 9 + i * 1.7 + d.seed, FIRE_COLORS);
+          PFX.flame(ctx, x + dx, y - 2, w, h * lick(i), t * 9 + i * 1.7 + d.seed, ENEMY_FIRE_COLORS);
         }
         break;
       }
@@ -277,7 +277,7 @@ const FortressDecor = {
         ctx.fillRect(x - 6, top - 1, 12, 3);
         drawLavaStream(ctx, x, top + 2, bottom, 10, t, { seed: d.seed });
         // it piles up where it lands: a slow-spreading heap of lava in the basin
-        PFX.disc(ctx, x, bottom, 9 + Math.sin(t * 0.8 + d.seed) * 1, 3, '#e0461e', 1);
+        PFX.disc(ctx, x, bottom, 9 + Math.sin(t * 0.8 + d.seed) * 1, 3, '#a8100e', 1);
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         PFX.glow(ctx, x, (top + bottom) / 2, 18, FORT_LAVA, 0.35, 2, 46);

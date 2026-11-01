@@ -267,9 +267,9 @@ const HUD = {
       if (p.dead) {
         this.text(ctx, 'DOWN', 158, y + 2, { size: 6, align: 'right', color: '#e04545' });
       } else {
-        ctx.fillStyle = '#3a1a24';
+        ctx.fillStyle = ALLY_BAR_BACK;
         ctx.fillRect(34, y + 11, 122, 4);
-        ctx.fillStyle = '#e84a4a';
+        ctx.fillStyle = ALLY_BAR;
         ctx.fillRect(34, y + 11, Math.round(122 * clamp(p.hp / p.maxHp, 0, 1)), 4);
       }
       y += 22;
