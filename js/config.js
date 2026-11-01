@@ -1026,7 +1026,7 @@ const CONFIG = {
     // mount trader's horse: moves the rider speed x faster, takes the rider's hits on its own hp, rests at 0
     // and gets `stageHeal` back at every new stage. No ultimates while riding; in a locked room you can get
     // off but not back on.
-    mount: { price: 45, hp: 50, speed: 1.4, stageHeal: 30 },
+    mount: { price: 45, hp: 150, speed: 1.6, stageHeal: 90 },
     // helper room: one hireling (a random kind) that follows its hero until it falls (see js/entities/allies.js).
     // Like pets, enemy bodies don't hurt them (only enemy attacks do).
     helpers: {
