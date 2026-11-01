@@ -1366,7 +1366,12 @@ class Game {
       ctx.drawImage(this.vignette, 0, 0, CONFIG.screen.width, CONFIG.screen.height);   // (stretched to this screen's shape)
       ctx.globalAlpha = 1;
     }
-    if (!this.showcase) StatusFx.draw(ctx, this);   // low health and ailment borders, the big STUNNED word
+    // low health and ailment borders, the big STUNNED word (a fault in them never takes the HUD down with it)
+    if (!this.showcase) {
+      ctx.save();
+      try { StatusFx.draw(ctx, this); } catch (e) { if (!StatusFx.failed) console.error('StatusFx:', e); StatusFx.failed = true; }
+      ctx.restore();
+    }
     if (!this.showcase) HUD.draw(ctx, this);
   }
 

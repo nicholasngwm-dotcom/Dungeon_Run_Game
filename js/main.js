@@ -758,7 +758,9 @@ const App = {
       Input.endFrame();
       if (!(this.errorShownAt > now - 8000)) {
         this.errorShownAt = now;
-        Menus.toast('SOMETHING WENT WRONG - THE GAME KEPT GOING (DETAILS IN THE CONSOLE)', '#ff6a6a');
+        // the error itself, short, so it can be read off a phone with no console
+        const at = String(e?.stack || '').match(/([\w.-]+\.js)\S*?:(\d+)/);
+        Menus.toast(`SOMETHING WENT WRONG: ${String(e?.message || e).slice(0, 80)}${at ? ` (${at[1]}:${at[2]})` : ''}`.toUpperCase(), '#ff6a6a');
       }
       requestAnimationFrame((t) => this.loop(t));
     }
