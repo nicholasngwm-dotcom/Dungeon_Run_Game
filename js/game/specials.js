@@ -176,6 +176,35 @@ const Specials = {
     w.events.onSpecial?.(hero, 'horse', ok);
   },
 
+  // ---------- the hero statue ----------
+
+  /** Buys the statue's blessing and binds it to `slot` (right click, E, F or the ultimate), replacing the hero's old one. */
+  bless(run, hero, slot) {
+    const w = run.world;
+    const pr = this.propHere(run, hero, 'heroStatue');
+    const price = this.price(run, hero, CONFIG.run.heroStatue.price);
+    const ok = !!pr && BLESSINGS[pr.hero] && BLESS_SLOTS.includes(slot) && !hero.dead && hero.coins >= price;
+    if (ok) {
+      hero.coins -= price;
+      Blessings.attach(hero, pr.hero, slot);
+      const info = BLESSINGS[pr.hero];
+      w.effects.text(hero.hx, hero.hy - 44, `${info.name.toUpperCase()} BLESSING: ${hero.icons[slot]}`, { color: info.color, size: 8, life: 2 });
+      w.effects.burst(hero.hx, hero.hy, { count: 30, colors: [info.color, '#fff6c8', '#ffffff'], speed: [40, 150], life: [0.4, 0.8], up: 60 });
+      // a beam of light from the statue down onto the hero
+      const { x: sx, y: sy } = pr;
+      const tx = hero.x;
+      const ty = hero.y;
+      w.effects.add(0.5, (ctx, k) => {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        PFX.line(ctx, sx, sy - 40, tx, ty - 16, `rgba(255, 240, 190, ${1 - k})`, 2);
+        ctx.restore();
+      });
+      Sound.play('magic');
+    }
+    w.events.onSpecial?.(hero, 'bless', ok);
+  },
+
   // ---------- the helper room ----------
 
   hire(run, hero) {

@@ -92,7 +92,7 @@ class Player extends Entity {
     return (this.slowTime > 0 ? CONFIG.golem.slowAmount : 1) * (this.chillTime > 0 ? this.chillAmount : 1)
       * (this.buffs.speed > 0 ? CONFIG.buffs.speed.multiplier : 1) * this.moveMultiplier * (1 + this.brew('speed'))
       * (this.tuneSpeed > 0 ? 1 + this.tuneSpeedAmount : 1) * this.sugarScale('speed') * Upgrades.speedScale(this)
-      * (this.riding ? CONFIG.run.mount.speed : 1);
+      * (this.riding ? CONFIG.run.mount.speed : 1) * (this.buffs.sickness > 0 ? CONFIG.buffs.sickness.speed : 1);
   }
 
   /** The sugar rush's boost to `stat` (speed or attackSpeed): stacked sugar rushes (Premium Baking Goods) add up. */
@@ -182,7 +182,7 @@ class Player extends Entity {
     this.contactGrace = this.ignoresContact ? 0.3 : (this.contactGrace || 0) - dt;
     for (const k of Object.keys(this.cooldowns)) {
       const rate = k === 'primary' ? this.attackSpeed * (1 + this.brew('rage')) * (this.inspired > 0 ? 1 + CONFIG.classes.bard.morale.attackSpeed : 1)
-        * this.sugarScale('attackSpeed') * Upgrades.rushScale(this)
+        * this.sugarScale('attackSpeed') * Upgrades.rushScale(this) * (this.buffs.sickness > 0 ? CONFIG.buffs.sickness.attackSpeed : 1)
         : k === 'dodge' ? 1 : this.abilityHaste;
       this.cooldowns[k] -= dt * rate;
     }
@@ -232,6 +232,7 @@ class Player extends Entity {
     // abilities
     if (this.busy <= 0) this.handleInput(world);
     this.updateAbility(dt, world);
+    Blessings.update(this, dt, world);   // a hero statue's blessing going off with the ability it's bound to
 
     if (this.chillTime > 0 && Math.random() < 0.25) {
       world.effects.burst(this.x + rand(-9, 9), this.y - rand(0, 24), { count: 1, colors: ['#c8f0ff', '#8ad0f0'], speed: [5, 15], life: [0.3, 0.5], up: -10 });
@@ -1296,6 +1297,7 @@ class Player extends Entity {
     else if (!this.seat) drawShadow(ctx, this.x, this.y + 9, 13, 5);
     this.drawGroundExtras(ctx);
     Upgrades.drawGround(this, ctx, this.animTime);
+    Blessings.drawGround(this, ctx);
     if (this.isLocal) this.drawAbilityPreview(ctx);
   }
 

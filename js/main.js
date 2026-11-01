@@ -308,6 +308,30 @@ const App = {
           { label: 'Not now', fn: () => Dialog.close() },
         ],
       });
+    } else if (kind === 'heroStatue') {
+      // the statue's blessing: what it does, its cooldown and price, and a choice of which ability to bind it to
+      const p = this.game.localPlayer;
+      const id = stand?.hero;
+      const info = BLESSINGS[id];
+      if (!info) { this.closePanel(); return; }
+      const c = Blessings.cfg(id);
+      const price = Specials.price(run, p, CONFIG.run.heroStatue.price);
+      const cur = p.blessing;
+      const have = cur && BLESSINGS[cur.id];
+      const poor = p.coins < price;
+      Dialog.open({
+        name: info.title, frames: { idle: [{ img: Scenes.stoneCache?.[id] || stoneify(Sprites.heroes[id].idle[0].img) }] },
+        text: `${info.desc(c)} (${c.cooldown}s cooldown.) Offer ${price} coins and choose an ability: whenever you use it, the blessing goes off with it.`
+          + (have ? ` You carry the ${have.name} blessing on ${Blessings.slotLabel(p, cur.slot)} - a new one replaces it.` : '')
+          + (poor ? ` (You have ${p.coins} coins.)` : ''),
+        options: [
+          ...(poor ? [] : BLESS_SLOTS.map((slot) => ({
+            label: `Bless ${Blessings.slotLabel(p, slot)} (${price})`,
+            fn: () => { Dialog.close(); this.command({ type: 'bless', slot }); },
+          }))),
+          { label: 'Leave', fn: () => Dialog.close() },
+        ],
+      });
     } else if (kind === 'darkTrader') {
       const p = this.game.localPlayer;
       const c = CONFIG.run.darkTrader;
@@ -404,6 +428,7 @@ const App = {
       stand: 'THAT TRADE IS OFF',
       horse: hero.horse ? 'YOU ALREADY HAVE A HORSE' : 'NOT ENOUGH COINS',
       hire: 'NOT ENOUGH COINS',
+      bless: 'NOT ENOUGH COINS',
     }[what];
     if (why) Menus.toast(why, '#e04545');
   },

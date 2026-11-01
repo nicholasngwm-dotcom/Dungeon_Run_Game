@@ -14,7 +14,7 @@ const ROOM_INFO = {
   survival: { name: 'Survival', color: '#ff8a1e', desc: 'Doors lock. Enemies keep coming: stay alive until the timer runs out.' },
   puzzle: { name: 'Puzzle', color: '#b67aff', desc: 'Touch the rune stone and it lights a pattern of colours: step on the matching floor plates in the same order. Get it right three times and every hero gets a free upgrade. Three mistakes and the stone blinks red, then blows up the whole room and sets it ablaze. Run!' },
   shop: { name: 'Shop', color: '#ffd34a', desc: 'Three stalls: buy upgrades (or reroll) from Bram, potions from Mira, and sell them back to Tobin.' },
-  special: { name: 'Special', color: '#c08aff', desc: 'Something unusual: a blacksmith who forges weapon enhancements, a wishing well, traders (dark, friendly, or one with horses), a camp of helpers for hire, treasure... The hero statue and the restaurant are coming soon.' },
+  special: { name: 'Special', color: '#c08aff', desc: 'Something unusual: a blacksmith who forges weapon enhancements, a wishing well, traders (dark, friendly, or one with horses), a camp of helpers for hire, treasure... The restaurant is coming soon.' },
   secret: { name: 'Secret', color: '#fff6c8', desc: 'Not connected to anything. Look for a glowing hole in a combat room floor and jump in. Three chests, open two: one is a mimic.' },
   boss: { name: 'Boss', color: '#ff3b30', desc: 'The theme\'s boss. Beat it to open the portal to the next stage.' },
   vault: { name: 'Gem Vault', color: '#7ac8ff', desc: 'Beat the last boss of a run and its blue portal leads here. Open the chest for your gems, then leave the dungeon.' },
@@ -161,8 +161,9 @@ class DungeonRun {
         soul: p.soulHp || 0,
         maxHpLost: p.maxHpLost || 0,
         darkTrades: Specials.darkTrades(p),
+        blessing: p.blessing ? { ...p.blessing } : null,
         horse: p.horse ? { hp: p.horse.hp, riding: !!p.riding } : null,
-        helpers: w.helpers.filter((h) => h.owner === p && !h.dead && h instanceof Hireling).map((h) => ({
+        helpers: w.helpers.filter((h) => h.owner === p && !h.dead && h instanceof Hireling && !h.blessed).map((h) => ({
           kind: h.kind, hp: h.hp, acolytes: w.helpers.filter((a) => a.priest === h && !a.dead).length,
         })),
       };
@@ -194,6 +195,7 @@ class DungeonRun {
       if (h.forged && FORGE_ITEMS[h.forged.item] && FORGE_RARITIES[h.forged.rarity]) Forge.equip(p, h.forged);
       if (h.forgePending && FORGE_ITEMS[h.forgePending.item] && FORGE_RARITIES[h.forgePending.rarity]) p.forgePending = { ...h.forgePending };
       p.soulHp = Math.max(0, Number(h.soul) || 0);
+      if (h.blessing && BLESSINGS[h.blessing.id] && BLESS_SLOTS.includes(h.blessing.slot)) p.blessing = { id: h.blessing.id, slot: h.blessing.slot, cd: Math.max(0, Number(h.blessing.cd) || 0) };
       if (h.horse) {
         p.horse = new Horse(p, clamp(Number(h.horse.hp) || 0, 0, CONFIG.run.mount.hp));
         w.horses.push(p.horse);
@@ -1586,6 +1588,12 @@ class DungeonRun {
           Object.assign(this.props[this.props.length - 1], { i, keeper });
         }
       } else add(r.special, 0, -0.5, info.name, info.color);
+      // the hero statue carries one hero's blessing
+      if (r.special === 'heroStatue') {
+        const statue = this.props[this.props.length - 1];
+        statue.hero = choose(Object.keys(BLESSINGS));
+        statue.label = `${BLESSINGS[statue.hero].name.toUpperCase()} STATUE`;
+      }
       // the helper camp has one kind of hireling waiting to be hired
       if (r.special === 'helper') {
         const camp = this.props[this.props.length - 1];
@@ -1672,7 +1680,7 @@ class DungeonRun {
    * Runs for each hero before they update, so pressing E at something here is
    * used up by the interaction and never also fires the hero's E ability.
    * Reward and secret chests open, the shopkeeper, chef and special rooms' keepers talk, the wishing
-   * well takes coins, the hole takes you down; the hero statue isn't in yet.
+   * well takes coins, the hole takes you down, the hero statue offers its blessing.
    * hero.nearProp is what that hero could use right now (prompts show the local hero's).
    */
   preUpdate(hero) {
@@ -1706,6 +1714,7 @@ class DungeonRun {
     if (pr.kind === 'restaurant5') return w.events.onNpc?.('chef', this, p);
     if (pr.kind === 'tradeStand') return w.events.onNpc?.('tradeStand', this, p, pr);
     if (SPECIAL_KEEPERS.includes(pr.kind)) return w.events.onNpc?.(pr.kind, this, p);
+    if (pr.kind === 'heroStatue') return w.events.onNpc?.('heroStatue', this, p, pr);
     if (p === w.localPlayer) {
       w.events.onToast?.(`${pr.label}: COMING SOON`);
       Sound.play('uiClick');
@@ -2166,7 +2175,7 @@ class DungeonRun {
       if (pr.ground) continue;   // floor plates are drawn with the ground
       if (Scenes[pr.kind]) {
         // (the helper camp shows its hireling until this screen's hero hires them)
-        const extra = pr.hire ? { hire: pr.hire, hired: !!pr.hired?.[this.world.localPlayer.netId || 'solo'] } : undefined;
+        const extra = pr.hire ? { hire: pr.hire, hired: !!pr.hired?.[this.world.localPlayer.netId || 'solo'] } : pr.hero;
         items.push(...Scenes.drawables(pr.kind, pr.x, pr.y, this.time, extra));
         items.push({ y: pr.y + 80, draw: (ctx) => this.drawPropLabel(ctx, pr) });
       } else {

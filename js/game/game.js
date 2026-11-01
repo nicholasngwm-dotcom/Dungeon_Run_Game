@@ -812,6 +812,9 @@ class Game {
       case 'standTrade':
         if (this.run && hero) Specials.standTrade(this.run, hero, cmd.stand, cmd.give);
         return;
+      case 'bless':
+        if (this.run && hero) Specials.bless(this.run, hero, cmd.slot);
+        return;
       case 'buyHorse':
         if (this.run && hero) Specials.buyHorse(this.run, hero);
         return;

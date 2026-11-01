@@ -681,7 +681,11 @@ const Touch = {
     this.cooldown(ctx, ak.x, ak.y, kr, p.cooldowns.primary, p.maxCooldowns.primary);
     if (!Settings.data.autoFire) HUD.text(ctx, 'AIM', L.aim.x, L.aim.y + L.aim.r + 2, { size: 5, align: 'center', color: '#d8c8a0' });
 
-    for (const b of L.buttons) this.drawButton(ctx, b, p, icons, held(b.id));
+    for (const b of L.buttons) {
+      this.drawButton(ctx, b, p, icons, held(b.id));
+      // a hero statue's blessing: a badge (with its cooldown) on the button it's bound to
+      if (p.blessing && p.blessing.slot === (b.id === 'ult' ? 'q' : b.id)) Blessings.drawBadge(ctx, p, b.x + b.r * 0.72, b.y - b.r * 0.72, 8);
+    }
 
     // while a skill is dragged: the CANCEL mark to let go on (lit red when the thumb is on a cancel spot)
     const sk = TOUCH_AIMED.map((r) => held(r)).find((t) => t && (t.moved || t.away));

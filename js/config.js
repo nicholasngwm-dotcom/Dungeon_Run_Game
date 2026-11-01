@@ -1012,7 +1012,7 @@ const CONFIG = {
     //         you on fire: the ordinary slow, light burn (burnDps for burnTime), like any fire attack
     lava: { dps: 40, every: 0.2, linger: 0.6, rooms: ['combat', 'survival', 'defend', 'boss'], pools: [1, 3], channelChance: 0.4 },
     fire: { fires: [2, 4], combatFires: [5, 7], radius: 18, burnDps: 8, burnTime: 3 },
-    // special rooms (one or two per floor); the hero statue and the restaurant aren't in yet
+    // special rooms (one or two per floor); the restaurant isn't in yet
     specials: ['blacksmith', 'wishingWell', 'heroStatue', 'restaurant5', 'mountTrader', 'darkTrader',
                'friendlyTrader', 'treasure', 'helper'],
     // Every special room price below is in coins, x the stage's shop price (shop.stagePrice) and Discount Cards.
@@ -1027,6 +1027,21 @@ const CONFIG = {
     // and gets `stageHeal` back at every new stage. No ultimates while riding; in a locked room you can get
     // off but not back on.
     mount: { price: 45, hp: 150, speed: 1.6, stageHeal: 90 },
+    // hero statue: one hero's blessing (js/game/blessings.js) for `price`, bound to the right click, E, F or the
+    // ultimate; it goes off with that ability, then waits out its own `cooldown` (s). One blessing per hero.
+    heroStatue: {
+      price: 15,
+      blessings: {
+        warrior:   { cooldown: 35, count: 3, hp: 50, damage: 12, life: 30 },
+        priestess: { cooldown: 25, heal: 4, duration: 5, radius: 70 },
+        ranger:    { cooldown: 20, duration: 0.5, radius: 75, confuse: 2 },
+        rogue:     { cooldown: 5, count: 3, damage: 15, speed: 560, range: 520 },
+        bard:      { cooldown: 10, speed: 0.5, duration: 4 },
+        baker:     { cooldown: 15, duration: 5, sickChance: 0.02 },
+        rocketeer: { cooldown: 7, damage: 30, stun: 5, radius: 60, speed: 480 },
+        mage:      { cooldown: 8, count: 8, damage: 12, speed: 300, life: 2.2, turnRate: 7, burnDps: 6, burnTime: 3 },
+      },
+    },
     // helper room: one hireling (a random kind) that follows its hero until it falls (see js/entities/allies.js).
     // Like pets, enemy bodies don't hurt them (only enemy attacks do).
     helpers: {
@@ -1086,6 +1101,8 @@ const CONFIG = {
     speed:  { name: 'SUPER SPEED', stacks: 3, multiplier: 1.35, color: '#ffd34a' }, // +35% move speed
     damage: { name: 'SUPER POWER', stacks: 3, multiplier: 1.35, color: '#ff5a4a' }, // +35% damage, stacks with passives
     sugar:  { name: 'SUGAR', duration: 5, speed: 1.25, attackSpeed: 1.3, color: '#ff8ad0' },  // the Baker's pastries: faster feet and hands
+    // the baker statue's blessing gone wrong (2%): slower feet and hands
+    sickness: { name: 'SICK', duration: 5, speed: 0.8, attackSpeed: 0.85, color: '#9ac86a', icon: 'sugar' },
   },
 
   // ---------------------------------------------------------

@@ -474,7 +474,7 @@ const HUD = {
       // the Priestess: a light orb above the box for each one the ability costs
       const orbs = s.slot ? p.orbCost?.(s.slot) : 0;
       if (orbs) this.costOrbs(ctx, s.x + s.w / 2, s.y - 13, orbs, p.resource.value);
-      if (s.slot === 'q') { this.ultSlot(ctx, s.x, s.y, p); continue; }
+      if (s.slot === 'q') { this.ultSlot(ctx, s.x, s.y, p); this.blessBadge(ctx, p, s); continue; }
       const icon = s.icon || (s.slot === 'dodge' ? Sprites.icons.dodge : icons[s.slot]);
       const cd = s.cd ?? p.cooldowns[s.slot];
       const max = s.max ?? p.maxCooldowns[s.slot];
@@ -483,10 +483,16 @@ const HUD = {
       const short = s.slot && !p.canAfford(s.slot) ? p.resource.name : null;
       const charges = s.slot === 'dodge' ? Upgrades.dodgeCharges(p) : s.slot ? p.slotCharges?.[s.slot] : null;   // (Burst Dodging: two dodges)
       this.abilitySlot(ctx, s.x, s.y, s.key, s.name, cd, max, icon, charges, armed, s.slot || s.name, short);
+      this.blessBadge(ctx, p, s);
     }
     // in a dungeon run: the weapon's attachment slot over the basic attack's button (the touch controls draw their own)
     if (!Touch.enabled && p.lastWorld?.run) this.drawForgeSlot(ctx, p, this.forgeSlotRect(p), this.forgeDrag ? Input._mouse : null);
     this.drawInventory(ctx, p);
+  },
+
+  /** A hero statue's badge on the corner of the slot its blessing is bound to (with its cooldown). */
+  blessBadge(ctx, p, s) {
+    if (p.blessing?.slot === s.slot) Blessings.drawBadge(ctx, p, s.x + s.w - 4, s.y + 4);
   },
 
   /**
@@ -841,13 +847,15 @@ const HUD = {
    */
   drawBuffs(ctx, p, x, y) {
     let cx = x;
+    // a hero statue's blessing first: whose it is, the key it's on, its cooldown
+    if (p.blessing) cx += Blessings.drawChip(ctx, p, cx, y) + 6;
     for (const [type, t] of Object.entries(p.buffs)) {
       const b = CONFIG.buffs[type];
       const w = b.stacks ? 96 : 70;
       const blink = b.stacks ? false : t < 2 && Math.floor(t * 6) % 2;
       this.panel(ctx, cx, y, w, 20);
       ctx.globalAlpha = blink ? 0.5 : 1;
-      const icon = Sprites.pickups[`buff_${type}`];
+      const icon = Sprites.pickups[`buff_${b.icon || type}`];
       ctx.drawImage(icon, cx + 1, y + 1);
       this.text(ctx, b.name, cx + 21, y + 3, { size: 6, color: b.color });
       if (!b.stacks) this.text(ctx, `${Math.ceil(t)}s`, cx + w - 3, y + 3, { size: 6, align: 'right' });
