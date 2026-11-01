@@ -1034,7 +1034,7 @@ const CONFIG = {
       blessings: {
         warrior:   { cooldown: 35, count: 3, hp: 50, damage: 12, life: 30 },
         priestess: { cooldown: 25, heal: 4, duration: 5, radius: 70 },
-        ranger:    { cooldown: 20, duration: 0.5, radius: 75, confuse: 2 },
+        ranger:    { cooldown: 20, duration: 0.5, radius: 115, confuse: 2 },
         rogue:     { cooldown: 5, count: 3, damage: 15, speed: 560, range: 520 },
         bard:      { cooldown: 10, speed: 0.5, duration: 4 },
         baker:     { cooldown: 15, duration: 5, sickChance: 0.02 },
