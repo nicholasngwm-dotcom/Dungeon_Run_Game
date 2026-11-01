@@ -578,6 +578,11 @@ class Player extends Entity {
     this.ailment('lava', dps, duration, world, 'MELTING', '#ff4a2a', every);
   }
 
+  /** Caught in a dragon's breath (the Dragon Lord): seared in rapid ticks (every `every` s) while it plays over you, a moment after. */
+  scorch(dps, duration, world, every) {
+    this.ailment('scorch', dps, duration, world, 'SCORCHED', '#ff6a3a', every);
+  }
+
   /** Cut open (the jester's daggers): bleeds dps hp per second for `duration`s. */
   bleed(dps, duration, world) { this.ailment('bleed', dps, duration, world, 'BLEEDING', '#ff5a6a'); }
 

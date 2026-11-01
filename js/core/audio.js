@@ -829,6 +829,18 @@ const SFX = {
     s.tone({ type: 'square', freq: 70, to: 38, dur: 0.8, vol: 0.14 });
     [0, 0.12, 0.24, 0.36, 0.48].forEach((d) => s.noise({ dur: 0.14, vol: 0.18, filter: 'lowpass', freq: 500, to: 150, delay: d }));
   },
+  // the Dragon Lord: a huge roar that rises then breaks into a rumbling growl, his wings' deep beat, his breath's roar
+  dragonRoar: (s) => {
+    s.tone({ type: 'sawtooth', freq: 110, to: 210, dur: 0.35, vol: 0.2 });
+    s.tone({ type: 'sawtooth', freq: 200, to: 50, dur: 1.4, vol: 0.24, delay: 0.3 });
+    s.tone({ type: 'square', freq: 72, to: 34, dur: 1.5, vol: 0.14, delay: 0.25 });
+    s.noise({ dur: 1.6, vol: 0.3, filter: 'bandpass', freq: 900, to: 180, q: 1.2 });
+  },
+  wingBeat: (s) => s.whoosh({ from: 160, to: 520, dur: 0.32, vol: 0.2, q: 0.8, swell: 0.35 }),
+  dragonBreath: (s) => {
+    s.noise({ dur: 0.9, vol: 0.26, filter: 'lowpass', freq: 600, to: 2400 });
+    s.tone({ type: 'sawtooth', freq: 90, to: 60, dur: 0.9, vol: 0.08 });
+  },
   fistCharge: (s) => s.tone({ type: 'sawtooth', freq: 80, to: 200, dur: 0.5, vol: 0.08 }),
   fistLaunch: (s) => {
     s.noise({ dur: 0.25, vol: 0.3, filter: 'bandpass', freq: 400, to: 1500 });

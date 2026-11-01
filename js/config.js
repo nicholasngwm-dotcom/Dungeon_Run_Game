@@ -910,6 +910,8 @@ const CONFIG = {
       fog: false,
       layout: { small: 'fortRubble', pillar: 'fortPillar', long: 'fortStatue', wallH: 'fortWallH', wallV: 'fortWallV', block: 'fortBlock' },
       bosses: ['flameworm'],
+      // the Blazing Dragon Lord, met once a run in stage 2 or 3 (lateChance of the time at stage 2, otherwise stage 3)
+      lateBoss: { type: 'dragonLord', stages: [2, 3], lateChance: 0.5 },
       // no frost barrels here: the heat would melt them
       barrels: ['explosive', 'poison'],
       enemies: {
@@ -1282,6 +1284,38 @@ const CONFIG = {
     arrow: { windup: 1.3, speed: 380, damage: 48, blastRadius: 100, fireRadius: 120, fireTime: 5, burnDps: 10, burnTime: 3, pillar: 240 },
     split: { time: 1.3, birth: 0.45, spread: 170 },   // its splitting: convulsing, then three worms rear up and plunge away
     trailTime: 3,              // seconds the molten rock behind its burrow takes to cool
+  },
+
+  // ---------------------------------------------------------
+  //  THE BLAZING DRAGON LORD (the Fiery Fortress's deeper boss, stage 2 or 3). His arena is a platform
+  //  fenced in over a moat of lava, with his perch, a squat tower, in the middle. He takes turns:
+  //    Flying (fly.time s): he circles out over the lava and can't be hurt, hurling giant lava meteors
+  //      at the heroes (meteor.every s apart): each crashes where its circle was and leaves the ground burning.
+  //      In phase 2 he also calls his baby dragons (babies: up to `count` alive) - they fly in over the lava.
+  //    Perched (perch.time s, random): he lands on his tower and can be hit anywhere on it. He roars at the
+  //      times in perch.roars, if there's still roarLeft s of the perch to go: fireballs rain down all over
+  //      the platform (rain.count), or in phase 2 round every hero (rain.near each, within rain.spread px).
+  //      In phase 2 a hero coming within breath.trigger px of the tower sets off his dragon's breath: a
+  //      stream of fire at them, rapid little hits (breath.damage every breath.every s) that set them alight.
+  //  Phase 2 starts below phase2At of his health: faster meteors, longer perches (and up to three roars).
+  // ---------------------------------------------------------
+  dragonLord: {
+    hp: 7400,
+    phase2At: 0.5,
+    perchHeight: 66,          // px from the tower's foot up to where he stands on it
+    hitRadius: 78,            // perched, he and his tower can be hit within this of his body
+    fly: { time: [11, 10], height: 120, spin: 0.72, takeoff: 1.3, land: 1.8 },   // spin: rad/s round the platform
+    meteor: { every: [1.7, 1.05], flight: 1.25, radius: 80, damage: 44, fireRadius: 60, fireTime: 3.5, burnDps: 9, burnTime: 3 },
+    perch: {
+      time: [[7, 12], [18, 20]],                 // [min, max] seconds [phase 1, phase 2]
+      roars: [[1.2, 9], [1.2, 7.4, 13.6]],       // when he roars (s into the perch): the second only on a perch of over 10 s
+      roarLeft: 1.6,
+      roarTime: 1.7,                             // seconds a roar lasts (the rain begins `rainAt` into it)
+      rainAt: 0.5,
+    },
+    rain: { count: 20, over: 2.4, near: 6, spread: 130, wild: 4, fall: 1.0, radius: 46, damage: 30, burnDps: 8, burnTime: 3 },
+    breath: { trigger: 170, range: 240, cone: 0.42, windup: 0.5, time: 2.2, every: 0.12, damage: 6, cooldown: 2.4, turn: 1.6, burnDps: 10, burnTime: 3 },
+    babies: { count: 3, at: 1.6, flyIn: 1.1 },   // phase 2: seconds into each flight he calls them, and how long they take to fly in
   },
 
   phantom: {

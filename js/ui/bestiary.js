@@ -85,6 +85,7 @@ const BESTIARY = {
     { type: 'moltenElemental', name: 'Molten Elemental', role: 'special', desc: 'A body of lava under plates of black rock, its fists floating beside it. It always stands in a pool of lava: keep out of it. It pours a wave of lava along the ground at you (an orange lane shows where) that leaves lava behind, and shoots beams of lava.' },
     { type: 'babyDragon', name: 'Blazing Baby Dragon', role: 'ranged', desc: 'Flies over walls and cover alike. Spits massive fireballs that burst into pools of lava, and charges you down a red lane, setting you on fire.' },
     { boss: 'flameworm', name: 'The Decronic Flameworm', role: 'boss', from: 1, stage: 'EVERY STAGE', desc: 'A giant sandworm armoured in crimson rock that lives under the fortress floor. Reared up out of its hole it sprays fireballs in every direction, wave after wave, or forms a divine flame arrow in its jaws that bursts into a pillar of flame near you. Then it dives head first into the floor beside you and leaps out at you again and again - watch the circles! Below ground it cannot be hurt: its heap of rock burrows after you, leaving molten rock behind, until the floor cracks and glows where it bites back up. Below half health it splits into three worms, each with its own health bar, all doing the same.' },
+    { boss: 'dragonLord', name: 'The Blazing Dragon Lord', role: 'boss', from: 2, stage: 'STAGE 2 OR 3', desc: 'A great crimson dragon who rules the fortress\'s sky. His arena is a platform fenced in over a moat of lava, his tower in its middle. While he circles out over the lava he cannot be hurt, and he hurls giant lava meteors at you - get out of the circles! Then he lands on his tower, where he can be hit, and roars to call fireballs raining down across the whole platform, again if he stays long. Below half health his meteors come faster, he calls three baby dragons to fly in, his fire rains down round each of you, and he stays perched longer - but come too close to his tower and he breathes a stream of fire over you that sears fast and sets you alight.' },
   ],
 };
 
@@ -369,7 +370,7 @@ const Bestiary = {
     let stats;
     if (e.boss) {
       const c = CONFIG[e.boss];
-      const dmg = { phantom: c.dashDamage, guardian: c.beam?.damage, flameworm: c.bite?.damage, deathbringer: c.slash?.damage, queen: c.homing?.damage, king: c.sword?.damage, princeBoss: c.dash?.damage, princessBoss: c.sky?.damage }[e.boss];
+      const dmg = { phantom: c.dashDamage, guardian: c.beam?.damage, flameworm: c.bite?.damage, dragonLord: c.meteor?.damage, deathbringer: c.slash?.damage, queen: c.homing?.damage, king: c.sword?.damage, princeBoss: c.dash?.damage, princessBoss: c.sky?.damage }[e.boss];
       stats = `HP ${c.hp} &nbsp; DMG ${dmg}`;
     } else {
       const c = CONFIG.enemies[e.type];
@@ -660,7 +661,7 @@ const Bestiary = {
         continue;
       }
       // each boss's idle loop (the King on his throne)
-      const list = { golem: Sprites.golem.body.walk, guardian: Sprites.guardian.idle, flameworm: [{ img: Sprites.flameworm.head }], phantom: Sprites.phantom.walk || Sprites.phantom.idle, deathbringer: Sprites.deathbringer.body, queen: Sprites.queen.idle, king: Sprites.king.sit, princeBoss: Sprites.enemies.prince.idle, princessBoss: Sprites.enemies.princess.idle }[entry.boss];
+      const list = { golem: Sprites.golem.body.walk, guardian: Sprites.guardian.idle, flameworm: [{ img: Sprites.flameworm.head }], dragonLord: Sprites.dragonLord.perch, phantom: Sprites.phantom.walk || Sprites.phantom.idle, deathbringer: Sprites.deathbringer.body, queen: Sprites.queen.idle, king: Sprites.king.sit, princeBoss: Sprites.enemies.prince.idle, princessBoss: Sprites.enemies.princess.idle }[entry.boss];
       const frame = list[Math.floor(time * (entry.boss === 'phantom' ? 8 : 4)) % list.length].img;
       const s = Math.min(3, Math.floor(Math.min(canvas.width / frame.width, canvas.height / frame.height) * 4) / 4);
       const w = frame.width * s;

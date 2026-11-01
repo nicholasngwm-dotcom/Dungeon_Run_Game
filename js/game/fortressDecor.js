@@ -66,7 +66,8 @@ const FortressDecor = {
       case 'special':
         return false;
       case 'boss':
-        this.wormArena(fd, r);
+        if (r === fd.run.dragonArena?.room) this.dragonArena(fd, r);
+        else this.wormArena(fd, r);
         return true;
       default:
         // the fortress's halls: braziers in the corners, banners, obsidian and bones along the walls,
@@ -118,6 +119,24 @@ const FortressDecor = {
     }
     for (let i = 0; i < 6; i++) fd.add('fortBones', fd.spot(r, { minGap: 50 }));
     this.lavafalls(fd, r, 2);
+  },
+
+  /**
+   * The Dragon Lord's arena (see DragonArena): braziers in the platform's corners inside the fence, war
+   * banners either side of his tower, bones and obsidian about (the moat round it is left bare).
+   */
+  dragonArena(fd, r) {
+    const T = fd.floor.T;
+    const pl = fd.run.dragonArena.platform;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const x = sx < 0 ? pl.left + 1.3 * T : pl.right - 1.3 * T;
+      const y = sy < 0 ? pl.top + 1.4 * T : pl.bottom - 0.9 * T;
+      fd.add('fortBrazier', { x, y });
+    }
+    fd.add('fortBanner', { x: r.cx - 3.6 * T, y: r.cy - 1.2 * T }, { facing: 1 });
+    fd.add('fortBanner', { x: r.cx + 3.6 * T, y: r.cy - 1.2 * T }, { facing: -1 });
+    for (const [dx, dy] of [[-8, -2.5], [7.5, 3], [-6, 4.5], [9, -3]]) fd.add('fortBones', { x: r.cx + dx * T, y: r.cy + dy * T });
+    for (const [dx, dy] of [[-10, 2], [10, 1]]) fd.add('obsidian', { x: r.cx + dx * T, y: r.cy + dy * T });
   },
 
   // ---------- hazards (simulation) ----------

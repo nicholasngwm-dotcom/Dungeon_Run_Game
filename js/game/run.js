@@ -222,13 +222,13 @@ class DungeonRun {
 
   /** The stage a boss is normally met at (the castle's Queen and King come later, the Deathbringer deep in the graveyard). */
   static bossStage(type) {
-    return { queen: 2, king: 3, deathbringer: 2 }[type] || 1;
+    return { queen: 2, king: 3, deathbringer: 2, dragonLord: 2 }[type] || 1;
   }
 
   /** The dungeon theme whose boss room a boss fights in (the castle's royals, or the graveyard). */
   static bossTheme(type) {
     if (type === 'golem' || type === 'guardian') return 'ruins';
-    if (type === 'flameworm') return 'fortress';
+    if (type === 'flameworm' || type === 'dragonLord') return 'fortress';
     return ['queen', 'king', 'prince', 'princess'].includes(type) ? 'castle' : 'graveyard';
   }
 
@@ -270,6 +270,7 @@ class DungeonRun {
     this.sleepers = [];          // combat rooms' first waves, already standing about in them (see populate)
     this.hole = null;            // the glowing hole down to the secret room
     this.lavaPools = [];         // the Fiery Fortress: where the rooms' lava lies ({ x, y, r }, for its glow; see addLava)
+    this.dragonArena = null;     // the Dragon Lord's platform, moat, fence and tower (see DragonArena)
     // this stage's shop: the potion shelf (shared) and each hero's upgrade store state
     this.shopSeed = Math.floor(Math.random() * 2 ** 31);
     this.stageTime = 0;          // seconds since this stage began (the free pick waits a moment)
@@ -285,6 +286,7 @@ class DungeonRun {
       if (r.type === 'boss' && this.bossType === 'golem') this.guardianCover(r);
       if (r.type === 'boss' && this.bossType === 'guardian') this.crystalCover(r);
       if (r.type === 'boss' && this.bossType === 'flameworm') this.wormCover(r);
+      if (r.type === 'boss' && this.bossType === 'dragonLord') DragonArena.build(this, r);
       if (r.type === 'boss' && this.bossType === 'king') this.throneHallPillars(r);
       if (r.type === 'combat' && this.themeId !== 'fortress') this.addSpikes(r);   // (the fortress has more open fires instead)
       this.addProps(r);
@@ -1045,6 +1047,7 @@ class DungeonRun {
       king: { x: r.cx, y: (r.y0 + 5) * T - 30 },
       princess: { x: r.cx, y: (r.y0 + 4) * T - 6 },
       prince: { x: r.cx, y: r.cy },
+      dragonLord: this.dragonArena?.tower,   // (he swoops down onto his tower)
     }[type] || { x: r.cx, y: r.cy - 20 };
     w.boss = Game.createBoss(type, at);
     const s = this.scale;
@@ -1085,6 +1088,7 @@ class DungeonRun {
 
   /** Where a beaten boss room's portal opens (in the garden: on the lawn before the bell, not under it). */
   portalSpot(r) {
+    if (this.bossType === 'dragonLord') return DragonArena.portalSpot(r);
     return this.bossType === 'queen' ? { x: r.cx, y: r.cy + 3.4 * this.floor.T } : { x: r.cx, y: r.cy };
   }
 
@@ -1434,6 +1438,7 @@ class DungeonRun {
    * cross through the middle, the doorways, cover and spike pads always stay clear, so there's a way round.
    */
   addLava(r) {
+    if (r === this.dragonArena?.room) return;   // (his moat is all the lava his arena has)
     const L = CONFIG.run.lava;
     const f = this.floor;
     const T = f.T;
@@ -2222,6 +2227,7 @@ class DungeonRun {
     if (this.totem && this.totem.souls.length) items.push({ y: this.totem.y + 1000, draw: (ctx) => this.totem.drawSouls(ctx) });
     items.push(...this.decor.getDrawables(this.world.camera));
     const cam = this.world.camera;
+    items.push(...DragonArena.drawables(this, cam));
     for (const o of this.cover) {
       if (o.item || o.hidden) continue;   // solid decor and the throne are drawn by the decor
       if (o.x > cam.x + cam.width + 64 || o.x + o.w * this.floor.T + 32 < cam.x || o.y - 40 > cam.y + cam.height || o.y + o.h * this.floor.T + 40 < cam.y) continue;
@@ -3037,6 +3043,7 @@ class DungeonRun {
     // a faint glow off each barrel, so they read in the dark (the fuse's spark, the ooze, the frost)
     // the Deathbringer's tombs: their runes glow faintly, so they can still be made out in its darkness
     for (const o of this.cover) if (o.kind === 'darkTomb') out.push({ x: o.x + o.w * this.floor.T / 2, y: o.y + 6, r: 70, s: 0.5, rgb: '154, 106, 255' });
+    DragonArena.lights(this, out);
     for (const b of this.barrels) if (!b.dead) out.push({ x: b.x, y: b.y - 14, r: 48, s: 0.45, rgb: { explosive: '255, 170, 80', poison: '140, 240, 100', frost: '150, 200, 255' }[b.kind] });
     const w = this.world;
     if (w.boss?.addLights) w.boss.addLights(out);

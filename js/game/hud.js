@@ -1198,6 +1198,8 @@ const HUD = {
     RoyalPrincess: { band: ['#141030', '#221a4a', '#3a2c70'], trim: '#c49aff', glow: '170, 130, 255', h: 100 },
     // the worm rears up tall and its head juts forward: a big portrait (drawPortrait centres it)
     Flameworm: { band: ['#1a0406', '#3a0a0e', '#5e1216'], trim: '#ff6a4a', glow: '255, 70, 40', h: 170 },
+    // reared up with his wings spread wide: the tallest portrait of them all
+    BlazingDragonLord: { band: ['#1e0406', '#46080e', '#6e1216'], trim: '#e8c25a', glow: '255, 110, 40', h: 190 },
   },
 
   /** Letterbox bars slide in while the camera pans to the boss, and out as the fight begins. */
