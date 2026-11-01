@@ -1,19 +1,22 @@
 // Screen-edge warnings for this screen's hero, so you can feel what's wrong without reading the
 // HUD: a blood-red border pulsing with a heartbeat while under 25% health, and a border of its
-// own for each ailment - flames licking up the edges while burning, ice crystals creeping in from
+// own for each ailment - flames licking up the edges while burning, molten rock welling up and
+// oozing down while melting in lava, ice crystals creeping in from
 // the corners while frozen (a lighter frost while chilled), green ooze dripping while poisoned,
 // stars wheeling round the edge while stunned - plus a giant STUNNED / FROZEN word while you
 // can't act. Looks and sound only; drawn over the world, under the HUD.
 
 const LOW_HP = 0.25;   // the share of max health that starts the warning
+// molten rock for the melting border, crust to white-hot (the fortress lava's reds)
+const MELT_COLORS = ['#2a0604', '#6a0c08', '#a8100e', '#d81e14', '#ff4a2a', '#ff9a80'];
 
 const StatusFx = {
-  levels: { low: 0, burn: 0, frozen: 0, poison: 0, stun: 0 },   // each border's strength, fading in and out
+  levels: { low: 0, burn: 0, melt: 0, frozen: 0, poison: 0, stun: 0 },   // each border's strength, fading in and out
   last: null,        // the game time last drawn (borders and the heartbeat follow game time, so pausing stops them)
   beat: 0,           // seconds to the next heartbeat
   pulse: 0,          // 1 on a heartbeat, fading
   word: null,        // the big word: { text, colors, t (s shown), out (s fading) }
-  borders: null,     // pre-drawn borders for this screen size: { key, low, burn, frozen, poison, stun }
+  borders: null,     // pre-drawn borders for this screen size: { key, low, burn, melt, frozen, poison, stun }
 
   draw(ctx, game) {
     const p = game.localPlayer;
@@ -26,7 +29,8 @@ const StatusFx = {
     const stunned = alive && p.stunTime > 0 && !frozen;
     const target = {
       low: low ? 0.7 + 0.3 * (1 - k / LOW_HP) : 0,
-      burn: alive && (p.ailments?.burn || p.ailments?.lava) ? 1 : 0,
+      burn: alive && p.ailments?.burn ? 1 : 0,
+      melt: alive && p.ailments?.lava ? 1 : 0,
       frozen: frozen ? 1 : alive && p.chillTime > 0 ? 0.45 : 0,
       poison: alive && p.poisonTime > 0 ? 1 : 0,
       stun: stunned ? 1 : 0,
@@ -82,6 +86,11 @@ const StatusFx = {
       ctx.globalAlpha = lv.burn;
       this.drawFlames(ctx, w, h, t);
     }
+    if (lv.melt > 0) {
+      ctx.globalAlpha = lv.melt;
+      ctx.drawImage(b.melt, 0, 0, w, h);
+      this.drawLava(ctx, w, h, t);
+    }
     if (lv.stun > 0) {
       ctx.globalAlpha = lv.stun;
       ctx.drawImage(b.stun, 0, 0, w, h);
@@ -104,6 +113,97 @@ const StatusFx = {
       const y = f.side === 0 ? h + 4 : h * (0.55 + f.u * 0.45);
       const flick = 0.75 + 0.25 * Math.sin(t * 7 + f.seed * 9);
       PFX.flame(ctx, x, y, f.w, f.h * flick, t + f.seed, ENEMY_FIRE_COLORS, 4);
+    }
+  },
+
+  /**
+   * Melting in lava: a molten pool welling and sloshing along the bottom (crust rafts drifting on it,
+   * bubbles swelling and bursting), and thick drips oozing down from the top until a drop falls off.
+   */
+  drawLava(ctx, w, h, t) {
+    const L = MELT_COLORS;
+    const surface = (x) => h - 52 - Math.sin(x * 0.018 + t * 1.1) * 6 - Math.sin(x * 0.047 - t * 0.7) * 4;
+    for (let x = 0; x < w; x += 4) {
+      const y = Math.round(surface(x));
+      ctx.fillStyle = L[0];
+      ctx.fillRect(x, y - 2, 4, h - y + 2);
+      ctx.fillStyle = L[1];
+      ctx.fillRect(x, y, 4, h - y);
+      // slow bright swirls in the body, a hot band under the skin, the glowing skin itself
+      if (Math.sin(x * 0.06 + t * 0.6) + Math.sin(x * 0.021 - t * 0.4) > 0.9) {
+        ctx.fillStyle = L[2];
+        ctx.fillRect(x, y + 12, 4, h - y - 12);
+      }
+      ctx.fillStyle = L[3];
+      ctx.fillRect(x, y + 2, 4, 6);
+      ctx.fillStyle = L[4];
+      ctx.fillRect(x, y, 4, 2);
+    }
+    // rafts of dark crust riding the surface
+    for (let i = 0; i < 6; i++) {
+      const x = ((i * 0.173 + t * 0.012 * (i % 2 ? 1 : -1)) % 1 + 1) % 1 * w;
+      const y = surface(x);
+      const len = 14 + (i % 3) * 8;
+      ctx.fillStyle = L[0];
+      ctx.fillRect(Math.round(x - len / 2), Math.round(y) - 1, len, 4);
+      ctx.fillStyle = '#4a2218';
+      ctx.fillRect(Math.round(x - len / 2) + 2, Math.round(y) - 1, len - 6, 1);
+    }
+    // bubbles swelling on the surface and bursting
+    for (let i = 0; i < 8; i++) {
+      const cycle = t / (1.3 + (i % 3) * 0.4) + i * 0.29;
+      const u = cycle % 1;
+      const x = ((Math.floor(cycle) * 0.618 + i * 0.137) % 1) * w;
+      const y = surface(x) + 1;
+      if (u < 0.8) {
+        const r = Math.round(1 + (u / 0.8) * 6);
+        ctx.fillStyle = L[0];
+        ctx.fillRect(Math.round(x - r) - 1, Math.round(y - r * 1.4) - 1, r * 2 + 2, Math.round(r * 1.4) + 2);
+        ctx.fillStyle = L[3];
+        ctx.fillRect(Math.round(x - r), Math.round(y - r * 1.4), r * 2, Math.round(r * 1.4));
+        ctx.fillStyle = L[5];
+        ctx.fillRect(Math.round(x - r * 0.5), Math.round(y - r * 1.2), 2, 2);
+      } else {
+        // burst: spatters flung up and falling back
+        const k = (u - 0.8) / 0.2;
+        ctx.fillStyle = L[4];
+        for (const dx of [-1, -0.4, 0.4, 1]) {
+          ctx.fillRect(Math.round(x + dx * 10 * k), Math.round(y - 14 * Math.sin(k * Math.PI) * (1.2 - Math.abs(dx) * 0.5)), 3, 3);
+        }
+      }
+    }
+    // drips oozing down from the top edge, swelling at the tip until a drop lets go
+    for (let i = 0; i < 12; i++) {
+      const period = 2.6 + (i % 4) * 0.7;
+      const u = (t / period + i * 0.31) % 1;
+      const x = Math.round(((i * 0.0833 + 0.04 + Math.sin(i * 7.3) * 0.03) * w) / 2) * 2;
+      const max = 18 + (i % 5) * 8;
+      const len = u < 0.75 ? (u / 0.75) * max : max * (1 - (u - 0.75) * 2);
+      const wid = 8 + (i % 3) * 2;
+      ctx.fillStyle = L[0];
+      ctx.fillRect(x - wid / 2 - 1, 0, wid + 2, len + 1);
+      ctx.fillStyle = L[3];
+      ctx.fillRect(x - wid / 2, 0, wid, len);
+      ctx.fillStyle = L[4];
+      ctx.fillRect(x - wid / 2 + 1, 0, 2, len);
+      const tip = u < 0.75 ? 1 + (u / 0.75) * 3 : 1;
+      ctx.fillStyle = L[0];
+      ctx.fillRect(x - wid / 2 - tip - 1, len - 1, wid + tip * 2 + 2, wid + 2);
+      ctx.fillStyle = L[3];
+      ctx.fillRect(x - wid / 2 - tip, len, wid + tip * 2, wid);
+      ctx.fillStyle = L[5];
+      ctx.fillRect(x - wid / 2 - tip + 1, len + 1, 2, 2);
+      if (u >= 0.75) {
+        // the drop that fell, speeding up
+        const k = (u - 0.75) / 0.25;
+        const dy = max + 6 + k * k * 260;
+        ctx.fillStyle = L[0];
+        ctx.fillRect(x - 5, Math.round(dy) - 1, 10, 11);
+        ctx.fillStyle = L[3];
+        ctx.fillRect(x - 4, Math.round(dy), 8, 9);
+        ctx.fillStyle = L[5];
+        ctx.fillRect(x - 3, Math.round(dy) + 1, 2, 2);
+      }
     }
   },
 
@@ -265,6 +365,28 @@ const StatusFx = {
       rim(g, 'rgba(120, 10, 6, 0.5)', 3);
     });
 
+    // melting: a deep heat glow, the edges charred to a black crust split by glowing cracks
+    const melt = canvas((g) => {
+      edge(g, '200, 30, 12', 0.8, 0.62);
+      rim(g, 'rgba(26, 6, 4, 0.85)', 7);
+      band(g, '26, 6, 4', 0.5, 20);
+      for (let i = 0; i < 40; i++) {
+        let s = nearEdge(8);
+        g.beginPath();
+        g.moveTo(s.x, s.y);
+        for (let j = 0; j < 3; j++) {
+          s = { x: s.x + (rng() - 0.5) * 12, y: s.y + (rng() - 0.5) * 12 };
+          g.lineTo(clamp(s.x, 0, w), clamp(s.y, 0, h));
+        }
+        g.lineWidth = 3;
+        g.strokeStyle = 'rgba(168, 16, 14, 0.7)';
+        g.stroke();
+        g.lineWidth = 1;
+        g.strokeStyle = 'rgba(255, 74, 42, 0.85)';
+        g.stroke();
+      }
+    });
+
     const frozen = canvas((g) => {
       edge(g, '150, 205, 255', 0.8, 0.64);
       rim(g, 'rgba(230, 246, 255, 0.55)', 3);
@@ -357,6 +479,6 @@ const StatusFx = {
       for (let i = 0; i < 5; i++) flames.push({ side, u: (i + rng() * 0.5) / 5, d: 6 + rng() * 12, w: 20 + rng() * 14, h: 40 + rng() * 40, seed: rng() * 10 });
     }
 
-    return { key: `${w}x${h}`, low, burn, frozen, poison, stun, flames };
+    return { key: `${w}x${h}`, low, burn, melt, frozen, poison, stun, flames };
   },
 };
